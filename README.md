@@ -1,4 +1,4 @@
 groupcached
 ======
 
-C implementation of groupcache (golane/groupcache)
+C implementation of groupcache (golang/groupcache)

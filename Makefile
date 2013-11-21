@@ -1,4 +1,5 @@
 UNAME := $(shell uname)
+LIBGROUPCACHE_DIR := $(shell pwd)
 
 LDFLAGS += -L. deps/.libs/libhl.a deps/.libs/libchash.a
 
@@ -23,13 +24,23 @@ TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
 TEST_EXEC_ORDER = 
 
-all: build_deps objects static shared
+all: build_deps objects static shared groupcache_daemon
 
 build_deps:
 	@make -C deps all
 
+groupcache_daemon:
+	@LIBGROUPCACHE_DIR="`pwd`" make -C groupcached all
+
 static: objects
-	ar -r libgroupcache.a src/*.o
+	@cwd=`pwd`; \
+	dir="/tmp/libgroupcache_build$$$$"; \
+	mkdir $$dir; \
+	cd $$dir; \
+	ar x $$cwd/deps/.libs/libchash.a; ar x $$cwd/deps/.libs/libhl.a; \
+	cd $$cwd; \
+	ar -r libgroupcache.a $$dir/*.o src/*.o; \
+	rm -rf $$dir
 
 shared: objects
 	$(CC) $(LDFLAGS) $(SHAREDFLAGS) src/*.o -o libgroupcache.$(SHAREDEXT)
