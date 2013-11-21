@@ -19,6 +19,16 @@ all:
 	    cd -; \
 	done
 
+update:
+	@for i in $(DEPS); do \
+	    name=`echo $$i | cut -d/ -f5 `; \
+	    if [ -d $$name ]; then \
+	        cd $$name;\
+		git pull;\
+		cd -;\
+	    fi;\
+	done
+
 clean:
 	@for i in $(DEPS); do \
 	    name=`echo $$i | cut -d/ -f5 `; \
