@@ -33,6 +33,9 @@ groupcache_daemon:
 	@LIBGROUPCACHE_DIR="`pwd`" make -C groupcached all
 
 static: objects
+	ar -r libgroupcache.a src/*.o
+
+standalone: objects
 	@cwd=`pwd`; \
 	dir="/tmp/libgroupcache_build$$$$"; \
 	mkdir $$dir; \
