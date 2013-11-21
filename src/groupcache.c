@@ -21,9 +21,9 @@
 #define GROUPCACHE_PORT_DEFAULT 9874
 
 typedef enum {
-    GROUPCACHE_CMD_GET = 0x01,
+    GROUPCACHE_CMD_GET          = 0x01,
     GROUPCACHE_CMD_GET_RESPONSE = 0x02,
-    GROUPCACHE_CMD_SET = 0x03,
+    GROUPCACHE_CMD_SET          = 0x03,
     GROUPCACHE_CMD_SET_RESPONSE = 0x04
 } groupcache_cmd_t;
 
@@ -124,9 +124,13 @@ static int write_message(int fd, char cmd, void *v, size_t vlen)  {
     //        so we need to provide multiple chunks in case the transmitted
     //        value is bigger and doesn't fit in one chunk
 
-    int wb = write_socket(fd, (char *)&cmd, 1);
-    if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
-        return -1;
+    int wb;
+
+    if (cmd > 0) {
+        wb = write_socket(fd, (char *)&cmd, 1);
+        if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
+            return -1;
+        }
     }
 
     uint16_t size = htons(vlen);
@@ -164,6 +168,42 @@ static void *__op_create(const void *key, size_t len, void *priv)
     obj->data = NULL;
 
     return obj;
+}
+
+static int __send_to_peer(char *peer, void *key, size_t klen, void *value, size_t vlen) {
+    char *brkt;
+    char *addr = strdup(peer);
+    char *host = strtok_r(addr, ":", &brkt);
+    char *port_string = strtok_r(NULL, ":", &brkt);
+    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
+    int fd = open_connection(host, port, 30);
+    free(addr);
+
+    if (fd >= 0) {
+        int rc = write_message(fd, GROUPCACHE_CMD_SET, key, klen);
+        if (rc != 0) {
+            close(fd);
+            return -1;
+        }
+
+        groupcache_cmd_t cmd = 0;
+        rc = write_message(fd, 0, value, vlen);
+
+        if (rc == 0) {
+            fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            int rb = read_message(fd, &resp, &cmd);
+            if (cmd == GROUPCACHE_CMD_SET_RESPONSE && rb > 0) {
+                printf("GOT: %s\n", fbuf_data(&resp));
+                close(fd);
+                fbuf_destroy(&resp);
+                return 0;
+            } else {
+                // TODO - Error messages
+            }
+        }
+        close(fd);
+    }
+    return -1;
 }
 
 static int __fetch_from_peer(char *peer, void *key, size_t len, fbuf_t *out) {
@@ -378,8 +418,19 @@ void *groupcache_get(groupcache_t *cache, void *key, size_t len, size_t *vlen) {
     return obj->data;
 }
 
-void *groupcache_set(groupcache_t *gc, void *key, size_t klen, void *value, size_t *vlen) {
-    return NULL;
+int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, size_t vlen) {
+    const char *node_name = NULL;
+    size_t name_len = 0;
+    chash_lookup(cache->chash, key, klen, &node_name, &name_len);
+    // if we are not the owner try asking our peer responsible for this data
+    if (strcmp(node_name, cache->me) == 0) {
+        if (cache->store_item_cb)
+            cache->store_item_cb(key, klen, value, vlen, cache->priv);
+    } else {
+        __send_to_peer((char *)node_name, key, klen, value, vlen);
+    }
+
+    return 0;
 }
 
 char **groupcache_get_peers(groupcache_t *cache, int *num_peers) {

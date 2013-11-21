@@ -18,8 +18,8 @@ groupcache_t *groupcache_create(char *me,
                         void *priv);
 
 void groupcache_destroy(groupcache_t *cache);
-void *groupcache_get(groupcache_t *gc, void *key, size_t klen, size_t *vlen);
-void *groupcache_set(groupcache_t *gc, void *key, size_t klen, void *value, size_t *vlen);
+void *groupcache_get(groupcache_t *cache, void *key, size_t klen, size_t *vlen);
+int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, size_t vlen);
 
 char **groupcache_get_peers(groupcache_t *cache, int *num_peers);
 

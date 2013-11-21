@@ -6,7 +6,6 @@
 #include <signal.h>
 #include <errno.h>
 
-#include "iomux.h"
 #include "log.h"
 
 #include <sys/socket.h>
@@ -15,6 +14,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+
+#include <iomux.h>
 
 #include <pthread.h>
 #include <regex.h>
@@ -259,19 +260,7 @@ void *worker(void *priv)
                 }
                 rb += n;
             } 
-            const char *node_name = NULL;
-            size_t name_len = 0;
-            chash_lookup(chash, key, strlen(key), &node_name, &name_len);
-            // if we are not the owner try asking our peer responsible for this data
-            if (strcmp(node_name, me) == 0) {
-                DEBUG2("SETTING KEY %s to VALUE %s\n", key, fbuf_data(&v));
-                groupcached_stored_item *item = malloc(sizeof(groupcached_stored_item));
-                item->value = fbuf_data(&v);
-                item->size = fbuf_used(&v);
-                ht_set(storage, key, strlen(key), item);
-            } else {
-
-            }
+            groupcache_set(cache, key, strlen(key), fbuf_data(&v), fbuf_used(&v));
 
             char response[2048];
 
