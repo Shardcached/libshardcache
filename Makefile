@@ -1,7 +1,7 @@
 UNAME := $(shell uname)
 LIBGROUPCACHE_DIR := $(shell pwd)
 
-LDFLAGS += -L. deps/.libs/libhl.a deps/.libs/libchash.a
+LDFLAGS += -L. deps/.libs/libhl.a deps/.libs/libchash.a deps/.libs/libiomux.a
 
 ifeq ($(UNAME), Linux)
 LDFLAGS += -pthread
