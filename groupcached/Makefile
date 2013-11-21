@@ -1,6 +1,9 @@
 UNAME := $(shell uname)
 
-LDFLAGS += -L. $(LIBGROUPCACHE_DIR)/deps/.libs/libhl.a $(LIBGROUPCACHE_DIR)/deps/.libs/libchash.a $(LIBGROUPCACHE_DIR)/libgroupcache.a
+LDFLAGS += -L. $(LIBGROUPCACHE_DIR)/deps/.libs/libiomux.a \
+	   $(LIBGROUPCACHE_DIR)/deps/.libs/libhl.a \
+	   $(LIBGROUPCACHE_DIR)/deps/.libs/libchash.a \
+	   $(LIBGROUPCACHE_DIR)/libgroupcache.a
 
 ifeq ($(UNAME), Linux)
 LDFLAGS +=

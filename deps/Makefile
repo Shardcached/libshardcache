@@ -1,5 +1,6 @@
 DEPS=https://github.com/xant/libchash \
-     https://github.com/xant/libhl
+     https://github.com/xant/libhl \
+     https://github.com/xant/libiomux
 
 LIBDIR=$(shell pwd)/.libs
 INCDIR=$(shell pwd)/.incs
