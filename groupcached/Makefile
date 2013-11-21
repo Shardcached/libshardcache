@@ -29,7 +29,7 @@ $(LIBGROUPCACHE_DIR)/libgroupcache.a:
 groupcached: objects
 	gcc $(LDFLAGS) src/*.o -o groupcached
 
-objects: CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -g
+objects: CFLAGS += -fPIC -I$(LIBGROUPCACHE_DIR)/src -I$(LIBGROUPCACHE_DIR)/deps/.incs -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 objects: $(TARGETS)
 
 clean:

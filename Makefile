@@ -58,6 +58,7 @@ clean:
 	rm -f libgroupcache.$(SHAREDEXT)
 	rm -f support/testing.o
 	make -C deps clean
+	make -C groupcached clean
 
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
