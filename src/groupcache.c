@@ -18,7 +18,14 @@
 #include <chash.h>
 
 
-#define GROUPCACHED_PORT_DEFAULT 9874
+#define GROUPCACHE_PORT_DEFAULT 9874
+
+typedef enum {
+    GROUPCACHE_CMD_GET = 0x01,
+    GROUPCACHE_CMD_GET_RESPONSE = 0x02,
+    GROUPCACHE_CMD_SET = 0x03,
+    GROUPCACHE_CMD_SET_RESPONSE = 0x04
+} groupcache_cmd_t;
 
 typedef struct chash_t chash_t;
 
@@ -35,12 +42,12 @@ struct __groupcache_s {
 
     groupcache_free_item_callback_t free_item_cb; 
     groupcache_fetch_item_callback_t fetch_item_cb; 
+    groupcache_store_item_callback_t store_item_cb; 
     void *priv;
 
     int sock;
     pthread_t *workers;
     int       num_workers;
-    pthread_mutex_t lock;
 };
 
 /* This is the object we're managing. It has a key
@@ -53,15 +60,37 @@ typedef struct {
     void *data;
 } cache_object_t;
 
-int read_message(int fd, fbuf_t *out) {
+int read_message(int fd, fbuf_t *out, groupcache_cmd_t *cmd) {
     uint16_t chunk_len;
+    int reading_message = 0;
     for(;;) {
-        int rb = read_socket(fd, (char *)&chunk_len, 2);
+        int rb;
+
+        if (reading_message == 0 && cmd) {
+            rb = read_socket(fd, (char *)cmd, 1);
+            if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                return -1;
+            }
+            if (*cmd != GROUPCACHE_CMD_GET &&
+                *cmd != GROUPCACHE_CMD_GET_RESPONSE &&
+                *cmd != GROUPCACHE_CMD_SET&&
+                *cmd != GROUPCACHE_CMD_SET_RESPONSE)
+            {
+                return -1;
+            }
+            reading_message = 1;
+        }
+
+        rb = read_socket(fd, (char *)&chunk_len, 2);
         if (rb == 2) {
             chunk_len = ntohs(chunk_len);
             if (chunk_len == 0) {
-                return 0;
+                return fbuf_used(out);
             }
+
+            if (cmd)
+                DEBUG2("Received new message type %d , len %d", *cmd, chunk_len);
+
             int initial_len = chunk_len;
             while (chunk_len != 0) {
                 char buf[chunk_len];
@@ -70,13 +99,10 @@ int read_message(int fd, fbuf_t *out) {
                     if (errno != EINTR && errno != EAGAIN) {
                         // ERROR 
                         fbuf_set_used(out, fbuf_used(out) - (initial_len - chunk_len));
-                        close(fd);
                         return -1;
                     }
-                    break;
                 } else if (rb == 0) {
                     fbuf_set_used(out, fbuf_used(out) - (initial_len - chunk_len));
-                    close(fd);
                     return -1;
                 }
                 chunk_len -= rb;
@@ -87,28 +113,31 @@ int read_message(int fd, fbuf_t *out) {
             break;
         } else if (rb == 0) {
             break;
-        }
+        } 
     }
-    close(fd);
     return -1;
 }
 
-static int write_message(int fd, void *v, size_t vlen)  {
+static int write_message(int fd, char cmd, void *v, size_t vlen)  {
     // TODO - split if vlen is bigger than MAXUINT16
     //        the protocol supports chunks of at most MAXUINT16 bytes
     //        so we need to provide multiple chunks in case the transmitted
     //        value is bigger and doesn't fit in one chunk
-    uint16_t size = htons(vlen);
-    int wb = write_socket(fd, (char *)&size, 2);
+
+    int wb = write_socket(fd, (char *)&cmd, 1);
     if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
-        close(fd);
+        return -1;
+    }
+
+    uint16_t size = htons(vlen);
+    wb = write_socket(fd, (char *)&size, 2);
+    if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
         return -1;
     } else if (wb == 2) {
         int wrote = 0;
         while (wrote != vlen) {
             wb = write_socket(fd, v, vlen);
             if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
-                close(fd);
                 return -1;
             }
             wrote += wb;
@@ -142,19 +171,24 @@ static int __fetch_from_peer(char *peer, void *key, size_t len, fbuf_t *out) {
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
     char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : GROUPCACHED_PORT_DEFAULT;
+    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
     int fd = open_connection(host, port, 30);
     free(addr);
 
     if (fd >= 0) {
-        int rc = write_message(fd, key, len);
+        int rc = write_message(fd, GROUPCACHE_CMD_GET, key, len);
         if (rc == 0) {
-            rc = read_message(fd, out);
-            if (rc == 0) {
-                return 0;
+            groupcache_cmd_t cmd = 0;
+            int rb = read_message(fd, out, &cmd);
+            if (cmd == GROUPCACHE_CMD_GET_RESPONSE && rb > 0) {
                 printf("HEYHEY GOT : %s\n", fbuf_data(out));
+                close(fd);
+                return 0;
+            } else {
+                // TODO - Error messages
             }
         }
+        close(fd);
     }
     return -1;
 }
@@ -208,18 +242,43 @@ static void __op_destroy(void *item, void *priv)
 
 static void serve_request(groupcache_t *cache, int fd) {
     fbuf_t buf = FBUF_STATIC_INITIALIZER; 
-    int rc = read_message(fd, &buf);
-    while (rc == 0) {
-        if (fbuf_used(&buf)) {
-            size_t vlen = 0;
-            void *v = groupcache_get(cache, fbuf_data(&buf), fbuf_used(&buf), &vlen);
-            if (v && vlen > 0) {
-                write_message(fd, v, vlen);
-            }
+    groupcache_cmd_t cmd = 0;
+    int rb = read_message(fd, &buf, &cmd);
+    while (cmd > 0 && rb > 0) {
+        switch(cmd) {
+            case GROUPCACHE_CMD_GET:
+                if (fbuf_used(&buf)) {
+                    size_t vlen = 0;
+                    void *v = groupcache_get(cache, fbuf_data(&buf), fbuf_used(&buf), &vlen);
+                    if (v && vlen > 0) {
+                        write_message(fd, GROUPCACHE_CMD_GET_RESPONSE, v, vlen);
+                    }
+                }
+                break;
+            case GROUPCACHE_CMD_SET:
+                {
+                    int klen = fbuf_used(&buf);
+                    void *key = malloc(klen);
+                    memcpy(key, fbuf_data(&buf), klen);
+                    fbuf_clear(&buf);
+                    rb = read_message(fd, &buf, NULL);
+                    if (rb > 0) {
+                        if (cache->store_item_cb)
+                            cache->store_item_cb(key, klen, fbuf_data(&buf), fbuf_used(&buf), cache->priv);
+                        write_message(fd, GROUPCACHE_CMD_SET_RESPONSE, "OK", 2);
+                    }
+                    free(key);
+                }
+                break;
+            default:
+                close(fd);
+                fbuf_destroy(&buf);
+                return;
         }
         fbuf_clear(&buf);
-        rc = read_message(fd, &buf);
+        rb = read_message(fd, &buf, &cmd);
     }
+    close(fd);
     fbuf_destroy(&buf);
 }
 
@@ -243,6 +302,7 @@ groupcache_t *groupcache_create(char *me,
                         char **peers,
                         int npeers,
                         groupcache_fetch_item_callback_t fetch_cb, 
+                        groupcache_store_item_callback_t store_cb, 
                         groupcache_free_item_callback_t free_cb,
                         void *priv)
 {
@@ -266,20 +326,20 @@ groupcache_t *groupcache_create(char *me,
     }
     shard_lens[npeers] = strlen(me);
 
-    cache->chash = chash_create((const char **)cache->shards, shard_lens, npeers + 1, 200);
+    cache->num_shards = npeers + 1;
+    cache->chash = chash_create((const char **)cache->shards, shard_lens, cache->num_shards, 200);
 
     cache->arc = arc_create(&cache->ops, 300);
     cache->free_item_cb = free_cb;
     cache->fetch_item_cb = fetch_cb;
+    cache->store_item_cb = store_cb;
     cache->priv = priv;
-
-    pthread_mutex_init(&cache->lock, NULL);
 
     char *brkt;
     char *addr = strdup(me);
     char *host = strtok_r(addr, ":", &brkt);
     char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : GROUPCACHED_PORT_DEFAULT;
+    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
     cache->sock = open_socket(host, port);
     if (cache->sock == -1) {
         fprintf(stderr, "Can't open listening socket: %s\n",strerror(errno));
@@ -307,9 +367,7 @@ void groupcache_destroy(groupcache_t *cache) {
 }
 
 void *groupcache_get(groupcache_t *cache, void *key, size_t len, size_t *vlen) {
-    pthread_mutex_lock(&cache->lock);
     cache_object_t *obj = arc_lookup(cache->arc, (const void *)key, len);
-    pthread_mutex_unlock(&cache->lock);
 
     if (!obj)
         return NULL;
@@ -320,3 +378,12 @@ void *groupcache_get(groupcache_t *cache, void *key, size_t len, size_t *vlen) {
     return obj->data;
 }
 
+void *groupcache_set(groupcache_t *gc, void *key, size_t klen, void *value, size_t *vlen) {
+    return NULL;
+}
+
+char **groupcache_get_peers(groupcache_t *cache, int *num_peers) {
+    if (num_peers)
+        *num_peers = cache->num_shards;
+    return cache->shards;
+}
