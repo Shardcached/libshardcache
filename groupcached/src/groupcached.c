@@ -42,8 +42,6 @@
 
 static char *me = NULL;
 static iomux_t *iomux = NULL;
-static int use_http = 1;
-static int single_thread = 0;
 static hashtable_t *storage = NULL;
 static groupcache_t *cache = NULL;
 static struct chash_t *chash = NULL;
@@ -137,19 +135,17 @@ static void send_response(groupcached_connection_context *ctx)
     void *value = groupcache_get(cache, ctx->key, strlen(ctx->key), &vlen);
     if (value)
         fbuf_add_binary(ctx->output, value, vlen);
-    if (use_http) {
-        char response_header[1024];
-        sprintf(response_header, "%s 200 OK\r\n"
-                "Content-Type: application/octet-stream\r\n"
-                "Content-length: %d\r\n"
-                "Server: groupcached\r\n"
-                "Connection: Close\r\n\r\n",
-                ctx->is_http10 ? "HTTP/1.0" : "HTTP/1.1", fbuf_used(ctx->output));
+    char response_header[1024];
+    sprintf(response_header, "%s 200 OK\r\n"
+            "Content-Type: application/octet-stream\r\n"
+            "Content-length: %d\r\n"
+            "Server: groupcached\r\n"
+            "Connection: Close\r\n\r\n",
+            ctx->is_http10 ? "HTTP/1.0" : "HTTP/1.1", fbuf_used(ctx->output));
 
-        int err = write_socket(ctx->fd, response_header, strlen(response_header));
-        if (err != 0) {
-            ERROR("(%p) Can't write the response header : %s", pthread_self(), strerror(errno));
-        }
+    int err = write_socket(ctx->fd, response_header, strlen(response_header));
+    if (err != 0) {
+        ERROR("(%p) Can't write the response header : %s", pthread_self(), strerror(errno));
     }
 
     if (write_socket(ctx->fd, fbuf_data(ctx->output), fbuf_used(ctx->output)) != 0) {
@@ -206,77 +202,72 @@ void *worker(void *priv)
     struct sockaddr_in peer;
     socklen_t socklen = sizeof(struct sockaddr);
     getpeername(ctx->fd, (struct sockaddr *)&peer, &socklen);
-    if (use_http) {
-        char *method = strtok(request_data, " ");
-        if (!method) {
-            goto __end_worker;
-        }
-        char *url = strtok(NULL, " ");
-        key = extract_key(url);
-        if (key) {
-            NOTICE("(%p) Lookup request from %s: %s", pthread_self(), inet_ntoa(peer.sin_addr), key);
-            ctx->key = key;
-        }
-        char *httpv = strtok(NULL, "\r\n");
-        if (httpv) {
-            ctx->is_http10 = (strncmp(httpv, "HTTP/1.0", 8) == 0);
+    char *method = strtok(request_data, " ");
+    if (!method) {
+        goto __end_worker;
+    }
+    char *url = strtok(NULL, " ");
+    key = extract_key(url);
+    if (key) {
+        NOTICE("(%p) Lookup request from %s: %s", pthread_self(), inet_ntoa(peer.sin_addr), key);
+        ctx->key = key;
+    }
+    char *httpv = strtok(NULL, "\r\n");
+    if (httpv) {
+        ctx->is_http10 = (strncmp(httpv, "HTTP/1.0", 8) == 0);
+    }
+
+    request_data += (httpv - request_data) + strlen(httpv) + 1;
+    if (strncasecmp(method, "GET", 3) == 0) {
+        send_response(ctx);
+    } else if (strncasecmp(method, "PUT", 3) == 0) {
+        int clen = 0;
+        char *clen_hdr = strcasestr(request_data, "Content-Length:");
+        if (clen_hdr) {
+            while(*clen_hdr == ' ')
+                clen_hdr++;
+            clen = strtol(clen_hdr + 15, NULL, 10); 
         }
 
-        request_data += (httpv - request_data) + strlen(httpv) + 1;
-        if (strncasecmp(method, "GET", 3) == 0) {
-            send_response(ctx);
-        } else if (strncasecmp(method, "PUT", 3) == 0) {
-            int clen = 0;
-            char *clen_hdr = strcasestr(request_data, "Content-Length:");
-            if (clen_hdr) {
-                while(*clen_hdr == ' ')
-                    clen_hdr++;
-                clen = strtol(clen_hdr + 15, NULL, 10); 
-            }
-
-            int rb = 0;
-            fbuf_t v = FBUF_STATIC_INITIALIZER;
-            char *end = strstr(request_data, "\r\n\r\n");
+        int rb = 0;
+        fbuf_t v = FBUF_STATIC_INITIALIZER;
+        char *end = strstr(request_data, "\r\n\r\n");
+        if (end) {
+            end += 4;
+        } else {
+            end = strstr(request_data, "\n\n");
             if (end) {
-                end += 4;
-            } else {
-                end = strstr(request_data, "\n\n");
-                if (end) {
-                    end += 2;
-                }
-            }
-
-            int buffered = end ? fbuf_end(ctx->input) - end : 0;
-            if (buffered)
-                fbuf_add_binary(&v, end, buffered);
-
-            rb = fbuf_used(&v);
-            while (rb != clen) {
-                int len = clen > 0 ? (clen - rb): 1024;
-                int n = fbuf_read(&v, ctx->fd, len);
-                if (n == -1) {
-                    // TODO - Error Messages
-                    break;
-                }
-                rb += n;
-            } 
-            groupcache_set(cache, key, strlen(key), fbuf_data(&v), fbuf_used(&v));
-
-            char response[2048];
-
-            snprintf(response, sizeof(response),
-                     "%s 200 OK\r\n"
-                     "Content-Length: 0\r\n\r\n",
-                    ctx->is_http10 ? "HTTP/1.0" : "HTTP/1.1");
-
-            // XXX
-            if (write_socket(ctx->fd, response, strlen(response)) != 0) {
-                ERROR("Worker %p failed writing reponse: %s", pthread_self(), strerror(errno));
+                end += 2;
             }
         }
 
-    } else if (!use_http) {
-        key = strdup(fbuf_data(ctx->input));
+        int buffered = end ? fbuf_end(ctx->input) - end : 0;
+        if (buffered)
+            fbuf_add_binary(&v, end, buffered);
+
+        rb = fbuf_used(&v);
+        while (rb != clen) {
+            int len = clen > 0 ? (clen - rb): 1024;
+            int n = fbuf_read(&v, ctx->fd, len);
+            if (n == -1) {
+                // TODO - Error Messages
+                break;
+            }
+            rb += n;
+        } 
+        groupcache_set(cache, key, strlen(key), fbuf_data(&v), fbuf_used(&v));
+
+        char response[2048];
+
+        snprintf(response, sizeof(response),
+                 "%s 200 OK\r\n"
+                 "Content-Length: 0\r\n\r\n",
+                ctx->is_http10 ? "HTTP/1.0" : "HTTP/1.1");
+
+        // XXX
+        if (write_socket(ctx->fd, response, strlen(response)) != 0) {
+            ERROR("Worker %p failed writing reponse: %s", pthread_self(), strerror(errno));
+        }
     }
 
     if (!key) {
@@ -317,9 +308,9 @@ static void groupcached_input_handler(iomux_t *iomux, int fd, void *data, int le
         return;
 
     // check if we have a complete requset
-    char *current_data = fbuf_end(ctx->input) - (use_http ? 4 : 1);
-    char *request_terminator = use_http ? strstr(current_data, "\r\n\r\n") : strstr(current_data, "\n");
-    if (!request_terminator && use_http) { // support some broken clients/requests
+    char *current_data = fbuf_end(ctx->input) - 4;
+    char *request_terminator = strstr(current_data, "\r\n\r\n");
+    if (!request_terminator) { // support some broken clients/requests
         request_terminator = strstr(current_data, "\n\n");
     }
     if (request_terminator) {
@@ -329,12 +320,8 @@ static void groupcached_input_handler(iomux_t *iomux, int fd, void *data, int le
         ctx->fd = fd;
         // let the worker take care of the fd from now on
         iomux_remove(iomux, fd);
-        if (single_thread) {
-            worker(ctx);
-        } else {
-            pthread_create(&worker_thread, NULL, worker, ctx);
-            pthread_detach(worker_thread);
-        }
+        pthread_create(&worker_thread, NULL, worker, ctx);
+        pthread_detach(worker_thread);
     }
 }
 
@@ -357,11 +344,9 @@ static void usage(char *progname, char *msg, ...)
            "Possible options:\n"
            "    -f                    run in foreground\n"
            "    -d <level>            debug level\n"
-           "    -l <ip_address>       ip address where to listen for incoming connections\n"
-           "    -p <port>             tcp port where to listen for incoming connections\n"
-           "    -w <groupcache_file>       path to the groupcache xml file\n"
+           "    -l <ip_address:port>  ip address:port where to listen for incoming http connections\n"
+           "    -p <peers>            list of peers participating in the groupcache in the form : 'address:port,address2:port2'\n"
            "    -s                    no multithreading, handle all requests in the main thread\n"
-           "    -n                    no http, expects a raw useragent string on the connected\n"
            "                          socket, terminated by a newline\n", progname);
     exit(-2);
 }
@@ -509,14 +494,12 @@ int main(int argc, char **argv)
         {"foreground", 0, 0, 'f'},
         {"listen", 2, 0, 'l'},
         {"peers", 2, 0, 'p'},
-        {"nohttp", 0, 0, 'n'},
-        {"singlethread", 0, 0, 's'},
         {"help", 0, 0, 'h'},
         {0, 0, 0, 0}
     };
 
     char c;
-    while ((c = getopt_long (argc, argv, "d:fhl:np:s?", long_options, &option_index))) {
+    while ((c = getopt_long (argc, argv, "d:fhl:p:?", long_options, &option_index))) {
         if (c == -1) {
             break;
         }
@@ -532,12 +515,6 @@ int main(int argc, char **argv)
                 break;
             case 'p':
                 peers = optarg;
-                break;
-            case 's':
-                single_thread = 1;
-                break;
-            case 'n':
-                use_http = 0;
                 break;
             case 'h':
             case '?':

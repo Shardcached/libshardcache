@@ -505,7 +505,7 @@ groupcache_t *groupcache_create(char *me,
 
     cache->ops.priv = cache;
     cache->shards = malloc(sizeof(char *) * (npeers + 1));
-    memcpy(cache->shards, peers, npeers);
+    memcpy(cache->shards, peers, sizeof(char *) * npeers);
     cache->shards[npeers] = me;
     for (i = 0; i < npeers; i++) {
         shard_lens[i] = strlen(cache->shards[i]);
