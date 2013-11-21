@@ -21,7 +21,8 @@
 
 #include <fbuf.h>
 #include <hashtable.h>
-#include "groupcache.h"
+#include <groupcache.h>
+#include <chash.h>
 
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -44,6 +45,7 @@ static int use_http = 1;
 static int single_thread = 0;
 static hashtable_t *storage = NULL;
 static groupcache_t *cache = NULL;
+static struct chash_t *chash = NULL;
 
 typedef struct {
     fbuf_t *input;
@@ -257,11 +259,19 @@ void *worker(void *priv)
                 }
                 rb += n;
             } 
-            DEBUG2("SETTING KEY %s to VALUE %s\n", key, fbuf_data(&v));
-            groupcached_stored_item *item = malloc(sizeof(groupcached_stored_item));
-            item->value = fbuf_data(&v);
-            item->size = fbuf_used(&v);
-            ht_set(storage, key, strlen(key), item);
+            const char *node_name = NULL;
+            size_t name_len = 0;
+            chash_lookup(chash, key, strlen(key), &node_name, &name_len);
+            // if we are not the owner try asking our peer responsible for this data
+            if (strcmp(node_name, me) == 0) {
+                DEBUG2("SETTING KEY %s to VALUE %s\n", key, fbuf_data(&v));
+                groupcached_stored_item *item = malloc(sizeof(groupcached_stored_item));
+                item->value = fbuf_data(&v);
+                item->size = fbuf_used(&v);
+                ht_set(storage, key, strlen(key), item);
+            } else {
+
+            }
 
             char response[2048];
 
@@ -367,14 +377,9 @@ static void usage(char *progname, char *msg, ...)
     exit(-2);
 }
 
-static void groupcache_init()
-{
-}
-
 static void groupcached_reload(int sig)
 {
     NOTICE("reloading database");
-    groupcache_init();
 }
 
 static void groupcached_stop(int sig)
@@ -392,10 +397,18 @@ static void *cache_fetch_item(void *key, size_t len, size_t *vlen, void *priv)
     groupcached_stored_item *item = (groupcached_stored_item *)ht_get(storage, key, len);
     if (!item)
         return NULL;
-    DEBUG2("GOT KEY %s VALUE %s\n\n", key, (char *)item->value);
     if (vlen)
         *vlen = item->size;
     return item->value;
+}
+
+static void cache_store_item(void *key, size_t len, void *value, size_t vlen, void *priv)
+{
+    groupcached_stored_item *item = malloc(sizeof(groupcached_stored_item));
+    item->value = malloc(vlen);
+    memcpy(item->value, value, vlen);
+    item->size = vlen;
+    ht_set(storage, key, len, item);
 }
 
 static void free_stored_item(void *v)
@@ -586,8 +599,21 @@ int main(int argc, char **argv)
 
     log_init("groupcached", loglevel);
 
-    cache = groupcache_create(me, shard_names, cnt, cache_fetch_item, free, NULL);
-    groupcache_init();
+    cache = groupcache_create(me, shard_names, cnt, cache_fetch_item, cache_store_item, free, NULL);
+
+    int num_peers = 0;
+    char **peer_names = groupcache_get_peers(cache, &num_peers);
+    if (peer_names) {
+        int i;
+        size_t peer_sizes[num_peers];
+        for (i = 0; i < num_peers; i++) {
+            peer_sizes[i] = strlen(peer_names[i]);
+        }
+        chash = chash_create((const char **)peer_names, peer_sizes, num_peers, 200);
+    } else {
+        ERROR("No peers configured in groupcache");
+        exit(-1);
+    }
 
     signal(SIGHUP, groupcached_reload);
     signal(SIGINT, groupcached_stop);
