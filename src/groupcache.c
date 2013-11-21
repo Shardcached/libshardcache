@@ -8,12 +8,13 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <netinet/in.h>
+#include <iomux.h>
+#include <fcntl.h>
 
 #include "groupcache.h"
 #include "arc.h"
 #include "connections.h"
-#include "fbuf.h"
-#include "log.h"
+#include <fbuf.h>
 
 #include <chash.h>
 
@@ -46,7 +47,7 @@ struct __groupcache_s {
     void *priv;
 
     int sock;
-    pthread_t *workers;
+    pthread_t listener;
     int       num_workers;
 };
 
@@ -87,9 +88,6 @@ int read_message(int fd, fbuf_t *out, groupcache_cmd_t *cmd) {
             if (chunk_len == 0) {
                 return fbuf_used(out);
             }
-
-            if (cmd)
-                DEBUG2("Received new message type %d , len %d", *cmd, chunk_len);
 
             int initial_len = chunk_len;
             while (chunk_len != 0) {
@@ -279,63 +277,211 @@ static void __op_destroy(void *item, void *priv)
     free(obj);
 }
 
+typedef struct {
+    fbuf_t *input;
+    fbuf_t *output;
+    int fd;
+    groupcache_t *cache;
+    groupcache_cmd_t cmd;
+    void *key;
+    int klen;
+    void *value;
+    int vlen;
+} groupcache_connection_context;
 
-static void serve_request(groupcache_t *cache, int fd) {
-    fbuf_t buf = FBUF_STATIC_INITIALIZER; 
-    groupcache_cmd_t cmd = 0;
-    int rb = read_message(fd, &buf, &cmd);
-    while (cmd > 0 && rb > 0) {
-        switch(cmd) {
-            case GROUPCACHE_CMD_GET:
-                if (fbuf_used(&buf)) {
-                    size_t vlen = 0;
-                    void *v = groupcache_get(cache, fbuf_data(&buf), fbuf_used(&buf), &vlen);
-                    if (v && vlen > 0) {
-                        write_message(fd, GROUPCACHE_CMD_GET_RESPONSE, v, vlen);
-                    }
-                }
-                break;
-            case GROUPCACHE_CMD_SET:
-                {
-                    int klen = fbuf_used(&buf);
-                    void *key = malloc(klen);
-                    memcpy(key, fbuf_data(&buf), klen);
-                    fbuf_clear(&buf);
-                    rb = read_message(fd, &buf, NULL);
-                    if (rb > 0) {
-                        if (cache->store_item_cb)
-                            cache->store_item_cb(key, klen, fbuf_data(&buf), fbuf_used(&buf), cache->priv);
-                        write_message(fd, GROUPCACHE_CMD_SET_RESPONSE, "OK", 2);
-                    }
-                    free(key);
-                }
-                break;
-            default:
-                close(fd);
-                fbuf_destroy(&buf);
-                return;
+
+static void *serve_request(void *priv) {
+    groupcache_connection_context *ctx = (groupcache_connection_context *)priv;
+    groupcache_t *cache = ctx->cache;
+    int fd = ctx->fd;
+
+    int opts = fcntl(fd, F_GETFL);
+    if (opts >= 0) {
+        int err = fcntl(fd, F_SETFL, opts & (~O_NONBLOCK));
+        if (err != 0) {
+            // TODO - Warning Messages
         }
-        fbuf_clear(&buf);
-        rb = read_message(fd, &buf, &cmd);
+    } else {
+        // TODO - Warning Messages
     }
+
+    switch(ctx->cmd) {
+        case GROUPCACHE_CMD_GET:
+        {
+            size_t vlen = 0;
+            void *v = groupcache_get(cache, ctx->key, ctx->klen, &vlen);
+            if (v && vlen > 0) {
+                write_message(fd, GROUPCACHE_CMD_GET_RESPONSE, v, vlen);
+            }
+            break;
+        }
+        case GROUPCACHE_CMD_SET:
+        {
+            if (cache->store_item_cb)
+                cache->store_item_cb(ctx->key, ctx->klen, ctx->value, ctx->vlen, cache->priv);
+            write_message(fd, GROUPCACHE_CMD_SET_RESPONSE, "OK", 2);
+            break;
+        }
+        default:
+            // TODO - Error Messages
+            break;
+    }
+
     close(fd);
-    fbuf_destroy(&buf);
+    fbuf_destroy(ctx->input);
+    fbuf_destroy(ctx->output);
+    free(ctx);
+    return NULL;
 }
 
-pthread_mutex_t accept_lock = PTHREAD_MUTEX_INITIALIZER;
+static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len, void *priv)
+{
+    groupcache_connection_context *ctx = (groupcache_connection_context *)priv;
+    if (!ctx)
+        return;
+
+    fbuf_add_binary(ctx->input, data, len);
+
+    // the smallest possible valid (complete) request is 6 bytes
+    if (fbuf_used(ctx->input) < 6)
+        return;
+
+    char *chunk = fbuf_data(ctx->input);
+    char cmd = *chunk;
+    chunk++;
+
+    if (cmd != GROUPCACHE_CMD_GET &&
+        cmd != GROUPCACHE_CMD_GET_RESPONSE &&
+        cmd != GROUPCACHE_CMD_SET&&
+        cmd != GROUPCACHE_CMD_SET_RESPONSE)
+    {
+        // BAD REQUEST
+        fbuf_free(ctx->input);
+        fbuf_free(ctx->output);
+        free(ctx);
+        iomux_close(iomux, fd);
+        return;
+    }
+
+    ctx->cmd = cmd;
+
+    int terminator_found = 0;
+    int separator_found = 0;
+    unsigned int ahead = 1; 
+
+    if (ctx->key) {
+        ahead += (2 + ctx->klen);
+        chunk += 2 + ctx->klen;
+    }
+       
+    while (!terminator_found) {
+        uint16_t nlen;
+        memcpy(&nlen, chunk, 2);
+        uint16_t clen = ntohs(nlen);
+        chunk += 2;
+        ahead += 2;
+        if (clen > 0) {
+            ahead += clen;
+            if (fbuf_used(ctx->input) >= ahead) {
+                if (ctx->key) {
+                    if (cmd == GROUPCACHE_CMD_SET) {
+                        ctx->value = chunk;
+                        ctx->vlen = clen;
+                    } else {
+                        // TODO - Error Messages
+                    }
+                } else {
+                    ctx->key = chunk;
+                    ctx->klen = clen;
+                }
+                chunk += clen;
+            } else {
+                break;
+            }
+        } else if (separator_found ||
+                   (cmd != GROUPCACHE_CMD_SET && ctx->key))
+        {
+            terminator_found = 1;
+        } else {
+            separator_found = 1;
+        }
+    }
+
+    if (terminator_found) {
+        // we have a complete request so we can now start 
+        // background worker to handle it
+        pthread_t worker_thread;
+        ctx->fd = fd;
+        // let the worker take care of the fd from now on
+        iomux_remove(iomux, fd);
+        pthread_create(&worker_thread, NULL, serve_request, ctx);
+        pthread_detach(worker_thread);
+    }
+}
+
+static void groupcache_eof_handler(iomux_t *iomux, int fd, void *priv)
+{
+    //DEBUG1("Connection to %d closed", fd);
+    close(fd);
+}
+
+static void groupcache_connection_handler(iomux_t *iomux, int fd, void *priv)
+{
+    groupcache_t *cache = (groupcache_t *)priv;
+
+    // create and initialize the context for the new connection
+    groupcache_connection_context *context = calloc(1, sizeof(groupcache_connection_context));
+
+    context->input = fbuf_create(0);
+    context->output = fbuf_create(0);
+    context->cache = cache;
+
+    iomux_callbacks_t connection_callbacks = {
+        .mux_connection = NULL,
+        .mux_input = groupcache_input_handler,
+        .mux_eof = groupcache_eof_handler,
+        .mux_output = NULL,
+        .mux_timeout = NULL,
+        .priv = context
+    };
+
+    // and wait for input data
+    iomux_add(iomux, fd, &connection_callbacks);
+}
+
 
 void *accept_requests(void *priv) {
     groupcache_t *cache = (groupcache_t *)priv;
-    for(;;) {
-        struct sockaddr peer_addr;
-        socklen_t addr_len;
-        pthread_mutex_lock(&accept_lock);
-        int fd = accept(cache->sock, &peer_addr, &addr_len);
-        pthread_mutex_unlock(&accept_lock);
-        if (fd >= 0) {
-            serve_request(cache, fd);
-        }
+
+    char *brkt;
+    char *addr = strdup(cache->me);
+    char *host = strtok_r(addr, ":", &brkt);
+    char *port_string = strtok_r(NULL, ":", &brkt);
+    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
+
+    iomux_callbacks_t groupcache_callbacks = {
+        .mux_connection = groupcache_connection_handler,
+        .mux_input = NULL,
+        .mux_eof = groupcache_eof_handler,
+        .mux_output = NULL,
+        .mux_timeout = NULL,
+        .priv = cache
+    };
+
+    iomux_t *iomux = iomux_create();
+    cache->sock = open_socket(host, port);
+    if (cache->sock == -1) {
+        fprintf(stderr, "Can't open listening socket: %s\n",strerror(errno));
+        groupcache_destroy(cache);
+        return NULL;
     }
+    iomux_add(iomux, cache->sock, &groupcache_callbacks);
+    iomux_listen(iomux, cache->sock);
+
+    iomux_loop(iomux, 0);
+    
+    iomux_destroy(iomux);
+    return NULL;
 }
 
 groupcache_t *groupcache_create(char *me,
@@ -375,31 +521,18 @@ groupcache_t *groupcache_create(char *me,
     cache->store_item_cb = store_cb;
     cache->priv = priv;
 
-    char *brkt;
-    char *addr = strdup(me);
-    char *host = strtok_r(addr, ":", &brkt);
-    char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
-    cache->sock = open_socket(host, port);
-    if (cache->sock == -1) {
-        fprintf(stderr, "Can't open listening socket: %s\n",strerror(errno));
+
+    int rc = pthread_create(&cache->listener, NULL, accept_requests, cache);
+    if (rc != 0) {
         groupcache_destroy(cache);
         return NULL;
-    }
-    cache->num_workers = 10;
-    cache->workers = calloc(sizeof(pthread_t), cache->num_workers);
-    for (i = 0; i < cache->num_workers; i++) {
-        pthread_create(&cache->workers[i], NULL, accept_requests, cache);
     }
     return cache;
 }
 
 void groupcache_destroy(groupcache_t *cache) {
-    int i;
-    for (i = 0; i < cache->num_workers; i++) {
-        pthread_cancel(cache->workers[i]);
-        pthread_join(cache->workers[i], NULL);
-    }
+    pthread_cancel(cache->listener);
+    pthread_join(cache->listener, NULL);
     arc_destroy(cache->arc);
     chash_free(cache->chash);
     free(cache->me);
