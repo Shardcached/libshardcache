@@ -8,6 +8,8 @@
 #include <stddef.h>
 #include <hashtable.h>
 
+#include <pthread.h>
+
 /**********************************************************************
  * Simple double-linked list, inspired by the implementation used in the
  * linux kernel.
@@ -78,6 +80,7 @@ typedef struct __arc_object {
     arc_list_t head, hash;
     unsigned long size;
     void *ptr;
+    pthread_mutex_t lock;
 } arc_object_t;
 
 /* The actual cache. */
@@ -87,6 +90,8 @@ struct __arc {
     
     unsigned long c, p;
     struct __arc_state mrug, mru, mfu, mfug;
+
+    pthread_mutex_t lock;
 };
 
 
@@ -103,6 +108,7 @@ static arc_object_t *arc_object_create(unsigned long size, void *ptr)
 
     arc_list_init(&obj->head);
     arc_list_init(&obj->hash);
+    pthread_mutex_init(&obj->lock, NULL);
     return obj;
 }
 
@@ -113,6 +119,7 @@ static void arc_balance(arc_t *cache, unsigned long size);
 * fetch, evict or destroy the object. */
 static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 {
+    pthread_mutex_lock(&cache->lock);
     if (obj->state) {
         obj->state->size -= obj->size;
         arc_list_remove(&obj->head);
@@ -123,6 +130,7 @@ static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *stat
         arc_list_remove(&obj->hash);
         cache->ops->destroy(obj->ptr, cache->ops->priv);
         free(obj);
+        pthread_mutex_unlock(&cache->lock);
         return NULL;
     } else {
         if (state == &cache->mrug || state == &cache->mfug) {
@@ -133,16 +141,23 @@ static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *stat
             /* The object is being moved from one of the ghost lists into
              * the MRU or MFU list, fetch the object into the cache. */
             arc_balance(cache, obj->size);
+            // unlock the mutex while the backend is fetching the data
+            pthread_mutex_unlock(&cache->lock);
+            pthread_mutex_lock(&obj->lock);
             if (cache->ops->fetch(obj->ptr, cache->ops->priv)) {
+                pthread_mutex_unlock(&obj->lock);
+                pthread_mutex_lock(&cache->lock);
                 /* If the fetch fails, put the object back to the list
                  * it was in before. */
                 if (obj->state) {
                     obj->state->size += obj->size;
                     arc_list_prepend(&obj->head, &obj->state->head);
                 }
-                
+                pthread_mutex_unlock(&cache->lock);
                 return NULL;
             }
+            pthread_mutex_unlock(&obj->lock);
+            pthread_mutex_lock(&cache->lock);
         }
 
         arc_list_prepend(&obj->head, &state->head);
@@ -151,6 +166,7 @@ static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *stat
         obj->state->size += obj->size;
     }
     
+    pthread_mutex_unlock(&cache->lock);
     return obj;
 }
 
@@ -209,6 +225,12 @@ arc_t *arc_create(arc_ops_t *ops, unsigned long c)
     arc_list_init(&cache->mru.head);
     arc_list_init(&cache->mfu.head);
     arc_list_init(&cache->mfug.head);
+    
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&cache->lock, &attr);
+    pthread_mutexattr_destroy(&attr);
 
     return cache;
 }
@@ -246,6 +268,7 @@ void  *arc_lookup(arc_t *cache, const void *key, size_t len)
     arc_object_t *obj = ht_get(cache->hash, (void *)key, len);
 
     if (obj) {
+        // XXX - possible race condition on obj->state
         if (obj->state == &cache->mru || obj->state == &cache->mfu) {
             /* Object is already in the cache, move it to the head of the
              * MFU list. */
