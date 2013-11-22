@@ -29,6 +29,14 @@ update:
 	    fi;\
 	done
 
+purge: clean
+	@for i in $(DEPS); do \
+	    name=`echo $$i | cut -d/ -f5 `; \
+	    if [ -d $$name ]; then \
+		rm -rf $$name; \
+	    fi;\
+	done
+
 clean:
 	@for i in $(DEPS); do \
 	    name=`echo $$i | cut -d/ -f5 `; \
