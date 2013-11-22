@@ -431,10 +431,10 @@ int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, siz
 int groupcache_del(groupcache_t *cache, void *key, size_t klen) {
     // if we are not the owner try propagating the command to the responsible peer
     const char *node_name;
+    arc_remove(cache->arc, (const void *)key, klen);
     if (groupcache_test_ownership(cache, key, klen, &node_name)) {
         if (cache->storage.remove)
             cache->storage.remove(key, klen, cache->priv);
-        arc_remove(cache->arc, (const void *)key, klen);
         return 0;
     } else {
         return delete_from_peer((char *)node_name, key, klen);
