@@ -80,6 +80,8 @@ typedef struct __arc_object {
     arc_list_t head, hash;
     unsigned long size;
     void *ptr;
+    void *key;
+    size_t klen;
     pthread_mutex_t lock;
 } arc_object_t;
 
@@ -129,6 +131,10 @@ static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *stat
         /* The object is being removed from the cache, destroy it. */
         arc_list_remove(&obj->hash);
         cache->ops->destroy(obj->ptr, cache->ops->priv);
+        if (obj->key) {
+            ht_delete(cache->hash, obj->key, obj->klen);
+            free(obj->key);
+        }
         free(obj);
         pthread_mutex_unlock(&cache->lock);
         return NULL;
@@ -302,6 +308,9 @@ void  *arc_lookup(arc_t *cache, const void *key, size_t len)
         /* New objects are always moved to the MRU list. */
         arc_object_t *moved = arc_move(cache, obj, &cache->mru);
         if (moved) {
+            obj->key = malloc(len);
+            memcpy(obj->key, key, len);
+            obj->klen = len;
             ht_set(cache->hash, (void *)key, len, obj);
             return moved->ptr;
         } else {
