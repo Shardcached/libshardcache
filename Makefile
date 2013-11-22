@@ -28,8 +28,12 @@ all: build_deps objects static shared groupcache_daemon
 
 build_deps:
 	@make -C deps all
+
 update_deps:
 	@make -C deps update
+
+purge_deps:
+	@make -C deps purge
 
 groupcache_daemon:
 	@LIBGROUPCACHE_DIR="`pwd`" make -C groupcached all

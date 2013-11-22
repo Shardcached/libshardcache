@@ -47,17 +47,17 @@ struct __groupcache_s {
 
     int sock;
     pthread_t listener;
-    int       num_workers;
+    int num_workers;
 };
 
 /* This is the object we're managing. It has a key
- * * and some data. This data will be loaded when ARC instruct
- * * us to do so. */
+ * and some data. This data will be loaded when ARC instruct
+ * us to do so. */
 typedef struct {
     void *key;
     size_t len;
-    size_t dlen;
     void *data;
+    size_t dlen;
 } cache_object_t;
 
 int read_message(int fd, fbuf_t *out, groupcache_cmd_t *cmd) {
@@ -271,16 +271,6 @@ static int __fetch_from_peer(char *peer, void *key, size_t len, fbuf_t *out) {
         close(fd);
     }
     return -1;
-}
-
-int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const char **owner)
-{
-    const char *node_name = NULL;
-    size_t name_len = 0;
-    chash_lookup(cache->chash, key, len, &node_name, &name_len);
-    if (owner)
-        *owner = node_name;
-    return (strcmp(node_name, cache->me) == 0);
 }
 
 static int __op_fetch(void *item, void * priv)
@@ -664,3 +654,14 @@ char **groupcache_get_peers(groupcache_t *cache, int *num_peers) {
         *num_peers = cache->num_shards;
     return cache->shards;
 }
+
+int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const char **owner)
+{
+    const char *node_name = NULL;
+    size_t name_len = 0;
+    chash_lookup(cache->chash, key, len, &node_name, &name_len);
+    if (owner)
+        *owner = node_name;
+    return (strcmp(node_name, cache->me) == 0);
+}
+
