@@ -2,8 +2,8 @@ DEPS=https://github.com/xant/libchash \
      https://github.com/xant/libhl \
      https://github.com/xant/libiomux
 
-LIBDIR=$(shell pwd)/.libs
-INCDIR=$(shell pwd)/.incs
+LIBDIR := $(shell pwd)/.libs
+INCDIR := $(shell pwd)/.incs
 
 all:
 	@mkdir -p .libs; \
@@ -15,6 +15,8 @@ all:
 	    fi; \
 	    cd $$name; \
 	    make; \
+	    export INCDIR=$(INCDIR); \
+	    export LIBDIR=$(LIBDIR); \
 	    make install; \
 	    cd -; \
 	done
