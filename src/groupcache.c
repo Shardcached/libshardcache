@@ -117,11 +117,6 @@ int read_message(int fd, fbuf_t *out, groupcache_cmd_t *cmd) {
 }
 
 static int write_message(int fd, char cmd, void *v, size_t vlen)  {
-    // TODO - split if vlen is bigger than MAXUINT16
-    //        the protocol supports chunks of at most MAXUINT16 bytes
-    //        so we need to provide multiple chunks in case the transmitted
-    //        value is bigger and doesn't fit in one chunk
-
     int wb;
 
     if (cmd > 0) {
@@ -131,20 +126,24 @@ static int write_message(int fd, char cmd, void *v, size_t vlen)  {
         }
     }
 
-    uint16_t size = htons(vlen);
-    wb = write_socket(fd, (char *)&size, 2);
-    if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
-        return -1;
-    } else if (wb == 2) {
-        int wrote = 0;
-        while (wrote != vlen) {
-            wb = write_socket(fd, v, vlen);
-            if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
-                return -1;
+    do {
+        int writelen = (vlen > (size_t)UINT16_MAX) ? UINT16_MAX : vlen;
+        vlen -= writelen;
+        uint16_t size = htons(writelen);
+        wb = write_socket(fd, (char *)&size, 2);
+        if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
+            return -1;
+        } else if (wb == 2) {
+            int wrote = 0;
+            while (wrote != writelen) {
+                wb = write_socket(fd, v, writelen);
+                if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
+                    return -1;
+                }
+                wrote += wb;
             }
-            wrote += wb;
         }
-    }
+    } while (vlen != 0);
     uint16_t terminator = 0;
     wb = write_socket(fd, (char *)&terminator, 2);
     if (wb == 2)
@@ -191,7 +190,9 @@ static int __send_to_peer(char *peer, void *key, size_t klen, void *value, size_
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             int rb = read_message(fd, &resp, &cmd);
             if (cmd == GROUPCACHE_CMD_SET_RESPONSE && rb > 0) {
-                printf("GOT: %s\n", fbuf_data(&resp));
+#ifdef DEBUG_GROUPCACHE
+                fprintf(stderr, "Got (set) response from peer %s : %s\n", peer, fbuf_data(&resp));
+#endif
                 close(fd);
                 fbuf_destroy(&resp);
                 return 0;
@@ -219,7 +220,12 @@ static int __fetch_from_peer(char *peer, void *key, size_t len, fbuf_t *out) {
             groupcache_cmd_t cmd = 0;
             int rb = read_message(fd, out, &cmd);
             if (cmd == GROUPCACHE_CMD_GET_RESPONSE && rb > 0) {
-                printf("HEYHEY GOT : %s\n", fbuf_data(out));
+#ifdef DEBUG_GROUPCACHE
+                // XXX - casting to (char *) here is dangerous ...
+                //       but this would happen only in debugging
+                //       so let's assume we know what we are doing
+                fprintf(stderr, "Got new data from peer %s : %s => %s \n", peer, key, fbuf_data(out));
+#endif
                 close(fd);
                 return 0;
             } else {
@@ -283,10 +289,10 @@ typedef struct {
     int fd;
     groupcache_t *cache;
     groupcache_cmd_t cmd;
-    void *key;
-    int klen;
-    void *value;
-    int vlen;
+    fbuf_t *key;
+    fbuf_t *value;
+    int    key_found;
+    int    value_found;
 } groupcache_connection_context;
 
 
@@ -309,7 +315,7 @@ static void *serve_request(void *priv) {
         case GROUPCACHE_CMD_GET:
         {
             size_t vlen = 0;
-            void *v = groupcache_get(cache, ctx->key, ctx->klen, &vlen);
+            void *v = groupcache_get(cache, fbuf_data(ctx->key), fbuf_used(ctx->key), &vlen);
             if (v && vlen > 0) {
                 write_message(fd, GROUPCACHE_CMD_GET_RESPONSE, v, vlen);
             }
@@ -317,9 +323,19 @@ static void *serve_request(void *priv) {
         }
         case GROUPCACHE_CMD_SET:
         {
+            /*
             if (cache->store_item_cb)
-                cache->store_item_cb(ctx->key, ctx->klen, ctx->value, ctx->vlen, cache->priv);
-            write_message(fd, GROUPCACHE_CMD_SET_RESPONSE, "OK", 2);
+                cache->store_item_cb(fbuf_data(ctx->key), fbuf_used(ctx->key),
+                        fbuf_data(ctx->value), fbuf_used(ctx->value), cache->priv);
+            */
+            int rc = groupcache_set(cache, fbuf_data(ctx->key), fbuf_used(ctx->key),
+                    fbuf_data(ctx->value), fbuf_used(ctx->value));
+            if (rc != 0) {
+                fprintf(stderr, "groupcache: Error setting a new key (%s)\n", fbuf_data(ctx->key));
+                write_message(fd, GROUPCACHE_CMD_SET_RESPONSE, "ERR", 3);
+            } else {
+                write_message(fd, GROUPCACHE_CMD_SET_RESPONSE, "OK", 2);
+            }
             break;
         }
         default:
@@ -328,8 +344,10 @@ static void *serve_request(void *priv) {
     }
 
     close(fd);
-    fbuf_destroy(ctx->input);
-    fbuf_destroy(ctx->output);
+    fbuf_free(ctx->input);
+    fbuf_free(ctx->output);
+    fbuf_free(ctx->key);
+    fbuf_free(ctx->value);
     free(ctx);
     return NULL;
 }
@@ -356,9 +374,6 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         cmd != GROUPCACHE_CMD_SET_RESPONSE)
     {
         // BAD REQUEST
-        fbuf_free(ctx->input);
-        fbuf_free(ctx->output);
-        free(ctx);
         iomux_close(iomux, fd);
         return;
     }
@@ -369,10 +384,8 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     int separator_found = 0;
     unsigned int ahead = 1; 
 
-    if (ctx->key) {
-        ahead += (2 + ctx->klen);
-        chunk += 2 + ctx->klen;
-    }
+    int klen = fbuf_used(ctx->key);
+    int vlen = fbuf_used(ctx->value);
        
     while (!terminator_found) {
         uint16_t nlen;
@@ -383,27 +396,35 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         if (clen > 0) {
             ahead += clen;
             if (fbuf_used(ctx->input) >= ahead) {
-                if (ctx->key) {
-                    if (cmd == GROUPCACHE_CMD_SET) {
-                        ctx->value = chunk;
-                        ctx->vlen = clen;
-                    } else {
-                        // TODO - Error Messages
-                    }
+                if (!ctx->key_found) {
+                    if (klen > 0)
+                        klen -= clen;
+                    else
+                        fbuf_add_binary(ctx->key, chunk, clen);
+                } else if (!ctx->value_found) {
+                    if (vlen > 0)
+                        vlen -= clen;
+                    else
+                        fbuf_add_binary(ctx->value, chunk, clen);
                 } else {
-                    ctx->key = chunk;
-                    ctx->klen = clen;
+                    // TODO - Error Messages
                 }
                 chunk += clen;
             } else {
                 break;
             }
-        } else if (separator_found ||
-                   (cmd != GROUPCACHE_CMD_SET && ctx->key))
-        {
+        } else if (separator_found) {
+            if (cmd == GROUPCACHE_CMD_SET) {
+                ctx->value_found = 1;
+            } else {
+                // TODO - Error Messages
+            }
             terminator_found = 1;
         } else {
+            ctx->key_found = 1;
             separator_found = 1;
+            if (cmd != GROUPCACHE_CMD_SET)
+                terminator_found = 1;
         }
     }
 
@@ -421,6 +442,14 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
 
 static void groupcache_eof_handler(iomux_t *iomux, int fd, void *priv)
 {
+    groupcache_connection_context *ctx = (groupcache_connection_context *)priv;
+    if (ctx) {
+        fbuf_free(ctx->input);
+        fbuf_free(ctx->output);
+        fbuf_free(ctx->key);
+        fbuf_free(ctx->value);
+        free(ctx);
+    }
     //DEBUG1("Connection to %d closed", fd);
     close(fd);
 }
@@ -434,6 +463,8 @@ static void groupcache_connection_handler(iomux_t *iomux, int fd, void *priv)
 
     context->input = fbuf_create(0);
     context->output = fbuf_create(0);
+    context->key = fbuf_create(0);
+    context->value = fbuf_create(0);
     context->cache = cache;
 
     iomux_callbacks_t connection_callbacks = {
@@ -559,11 +590,12 @@ int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, siz
     if (strcmp(node_name, cache->me) == 0) {
         if (cache->store_item_cb)
             cache->store_item_cb(key, klen, value, vlen, cache->priv);
+        return 0;
     } else {
-        __send_to_peer((char *)node_name, key, klen, value, vlen);
+        return __send_to_peer((char *)node_name, key, klen, value, vlen);
     }
 
-    return 0;
+    return -1;
 }
 
 char **groupcache_get_peers(groupcache_t *cache, int *num_peers) {
