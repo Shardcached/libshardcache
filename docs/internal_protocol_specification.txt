@@ -1,0 +1,73 @@
+The internal communication uses a very simple protocol
+
+GET_MESSAGE      : <HDR><KEY><EOM>
+SET_MESSAGE      : <HDR><KEY><VALUE><EOM>
+DEL_MESSAGE      : <HDR><KEY><EOM>
+RESP_MESSAGE     : <HDR><VALUE><EOM>
+
+HDR       : MSG_GET | MSG_SET | MSG_DEL | MSG_RESP
+MSG_GET   : 0x01
+MSG_SET   : 0x02
+MSG_DEL   : 0x03
+MSG_RESP  : 0x11
+KEY       : <BODY>
+VALUE     : <BODY>
+BODY      : <CHUNK_LEN><DATA>[<CHUNK_LEN><DATA>...]
+CHUNK_LEN : <HIGH_BYTE><LOW_BYTE>
+DATA      : <BYTE>...<BYTE>
+EOM       : <NULL_BYTE><NULL_BYTE>
+HIGH_BYTE : BYTE
+LOW_BYTE  : BYTE
+NULL_BYTE : 0x00
+BYTE      : 0x00 - 0xFF
+
+
+Examples
+
+A GET message for the key FOO (hex sequence: 0x46 0x4f 0x4f) would look like:
+
+<01><00><03><46><4f><4f><00><00>
+
+----------
+
+A SET message for the key FOO (hex sequence: 0x46 0x4f 0x4f)
+assigning the value TEST (hex sequence: 0x54 0x45 0x53 0x54) would look like:
+
+<02><00><03><46><4f><4f><00><00><00><04><54><45><53><54><00><00>
+
+----------
+
+A DEL message for the FOO would look exactly like a GET message but with a different
+HDR value :
+
+<03><00><03><46><4f><4f><00><00>
+
+----------
+
+A RESP message containing a value "OK" (0x4f 0x4b) would look like:
+
+<11><00><02><4f><4b><00><00>
+
+----------
+
+A RESP with an empty value (for instance if querying a not-existing key):
+
+<11><00><00>
+
+----------
+
+Responses to 'GET' requests will return the value for the requested key if any,
+an empty value otherwise
+
+Responses to 'SET' and 'DEL' requests will return either the string 'OK' or 'ERR'
+depending on the status of the operation
+
+
+=====================================================================
+|  FIELD    |   SIZE   |  DESC
+|           |          |
+|   HDR     |  1 Byte  |  The message type
+| CHUNK_LEN |  2 Bytes |  The length of the following chunk of data
+|   DATA    |  N Bytes |  The actual chunk of data
+|   EOM     |  2 Bytes |  End Of Message
+
