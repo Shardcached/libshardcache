@@ -118,7 +118,7 @@ typedef struct {
     fbuf_t *output;
     int fd;
     groupcache_t *cache;
-    groupcache_cmd_t cmd;
+    groupcache_hdr_t hdr;
     fbuf_t *key;
     fbuf_t *value;
     int    key_found;
@@ -160,17 +160,15 @@ static void *serve_request(void *priv) {
     }
 
     int rc = 0;
-    switch(ctx->cmd) {
-        case GROUPCACHE_CMD_GET:
+    switch(ctx->hdr) {
+        case GROUPCACHE_HDR_GET:
         {
             size_t vlen = 0;
             void *v = groupcache_get(cache, fbuf_data(ctx->key), fbuf_used(ctx->key), &vlen);
-            if (v && vlen > 0) {
-                write_message(fd, GROUPCACHE_CMD_RESPONSE, v, vlen);
-            }
+            write_message(fd, GROUPCACHE_HDR_RES, v, vlen);
             break;
         }
-        case GROUPCACHE_CMD_SET:
+        case GROUPCACHE_HDR_SET:
         {
             /*
             if (cache->storage.store)
@@ -181,21 +179,21 @@ static void *serve_request(void *priv) {
                     fbuf_data(ctx->value), fbuf_used(ctx->value));
             break;
         }
-        case GROUPCACHE_CMD_DEL:
+        case GROUPCACHE_HDR_DEL:
         {
             rc = groupcache_del(cache, fbuf_data(ctx->key), fbuf_used(ctx->key));
             break;
         }
         default:
-            fprintf(stderr, "Unknown command: 0x%02x\n", (char)ctx->cmd);
+            fprintf(stderr, "Unknown command: 0x%02x\n", (char)ctx->hdr);
             break;
     }
 
     if (rc != 0) {
-        fprintf(stderr, "groupcache: Error running command %d (key %s)\n", ctx->cmd, fbuf_data(ctx->key));
-        write_message(fd, GROUPCACHE_CMD_RESPONSE, "ERR", 3);
+        fprintf(stderr, "groupcache: Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
+        write_message(fd, GROUPCACHE_HDR_RES, "ERR", 3);
     } else {
-        write_message(fd, GROUPCACHE_CMD_RESPONSE, "OK", 2);
+        write_message(fd, GROUPCACHE_HDR_RES, "OK", 2);
     }
 
     close(fd);
@@ -216,20 +214,20 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         return;
 
     char *chunk = fbuf_data(ctx->input);
-    char cmd = *chunk;
+    char hdr = *chunk;
     chunk++;
 
-    if (cmd != GROUPCACHE_CMD_GET &&
-        cmd != GROUPCACHE_CMD_SET&&
-        cmd != GROUPCACHE_CMD_DEL &&
-        cmd != GROUPCACHE_CMD_RESPONSE)
+    if (hdr != GROUPCACHE_HDR_GET &&
+        hdr != GROUPCACHE_HDR_SET&&
+        hdr != GROUPCACHE_HDR_DEL &&
+        hdr != GROUPCACHE_HDR_RES)
     {
         // BAD REQUEST
         iomux_close(iomux, fd);
         return;
     }
 
-    ctx->cmd = cmd;
+    ctx->hdr = hdr;
 
     int terminator_found = 0;
     int separator_found = 0;
@@ -265,7 +263,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                 break;
             }
         } else if (separator_found) {
-            if (cmd == GROUPCACHE_CMD_SET) {
+            if (hdr == GROUPCACHE_HDR_SET) {
                 ctx->value_found = 1;
             } else {
                 // Bogus request, ignore
@@ -274,7 +272,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         } else {
             ctx->key_found = 1;
             separator_found = 1;
-            if (cmd != GROUPCACHE_CMD_SET)
+            if (hdr != GROUPCACHE_HDR_SET)
                 terminator_found = 1;
         }
     }
