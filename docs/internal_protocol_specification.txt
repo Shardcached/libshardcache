@@ -1,26 +1,34 @@
 The internal communication uses a very simple protocol
 
-GET_MESSAGE      : <HDR><KEY><EOM>
-SET_MESSAGE      : <HDR><KEY><VALUE><EOM>
-DEL_MESSAGE      : <HDR><KEY><EOM>
-RESP_MESSAGE     : <HDR><VALUE><EOM>
+GET_MESSAGE      : <HDR><KEY>
+SET_MESSAGE      : <HDR><KEY><VALUE>
+DEL_MESSAGE      : <HDR><KEY>
+RESP_MESSAGE     : <HDR><VALUE>
 
 HDR       : MSG_GET | MSG_SET | MSG_DEL | MSG_RESP
 MSG_GET   : 0x01
 MSG_SET   : 0x02
 MSG_DEL   : 0x03
 MSG_RESP  : 0x11
-KEY       : <BODY>
-VALUE     : <BODY>
-BODY      : <CHUNK_LEN><DATA>[<CHUNK_LEN><DATA>...]
-CHUNK_LEN : <HIGH_BYTE><LOW_BYTE>
+KEY       : <RECORD>
+VALUE     : <RECORD>
+RECORD    : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
+SIZE      : <HIGH_BYTE><LOW_BYTE>
 DATA      : <BYTE>...<BYTE>
-EOM       : <NULL_BYTE><NULL_BYTE>
+EOR       : <NULL_BYTE><NULL_BYTE>
 HIGH_BYTE : BYTE
 LOW_BYTE  : BYTE
 NULL_BYTE : 0x00
 BYTE      : 0x00 - 0xFF
 
+============================================================================================
+|  FIELD   |   SIZE   |  DESC                                                              |
+|----------|----------|--------------------------------------------------------------------|
+|   HDR    |  1 Byte  |  The message type                                                  |
+|   SIZE   |  2 Bytes |  The length of the following chunk of data (in network byte order) |
+|   DATA   |  N Bytes |  The actual chunk of data                                          |
+|   EOR    |  2 Bytes |  End Of Record                                                     |
+--------------------------------------------------------------------------------------------
 
 Examples
 
@@ -62,12 +70,4 @@ an empty value otherwise
 Responses to 'SET' and 'DEL' requests will return either the string 'OK' or 'ERR'
 depending on the status of the operation
 
-
-=====================================================================
-|  FIELD    |   SIZE   |  DESC
-|           |          |
-|   HDR     |  1 Byte  |  The message type
-| CHUNK_LEN |  2 Bytes |  The length of the following chunk of data
-|   DATA    |  N Bytes |  The actual chunk of data
-|   EOM     |  2 Bytes |  End Of Message
 
