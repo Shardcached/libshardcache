@@ -220,6 +220,20 @@ void *worker(void *priv)
     request_data += (httpv - request_data) + strlen(httpv) + 1;
     if (strncasecmp(method, "GET", 3) == 0) {
         send_response(ctx);
+    } else if (strncasecmp(method, "DELETE", 6) == 0) {
+        int rc = groupcache_del(cache, ctx->key, strlen(ctx->key));
+        char response[2048];
+
+        snprintf(response, sizeof(response),
+                 "%s %s\r\n"
+                 "Content-Length: 0\r\n\r\n",
+                 ctx->is_http10 ? "HTTP/1.0" : "HTTP/1.1",
+                 rc == 0 ? "200 OK" : "500 ERR");
+
+        // XXX
+        if (write_socket(ctx->fd, response, strlen(response)) != 0) {
+            ERROR("Worker %p failed writing reponse: %s", pthread_self(), strerror(errno));
+        }
     } else if (strncasecmp(method, "PUT", 3) == 0) {
         int clen = 0;
         char *clen_hdr = strcasestr(request_data, "Content-Length:");
@@ -384,6 +398,12 @@ static void cache_store_item(void *key, size_t len, void *value, size_t vlen, vo
     item->size = vlen;
     ht_set(storage, key, len, item);
 }
+
+static void cache_delete_item(void *key, size_t len, void *priv)
+{
+    ht_delete(storage, key, len);
+}
+
 
 static void free_stored_item(void *v)
 {
@@ -565,7 +585,14 @@ int main(int argc, char **argv)
 
     log_init("groupcached", loglevel);
 
-    cache = groupcache_create(me, shard_names, cnt, cache_fetch_item, cache_store_item, free, NULL);
+    groupcache_storage_t st = {
+        .fetch  = cache_fetch_item,
+        .store  = cache_store_item,
+        .remove = cache_delete_item,
+        .free   = free,
+        .priv   = NULL
+    };
+    cache = groupcache_create(me, shard_names, cnt, &st);
 
     int num_peers = 0;
     char **peer_names = groupcache_get_peers(cache, &num_peers);

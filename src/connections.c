@@ -7,8 +7,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
-#include <syslog.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include <sys/param.h>
 #include <sys/socket.h>
@@ -21,7 +22,6 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <log.h>
 
 #include "connections.h"
 
@@ -150,7 +150,7 @@ int write_socket(int fd, char *buf, int len) {
         wb =  write(fd, buf+ofx, len);
         if (wb == -1) {
             if (errno != EINTR || errno != EAGAIN) {
-                NOTICE("write on fd %d failed: %s", fd, strerror(errno));
+                fprintf(stderr, "write on fd %d failed: %s", fd, strerror(errno));
                 return -1;
             }
             wb = 0;
@@ -173,7 +173,7 @@ int read_socket(int fd, char *buf, int len) {
     int rb = 0;
     rb =  read(fd, buf, len);
     if (rb == -1 && (errno != EINTR || errno != EAGAIN)) { 
-        NOTICE("Read on fd %d failed: %s", fd, strerror(errno));
+        fprintf(stderr, "Read on fd %d failed: %s", fd, strerror(errno));
         return -1;
     }
     return rb >= 0 ? rb : 0;
@@ -210,7 +210,7 @@ open_connection(const char *host, int port, unsigned int timeout)
 	struct timeval tv = { timeout, 0 };
 	if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == -1
 	    || setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1)
-	    INFO("%s:%d: Failed to set timeout to %d\n", host, port, timeout);
+	    fprintf(stderr, "%s:%d: Failed to set timeout to %d\n", host, port, timeout);
     }
 
     if (string2sockaddr(host, port, &sockaddr) == -1

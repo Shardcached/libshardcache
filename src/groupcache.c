@@ -22,10 +22,10 @@
 #define GROUPCACHE_PORT_DEFAULT 9874
 
 typedef enum {
-    GROUPCACHE_CMD_GET          = 0x01,
-    GROUPCACHE_CMD_GET_RESPONSE = 0x02,
-    GROUPCACHE_CMD_SET          = 0x03,
-    GROUPCACHE_CMD_SET_RESPONSE = 0x04
+    GROUPCACHE_CMD_GET      = 0x01,
+    GROUPCACHE_CMD_SET      = 0x03,
+    GROUPCACHE_CMD_DEL      = 0x04,
+    GROUPCACHE_CMD_RESPONSE = 0x11
 } groupcache_cmd_t;
 
 typedef struct chash_t chash_t;
@@ -41,9 +41,8 @@ struct __groupcache_s {
 
     chash_t *chash;
 
-    groupcache_free_item_callback_t free_item_cb; 
-    groupcache_fetch_item_callback_t fetch_item_cb; 
-    groupcache_store_item_callback_t store_item_cb; 
+    groupcache_storage_t storage;
+
     void *priv;
 
     int sock;
@@ -73,9 +72,9 @@ int read_message(int fd, fbuf_t *out, groupcache_cmd_t *cmd) {
                 return -1;
             }
             if (*cmd != GROUPCACHE_CMD_GET &&
-                *cmd != GROUPCACHE_CMD_GET_RESPONSE &&
-                *cmd != GROUPCACHE_CMD_SET&&
-                *cmd != GROUPCACHE_CMD_SET_RESPONSE)
+                *cmd != GROUPCACHE_CMD_SET &&
+                *cmd != GROUPCACHE_CMD_DEL &&
+                *cmd != GROUPCACHE_CMD_RESPONSE)
             {
                 return -1;
             }
@@ -167,6 +166,43 @@ static void *__op_create(const void *key, size_t len, void *priv)
     return obj;
 }
 
+static int __delete_from_peer(char *peer, void *key, size_t klen) {
+    char *brkt;
+    char *addr = strdup(peer);
+    char *host = strtok_r(addr, ":", &brkt);
+    char *port_string = strtok_r(NULL, ":", &brkt);
+    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
+    int fd = open_connection(host, port, 30);
+    free(addr);
+
+    if (fd >= 0) {
+        int rc = write_message(fd, GROUPCACHE_CMD_DEL, key, klen);
+        if (rc != 0) {
+            close(fd);
+            return -1;
+        }
+
+        groupcache_cmd_t cmd = 0;
+        if (rc == 0) {
+            fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            int rb = read_message(fd, &resp, &cmd);
+            if (cmd == GROUPCACHE_CMD_RESPONSE && rb > 0) {
+#ifdef DEBUG_GROUPCACHE
+                fprintf(stderr, "Got (set) response from peer %s : %s\n", peer, fbuf_data(&resp));
+#endif
+                close(fd);
+                fbuf_destroy(&resp);
+                return 0;
+            } else {
+                // TODO - Error messages
+            }
+        }
+        close(fd);
+    }
+    return -1;
+}
+
+
 static int __send_to_peer(char *peer, void *key, size_t klen, void *value, size_t vlen) {
     char *brkt;
     char *addr = strdup(peer);
@@ -189,7 +225,7 @@ static int __send_to_peer(char *peer, void *key, size_t klen, void *value, size_
         if (rc == 0) {
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             int rb = read_message(fd, &resp, &cmd);
-            if (cmd == GROUPCACHE_CMD_SET_RESPONSE && rb > 0) {
+            if (cmd == GROUPCACHE_CMD_RESPONSE && rb > 0) {
 #ifdef DEBUG_GROUPCACHE
                 fprintf(stderr, "Got (set) response from peer %s : %s\n", peer, fbuf_data(&resp));
 #endif
@@ -219,7 +255,7 @@ static int __fetch_from_peer(char *peer, void *key, size_t len, fbuf_t *out) {
         if (rc == 0) {
             groupcache_cmd_t cmd = 0;
             int rb = read_message(fd, out, &cmd);
-            if (cmd == GROUPCACHE_CMD_GET_RESPONSE && rb > 0) {
+            if (cmd == GROUPCACHE_CMD_RESPONSE && rb > 0) {
 #ifdef DEBUG_GROUPCACHE
                 // XXX - casting to (char *) here is dangerous ...
                 //       but this would happen only in debugging
@@ -237,16 +273,24 @@ static int __fetch_from_peer(char *peer, void *key, size_t len, fbuf_t *out) {
     return -1;
 }
 
+int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const char **owner)
+{
+    const char *node_name = NULL;
+    size_t name_len = 0;
+    chash_lookup(cache->chash, key, len, &node_name, &name_len);
+    if (owner)
+        *owner = node_name;
+    return (strcmp(node_name, cache->me) == 0);
+}
+
 static int __op_fetch(void *item, void * priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
     groupcache_t *cache = (groupcache_t *)priv;
 
-    const char *node_name = NULL;
-    size_t name_len = 0;
-    chash_lookup(cache->chash, obj->key, obj->len, &node_name, &name_len);
+    const char *node_name;
     // if we are not the owner try asking our peer responsible for this data
-    if (strcmp(node_name, cache->me) != 0) {
+    if (groupcache_test_ownership(cache, obj->key, obj->len, &node_name)) {
         // another peer is responsible for this item, let's get the value from there
         fbuf_t value = FBUF_STATIC_INITIALIZER;
         int rc = __fetch_from_peer((char *)node_name, obj->key, obj->len, &value);
@@ -258,8 +302,8 @@ static int __op_fetch(void *item, void * priv)
     }
 
     // we are responsible for this item ... so let's fetch it
-    if (cache->fetch_item_cb)
-        obj->data = cache->fetch_item_cb(obj->key, obj->len, &obj->dlen, cache->priv);
+    if (cache->storage.fetch)
+        obj->data = cache->storage.fetch(obj->key, obj->len, &obj->dlen, cache->priv);
     if (!obj->data)
         return -1;
     return 0;
@@ -269,8 +313,8 @@ static void __op_evict(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
     groupcache_t *cache = (groupcache_t *)priv;
-    if (obj->data && cache->free_item_cb) {
-        cache->free_item_cb(obj->data);
+    if (obj->data && cache->storage.free) {
+        cache->storage.free(obj->data);
         obj->data = NULL;
         obj->dlen = 0;
     }
@@ -329,36 +373,43 @@ static void *serve_request(void *priv) {
         // TODO - Warning Messages
     }
 
+    int rc = 0;
     switch(ctx->cmd) {
         case GROUPCACHE_CMD_GET:
         {
             size_t vlen = 0;
             void *v = groupcache_get(cache, fbuf_data(ctx->key), fbuf_used(ctx->key), &vlen);
             if (v && vlen > 0) {
-                write_message(fd, GROUPCACHE_CMD_GET_RESPONSE, v, vlen);
+                write_message(fd, GROUPCACHE_CMD_RESPONSE, v, vlen);
             }
             break;
         }
         case GROUPCACHE_CMD_SET:
         {
             /*
-            if (cache->store_item_cb)
-                cache->store_item_cb(fbuf_data(ctx->key), fbuf_used(ctx->key),
+            if (cache->storage.store)
+                cache->storage.store(fbuf_data(ctx->key), fbuf_used(ctx->key),
                         fbuf_data(ctx->value), fbuf_used(ctx->value), cache->priv);
             */
-            int rc = groupcache_set(cache, fbuf_data(ctx->key), fbuf_used(ctx->key),
+            rc = groupcache_set(cache, fbuf_data(ctx->key), fbuf_used(ctx->key),
                     fbuf_data(ctx->value), fbuf_used(ctx->value));
-            if (rc != 0) {
-                fprintf(stderr, "groupcache: Error setting a new key (%s)\n", fbuf_data(ctx->key));
-                write_message(fd, GROUPCACHE_CMD_SET_RESPONSE, "ERR", 3);
-            } else {
-                write_message(fd, GROUPCACHE_CMD_SET_RESPONSE, "OK", 2);
-            }
+            break;
+        }
+        case GROUPCACHE_CMD_DEL:
+        {
+            rc = groupcache_del(cache, fbuf_data(ctx->key), fbuf_used(ctx->key));
             break;
         }
         default:
             // TODO - Error Messages
             break;
+    }
+
+    if (rc != 0) {
+        fprintf(stderr, "groupcache: Error running command %d (key %s)\n", ctx->cmd, fbuf_data(ctx->key));
+        write_message(fd, GROUPCACHE_CMD_RESPONSE, "ERR", 3);
+    } else {
+        write_message(fd, GROUPCACHE_CMD_RESPONSE, "OK", 2);
     }
 
     close(fd);
@@ -383,9 +434,9 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     chunk++;
 
     if (cmd != GROUPCACHE_CMD_GET &&
-        cmd != GROUPCACHE_CMD_GET_RESPONSE &&
         cmd != GROUPCACHE_CMD_SET&&
-        cmd != GROUPCACHE_CMD_SET_RESPONSE)
+        cmd != GROUPCACHE_CMD_DEL &&
+        cmd != GROUPCACHE_CMD_RESPONSE)
     {
         // BAD REQUEST
         iomux_close(iomux, fd);
@@ -519,19 +570,16 @@ void *accept_requests(void *priv) {
     return NULL;
 }
 
-groupcache_t *groupcache_create(char *me,
-                        char **peers,
-                        int npeers,
-                        groupcache_fetch_item_callback_t fetch_cb, 
-                        groupcache_store_item_callback_t store_cb, 
-                        groupcache_free_item_callback_t free_cb,
-                        void *priv)
+groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_storage_t *st)
 {
     int i;
     size_t shard_lens[npeers + 1];
 
     groupcache_t *cache = calloc(1, sizeof(groupcache_t));
     cache->me = strdup(me);
+
+    if (st)
+        memcpy(&cache->storage, st, sizeof(cache->storage));;
 
     cache->ops.create  = __op_create;
     cache->ops.fetch   = __op_fetch;
@@ -551,11 +599,6 @@ groupcache_t *groupcache_create(char *me,
     cache->chash = chash_create((const char **)cache->shards, shard_lens, cache->num_shards, 200);
 
     cache->arc = arc_create(&cache->ops, 300);
-    cache->free_item_cb = free_cb;
-    cache->fetch_item_cb = fetch_cb;
-    cache->store_item_cb = store_cb;
-    cache->priv = priv;
-
 
     int rc = pthread_create(&cache->listener, NULL, accept_requests, cache);
     if (rc != 0) {
@@ -587,16 +630,30 @@ void *groupcache_get(groupcache_t *cache, void *key, size_t len, size_t *vlen) {
 }
 
 int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, size_t vlen) {
-    const char *node_name = NULL;
-    size_t name_len = 0;
-    chash_lookup(cache->chash, key, klen, &node_name, &name_len);
-    // if we are not the owner try asking our peer responsible for this data
-    if (strcmp(node_name, cache->me) == 0) {
-        if (cache->store_item_cb)
-            cache->store_item_cb(key, klen, value, vlen, cache->priv);
+    // if we are not the owner try propagating the command to the responsible peer
+    
+    const char *node_name;
+    if (groupcache_test_ownership(cache, key, klen, &node_name)) {
+        if (cache->storage.store)
+            cache->storage.store(key, klen, value, vlen, cache->priv);
         return 0;
     } else {
         return __send_to_peer((char *)node_name, key, klen, value, vlen);
+    }
+
+    return -1;
+}
+
+int groupcache_del(groupcache_t *cache, void *key, size_t klen) {
+    // if we are not the owner try propagating the command to the responsible peer
+    const char *node_name;
+    if (groupcache_test_ownership(cache, key, klen, &node_name)) {
+        if (cache->storage.remove)
+            cache->storage.remove(key, klen, cache->priv);
+        arc_remove(cache->arc, (const void *)key, klen);
+        return 0;
+    } else {
+        return __delete_from_peer((char *)node_name, key, klen);
     }
 
     return -1;

@@ -262,6 +262,14 @@ void arc_destroy(arc_t *cache)
     free(cache);
 }
 
+void arc_remove(arc_t *cache, const void *key, size_t len)
+{
+    arc_object_t *obj = ht_get(cache->hash, (void *)key, len);
+    if (obj) {
+        arc_move(cache, obj, NULL);
+    }
+}
+
 /* Lookup an object with the given key. */
 void  *arc_lookup(arc_t *cache, const void *key, size_t len)
 {

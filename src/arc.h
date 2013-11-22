@@ -33,5 +33,7 @@ void arc_destroy(arc_t *cache);
  * fetches the object if it does not exists yet. */
 void *arc_lookup(arc_t *cache, const void *key, size_t len);
 
+void arc_remove(arc_t *cache, const void *key, size_t len);
+
 
 #endif /* __ARC_H__ */
