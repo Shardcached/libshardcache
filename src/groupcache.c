@@ -293,11 +293,29 @@ typedef struct {
     fbuf_t *value;
     int    key_found;
     int    value_found;
-} groupcache_connection_context;
+} groupcache_worker_context_t;
 
+static groupcache_worker_context_t *groupcache_create_connection_context(groupcache_t *cache) {
+    groupcache_worker_context_t *context = calloc(1, sizeof(groupcache_worker_context_t));
+
+    context->input = fbuf_create(0);
+    context->output = fbuf_create(0);
+    context->key = fbuf_create(0);
+    context->value = fbuf_create(0);
+    context->cache = cache;
+    return context;
+}
+
+static void groupcache_destroy_connection_context(groupcache_worker_context_t *ctx) {
+    fbuf_free(ctx->input);
+    fbuf_free(ctx->output);
+    fbuf_free(ctx->key);
+    fbuf_free(ctx->value);
+    free(ctx);
+}
 
 static void *serve_request(void *priv) {
-    groupcache_connection_context *ctx = (groupcache_connection_context *)priv;
+    groupcache_worker_context_t *ctx = (groupcache_worker_context_t *)priv;
     groupcache_t *cache = ctx->cache;
     int fd = ctx->fd;
 
@@ -344,17 +362,13 @@ static void *serve_request(void *priv) {
     }
 
     close(fd);
-    fbuf_free(ctx->input);
-    fbuf_free(ctx->output);
-    fbuf_free(ctx->key);
-    fbuf_free(ctx->value);
-    free(ctx);
+    groupcache_destroy_connection_context(ctx);
     return NULL;
 }
 
 static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len, void *priv)
 {
-    groupcache_connection_context *ctx = (groupcache_connection_context *)priv;
+    groupcache_worker_context_t *ctx = (groupcache_worker_context_t *)priv;
     if (!ctx)
         return;
 
@@ -442,16 +456,12 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
 
 static void groupcache_eof_handler(iomux_t *iomux, int fd, void *priv)
 {
-    groupcache_connection_context *ctx = (groupcache_connection_context *)priv;
+    groupcache_worker_context_t *ctx = (groupcache_worker_context_t *)priv;
+    close(fd);
     if (ctx) {
-        fbuf_free(ctx->input);
-        fbuf_free(ctx->output);
-        fbuf_free(ctx->key);
-        fbuf_free(ctx->value);
-        free(ctx);
+        groupcache_destroy_connection_context(ctx);
     }
     //DEBUG1("Connection to %d closed", fd);
-    close(fd);
 }
 
 static void groupcache_connection_handler(iomux_t *iomux, int fd, void *priv)
@@ -459,13 +469,7 @@ static void groupcache_connection_handler(iomux_t *iomux, int fd, void *priv)
     groupcache_t *cache = (groupcache_t *)priv;
 
     // create and initialize the context for the new connection
-    groupcache_connection_context *context = calloc(1, sizeof(groupcache_connection_context));
-
-    context->input = fbuf_create(0);
-    context->output = fbuf_create(0);
-    context->key = fbuf_create(0);
-    context->value = fbuf_create(0);
-    context->cache = cache;
+    groupcache_worker_context_t *ctx = groupcache_create_connection_context(cache);
 
     iomux_callbacks_t connection_callbacks = {
         .mux_connection = NULL,
@@ -473,7 +477,7 @@ static void groupcache_connection_handler(iomux_t *iomux, int fd, void *priv)
         .mux_eof = groupcache_eof_handler,
         .mux_output = NULL,
         .mux_timeout = NULL,
-        .priv = context
+        .priv = ctx
     };
 
     // and wait for input data
