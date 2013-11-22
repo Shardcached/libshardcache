@@ -3,6 +3,8 @@
 
 #include <sys/types.h>
 
+#define GROUPCACHE_PORT_DEFAULT 9874
+
 typedef struct __groupcache_s groupcache_t;
 
 typedef void *(*groupcache_fetch_item_callback_t)(void *key, size_t len, size_t *vlen, void *priv);
