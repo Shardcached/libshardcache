@@ -75,7 +75,7 @@ static int __op_fetch(void *item, void * priv)
 
     const char *node_name;
     // if we are not the owner try asking our peer responsible for this data
-    if (groupcache_test_ownership(cache, obj->key, obj->len, &node_name)) {
+    if (!groupcache_test_ownership(cache, obj->key, obj->len, &node_name)) {
         // another peer is responsible for this item, let's get the value from there
         fbuf_t value = FBUF_STATIC_INITIALIZER;
         int rc = fetch_from_peer((char *)node_name, obj->key, obj->len, &value);
@@ -89,6 +89,7 @@ static int __op_fetch(void *item, void * priv)
     // we are responsible for this item ... so let's fetch it
     if (cache->storage.fetch)
         obj->data = cache->storage.fetch(obj->key, obj->len, &obj->dlen, cache->priv);
+
     if (!obj->data)
         return -1;
     return 0;
@@ -152,10 +153,10 @@ static void *serve_request(void *priv) {
     if (opts >= 0) {
         int err = fcntl(fd, F_SETFL, opts & (~O_NONBLOCK));
         if (err != 0) {
-            // TODO - Warning Messages
+            fprintf(stderr, "Can't set fd %d to non blocking mode: %s\n", fd, strerror(errno));
         }
     } else {
-        // TODO - Warning Messages
+        fprintf(stderr, "Can't get flags for fd %d: %s\n", fd, strerror(errno));
     }
 
     int rc = 0;
@@ -186,7 +187,7 @@ static void *serve_request(void *priv) {
             break;
         }
         default:
-            // TODO - Error Messages
+            fprintf(stderr, "Unknown command: 0x%02x\n", (char)ctx->cmd);
             break;
     }
 
@@ -257,7 +258,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                     else
                         fbuf_add_binary(ctx->value, chunk, clen);
                 } else {
-                    // TODO - Error Messages
+                    // Bogus request, ignore
                 }
                 chunk += clen;
             } else {
@@ -267,7 +268,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             if (cmd == GROUPCACHE_CMD_SET) {
                 ctx->value_found = 1;
             } else {
-                // TODO - Error Messages
+                // Bogus request, ignore
             }
             terminator_found = 1;
         } else {
@@ -333,7 +334,7 @@ void *accept_requests(void *priv) {
     iomux_callbacks_t groupcache_callbacks = {
         .mux_connection = groupcache_connection_handler,
         .mux_input = NULL,
-        .mux_eof = groupcache_eof_handler,
+        .mux_eof = NULL,
         .mux_output = NULL,
         .mux_timeout = NULL,
         .priv = cache
