@@ -93,3 +93,49 @@ sub del {
 }
 
 1;
+__END__
+
+=head1 NAME
+
+Groupcache::Client - Client library to access groupcache nodes
+
+
+=head1 SYNOPSIS
+
+    use Groupcache::Client;
+
+    $c = Groupcache::Client->new("http://localhost:4444");
+
+    $c->set("key", "value");
+
+    $v = $c->get("key");
+
+    $c->del("key");
+
+=head1 DESCRIPTION
+
+Client library to access groupcache nodes (based on libgroupcache)
+This module allow committing get/set/del operations to the groupcache cloud
+communicating with any of the nodes over their internal channel
+
+=head1 SEE ALSO
+
+=for :list
+ * L<Groupcache>
+ * L<Groupcache::Storage>
+ * L<Groupcache::Storage::Mem>
+
+=head1 AUTHOR
+
+Andrea Guzzo, E<lt>xant@apple.comE<gt>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2013 by Andrea Guzzo
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.12.4 or,
+at your option, any later version of Perl 5 you may have available.
+
+
+=cut
