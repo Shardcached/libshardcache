@@ -43,14 +43,15 @@ if ($pid) {
     $gc->set("test_key2", "test_value2");
     $gc->set("test_key3", "test_value3");
 
-    warn "test_key1: " . $gc->get("test_key1");
-    warn "test_key2: " . $gc->get("test_key2");
-    warn "test_key3: " . $gc->get("test_key3");
+    is($gc->get("test_key1"), "test_value1");
+    is($gc->get("test_key2"), "test_value2");
+    is($gc->get("test_key3"), "test_value3");
 
     wait;
 
-    warn "test_key4: " . $gc->get("test_key4");
-    warn "test_key2 (should be null): " . ($gc->get("test_key2") || "(null)");
+    is($gc->get("test_key4"), "test_value4");
+
+    ok ( !defined $gc->get("test_key2") );
 } else {
     my $c = Groupcache::Client->new("localhost:4444"); 
     warn Dumper($c);
