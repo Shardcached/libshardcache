@@ -39,7 +39,7 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
         croak("Unexpected errors calling the 'fetch' method on the storage object");
     }
 
-    SV *val = POPs;
+    SV *val = sv_2mortal(POPs);
     char * out = NULL;
 
     if (SvOK(val)) {
@@ -224,10 +224,6 @@ groupcache_set(cache, key, klen, value, vlen)
 	size_t	klen
 	char *	value
 	size_t	vlen
-        CODE:
-            RETVAL = groupcache_set(cache, key, klen, value, vlen);
-        OUTPUT:
-            RETVAL
 
 int
 groupcache_test_ownership(cache, key, len, owner)
