@@ -9,4 +9,8 @@
 test/*_test
 .DS_Store
 *.dSYM
-
+deps/.incs
+deps/.libs
+deps/libhl
+deps/libchash
+deps/libiomux
