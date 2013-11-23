@@ -12,15 +12,6 @@ LDFLAGS +=
 CFLAGS += -Wno-deprecated-declarations
 endif
 
-ifeq ($(UNAME), Darwin)
-SHAREDFLAGS = -dynamiclib
-SHAREDEXT = dylib
-else
-SHAREDFLAGS = -shared
-SHAREDEXT = so
-endif
-
-
 #CC = gcc
 TARGETS = $(patsubst %.c, %.o, $(wildcard src/*.c))
 
