@@ -211,6 +211,8 @@ void *worker(void *priv)
     if (key) {
         NOTICE("(%p) Lookup request from %s: %s", pthread_self(), inet_ntoa(peer.sin_addr), key);
         ctx->key = key;
+    } else {
+        goto __end_worker; 
     }
     char *httpv = strtok(NULL, "\r\n");
     if (httpv) {
@@ -269,6 +271,7 @@ void *worker(void *priv)
             }
             rb += n;
         } 
+
         groupcache_set(cache, key, strlen(key), fbuf_data(&v), fbuf_used(&v));
 
         char response[2048];

@@ -22,10 +22,10 @@ typedef struct __arc_list {
     ((type*) (((char*)ptr) - offsetof(type, field)))
 
 #define arc_list_each(pos, head) \
-    for (pos = (head)->next; pos != (head); pos = pos->next)
+    for (pos = (head)->next; pos && pos != (head); pos = pos->next)
 
 #define arc_list_each_prev(pos, head) \
-    for (pos = (head)->prev; pos != (head); pos = pos->prev)
+    for (pos = (head)->prev; pos && pos != (head); pos = pos->prev)
 
 static inline void
 arc_list_init( arc_list_t * head )
@@ -246,15 +246,13 @@ void arc_destroy(arc_t *cache)
 {
     arc_list_t *iter;
     
-    ht_destroy(cache->hash);
-    
     arc_list_each(iter, &cache->mrug.head) {
         arc_object_t *obj = arc_list_entry(iter, arc_object_t, head);
 		arc_move(cache, obj, NULL);
     }
     arc_list_each(iter, &cache->mru.head) {
         arc_object_t *obj = arc_list_entry(iter, arc_object_t, head);
-		arc_move(cache, obj, NULL);
+        arc_move(cache, obj, NULL);
     }
     arc_list_each(iter, &cache->mfu.head) {
         arc_object_t *obj = arc_list_entry(iter, arc_object_t, head);
@@ -265,6 +263,8 @@ void arc_destroy(arc_t *cache)
 		arc_move(cache, obj, NULL);
     }
 
+    ht_destroy(cache->hash);
+    
     free(cache);
 }
 
