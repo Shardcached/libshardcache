@@ -6,6 +6,7 @@ ppport.h
 README
 typemap
 t/Groupcache.t
-fallback/const-c.inc
-fallback/const-xs.inc
 lib/Groupcache.pm
+lib/Groupcache/Client.pm
+lib/Groupcache/Storage.pm
+lib/Groupcache/Storage/Mem.pm
