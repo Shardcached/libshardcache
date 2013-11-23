@@ -1,0 +1,5 @@
+const char **					T_PTROBJ
+groupcache_storage_t *				T_PTROBJ
+groupcache_t *					T_PTROBJ
+int *						T_PTROBJ
+size_t *					T_PTROBJ

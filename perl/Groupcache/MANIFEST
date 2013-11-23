@@ -1,0 +1,11 @@
+Changes
+Groupcache.xs
+Makefile.PL
+MANIFEST
+ppport.h
+README
+typemap
+t/Groupcache.t
+fallback/const-c.inc
+fallback/const-xs.inc
+lib/Groupcache.pm
