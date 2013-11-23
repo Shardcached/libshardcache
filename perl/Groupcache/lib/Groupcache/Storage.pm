@@ -3,7 +3,7 @@ package Groupcache::Storage;
 use strict;
 
 sub new {
-    my ($class, $self) = @_;
+    my ($class) = @_;
     my $self = {};
     bless $self, $class;
     return $self;

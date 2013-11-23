@@ -40,16 +40,19 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
     }
 
     SV *val = POPs;
-    STRLEN l;
-    char *str = SvPVbyte(val, l);
     char * out = NULL;
-    
-    if (l) {
-        out = malloc(l);
-        memcpy(out, str, l);
 
-        if (vlen)
-            *vlen = l; 
+    if (SvOK(val)) {
+        STRLEN l;
+        char *str = SvPVbyte(val, l);
+        
+        if (l) {
+            Newx(out, l, char);
+            memcpy(out, str, l);
+
+            if (vlen)
+                *vlen = l; 
+        }
     }
 
     PUTBACK;
@@ -106,7 +109,7 @@ static void __st_remove(void *key, size_t len, void *priv) {
 }
 
 static void __st_free(void *val) {
-    free(val);
+    Safefree(val);
 }
 
 MODULE = Groupcache		PACKAGE = Groupcache		
@@ -136,7 +139,7 @@ groupcache_create(me, peers, storage)
 
             num_peers = av_len(peers_array);
             if (num_peers > 0) {
-                shards = malloc(sizeof(char *) * num_peers + 1);
+                Newx(shards, sizeof(char *) * num_peers + 1, char *);
                 for (i = 0; i < num_peers; i++) {
                     STRLEN len;
                     char *peer;

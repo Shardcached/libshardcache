@@ -2,6 +2,7 @@ package Groupcache;
 
 use 5.012004;
 use strict;
+use warnings;
 use Carp;
 
 require Exporter;

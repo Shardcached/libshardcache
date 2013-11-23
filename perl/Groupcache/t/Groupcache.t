@@ -15,7 +15,6 @@ BEGIN { use_ok('Groupcache');
         use_ok('Groupcache::Client');
       };
 
-
 my $fail = 0;
 foreach my $constname (qw()) {
   next if (eval "my \$a = $constname; 1");
