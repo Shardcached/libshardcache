@@ -52,8 +52,10 @@ if ($pid) {
     # now let's wait for the child process to finish
     wait;
 
-    # we should now found the new key created by the child process
-    is($gc->get("test_key4"), "test_value4");
+    # we should now find some new keys created by the child process
+    foreach my $i (4..24) {
+        is($gc->get("test_key$i"), "test_value$i");
+    }
 
     # and test_key2 should have been removed by the child process as well
     ok ( !defined $gc->get("test_key2") );
@@ -62,7 +64,9 @@ if ($pid) {
     my $c = Groupcache::Client->new("localhost:4444"); 
     warn Dumper($c);
 
-    $c->set("test_key4", "test_value4");
+    foreach my $i (4..24) {
+        $c->set("test_key$i", "test_value$i");
+    }
 
     $c->del("test_key2");
 
