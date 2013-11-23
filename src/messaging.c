@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
+#include <netinet/in.h>
 #include <errno.h>
 #include "messaging.h"
 #include "connections.h"

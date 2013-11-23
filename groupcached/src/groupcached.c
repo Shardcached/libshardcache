@@ -1,6 +1,9 @@
+#define _GNU_SOURCE
+#include <getopt.h>
+#include <string.h>
+
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <signal.h>
@@ -24,9 +27,6 @@
 #include <hashtable.h>
 #include <groupcache.h>
 #include <chash.h>
-
-#define _GNU_SOURCE
-#include <getopt.h>
 
 #define GROUPCACHED_DBFILE_DEFAULT "/usr/share/groupcache/groupcache.xml"
 #define GROUPCACHED_PORT_DEFAULT 4321
@@ -421,44 +421,44 @@ static int string2sockaddr(const char *host, int port, struct sockaddr_in *socka
     errno = EINVAL;
 
     if (host) {
-	char host2[512];
-	char *p;
-	char *pe;
+        char host2[512];
+        char *p;
+        char *pe;
 
-	strncpy(host2, host, sizeof(host2)-1);
-	p = strchr(host2, ':');
+        strncpy(host2, host, sizeof(host2)-1);
+        p = strchr(host2, ':');
 
-	if (p) {				// check for <host>:<port>
-	    *p = '\0';				// point to port part
-	    p++;
-	    port = strtol(p, &pe, 10);		// convert string to number
-	    if (*pe != '\0') {			// did not match complete string? try as string
-		struct servent *e = getservbyname(p, "tcp");
-		if (!e) {
-		    errno = ENOENT;		// to avoid errno == 0 in error case
-		    return -1;
-		}
-		port = ntohs(e->s_port);
-	    }
-	}
+        if (p) {        // check for <host>:<port>
+            *p = '\0';  // point to port part
+            p++;
+            port = strtol(p, &pe, 10); // convert string to number
+            if (*pe != '\0') { // did not match complete string? try as string
+                struct servent *e = getservbyname(p, "tcp");
+                if (!e) {
+                    errno = ENOENT; // to avoid errno == 0 in error case
+                    return -1;
+                }
+                port = ntohs(e->s_port);
+            }
+        }
 
         if (strcmp(host2, "*") == 0) {
             ip = INADDR_ANY;
         } else {
             if (!inet_aton(host2, (struct in_addr *)&ip)) {
                 struct hostent *e = gethostbyname(host2);
-		if (!e || e->h_addrtype != AF_INET) {
-		    errno = ENOENT;		// to avoid errno == 0 in error case
-		    return -1;
-		}
+                if (!e || e->h_addrtype != AF_INET) {
+                    errno = ENOENT; // to avoid errno == 0 in error case
+                    return -1;
+                }
                 ip = ((unsigned long *) (e->h_addr_list[0]))[0];
             }
         }
     }
     if (port == 0)
-	return -1;
+        return -1;
     else
-	port = htons(port);
+        port = htons(port);
 
     bzero(sockaddr, sizeof(struct sockaddr_in));
 #ifndef __linux
@@ -479,20 +479,21 @@ static int open_socket(const char *host, int port)
 
     errno = EINVAL;
     if (host == NULL || strlen(host) == 0 || port == 0)
-	return -1;
+        return -1;
 
     sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == -1)
-	return -1;
+        return -1;
 
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &val,  sizeof(val));
 
     if (string2sockaddr(host, port, &sockaddr) == -1
-	|| bind(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1) {
-	shutdown(sock, SHUT_RDWR);
-	close(sock);
-	return -1;
+        || bind(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1)
+    {
+        shutdown(sock, SHUT_RDWR);
+        close(sock);
+        return -1;
     }
 
     listen(sock, -1);
@@ -583,8 +584,13 @@ int main(int argc, char **argv)
 
     regfree(&addr_regexp);
 
-    if (!foreground)
-        daemon(0, 0);
+    if (!foreground) {
+        int rc = daemon(0, 0);
+        if (rc != 0) {
+            fprintf(stderr, "Can't go daemon: %s\n", strerror(errno));
+            exit(-1);
+        }
+    }
 
     log_init("groupcached", loglevel);
 

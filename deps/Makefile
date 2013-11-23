@@ -2,8 +2,8 @@ DEPS=https://github.com/xant/libchash \
      https://github.com/xant/libhl \
      https://github.com/xant/libiomux
 
-LIBDIR := $(shell pwd)/.libs
-INCDIR := $(shell pwd)/.incs
+export LIBDIR := $(shell pwd)/.libs
+export INCDIR := $(shell pwd)/.incs
 
 all:
 	@mkdir -p .libs; \
@@ -13,12 +13,10 @@ all:
 	    if [ ! -d $$name ]; then \
 		git clone $$i; \
 	    fi; \
-	    cd $$name; \
-	    make; \
-	    export INCDIR=$(INCDIR); \
 	    export LIBDIR=$(LIBDIR); \
-	    make install; \
-	    cd -; \
+	    export INCDIR=$(INCDIR); \
+	    make -eC $$name; \
+	    make -eC $$name install; \
 	done
 
 update:
@@ -43,9 +41,7 @@ clean:
 	@for i in $(DEPS); do \
 	    name=`echo $$i | cut -d/ -f5 `; \
 	    if [ -d $$name ]; then \
-		cd $$name; \
-		make clean; \
-		cd -; \
+		make -C $$name clean; \
 	    fi; \
 	done;
 	@rm -rf $(LIBDIR);

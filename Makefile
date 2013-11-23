@@ -17,6 +17,14 @@ SHAREDFLAGS = -shared
 SHAREDEXT = so
 endif
 
+ifndef $(LIBDIR)
+LIBDIR=/usr/local/lib
+endif
+
+ifndef $(INCDIR)
+INCDIR=/usr/local/include
+endif
+
 
 #CC = gcc
 TARGETS = $(patsubst %.c, %.o, $(wildcard src/*.c))
@@ -52,7 +60,7 @@ standalone: objects
 	rm -rf $$dir
 
 shared: objects
-	$(CC) $(LDFLAGS) $(SHAREDFLAGS) src/*.o -o libgroupcache.$(SHAREDEXT)
+	$(CC) src/*.o $(LDFLAGS) $(SHAREDFLAGS) -o libgroupcache.$(SHAREDEXT)
 
 objects: CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -DTHREAD_SAFE -O3
 objects: $(TARGETS)
@@ -65,7 +73,6 @@ clean:
 	rm -f support/testing.o
 	make -C deps clean
 	make -C groupcached clean
-	make -C perl clean
 
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
@@ -89,12 +96,9 @@ perl:
 	make -C perl all
 
 install: all
-	@if [ "X$$LIBDIR" == "X" ]; then LIBDIR="/usr/local/lib"; fi; \
-	 if [ "X$$INCDIR" == "X" ]; then INCDIR="/usr/local/include"; fi; \
-	 echo "Installing libraries in $$LIBDIR"; \
-	 cp -v libgroupcache.a $$LIBDIR/;\
-	 cp -v libgroupcache.$(SHAREDEXT) $$LIBDIR/;\
-	 echo "Installing headers in $$INCDIR"; \
-	 cp -v src/groupcache.h $$INCDIR/; \
-	 make -C perl install
+	 @echo "Installing libraries in $(LIBDIR)"; \
+	 cp -v libgroupcache.a $(LIBDIR)/;\
+	 cp -v libgroupcache.$(SHAREDEXT) $(LIBDIR)/;\
+	 echo "Installing headers in $(INCDIR)"; \
+	 cp -v src/groupcache.h $(INCDIR)/; \
 

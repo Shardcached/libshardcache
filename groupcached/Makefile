@@ -6,7 +6,7 @@ LDFLAGS += -L. $(LIBGROUPCACHE_DIR)/deps/.libs/libiomux.a \
 	   $(LIBGROUPCACHE_DIR)/libgroupcache.a
 
 ifeq ($(UNAME), Linux)
-LDFLAGS +=
+LDFLAGS += -pthread
 else
 LDFLAGS +=
 CFLAGS += -Wno-deprecated-declarations
@@ -21,7 +21,7 @@ $(LIBGROUPCACHE_DIR)/libgroupcache.a:
 	make -C $(LIBGROUPCACHE_DIR) static
 
 groupcached: objects
-	gcc $(LDFLAGS) src/*.o -o groupcached
+	gcc src/*.o $(LDFLAGS) -o groupcached
 
 objects: CFLAGS += -fPIC -I$(LIBGROUPCACHE_DIR)/src -I$(LIBGROUPCACHE_DIR)/deps/.incs -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 objects: $(TARGETS)
