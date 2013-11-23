@@ -65,6 +65,7 @@ clean:
 	rm -f support/testing.o
 	make -C deps clean
 	make -C groupcached clean
+	make -C perl clean
 
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
@@ -78,12 +79,22 @@ tests: support/testing.o static
 	done;\
 	for i in $(TEST_EXEC_ORDER); do echo; test/$$i; echo; done
 
-install:
+perl_install:
+	make -C perl install
+
+perl_clean:
+	make -C perl clean
+
+perl:
+	make -C perl all
+
+install: all
 	@if [ "X$$LIBDIR" == "X" ]; then LIBDIR="/usr/local/lib"; fi; \
 	 if [ "X$$INCDIR" == "X" ]; then INCDIR="/usr/local/include"; fi; \
 	 echo "Installing libraries in $$LIBDIR"; \
 	 cp -v libgroupcache.a $$LIBDIR/;\
 	 cp -v libgroupcache.$(SHAREDEXT) $$LIBDIR/;\
 	 echo "Installing headers in $$INCDIR"; \
-	 cp -v src/groupcache.h $$INCDIR/;
+	 cp -v src/groupcache.h $$INCDIR/; \
+	 make -C perl install
 
