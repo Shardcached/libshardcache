@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <iomux.h>
 #include <fbuf.h>
@@ -161,6 +162,8 @@ static void *serve_request(void *priv) {
     groupcache_t *cache = ctx->cache;
     int fd = ctx->fd;
 
+    // let's ensure setting the fd to blocking mode
+    // (if it was used in the iomux earlier, it was set to non-blocking)
     int opts = fcntl(fd, F_GETFL);
     if (opts >= 0) {
         int err = fcntl(fd, F_SETFL, opts & (~O_NONBLOCK));
@@ -182,11 +185,6 @@ static void *serve_request(void *priv) {
         }
         case GROUPCACHE_HDR_SET:
         {
-            /*
-            if (cache->storage.store)
-                cache->storage.store(fbuf_data(ctx->key), fbuf_used(ctx->key),
-                        fbuf_data(ctx->value), fbuf_used(ctx->value), cache->storage.priv);
-            */
             rc = groupcache_set(cache, fbuf_data(ctx->key), fbuf_used(ctx->key),
                     fbuf_data(ctx->value), fbuf_used(ctx->value));
             write_status(ctx, rc);
@@ -264,6 +262,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                         fbuf_add_binary(ctx->value, chunk, clen);
                 } else {
                     // Bogus request, ignore
+                    break;
                 }
                 chunk += clen;
             } else {
@@ -274,6 +273,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                 ctx->value_found = 1;
             } else {
                 // Bogus request, ignore
+                break;
             }
             terminator_found = 1;
         } else {
@@ -286,11 +286,12 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
 
     if (terminator_found) {
         // we have a complete request so we can now start 
-        // background worker to handle it
+        // a background worker to take care of it
         pthread_t worker_thread;
         ctx->fd = fd;
-        // let the worker take care of the fd from now on
-        iomux_remove(iomux, fd);
+
+        iomux_remove(iomux, fd); // this fd doesn't belong to the mux anymore
+
         pthread_create(&worker_thread, NULL, serve_request, ctx);
         pthread_detach(worker_thread);
     }
@@ -363,6 +364,11 @@ void *accept_requests(void *priv) {
     return NULL;
 }
 
+static void groupcache_do_nothing(int sig)
+{
+    // do_nothing
+}
+
 groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_storage_t *st)
 {
     int i;
@@ -393,8 +399,21 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_s
 
     cache->arc = arc_create(&cache->ops, 300);
 
+    // check if there is already signal handler registered on SIGPIPE
+    struct sigaction sa;
+    if (sigaction(SIGPIPE, NULL, &sa) != 0) {
+        fprintf(stderr, "Can't check signal handlers: %s\n", strerror(errno)); 
+        groupcache_destroy(cache);
+        return NULL;
+    }
+
+    // if not we need to register one to handle writes/reads to disconnected sockets
+    if (sa.sa_handler == NULL)
+        signal(SIGPIPE, groupcache_do_nothing);
+
     int rc = pthread_create(&cache->listener, NULL, accept_requests, cache);
     if (rc != 0) {
+        fprintf(stderr, "Can't create new thread: %s\n", strerror(errno));
         groupcache_destroy(cache);
         return NULL;
     }
