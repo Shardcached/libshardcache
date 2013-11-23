@@ -92,7 +92,7 @@ perl_install:
 perl_clean:
 	make -C perl clean
 
-perl:
+perl_build:
 	make -C perl all
 
 install: all
