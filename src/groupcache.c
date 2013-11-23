@@ -37,7 +37,6 @@ struct __groupcache_s {
 
     int sock;
     pthread_t listener;
-    int num_workers;
 };
 
 /* This is the object we're managing. It has a key
