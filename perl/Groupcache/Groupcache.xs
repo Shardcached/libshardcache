@@ -39,7 +39,7 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
         croak("Unexpected errors calling the 'fetch' method on the storage object");
     }
 
-    SV *val = sv_2mortal(POPs);
+    SV *val = POPs;
     char * out = NULL;
 
     if (SvOK(val)) {
