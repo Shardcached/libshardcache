@@ -7,6 +7,5 @@ README
 typemap
 t/Groupcache.t
 lib/Groupcache.pm
-lib/Groupcache/Client.pm
 lib/Groupcache/Storage.pm
 lib/Groupcache/Storage/Mem.pm

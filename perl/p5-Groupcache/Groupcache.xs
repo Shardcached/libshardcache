@@ -178,7 +178,7 @@ groupcache_create(me, peers, storage)
 int
 groupcache_del(cache, key, klen)
 	groupcache_t *	cache
-	void *	key
+	char *	key
 	size_t	klen
 
 void
@@ -228,6 +228,6 @@ groupcache_set(cache, key, klen, value, vlen)
 int
 groupcache_test_ownership(cache, key, len, owner)
 	groupcache_t *	cache
-	void *	key
+	char *	key
 	size_t	len
 	const char **	owner

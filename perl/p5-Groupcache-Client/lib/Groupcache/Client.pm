@@ -3,6 +3,8 @@ package Groupcache::Client;
 use strict;
 use IO::Socket::INET;
 
+our $VERSION = "0.01";
+
 sub new {
     my ($class, $host) = @_;
 
