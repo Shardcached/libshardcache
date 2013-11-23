@@ -37,27 +37,39 @@ ok( $fail == 0 , 'Constants' );
 my $pid = fork();
 
 if ($pid) {
+    # we are in the main process ... let's start a groupcache instance
     my $gc = Groupcache->new(me => "127.0.0.1:4444", storage => Groupcache::Storage::Mem->new());
 
+    # set some keys
     $gc->set("test_key1", "test_value1");
     $gc->set("test_key2", "test_value2");
     $gc->set("test_key3", "test_value3");
 
+    # check their existance/value
     is($gc->get("test_key1"), "test_value1");
     is($gc->get("test_key2"), "test_value2");
     is($gc->get("test_key3"), "test_value3");
 
+    # now let's wait for the child process to finish
     wait;
 
+    # we should now found the new key created by the child process
     is($gc->get("test_key4"), "test_value4");
 
+    # and test_key2 should have been removed by the child process as well
     ok ( !defined $gc->get("test_key2") );
 } else {
+    # child process ... connect to the groupcache instance
     my $c = Groupcache::Client->new("localhost:4444"); 
     warn Dumper($c);
+
     $c->set("test_key4", "test_value4");
+
     $c->del("test_key2");
-    warn "CHILD - test_key1: : " . $c->get("test_key1");
+
+    if ($c->get("test_key1") ne "test_value1") {
+        die "Child process can't get a valid value for key: test_key1";
+    }
     exit(0);
 }
 
