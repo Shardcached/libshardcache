@@ -37,8 +37,13 @@ my $pid = fork();
 
 if ($pid) {
     # we are in the main process ... let's start two groupcache instances
-    my $gc = Groupcache->new(me => "localhost:4444", peers => ["localhost:4443"], storage => Groupcache::Storage::Mem->new());
-    my $gc2 = Groupcache->new(me => "localhost:4443", peers => ["localhost:4444"], storage => Groupcache::Storage::Mem->new());
+    my $gc = Groupcache->new(me => "localhost:4444",
+                             peers => ["localhost:4443"],
+                             storage => Groupcache::Storage::Mem->new());
+
+    my $gc2 = Groupcache->new(me => "localhost:4443",
+                              peers => ["localhost:4444"],
+                              storage => Groupcache::Storage::Mem->new());
 
     # set some keys on the first one
     $gc->set("test_key1", "test_value1");
