@@ -203,10 +203,10 @@ AV *
 groupcache_get_peers(cache, num_peers)
 	groupcache_t *	cache
 	int *	num_peers
-        PREINIT:
+    PREINIT:
         int i;
         AV *peers;
-        CODE:
+    CODE:
         peers = newAV();
         char **list = groupcache_get_peers(cache, num_peers);
         for (i = 0; i < *num_peers; i++) {
@@ -214,7 +214,7 @@ groupcache_get_peers(cache, num_peers)
             av_push(peers, sv_2mortal(peer));
         }
         RETVAL = peers;
-        OUTPUT:
+    OUTPUT:
         RETVAL
 
 int
@@ -225,9 +225,19 @@ groupcache_set(cache, key, klen, value, vlen)
 	char *	value
 	size_t	vlen
 
-int
-groupcache_test_ownership(cache, key, len, owner)
+SV *
+groupcache_test_ownership(cache, key, len)
 	groupcache_t *	cache
 	char *	key
 	size_t	len
-	const char **	owner
+    PREINIT:
+        const char *peer = NULL;
+    CODE:
+        groupcache_test_ownership(cache, key, len, &peer);
+        if (peer) {
+            RETVAL = newSVpv(peer, strlen(peer));
+        } else {
+            RETVAL = &PL_sv_undef;
+        }
+    OUTPUT:
+        RETVAL

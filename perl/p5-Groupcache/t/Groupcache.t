@@ -32,7 +32,13 @@ ok( $fail == 0 , 'Constants' );
 # Insert your test code below, the Test::More module is use()ed here so read
 # its man page ( perldoc Test::More ) for help writing this test script.
 
-my $gc = Groupcache->new(me => "127.0.0.1:4444", storage => Groupcache::Storage::Mem->new());
+my $gc = Groupcache->new(me => "127.0.0.1:4444",
+                         peers => ["127.0.0.1:4443"],
+                         storage => Groupcache::Storage::Mem->new());
+
+my $gc2 = Groupcache->new(me => "127.0.0.1:4443",
+                          peers => ["127.0.0.1:4444"],
+                          storage => Groupcache::Storage::Mem->new());
 
 # set some keys
 $gc->set("test_key1", "test_value1");
@@ -40,13 +46,17 @@ $gc->set("test_key2", "test_value2");
 $gc->set("test_key3", "test_value3");
 
 # check their existance/value
-is($gc->get("test_key1"), "test_value1");
-is($gc->get("test_key2"), "test_value2");
-is($gc->get("test_key3"), "test_value3");
+is($gc2->get("test_key1"), "test_value1");
+is($gc2->get("test_key2"), "test_value2");
+is($gc2->get("test_key3"), "test_value3");
 
 
-$gc->del("test_key2");
-
-ok ( !defined $gc->get("test_key2") );
+if ($gc2->owner("test_key2")) {
+    $gc2->del("test_key2");
+    ok ( !defined $gc->get("test_key2") );
+} else {
+    $gc->del("test_key2");
+    ok ( !defined $gc2->get("test_key2") );
+}
 
 done_testing();

@@ -81,6 +81,7 @@ sub new {
     } 
     $self->{_storage} = $storage;
     $self->{_peers} = $peers;
+    $self->{_me} = $me;
     $self->{_gc} = groupcache_create($me, $peers, $storage);
     bless $self, $class;
     return $self;
@@ -102,6 +103,11 @@ sub del {
     my ($self, $key) = @_;
     return unless $key;
     return groupcache_del($self->{_gc}, $key, length($key));
+}
+
+sub owner {
+    my ($self, $key) = @_;
+    return groupcache_test_ownership($self->{_gc}, $key, length($key));
 }
 
 sub DESTROY {
