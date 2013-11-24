@@ -1,4 +1,4 @@
-DEPS=https://github.com/xant/libchash \
+DEPS=https://github.com/dgryski/libchash \
      https://github.com/xant/libhl \
      https://github.com/xant/libiomux
 
