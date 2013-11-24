@@ -17,11 +17,11 @@ SHAREDFLAGS = -shared
 SHAREDEXT = so
 endif
 
-ifeq ($(LIBDIR), "")
+ifeq ("$(LIBDIR)", "")
 LIBDIR=/usr/local/lib
 endif
 
-ifeq ($(INCDIR), "")
+ifeq ("$(INCDIR)", "")
 INCDIR=/usr/local/include
 endif
 
@@ -95,7 +95,7 @@ perl_clean:
 perl_build:
 	make -C perl all
 
-install: all
+install:
 	 @echo "Installing libraries in $(LIBDIR)"; \
 	 cp -v libgroupcache.a $(LIBDIR)/;\
 	 cp -v libgroupcache.$(SHAREDEXT) $(LIBDIR)/;\
