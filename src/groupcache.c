@@ -405,7 +405,7 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_s
         cache->shards[i] = strdup(peers[i]);
         shard_lens[i] = strlen(cache->shards[i]);
     }
-    cache->shards[npeers] = me;
+    cache->shards[npeers] = cache->me;
     shard_lens[npeers] = strlen(me);
 
     cache->num_shards = npeers + 1;
