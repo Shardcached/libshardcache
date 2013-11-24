@@ -396,7 +396,9 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_s
     cache->ops.destroy = __op_destroy;
 
     cache->ops.priv = cache;
-    cache->shards = malloc(sizeof(char *) * (npeers + 1));
+    // shards will contain all the peers (including me) plus a
+    // trailing NULL pointer (thus npeers + 2)
+    cache->shards = malloc(sizeof(char *) * (npeers + 2));
     for (i = 0; i < npeers; i++) {
         cache->shards[i] = strdup(peers[i]);
         shard_lens[i] = strlen(cache->shards[i]);
@@ -405,6 +407,7 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_s
     shard_lens[npeers] = strlen(me);
 
     cache->num_shards = npeers + 1;
+    cache->shards[cache->num_shards] = NULL;
 
     cache->chash = chash_create((const char **)cache->shards, shard_lens, cache->num_shards, 200);
 

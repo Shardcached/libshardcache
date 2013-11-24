@@ -71,7 +71,7 @@ A RESP with an empty value (for instance if querying a not-existing key):
 Responses to 'GET' requests will return the value for the requested key if any,
 an empty value otherwise
 
-Responses to 'SET' and 'DEL' requests will return either the string 'OK' or 'ERR'
+Responses to 'SET', 'DEL' and 'EVI' requests will return either the string 'OK' or 'ERR'
 depending on the status of the operation
 
 
