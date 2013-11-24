@@ -61,4 +61,14 @@ if ($gc2->get_owner("test_key2") ne $gc2->me) {
     ok ( !defined $gc2->get("test_key2") );
 }
 
+if ($gc2->get_owner("test_key3") eq $gc2->me) {
+    $gc2->del("test_key3");
+    ok ( !defined $gc->get("test_key3") );
+} else {
+    $gc->del("test_key3");
+    ok ( !defined $gc2->get("test_key3") );
+}
+
+
+
 done_testing();
