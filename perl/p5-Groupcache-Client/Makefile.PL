@@ -9,8 +9,6 @@ WriteMakefile(
       'IO::Socket::INET' => 0,
     },
     ABSTRACT_FROM  => 'lib/Groupcache/Client.pm',
-    AUTHOR         => [
-        'Andrea Guzzo <xant@cpan.org>',
-    ],
+    AUTHOR         => 'Andrea Guzzo <xant@cpan.org>',
 );
 
