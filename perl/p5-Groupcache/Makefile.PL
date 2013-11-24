@@ -1,4 +1,4 @@
-use 5.012004;
+use 5.008005;
 use ExtUtils::MakeMaker;
 
 my $GROUPCACHE_INCDIR=$ENV{GROUPCACHE_INCDIR};
