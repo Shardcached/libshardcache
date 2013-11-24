@@ -132,14 +132,12 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
 
         if (memcmp(ctx->auth, (unsigned char *)fbuf_data(ctx->input), GROUPCACHE_AUTHKEY_LEN) != 0) {
             // AUTH FAILED
-            struct sockaddr saddr;
+            struct sockaddr_in saddr;
             socklen_t addr_len;
-            getpeername(fd, &saddr, &addr_len);
-
-            struct sockaddr_in *s = (struct sockaddr_in *)&saddr;
+            getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
 
             fprintf(stderr, "Unauthorized request from %s\n",
-                    inet_ntoa(s->sin_addr));
+            inet_ntoa(saddr.sin_addr));
 
             iomux_close(iomux, fd);
             return;
