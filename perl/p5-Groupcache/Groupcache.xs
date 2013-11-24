@@ -10,7 +10,7 @@
 
 #include <pthread.h>
 
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static PerlInterpreter *orig_perl = NULL;
 
 static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
