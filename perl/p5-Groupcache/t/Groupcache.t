@@ -53,9 +53,20 @@ foreach my $i (0..20) {
 }
 
 
-foreach my $i (0..20) {
+foreach my $i (0..9) {
     my $test_key = "test_key$i";
     if ($gc2->get_owner($test_key) ne $gc2->me) {
+        $gc2->del($test_key);
+        ok ( !defined $gc->get($test_key) );
+    } else {
+        $gc->del($test_key);
+        ok ( !defined $gc2->get($test_key) );
+    }
+}
+
+foreach my $i (10..20) {
+    my $test_key = "test_key$i";
+    if ($gc2->get_owner($test_key) eq $gc2->me) {
         $gc2->del($test_key);
         ok ( !defined $gc->get($test_key) );
     } else {
