@@ -169,6 +169,8 @@ groupcache_create(me, peers, storage, secret)
         };
 
         RETVAL = groupcache_create(me, shards, num_peers, &storage_struct, secret);
+        if (shards)
+            Safefree(shards);
 
         if (RETVAL == NULL)
             croak("Unknown error");
