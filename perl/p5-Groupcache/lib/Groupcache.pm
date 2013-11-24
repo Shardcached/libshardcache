@@ -105,9 +105,14 @@ sub del {
     return groupcache_del($self->{_gc}, $key, length($key));
 }
 
-sub owner {
+sub get_owner {
     my ($self, $key) = @_;
     return groupcache_test_ownership($self->{_gc}, $key, length($key));
+}
+
+sub me {
+    my ($self) = @_;
+    return $self->{_me};
 }
 
 sub DESTROY {
