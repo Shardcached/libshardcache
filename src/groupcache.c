@@ -519,6 +519,12 @@ int groupcache_del(groupcache_t *cache, void *key, size_t klen) {
         if (cache->evict_on_delete)
         {
             arc_remove(cache->arc, (const void *)key, klen);
+            /* TODO - we might want to use a backgroud thread to propagate the eviction requests
+             *        to all our peers. This would mean that the deleted value might still be found
+             *        in the cache of some other node when we return from this function.
+             *        But on the other hand we wouldn't block the caller until all the connections
+             *        have been handled ... involving eventual timeouts and slowdowns
+             */
             int i;
             for (i = 0; i < cache->num_shards; i++) {
                 char *peer = cache->shards[i];

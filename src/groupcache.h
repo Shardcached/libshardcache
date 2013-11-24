@@ -105,7 +105,7 @@ void *groupcache_get(groupcache_t *cache, void *key, size_t klen, size_t *vlen);
 int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, size_t vlen);
 
 /**
- * @brief Removes the value for a key
+ * @brief Remove the value for a key
  * @arg cache : A valid pointer to a groupcache_t structure
  * @arg key : A valid pointer to the key
  * @arg klen : The length of the key
@@ -115,7 +115,7 @@ int groupcache_del(groupcache_t *cache, void *key, size_t klen);
 
 
 /**
- * @brief Gets the list of all peers (including this node itself)
+ * @brief Get the list of all peers (including this node itself)
  *        taking part to the groupcache 'cloud'
  * @arg cache : A valid pointer to a groupcache_t structure
  * @arg num_peers : If provided the number of peers in the returned array will be 
@@ -125,7 +125,7 @@ int groupcache_del(groupcache_t *cache, void *key, size_t klen);
 char **groupcache_get_peers(groupcache_t *cache, int *num_peers);
 
 /**
- * @brief Gets the peer owning a specific key
+ * @brief Get the peer owning a specific key
  * @arg cache : A valid pointer to a groupcache_t structure
  * @arg key : A valid pointer to the key
  * @arg klen : The length of the key
