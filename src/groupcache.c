@@ -508,13 +508,15 @@ int groupcache_del(groupcache_t *cache, void *key, size_t klen) {
 
     // if we are not the owner try propagating the command to the responsible peer
     const char *node_name;
-    if (groupcache_test_ownership(cache, key, klen, &node_name)) {
+    if (groupcache_test_ownership(cache, key, klen, &node_name))
+    {
+        if (cache->storage.remove)
+            cache->storage.remove(key, klen, cache->storage.priv);
+
         if (cache->evict_on_delete)
         {
             arc_remove(cache->arc, (const void *)key, klen);
             int i;
-            if (cache->storage.remove)
-                cache->storage.remove(key, klen, cache->storage.priv);
             for (i = 0; i < cache->num_shards; i++) {
                 char *peer = cache->shards[i];
                 if (strcmp(peer, cache->me) != 0) {
