@@ -132,6 +132,7 @@ int delete_from_peer(char *peer, void *key, size_t klen, int owner) {
             } else {
                 // TODO - Error messages
             }
+            fbuf_destroy(&resp);
         }
         close(fd);
     }
