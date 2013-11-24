@@ -282,23 +282,26 @@ void  *arc_lookup(arc_t *cache, const void *key, size_t len)
     arc_object_t *obj = ht_get(cache->hash, (void *)key, len);
 
     if (obj) {
-        // XXX - possible race condition on obj->state
+        pthread_mutex_lock(&cache->lock);
+        void *ptr = NULL;
         if (obj->state == &cache->mru || obj->state == &cache->mfu) {
             /* Object is already in the cache, move it to the head of the
              * MFU list. */
             obj = arc_move(cache, obj, &cache->mfu);
-            return obj->ptr;
+            ptr = obj->ptr;
         } else if (obj->state == &cache->mrug) {
             cache->p = MIN(cache->c, cache->p + MAX(cache->mfug.size / cache->mrug.size, 1));
             obj = arc_move(cache, obj, &cache->mfu);
-            return obj->ptr;
+            ptr = obj->ptr;
         } else if (obj->state == &cache->mfug) {
             cache->p = MAX(0, cache->p - MAX(cache->mrug.size / cache->mfug.size, 1));
             obj = arc_move(cache, obj, &cache->mfu);
-            return obj->ptr;
+            ptr = obj->ptr;
         } else {
             assert(0);
         }
+        pthread_mutex_unlock(&cache->lock);
+        return ptr;
     } else {
         void *ptr = cache->ops->create(key, len, cache->ops->priv);
         arc_object_t *obj = arc_object_create(rand()%100, ptr);
@@ -308,10 +311,14 @@ void  *arc_lookup(arc_t *cache, const void *key, size_t len)
         /* New objects are always moved to the MRU list. */
         arc_object_t *moved = arc_move(cache, obj, &cache->mru);
         if (moved) {
-            obj->key = malloc(len);
-            memcpy(obj->key, key, len);
-            obj->klen = len;
-            ht_set(cache->hash, (void *)key, len, obj);
+            pthread_mutex_lock(&moved->lock);
+            if (!moved->key) {
+                moved->key = malloc(len);
+                memcpy(moved->key, key, len);
+                moved->klen = len;
+                ht_set(cache->hash, (void *)key, len, moved);
+            }
+            pthread_mutex_unlock(&moved->lock);
             return moved->ptr;
         } else {
             cache->ops->destroy(obj->ptr, cache->ops->priv);
