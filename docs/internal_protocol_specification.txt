@@ -1,4 +1,16 @@
-The internal communication uses a very simple protocol
+The internal communication uses a very simple protocol:
+
+============================================================================================
+|  FIELD   |   SIZE   |  DESC                                                              |
+|----------|----------|--------------------------------------------------------------------|
+|   AUTH   | 20 Bytes |  SHA1 digest computed from the groupcache shared secret            |
+|   HDR    |  1 Byte  |  The message type                                                  |
+|   SIZE   |  2 Bytes |  The length of the following chunk of data (in network byte order) |
+|  RECORD  |  N Bytes |  The actual chunk of data                                          |
+|   EOR    |  2 Bytes |  End Of Record                                                     |
+--------------------------------------------------------------------------------------------
+
+The only valid messages are :
 
 GET_MESSAGE      : <AUTH><HDR><KEY>
 SET_MESSAGE      : <AUTH><HDR><KEY><VALUE>
@@ -8,7 +20,7 @@ RESP_MESSAGE     : <HDR><VALUE>
 
 AUTH      : <BYTE>[20]
 BYTE      : 0x00 - 0xFF
-HDR       : MSG_GET | MSG_SET | MSG_DEL | MSG_RESP
+HDR       : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_RESP>
 MSG_GET   : 0x01
 MSG_SET   : 0x02
 MSG_DEL   : 0x03
@@ -18,56 +30,51 @@ KEY       : <RECORD>
 VALUE     : <RECORD>
 RECORD    : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
 SIZE      : <HIGH_BYTE><LOW_BYTE>
-HIGH_BYTE : BYTE
-LOW_BYTE  : BYTE
+HIGH_BYTE : <BYTE>
+LOW_BYTE  : <BYTE>
 DATA      : <BYTE>...<BYTE>
 EOR       : <NULL_BYTE><NULL_BYTE>
 NULL_BYTE : 0x00
-
-============================================================================================
-|  FIELD   |   SIZE   |  DESC                                                              |
-|----------|----------|--------------------------------------------------------------------|
-|   HDR    |  1 Byte  |  The message type                                                  |
-|   SIZE   |  2 Bytes |  The length of the following chunk of data (in network byte order) |
-|   DATA   |  N Bytes |  The actual chunk of data                                          |
-|   EOR    |  2 Bytes |  End Of Record                                                     |
---------------------------------------------------------------------------------------------
 
 Examples
 
 A GET message for the key FOO (hex sequence: 0x46 0x4f 0x4f) would look like:
 
-<01><00><03><46><4f><4f><00><00>
+<AUTH><01><00><03><46><4f><4f><00><00>
 
-----------
+--------------------------------------------------------------------------------------------
 
 A SET message for the key FOO (hex sequence: 0x46 0x4f 0x4f)
 assigning the value TEST (hex sequence: 0x54 0x45 0x53 0x54) would look like:
 
-<02><00><03><46><4f><4f><00><00><00><04><54><45><53><54><00><00>
+<AUTH><02><00><03><46><4f><4f><00><00><00><04><54><45><53><54><00><00>
 
-----------
+--------------------------------------------------------------------------------------------
 
 A DEL message for the FOO would look exactly like a GET message but with a different
 HDR value :
 
-<03><00><03><46><4f><4f><00><00>
+<AUTH><03><00><03><46><4f><4f><00><00>
 
 An EVI message would look exactly like a DEL message but with an HDR byte equal to 0x04
 
-----------
+--------------------------------------------------------------------------------------------
 
 A RESP message containing a value "OK" (0x4f 0x4b) would look like:
 
 <11><00><02><4f><4b><00><00>
 
-----------
+--------------------------------------------------------------------------------------------
 
 A RESP with an empty value (for instance if querying a not-existing key):
 
 <11><00><00>
 
-----------
+--------------------------------------------------------------------------------------------
+
+NOTES:
+
+Responses don't include the AUTH prefix
 
 Responses to 'GET' requests will return the value for the requested key if any,
 an empty value otherwise
@@ -75,4 +82,6 @@ an empty value otherwise
 Responses to 'SET', 'DEL' and 'EVI' requests will return either the string 'OK' or 'ERR'
 depending on the status of the operation
 
-
+The reference implementation serves only one request per connection, so implementing the protocol
+you should expect the peer to close its socket just after serving the response (and it may close
+its reading part of the socket just after reading exactly one complete request)
