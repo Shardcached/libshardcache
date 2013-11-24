@@ -67,6 +67,8 @@ sub send_msg {
     }
     my ($rhdr, $len, $chunk) = unpack("Cna*", $in);
 
+    return undef if ($len == 0);
+
     my $out = substr($chunk, 0, $len, "");
     while ($len == 65535) {
         ($len, $chunk) = unpack("na*", $chunk);
