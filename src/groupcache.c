@@ -19,6 +19,7 @@
 #include "connections.h"
 #include "messaging.h"
 #include "serving.h"
+#include "sha1.h"
 
 #include <chash.h>
 
@@ -43,6 +44,8 @@ struct __groupcache_s {
     pthread_t listener;
 
     int evict_on_delete;
+
+    unsigned char auth[GROUPCACHE_AUTHKEY_LEN];
 };
 
 /* This is the object we're managing. It has a key
@@ -87,7 +90,7 @@ static int __op_fetch(void *item, void * priv)
 #endif
         // another peer is responsible for this item, let's get the value from there
         fbuf_t value = FBUF_STATIC_INITIALIZER;
-        int rc = fetch_from_peer((char *)node_name, obj->key, obj->len, &value);
+        int rc = fetch_from_peer((char *)node_name, cache->auth, obj->key, obj->len, &value);
         if (rc == 0) {
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
@@ -141,7 +144,8 @@ static void groupcache_do_nothing(int sig)
     // do_nothing
 }
 
-groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_storage_t *st)
+groupcache_t *groupcache_create(char *me, char **peers, int npeers,
+                                groupcache_storage_t *st, char *secret)
 {
     int i;
     size_t shard_lens[npeers + 1];
@@ -206,12 +210,28 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_s
     }
 
     free(addr); // we don't need it anymore
+    
+    int rc = groupcache_compute_authkey(secret, cache->auth);
+    if (rc != 0) {
+        fprintf(stderr, "ERROR-- could not compute message digest\n");
+        groupcache_destroy(cache);
+        return NULL;
+    } 
+    cache->serv.auth = cache->auth;
+
+#ifdef GROUPCACHE_DEBUG
+    fprintf(stderr, "AUTH KEY (secret: %s): ", secret);
+    for (i = 0; i < GROUPCACHE_AUTHKEY_LEN; i++) {
+        fprintf(stderr, "%02x", (unsigned char)cache->serv.auth[i]); 
+    }
+    fprintf(stderr"\n");
+#endif
 
     cache->serv.cache = cache;
     cache->serv.sock = cache->sock;
 
     // and start a background thread to handle incoming connections
-    int rc = pthread_create(&cache->listener, NULL, accept_requests, &cache->serv);
+    rc = pthread_create(&cache->listener, NULL, accept_requests, &cache->serv);
     if (rc != 0) {
         fprintf(stderr, "Can't create new thread: %s\n", strerror(errno));
         groupcache_destroy(cache);
@@ -268,7 +288,7 @@ int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, siz
 #ifdef GROUPCACHE_DEBUG
         fprintf(stderr, "Forwarding set command %s => %s to %s\n", (char *)key, (char *)value, node_name);
 #endif
-        return send_to_peer((char *)node_name, key, klen, value, vlen);
+        return send_to_peer((char *)node_name, cache->auth, key, klen, value, vlen);
     }
 
     return -1;
@@ -299,13 +319,13 @@ int groupcache_del(groupcache_t *cache, void *key, size_t klen) {
             for (i = 0; i < cache->num_shards; i++) {
                 char *peer = cache->shards[i];
                 if (strcmp(peer, cache->me) != 0) {
-                    delete_from_peer(peer, key, klen, 0);
+                    delete_from_peer(peer, cache->auth, key, klen, 0);
                 }
             }
         }
         return 0;
     } else {
-        return delete_from_peer((char *)node_name, key, klen, 1);
+        return delete_from_peer((char *)node_name, cache->auth, key, klen, 1);
     }
 
     return -1;
@@ -335,3 +355,13 @@ int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const 
     return (strcmp(node_name, cache->me) == 0);
 }
 
+int groupcache_compute_authkey(char *secret, unsigned char *auth) {
+    SHA1Context sha;
+    SHA1Reset(&sha);
+    SHA1Input(&sha, (const unsigned char *)secret, strlen(secret));
+    if (!SHA1Result(&sha)) {
+        return -1;
+    }
+    memcpy(auth, &sha.Message_Digest, GROUPCACHE_AUTHKEY_LEN);
+    return 0;
+}

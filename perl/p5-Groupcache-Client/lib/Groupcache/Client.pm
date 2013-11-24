@@ -2,14 +2,22 @@ package Groupcache::Client;
 
 use strict;
 use IO::Socket::INET;
+use Groupcache;
 
 our $VERSION = "0.01";
 
 sub new {
-    my ($class, $host) = @_;
+    my ($class, $host, $secret) = @_;
 
     my ($addr, $port) = split(':', $host);
-    my $self = { _addr => $addr, _port => $port };
+
+    $secret = 'default' unless($secret);
+
+    my $self = { _addr => $addr,
+                 _port => $port,
+                 _auth => Groupcache::groupcache_compute_authkey($secret)
+               };
+
     bless $self, $class;
     
     return $self;
@@ -38,8 +46,8 @@ sub _chunkize_var {
 sub send_msg {
     my ($self, $hdr, $key, $value) = @_;
 
-    my $templ = "C";
-    my @vars = ($hdr);
+    my $templ = "a20C";
+    my @vars = ($self->{_auth}, $hdr);
 
     my $kbuf = _chunkize_var($key);
     $templ .= sprintf "a%dCC", length($kbuf);
@@ -106,7 +114,7 @@ Groupcache::Client - Client library to access groupcache nodes
 
     use Groupcache::Client;
 
-    $c = Groupcache::Client->new("http://localhost:4444");
+    $c = Groupcache::Client->new("http://localhost:4444", "my_groupcache_secret");
 
     $c->set("key", "value");
 

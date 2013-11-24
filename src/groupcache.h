@@ -10,6 +10,8 @@
 
 #define GROUPCACHE_PORT_DEFAULT 9874
 
+#define GROUPCACHE_AUTHKEY_LEN 20
+
 /**
  * @brief Opaque structure representing the actual groupcache instance
  */
@@ -64,18 +66,20 @@ typedef struct __groupcache_storage_s {
 
 /**
  * @brief Create a new groupcache instance
- * @arg me : a valid <address:port> string representing the new node to be created
+ * @arg me : a valid <address:port> null-terminated string representing the new node to be created
  * @arg peers : a list of <address:port> strings representing the peers taking part to the groupcache 'cloud'
  * @arg num_peers : the number of peers present in the peers list
  * @arg storage : a groupcache_storage_t structure holding pointers to the storage callbacks.
  *                NOTE: The newly created instance will copy the pointers to its internal descriptor so
  *                      the resources allocated for the storage structure can be safely released after
  *                      calling groupcache_create()
+ * @arg secret : a null-terminated string containing the shared secret used to authenticate message
  */
 groupcache_t *groupcache_create(char *me, 
                         char **peers,
                         int num_peers,
-                        groupcache_storage_t *storage);
+                        groupcache_storage_t *storage,
+                        char *secret);
 
 /**
  * @brief Release all the resources used by the groupcache instance
@@ -143,5 +147,7 @@ char **groupcache_get_peers(groupcache_t *cache, int *num_peers);
  * @return 1 if the current node (represented by cache) is the owner of the key, 0 otherwise
  */
 int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const char **owner);
+
+int groupcache_compute_authkey(char *secret, unsigned char *auth);
 
 #endif

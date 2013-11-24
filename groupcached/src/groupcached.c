@@ -512,18 +512,20 @@ int main(int argc, char **argv)
     char *listen_address = GROUPCACHED_ADDRESS_DEFAULT;
     uint16_t listen_port = GROUPCACHED_PORT_DEFAULT;
     char *peers = NULL;
+    char *secret = "default";
 
     static struct option long_options[] = {
         {"debug", 2, 0, 'd'},
         {"foreground", 0, 0, 'f'},
         {"listen", 2, 0, 'l'},
         {"peers", 2, 0, 'p'},
+        {"secret", 2, 0, 's'},
         {"help", 0, 0, 'h'},
         {0, 0, 0, 0}
     };
 
     char c;
-    while ((c = getopt_long (argc, argv, "d:fhl:p:?", long_options, &option_index))) {
+    while ((c = getopt_long (argc, argv, "d:fhl:p:s?", long_options, &option_index))) {
         if (c == -1) {
             break;
         }
@@ -540,6 +542,8 @@ int main(int argc, char **argv)
             case 'p':
                 peers = optarg;
                 break;
+            case 's':
+                secret = optarg;
             case 'h':
             case '?':
                 usage(argv[0], NULL);
@@ -601,7 +605,7 @@ int main(int argc, char **argv)
         .free   = free,
         .priv   = NULL
     };
-    cache = groupcache_create(me, shard_names, cnt, &st);
+    cache = groupcache_create(me, shard_names, cnt, &st, secret);
 
     int num_peers = 0;
     char **peer_names = groupcache_get_peers(cache, &num_peers);

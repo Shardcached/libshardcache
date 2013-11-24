@@ -1,11 +1,13 @@
 The internal communication uses a very simple protocol
 
-GET_MESSAGE      : <HDR><KEY>
-SET_MESSAGE      : <HDR><KEY><VALUE>
-DEL_MESSAGE      : <HDR><KEY>
-EVI_MESSAGE      : <HDR><KEY>
+GET_MESSAGE      : <AUTH><HDR><KEY>
+SET_MESSAGE      : <AUTH><HDR><KEY><VALUE>
+DEL_MESSAGE      : <AUTH><HDR><KEY>
+EVI_MESSAGE      : <AUTH><HDR><KEY>
 RESP_MESSAGE     : <HDR><VALUE>
 
+AUTH      : <BYTE>[20]
+BYTE      : 0x00 - 0xFF
 HDR       : MSG_GET | MSG_SET | MSG_DEL | MSG_RESP
 MSG_GET   : 0x01
 MSG_SET   : 0x02
@@ -16,12 +18,11 @@ KEY       : <RECORD>
 VALUE     : <RECORD>
 RECORD    : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
 SIZE      : <HIGH_BYTE><LOW_BYTE>
-DATA      : <BYTE>...<BYTE>
-EOR       : <NULL_BYTE><NULL_BYTE>
 HIGH_BYTE : BYTE
 LOW_BYTE  : BYTE
+DATA      : <BYTE>...<BYTE>
+EOR       : <NULL_BYTE><NULL_BYTE>
 NULL_BYTE : 0x00
-BYTE      : 0x00 - 0xFF
 
 ============================================================================================
 |  FIELD   |   SIZE   |  DESC                                                              |

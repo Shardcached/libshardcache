@@ -24,7 +24,9 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 	groupcache_get
 	groupcache_get_peers
 	groupcache_set
+        groupcache_evict
 	groupcache_test_ownership
+        groupcache_compute_authkey
 ) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
@@ -79,10 +81,14 @@ sub new {
             croak("'peers' MUST be an arrayref of string in the form 'ADDRESS:PORT'");
         }
     } 
+
+    my $secret = $params{secret} || 'default';
+
     $self->{_storage} = $storage;
     $self->{_peers} = $peers;
     $self->{_me} = $me;
-    $self->{_gc} = groupcache_create($me, $peers, $storage);
+    $self->{_gc} = groupcache_create($me, $peers, $storage, $secret);
+    return unless ($self->{_gc});
     bless $self, $class;
     return $self;
 }
@@ -103,6 +109,12 @@ sub del {
     my ($self, $key) = @_;
     return unless $key;
     return groupcache_del($self->{_gc}, $key, length($key));
+}
+
+sub evict {
+    my ($self, $key) = @_;
+    return unless $key;
+    return groupcache_evict($self->{_gc}, $key, length($key));
 }
 
 sub get_owner {
@@ -136,7 +148,15 @@ Groupcache - Perl extension for libgroupcache
 
   use Groupcache;
 
-    $gc = Groupcache->new(me => "127.0.0.1:4444", storage => Groupcache::Storage::Mem->new());
+    $gc = Groupcache->new(me => "127.0.0.1:4444",
+                          storage => Groupcache::Storage::Mem->new(),
+                          secret  => "my_groupcache_secret",
+                          peers => ["127.0.0.2:4443"]
+                          );
+
+    # NOTE: 'peers' and 'secret' are optional params
+    # if no peers are specified, the node will start in standalone mode
+    # if no secret is specified, the string 'default' will be used
 
     $gc->set("test_key1", "test_value1");
 
@@ -165,7 +185,9 @@ None by default.
   void *groupcache_get(groupcache_t *cache, void *key, size_t klen, size_t *vlen)
   char **groupcache_get_peers(groupcache_t *cache, int *num_peers)
   int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, size_t vlen)
+  int groupcache_evict(groupcache_t *cache, void *key, size_t klen);
   int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const char **owner)
+int groupcache_compute_authkey(char *secret, unsigned char *auth);
 
 
 

@@ -102,7 +102,7 @@ int write_message(int fd, char hdr, void *v, size_t vlen)  {
 }
 
 
-int delete_from_peer(char *peer, void *key, size_t klen, int owner) {
+int delete_from_peer(char *peer, unsigned char *auth, void *key, size_t klen, int owner) {
     char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
@@ -112,6 +112,15 @@ int delete_from_peer(char *peer, void *key, size_t klen, int owner) {
     free(addr);
 
     if (fd >= 0) {
+
+        if (auth) {
+            int wb = write_socket(fd, auth, GROUPCACHE_AUTHKEY_LEN);
+            if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
+                close(fd);
+                return -1;
+            }
+        }
+
         int rc = write_message(fd, owner ? GROUPCACHE_HDR_DEL : GROUPCACHE_HDR_EVI, key, klen);
         if (rc != 0) {
             close(fd);
@@ -140,7 +149,7 @@ int delete_from_peer(char *peer, void *key, size_t klen, int owner) {
 }
 
 
-int send_to_peer(char *peer, void *key, size_t klen, void *value, size_t vlen) {
+int send_to_peer(char *peer, unsigned char *auth, void *key, size_t klen, void *value, size_t vlen) {
     char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
@@ -150,6 +159,14 @@ int send_to_peer(char *peer, void *key, size_t klen, void *value, size_t vlen) {
     free(addr);
 
     if (fd >= 0) {
+        if (auth) {
+            int wb = write_socket(fd, auth, GROUPCACHE_AUTHKEY_LEN);
+            if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
+                close(fd);
+                return -1;
+            }
+        }
+
         int rc = write_message(fd, GROUPCACHE_HDR_SET, key, klen);
         if (rc != 0) {
             close(fd);
@@ -181,7 +198,7 @@ int send_to_peer(char *peer, void *key, size_t klen, void *value, size_t vlen) {
     return -1;
 }
 
-int fetch_from_peer(char *peer, void *key, size_t len, fbuf_t *out) {
+int fetch_from_peer(char *peer, unsigned char *auth, void *key, size_t len, fbuf_t *out) {
     char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
@@ -191,6 +208,15 @@ int fetch_from_peer(char *peer, void *key, size_t len, fbuf_t *out) {
     free(addr);
 
     if (fd >= 0) {
+
+        if (auth) {
+            int wb = write_socket(fd, auth, GROUPCACHE_AUTHKEY_LEN);
+            if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
+                close(fd);
+                return -1;
+            }
+        }
+
         int rc = write_message(fd, GROUPCACHE_HDR_GET, key, len);
         if (rc == 0) {
             groupcache_hdr_t hdr = 0;

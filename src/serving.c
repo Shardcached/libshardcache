@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <errno.h>
 #include <pthread.h>
 #include <iomux.h>
@@ -21,14 +22,16 @@ typedef struct {
     groupcache_hdr_t hdr;
     fbuf_t *key;
     fbuf_t *value;
-#define STATE_READING_NONE 0x00
-#define STATE_READING_KEY 0x01
-#define STATE_READING_VALUE 0x02
-#define STATE_READING_DONE 0x03
+#define STATE_READING_NONE  0x00
+#define STATE_READING_AUTH  0x01
+#define STATE_READING_KEY   0x02
+#define STATE_READING_VALUE 0x03
+#define STATE_READING_DONE  0x04
     char    state;
+    unsigned char    *auth;
 } groupcache_worker_context_t;
 
-static groupcache_worker_context_t *groupcache_create_connection_context(groupcache_t *cache) {
+static groupcache_worker_context_t *groupcache_create_connection_context(groupcache_t *cache, unsigned char *auth) {
     groupcache_worker_context_t *context = calloc(1, sizeof(groupcache_worker_context_t));
 
     context->input = fbuf_create(0);
@@ -36,6 +39,7 @@ static groupcache_worker_context_t *groupcache_create_connection_context(groupca
     context->key = fbuf_create(0);
     context->value = fbuf_create(0);
     context->cache = cache;
+    context->auth = auth;
     return context;
 }
 
@@ -122,8 +126,32 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         return;
 
     fbuf_add_binary(ctx->input, data, len);
-
     if (ctx->state == STATE_READING_NONE) {
+        if (fbuf_used(ctx->input) < GROUPCACHE_AUTHKEY_LEN)
+        return;
+
+        if (memcmp(ctx->auth, (unsigned char *)fbuf_data(ctx->input), GROUPCACHE_AUTHKEY_LEN) != 0) {
+            // AUTH FAILED
+            struct sockaddr saddr;
+            socklen_t addr_len;
+            getpeername(fd, &saddr, &addr_len);
+
+            struct sockaddr_in *s = (struct sockaddr_in *)&saddr;
+
+            fprintf(stderr, "Unauthorized request from %s\n",
+                    inet_ntoa(s->sin_addr));
+
+            iomux_close(iomux, fd);
+            return;
+        }
+        ctx->state = STATE_READING_AUTH;
+        fbuf_remove(ctx->input, GROUPCACHE_AUTHKEY_LEN);
+    }
+
+    if (!fbuf_used(ctx->input) > 0)
+        return;
+    
+    if (ctx->state == STATE_READING_AUTH) {
         char *input = fbuf_data(ctx->input);
         char hdr = *input;
 
@@ -178,10 +206,6 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     }
 
     if (ctx->state == STATE_READING_DONE) {
-        struct sockaddr saddr;
-        socklen_t addr_len;
-        getpeername(fd, &saddr, &addr_len);
-
         // we have a complete request so we can now start 
         // a background worker to take care of it
         pthread_t worker_thread;
@@ -209,10 +233,10 @@ static void groupcache_eof_handler(iomux_t *iomux, int fd, void *priv)
 
 static void groupcache_connection_handler(iomux_t *iomux, int fd, void *priv)
 {
-    groupcache_t *cache = (groupcache_t *)priv;
+    groupcache_serving_t *serv = (groupcache_serving_t *)priv;
 
     // create and initialize the context for the new connection
-    groupcache_worker_context_t *ctx = groupcache_create_connection_context(cache);
+    groupcache_worker_context_t *ctx = groupcache_create_connection_context(serv->cache, serv->auth);
 
     iomux_callbacks_t connection_callbacks = {
         .mux_connection = NULL,
@@ -237,7 +261,7 @@ void *accept_requests(void *priv) {
         .mux_eof = NULL,
         .mux_output = NULL,
         .mux_timeout = NULL,
-        .priv = serv->cache
+        .priv = serv
     };
 
     iomux_t *iomux = iomux_create();

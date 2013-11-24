@@ -120,10 +120,11 @@ MODULE = Groupcache		PACKAGE = Groupcache
 INCLUDE: const-xs.inc
 
 groupcache_t *
-groupcache_create(me, peers, storage)
+groupcache_create(me, peers, storage, secret)
         char *  me
         SV   *  peers
         SV   *  storage
+        char *  secret
     PREINIT:
         int i;
 	int	num_peers = 0;
@@ -167,7 +168,7 @@ groupcache_create(me, peers, storage)
             .priv   = SvREFCNT_inc(storage)
         };
 
-        RETVAL = groupcache_create(me, shards, num_peers, &storage_struct);
+        RETVAL = groupcache_create(me, shards, num_peers, &storage_struct, secret);
 
         if (RETVAL == NULL)
             croak("Unknown error");
@@ -241,3 +242,22 @@ groupcache_test_ownership(cache, key, len)
         }
     OUTPUT:
         RETVAL
+
+int 
+groupcache_evict(cache, key, klen)
+        groupcache_t *cache
+        char *key
+        size_t klen
+
+SV *
+groupcache_compute_authkey(secret)
+        char *secret
+    CODE:
+        unsigned char auth[GROUPCACHE_AUTHKEY_LEN];
+        RETVAL = &PL_sv_undef;
+        if (groupcache_compute_authkey(secret, auth) == 0) {
+            RETVAL = newSVpv((const char *)auth, GROUPCACHE_AUTHKEY_LEN);
+        }
+    OUTPUT:
+        RETVAL
+
