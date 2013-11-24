@@ -38,6 +38,8 @@ struct __groupcache_s {
 
     int sock;
     pthread_t listener;
+
+    int evict_on_delete;
 };
 
 /* This is the object we're managing. It has a key
@@ -382,6 +384,9 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_s
     size_t shard_lens[npeers + 1];
 
     groupcache_t *cache = calloc(1, sizeof(groupcache_t));
+
+    cache->evict_on_delete = 1;
+
     cache->me = strdup(me);
 
     if (st)
@@ -503,18 +508,20 @@ int groupcache_del(groupcache_t *cache, void *key, size_t klen) {
     if (!key)
         return -1;
 
-    arc_remove(cache->arc, (const void *)key, klen);
-    //
     // if we are not the owner try propagating the command to the responsible peer
     const char *node_name;
     if (groupcache_test_ownership(cache, key, klen, &node_name)) {
-        int i;
-        if (cache->storage.remove)
-            cache->storage.remove(key, klen, cache->storage.priv);
-        for (i = 0; i < cache->num_shards; i++) {
-            char *peer = cache->shards[i];
-            if (strcmp(peer, cache->me) != 0) {
-                delete_from_peer(peer, key, klen, 0);
+        if (cache->evict_on_delete)
+        {
+            arc_remove(cache->arc, (const void *)key, klen);
+            int i;
+            if (cache->storage.remove)
+                cache->storage.remove(key, klen, cache->storage.priv);
+            for (i = 0; i < cache->num_shards; i++) {
+                char *peer = cache->shards[i];
+                if (strcmp(peer, cache->me) != 0) {
+                    delete_from_peer(peer, key, klen, 0);
+                }
             }
         }
         return 0;
