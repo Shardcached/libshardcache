@@ -262,7 +262,6 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         fbuf_remove(ctx->input, 1);
     }
 
-
     for (;;) {
         char *chunk = fbuf_data(ctx->input);
         if (fbuf_used(ctx->input) < 2)
@@ -326,7 +325,6 @@ static void groupcache_eof_handler(iomux_t *iomux, int fd, void *priv)
     if (ctx) {
         groupcache_destroy_connection_context(ctx);
     }
-    //DEBUG1("Connection to %d closed", fd);
 }
 
 static void groupcache_connection_handler(iomux_t *iomux, int fd, void *priv)
@@ -488,14 +486,14 @@ int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, siz
     const char *node_name;
     if (groupcache_test_ownership(cache, key, klen, &node_name)) {
 #ifdef GROUPCACHE_DEBUG
-        fprintf(stderr, "Forwarding set command %s => %s to %s\n", (char *)key, (char *)value, node_name);
+        fprintf(stderr, "Storing value %s for key %s\n", (char *)value, (char *)key);
 #endif
         if (cache->storage.store)
             cache->storage.store(key, klen, value, vlen, cache->storage.priv);
         return 0;
     } else {
 #ifdef GROUPCACHE_DEBUG
-        fprintf(stderr, "Storing value %s for key %s\n", (char *)value, (char *)key);
+        fprintf(stderr, "Forwarding set command %s => %s to %s\n", (char *)key, (char *)value, node_name);
 #endif
         return send_to_peer((char *)node_name, key, klen, value, vlen);
     }
