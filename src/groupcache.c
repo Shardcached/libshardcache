@@ -341,12 +341,6 @@ static void groupcache_connection_handler(iomux_t *iomux, int fd, void *priv)
 void *accept_requests(void *priv) {
     groupcache_t *cache = (groupcache_t *)priv;
 
-    char *brkt;
-    char *addr = strdup(cache->me);
-    char *host = strtok_r(addr, ":", &brkt);
-    char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
-
     iomux_callbacks_t groupcache_callbacks = {
         .mux_connection = groupcache_connection_handler,
         .mux_input = NULL,
@@ -357,20 +351,13 @@ void *accept_requests(void *priv) {
     };
 
     iomux_t *iomux = iomux_create();
-    cache->sock = open_socket(host, port);
-    if (cache->sock == -1) {
-        fprintf(stderr, "Can't open listening socket: %s\n",strerror(errno));
-        groupcache_destroy(cache);
-        free(addr);
-        return NULL;
-    }
+    
     iomux_add(iomux, cache->sock, &groupcache_callbacks);
     iomux_listen(iomux, cache->sock);
 
     iomux_loop(iomux, 0);
     
     iomux_destroy(iomux);
-    free(addr);
     return NULL;
 }
 
@@ -422,6 +409,22 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_s
     if (sa.sa_handler == NULL)
         signal(SIGPIPE, groupcache_do_nothing);
 
+    // open the listening socket
+    char *brkt;
+    char *addr = strdup(cache->me);
+    char *host = strtok_r(addr, ":", &brkt);
+    char *port_string = strtok_r(NULL, ":", &brkt);
+    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
+
+    cache->sock = open_socket(host, port);
+    if (cache->sock == -1) {
+        fprintf(stderr, "Can't open listening socket: %s\n",strerror(errno));
+        groupcache_destroy(cache);
+        free(addr);
+        return NULL;
+    }
+
+    // and start a background thread to handle incoming connections
     int rc = pthread_create(&cache->listener, NULL, accept_requests, cache);
     if (rc != 0) {
         fprintf(stderr, "Can't create new thread: %s\n", strerror(errno));
