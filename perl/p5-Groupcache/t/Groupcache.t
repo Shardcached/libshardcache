@@ -32,12 +32,14 @@ ok( $fail == 0 , 'Constants' );
 # Insert your test code below, the Test::More module is use()ed here so read
 # its man page ( perldoc Test::More ) for help writing this test script.
 
-my $gc = Groupcache->new(me => "127.0.0.1:4444",
-                         peers => ["127.0.0.1:4443"],
+my $gc_name = "127.0.0.1:4444";
+my $gc2_name = "127.0.0.1:4443";
+my $gc = Groupcache->new(me => $gc_name,
+                         peers => [$gc2_name],
                          storage => Groupcache::Storage::Mem->new());
 
-my $gc2 = Groupcache->new(me => "127.0.0.1:4443",
-                          peers => ["127.0.0.1:4444"],
+my $gc2 = Groupcache->new(me => $gc2_name,
+                          peers => [$gc_name],
                           storage => Groupcache::Storage::Mem->new());
 
 # set some keys
@@ -51,7 +53,7 @@ is($gc2->get("test_key2"), "test_value2");
 is($gc2->get("test_key3"), "test_value3");
 
 
-if ($gc2->owner("test_key2")) {
+if ($gc2->get_owner("test_key2") ne $gc2->me) {
     $gc2->del("test_key2");
     ok ( !defined $gc->get("test_key2") );
 } else {
