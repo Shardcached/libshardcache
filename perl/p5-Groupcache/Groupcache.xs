@@ -19,6 +19,9 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
     dTHX;
     dSP;
 
+    ENTER;
+    SAVETMPS;
+
     SV *storage = (SV *)priv;
     SV *k = newSVpv(key, len);
 
@@ -58,6 +61,7 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
     PUTBACK;
     FREETMPS;
     LEAVE;
+
     pthread_mutex_unlock(&lock);
     
     return (void *)out;
@@ -82,9 +86,8 @@ static void __st_store(void *key, size_t len, void *value, size_t vlen, void *pr
     XPUSHs(sv_2mortal(v));
     PUTBACK;
 
-    pthread_mutex_unlock(&lock);
-
     call_method("store", G_DISCARD);
+    pthread_mutex_unlock(&lock);
 }
 
 static void __st_remove(void *key, size_t len, void *priv) {
@@ -137,7 +140,7 @@ groupcache_create(me, peers, storage)
 
             AV *peers_array = (AV *)SvRV(peers);
 
-            num_peers = av_len(peers_array);
+            num_peers = av_len(peers_array) + 1;
             if (num_peers > 0) {
                 Newx(shards, sizeof(char *) * num_peers + 1, char *);
                 for (i = 0; i < num_peers; i++) {
@@ -153,9 +156,6 @@ groupcache_create(me, peers, storage)
                     }
                     shards[i] = peer;
                 }
-            } else {
-                // the peers array is empty
-                num_peers = 0;
             }
         }
 
