@@ -22,6 +22,7 @@ int read_message(int fd, fbuf_t *out, groupcache_hdr_t *hdr) {
             if (*hdr != GROUPCACHE_HDR_GET &&
                 *hdr != GROUPCACHE_HDR_SET &&
                 *hdr != GROUPCACHE_HDR_DEL &&
+                *hdr != GROUPCACHE_HDR_EVI &&
                 *hdr != GROUPCACHE_HDR_RES)
             {
                 return -1;
@@ -101,7 +102,7 @@ int write_message(int fd, char hdr, void *v, size_t vlen)  {
 }
 
 
-int delete_from_peer(char *peer, void *key, size_t klen) {
+int delete_from_peer(char *peer, void *key, size_t klen, int owner) {
     char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
@@ -111,7 +112,7 @@ int delete_from_peer(char *peer, void *key, size_t klen) {
     free(addr);
 
     if (fd >= 0) {
-        int rc = write_message(fd, GROUPCACHE_HDR_DEL, key, klen);
+        int rc = write_message(fd, owner ? GROUPCACHE_HDR_DEL : GROUPCACHE_HDR_EVI, key, klen);
         if (rc != 0) {
             close(fd);
             return -1;

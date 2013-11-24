@@ -193,25 +193,34 @@ static void *serve_request(void *priv) {
     }
 
     int rc = 0;
+    void *key = fbuf_data(ctx->key);
+    size_t klen = fbuf_used(ctx->key);
     switch(ctx->hdr) {
+
         case GROUPCACHE_HDR_GET:
         {
             size_t vlen = 0;
-            void *v = groupcache_get(cache, fbuf_data(ctx->key), fbuf_used(ctx->key), &vlen);
+            void *v = groupcache_get(cache, key, klen, &vlen);
             write_message(fd, GROUPCACHE_HDR_RES, v, vlen);
             break;
         }
         case GROUPCACHE_HDR_SET:
         {
-            rc = groupcache_set(cache, fbuf_data(ctx->key), fbuf_used(ctx->key),
+            rc = groupcache_set(cache, key, klen,
                     fbuf_data(ctx->value), fbuf_used(ctx->value));
             write_status(ctx, rc);
             break;
         }
         case GROUPCACHE_HDR_DEL:
         {
-            rc = groupcache_del(cache, fbuf_data(ctx->key), fbuf_used(ctx->key));
+            rc = groupcache_del(cache, key, klen);
             write_status(ctx, rc);
+            break;
+        }
+        case GROUPCACHE_HDR_EVI:
+        {
+            arc_remove(cache->arc, key, klen);
+            write_status(ctx, 0);
             break;
         }
         default:
@@ -239,6 +248,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         if (hdr != GROUPCACHE_HDR_GET &&
             hdr != GROUPCACHE_HDR_SET &&
             hdr != GROUPCACHE_HDR_DEL &&
+            hdr != GROUPCACHE_HDR_EVI &&
             hdr != GROUPCACHE_HDR_RES)
         {
             // BAD REQUEST
@@ -498,11 +508,18 @@ int groupcache_del(groupcache_t *cache, void *key, size_t klen) {
     // if we are not the owner try propagating the command to the responsible peer
     const char *node_name;
     if (groupcache_test_ownership(cache, key, klen, &node_name)) {
+        int i;
         if (cache->storage.remove)
             cache->storage.remove(key, klen, cache->storage.priv);
+        for (i = 0; i < cache->num_shards; i++) {
+            char *peer = cache->shards[i];
+            if (strcmp(peer, cache->me) != 0) {
+                delete_from_peer(peer, key, klen, 0);
+            }
+        }
         return 0;
     } else {
-        return delete_from_peer((char *)node_name, key, klen);
+        return delete_from_peer((char *)node_name, key, klen, 1);
     }
 
     return -1;
