@@ -159,6 +159,7 @@ int send_to_peer(char *peer, void *key, size_t klen, void *value, size_t vlen) {
 
         if (rc == 0) {
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            errno = 0;
             int rb = read_message(fd, &resp, &hdr);
             if (hdr == GROUPCACHE_HDR_RES && rb > 0) {
 #ifdef DEBUG_GROUPCACHE
@@ -168,8 +169,10 @@ int send_to_peer(char *peer, void *key, size_t klen, void *value, size_t vlen) {
                 fbuf_destroy(&resp);
                 return 0;
             } else {
-                // TODO - Error messages
+                fprintf(stderr, "Bad response (%d) from %s : %s\n", hdr, peer, strerror(errno));
             }
+        } else {
+            fprintf(stderr, "Error reading from socket %d (%s) : %s\n", fd, peer, strerror(errno));
         }
         close(fd);
     }

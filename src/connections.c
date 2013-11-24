@@ -176,7 +176,7 @@ int read_socket(int fd, char *buf, int len) {
         fprintf(stderr, "Read on fd %d failed: %s", fd, strerror(errno));
         return -1;
     }
-    return rb >= 0 ? rb : 0;
+    return rb;
 }
 
 

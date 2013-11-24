@@ -21,7 +21,6 @@
 
 #include <chash.h>
 
-
 typedef struct chash_t chash_t;
 
 struct __groupcache_s {
@@ -72,9 +71,15 @@ static int __op_fetch(void *item, void * priv)
     cache_object_t *obj = (cache_object_t *)item;
     groupcache_t *cache = (groupcache_t *)priv;
 
+    if (obj->data) // the value is already loaded, we don't need to fetch
+        return 0;
+
     const char *node_name;
     // if we are not the owner try asking our peer responsible for this data
     if (!groupcache_test_ownership(cache, obj->key, obj->len, &node_name)) {
+#ifdef GROUPCACHE_DEBUG
+        fprintf(stderr, "Fetching data for key %s from peer %s\n", (char *)obj->key, node_name); 
+#endif
         // another peer is responsible for this item, let's get the value from there
         fbuf_t value = FBUF_STATIC_INITIALIZER;
         int rc = fetch_from_peer((char *)node_name, obj->key, obj->len, &value);
@@ -88,6 +93,10 @@ static int __op_fetch(void *item, void * priv)
     // we are responsible for this item ... so let's fetch it
     if (cache->storage.fetch) {
         void *v = cache->storage.fetch(obj->key, obj->len, &obj->dlen, cache->storage.priv);
+#ifdef GROUPCACHE_DEBUG
+        fprintf(stderr, "Fetch storage callback returned value %s (%lu) for key %s\n",
+                v, (unsigned long)obj->dlen, (char *)obj->key); 
+#endif
         if (v && obj->dlen) {
             obj->data = malloc(obj->dlen);
             memcpy(obj->data, v, obj->dlen);
@@ -158,7 +167,7 @@ static void groupcache_destroy_connection_context(groupcache_worker_context_t *c
 
 static void write_status(groupcache_worker_context_t *ctx, int rc) {
     if (rc != 0) {
-        fprintf(stderr, "groupcache: Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
+        fprintf(stderr, "Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
         write_message(ctx->fd, GROUPCACHE_HDR_RES, "ERR", 3);
     } else {
         write_message(ctx->fd, GROUPCACHE_HDR_RES, "OK", 2);
@@ -292,7 +301,11 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         ctx->fd = fd;
 
         iomux_remove(iomux, fd); // this fd doesn't belong to the mux anymore
+        shutdown(fd, SHUT_RD); // we don't want to read anymore from this socket
 
+#ifdef GROUPCACHE_DEBUG
+        fprintf(stderr, "Creating thread to serve request: (%d) %02x:%s\n", fd, ctx->cmd, fbuf_data(ctx->key));
+#endif
         pthread_create(&worker_thread, NULL, serve_request, ctx);
         pthread_detach(worker_thread);
     }
@@ -457,12 +470,19 @@ int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, siz
         return -1;
 
     arc_remove(cache->arc, (const void *)key, klen);
+
     const char *node_name;
     if (groupcache_test_ownership(cache, key, klen, &node_name)) {
+#ifdef GROUPCACHE_DEBUG
+        fprintf(stderr, "Forwarding set command %s => %s to %s\n", (char *)key, (char *)value, node_name);
+#endif
         if (cache->storage.store)
             cache->storage.store(key, klen, value, vlen, cache->storage.priv);
         return 0;
     } else {
+#ifdef GROUPCACHE_DEBUG
+        fprintf(stderr, "Storing value %s for key %s\n", (char *)value, (char *)key);
+#endif
         return send_to_peer((char *)node_name, key, klen, value, vlen);
     }
 
@@ -470,11 +490,14 @@ int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, siz
 }
 
 int groupcache_del(groupcache_t *cache, void *key, size_t klen) {
+
     if (!key)
         return -1;
+
+    arc_remove(cache->arc, (const void *)key, klen);
+    //
     // if we are not the owner try propagating the command to the responsible peer
     const char *node_name;
-    arc_remove(cache->arc, (const void *)key, klen);
     if (groupcache_test_ownership(cache, key, klen, &node_name)) {
         if (cache->storage.remove)
             cache->storage.remove(key, klen, cache->storage.priv);
