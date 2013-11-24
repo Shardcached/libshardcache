@@ -43,32 +43,25 @@ my $gc2 = Groupcache->new(me => $gc2_name,
                           storage => Groupcache::Storage::Mem->new());
 
 # set some keys
-$gc->set("test_key1", "test_value1");
-$gc->set("test_key2", "test_value2");
-$gc->set("test_key3", "test_value3");
+foreach my $i (0..20) {
+    $gc->set("test_key$i", "test_value$i");
+}
 
 # check their existance/value
-is($gc2->get("test_key1"), "test_value1");
-is($gc2->get("test_key2"), "test_value2");
-is($gc2->get("test_key3"), "test_value3");
-
-
-if ($gc2->get_owner("test_key2") ne $gc2->me) {
-    $gc2->del("test_key2");
-    ok ( !defined $gc->get("test_key2") );
-} else {
-    $gc->del("test_key2");
-    ok ( !defined $gc2->get("test_key2") );
-}
-
-if ($gc2->get_owner("test_key3") eq $gc2->me) {
-    $gc2->del("test_key3");
-    ok ( !defined $gc->get("test_key3") );
-} else {
-    $gc->del("test_key3");
-    ok ( !defined $gc2->get("test_key3") );
+foreach my $i (0..20) {
+    is($gc2->get("test_key$i"), "test_value$i");
 }
 
 
+foreach my $i (0..20) {
+    my $test_key = "test_key$i";
+    if ($gc2->get_owner($test_key) ne $gc2->me) {
+        $gc2->del($test_key);
+        ok ( !defined $gc->get($test_key) );
+    } else {
+        $gc->del($test_key);
+        ok ( !defined $gc2->get($test_key) );
+    }
+}
 
 done_testing();
