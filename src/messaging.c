@@ -102,7 +102,7 @@ int write_message(int fd, char hdr, void *v, size_t vlen)  {
 
 
 int delete_from_peer(char *peer, void *key, size_t klen) {
-    char *brkt;
+    char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
     char *port_string = strtok_r(NULL, ":", &brkt);
@@ -139,7 +139,7 @@ int delete_from_peer(char *peer, void *key, size_t klen) {
 
 
 int send_to_peer(char *peer, void *key, size_t klen, void *value, size_t vlen) {
-    char *brkt;
+    char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
     char *port_string = strtok_r(NULL, ":", &brkt);
@@ -180,7 +180,7 @@ int send_to_peer(char *peer, void *key, size_t klen, void *value, size_t vlen) {
 }
 
 int fetch_from_peer(char *peer, void *key, size_t len, fbuf_t *out) {
-    char *brkt;
+    char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
     char *port_string = strtok_r(NULL, ":", &brkt);

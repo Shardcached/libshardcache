@@ -410,7 +410,7 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_s
         signal(SIGPIPE, groupcache_do_nothing);
 
     // open the listening socket
-    char *brkt;
+    char *brkt = NULL;
     char *addr = strdup(cache->me);
     char *host = strtok_r(addr, ":", &brkt);
     char *port_string = strtok_r(NULL, ":", &brkt);
