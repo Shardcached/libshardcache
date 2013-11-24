@@ -396,6 +396,7 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers, groupcache_s
     shard_lens[npeers] = strlen(me);
 
     cache->num_shards = npeers + 1;
+
     cache->chash = chash_create((const char **)cache->shards, shard_lens, cache->num_shards, 200);
 
     cache->arc = arc_create(&cache->ops, 300);
@@ -455,6 +456,7 @@ int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, siz
     if (!key || !value)
         return -1;
 
+    arc_remove(cache->arc, (const void *)key, klen);
     const char *node_name;
     if (groupcache_test_ownership(cache, key, klen, &node_name)) {
         if (cache->storage.store)
