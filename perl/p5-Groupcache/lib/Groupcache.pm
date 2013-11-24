@@ -172,14 +172,9 @@ Client libraries are also provided in Groupcache::Client
 
 None by default.
 
-=head2 Exportable constants
-
 =head2 Exportable functions
 
-  groupcache_t *groupcache_create(char *me,
-                        char **peers,
-                        int num_peers,
-                        groupcache_storage_t *storage)
+  groupcache_t *groupcache_create(char *me, char **peers, int num_peers, groupcache_storage_t *storage)
   int groupcache_del(groupcache_t *cache, void *key, size_t klen)
   void groupcache_destroy(groupcache_t *cache)
   void *groupcache_get(groupcache_t *cache, void *key, size_t klen, size_t *vlen)
@@ -200,7 +195,7 @@ int groupcache_compute_authkey(char *secret, unsigned char *auth);
 
 =head1 AUTHOR
 
-Andrea Guzzo, E<lt>xant@apple.comE<gt>
+Andrea Guzzo, E<lt>xant@xant.net<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
