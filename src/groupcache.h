@@ -113,6 +113,15 @@ int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, siz
  */
 int groupcache_del(groupcache_t *cache, void *key, size_t klen);
 
+/**
+ * @brief Remove the value from the cache for a key
+ *        NOTE: the value will not be removed from the underlying storage
+ * @arg cache : A valid pointer to a groupcache_t structure
+ * @arg key : A valid pointer to the key
+ * @arg klen : The length of the key
+ * @return 0 on success, -1 otherwise
+ */
+int groupcache_evict(groupcache_t *cache, void *key, size_t klen);
 
 /**
  * @brief Get the list of all peers (including this node itself)
