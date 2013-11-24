@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <iomux.h>
@@ -85,8 +86,13 @@ static int __op_fetch(void *item, void * priv)
     }
 
     // we are responsible for this item ... so let's fetch it
-    if (cache->storage.fetch)
-        obj->data = cache->storage.fetch(obj->key, obj->len, &obj->dlen, cache->storage.priv);
+    if (cache->storage.fetch) {
+        void *v = cache->storage.fetch(obj->key, obj->len, &obj->dlen, cache->storage.priv);
+        if (v && obj->dlen) {
+            obj->data = malloc(obj->dlen);
+            memcpy(obj->data, v, obj->dlen);
+        }
+    }
 
     if (!obj->data)
         return -1;
@@ -124,8 +130,11 @@ typedef struct {
     groupcache_hdr_t hdr;
     fbuf_t *key;
     fbuf_t *value;
-    int    key_found;
-    int    value_found;
+#define STATE_READING_NONE 0x00
+#define STATE_READING_KEY 0x01
+#define STATE_READING_VALUE 0x02
+#define STATE_READING_DONE 0x03
+    char    state;
 } groupcache_worker_context_t;
 
 static groupcache_worker_context_t *groupcache_create_connection_context(groupcache_t *cache) {
@@ -215,76 +224,68 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     fbuf_add_binary(ctx->input, data, len);
 
     // the smallest possible valid (complete) request is 6 bytes
-    if (fbuf_used(ctx->input) < 6)
+    if (fbuf_used(ctx->input) < 2)
         return;
 
-    char *chunk = fbuf_data(ctx->input);
-    char hdr = *chunk;
-    chunk++;
+    if (ctx->state == STATE_READING_NONE) {
+        char *input = fbuf_data(ctx->input);
+        char hdr = *input;
 
-    if (hdr != GROUPCACHE_HDR_GET &&
-        hdr != GROUPCACHE_HDR_SET&&
-        hdr != GROUPCACHE_HDR_DEL &&
-        hdr != GROUPCACHE_HDR_RES)
-    {
-        // BAD REQUEST
-        iomux_close(iomux, fd);
-        return;
+        if (hdr != GROUPCACHE_HDR_GET &&
+            hdr != GROUPCACHE_HDR_SET &&
+            hdr != GROUPCACHE_HDR_DEL &&
+            hdr != GROUPCACHE_HDR_RES)
+        {
+            // BAD REQUEST
+            iomux_close(iomux, fd);
+            return;
+        }
+        ctx->hdr = hdr;
+        ctx->state = STATE_READING_KEY;
+        fbuf_remove(ctx->input, 1);
     }
 
-    ctx->hdr = hdr;
 
-    int terminator_found = 0;
-    int separator_found = 0;
-    unsigned int ahead = 1; 
+    for (;;) {
+        char *chunk = fbuf_data(ctx->input);
+        if (fbuf_used(ctx->input) < 2)
+            break;
 
-    int klen = fbuf_used(ctx->key);
-    int vlen = fbuf_used(ctx->value);
-       
-    while (!terminator_found) {
         uint16_t nlen;
         memcpy(&nlen, chunk, 2);
         uint16_t clen = ntohs(nlen);
-        chunk += 2;
-        ahead += 2;
         if (clen > 0) {
-            ahead += clen;
-            if (fbuf_used(ctx->input) >= ahead) {
-                if (!ctx->key_found) {
-                    if (klen > 0)
-                        klen -= clen;
-                    else
-                        fbuf_add_binary(ctx->key, chunk, clen);
-                } else if (!ctx->value_found) {
-                    if (vlen > 0)
-                        vlen -= clen;
-                    else
-                        fbuf_add_binary(ctx->value, chunk, clen);
+            if (fbuf_used(ctx->input) < 2+clen) {
+                break;
+            }
+            chunk += 2;
+            if (ctx->state == STATE_READING_KEY) {
+                fbuf_add_binary(ctx->key, chunk, clen);
+            } else if (ctx->state == STATE_READING_VALUE) {
+                fbuf_add_binary(ctx->value, chunk, clen);
+            }
+            fbuf_remove(ctx->input, 2+clen);
+        } else {
+            if (ctx->state == STATE_READING_KEY) {
+                if (ctx->hdr == GROUPCACHE_HDR_SET) {
+                    ctx->state = STATE_READING_VALUE;
                 } else {
-                    // Bogus request, ignore
+                    ctx->state = STATE_READING_DONE;
                     break;
                 }
-                chunk += clen;
-            } else {
+            } else if (ctx->state == STATE_READING_VALUE) {
+                ctx->state = STATE_READING_DONE;
                 break;
             }
-        } else if (separator_found) {
-            if (hdr == GROUPCACHE_HDR_SET) {
-                ctx->value_found = 1;
-            } else {
-                // Bogus request, ignore
-                break;
-            }
-            terminator_found = 1;
-        } else {
-            ctx->key_found = 1;
-            separator_found = 1;
-            if (hdr != GROUPCACHE_HDR_SET)
-                terminator_found = 1;
+            fbuf_remove(ctx->input, 2);
         }
     }
 
-    if (terminator_found) {
+    if (ctx->state == STATE_READING_DONE) {
+        struct sockaddr saddr;
+        socklen_t addr_len;
+         getpeername(fd, &saddr, &addr_len);
+
         // we have a complete request so we can now start 
         // a background worker to take care of it
         pthread_t worker_thread;
