@@ -232,10 +232,6 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
 
     fbuf_add_binary(ctx->input, data, len);
 
-    // the smallest possible valid (complete) request is 6 bytes
-    if (fbuf_used(ctx->input) < 2)
-        return;
-
     if (ctx->state == STATE_READING_NONE) {
         char *input = fbuf_data(ctx->input);
         char hdr = *input;
@@ -293,7 +289,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     if (ctx->state == STATE_READING_DONE) {
         struct sockaddr saddr;
         socklen_t addr_len;
-         getpeername(fd, &saddr, &addr_len);
+        getpeername(fd, &saddr, &addr_len);
 
         // we have a complete request so we can now start 
         // a background worker to take care of it
