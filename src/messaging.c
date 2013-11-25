@@ -5,65 +5,121 @@
 #include <netinet/in.h>
 #include <errno.h>
 
+#define HAVE_UINT64_T
 #include <siphash.h>
 
 #include "messaging.h"
 #include "connections.h"
 #include "groupcache.h"
 
-int read_message(int fd, fbuf_t *out, groupcache_hdr_t *hdr) {
-    uint16_t chunk_len;
+int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
+    uint16_t clen;
+    int initial_len = fbuf_used(out);;
     int reading_message = 0;
+    char hdr;
+    sip_hash *shash = sip_hash_new(auth, 2, 4);
     for(;;) {
         int rb;
 
-        if (reading_message == 0 && hdr) {
-            rb = read_socket(fd, (char *)hdr, 1);
+        if (reading_message == 0) {
+            rb = read_socket(fd, &hdr, 1);
             if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                sip_hash_free(shash);
                 return -1;
             }
-            if (*hdr != GROUPCACHE_HDR_GET &&
-                *hdr != GROUPCACHE_HDR_SET &&
-                *hdr != GROUPCACHE_HDR_DEL &&
-                *hdr != GROUPCACHE_HDR_EVI &&
-                *hdr != GROUPCACHE_HDR_RES)
+            if (hdr != GROUPCACHE_HDR_GET &&
+                hdr != GROUPCACHE_HDR_SET &&
+                hdr != GROUPCACHE_HDR_DEL &&
+                hdr != GROUPCACHE_HDR_EVI &&
+                hdr != GROUPCACHE_HDR_RES)
             {
+                sip_hash_free(shash);
                 return -1;
             }
+            sip_hash_update(shash, &hdr, 1);
+            if (ohdr)
+                *ohdr = hdr;
             reading_message = 1;
         }
 
-        rb = read_socket(fd, (char *)&chunk_len, 2);
+        rb = read_socket(fd, (char *)&clen, 2);
+        // XXX - bug if read only one bit at this point
         if (rb == 2) {
-            chunk_len = ntohs(chunk_len);
+            sip_hash_update(shash, (char *)&clen, 2);
+            uint16_t chunk_len = ntohs(clen);
+
             if (chunk_len == 0) {
-                return fbuf_used(out);
+                char sig[GROUPCACHE_SIG_LEN];
+                int ofx = 0;
+                do {
+                    rb = read_socket(fd, &sig[ofx], GROUPCACHE_SIG_LEN-ofx);
+                    if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                        fbuf_set_used(out, initial_len);
+                        sip_hash_free(shash);
+                        return -1;
+                    } 
+                    ofx += rb;
+                } while (ofx != GROUPCACHE_SIG_LEN);
+
+                uint64_t digest;
+                if (!sip_hash_final_integer(shash, &digest)) {
+                    // TODO - Error Messages
+                    fbuf_set_used(out, initial_len);
+                    sip_hash_free(shash);
+                    return -1;
+                }
+
+#ifdef GROUPCACHE_DEBUG
+                int i;
+                printf("computed digest for received data: (%s) ", auth);
+                for (i=0; i<8; i++) {
+                    printf("%02x", (unsigned char)((char *)&digest)[i]);
+                }
+                printf("\n");
+
+                printf("digest from received data: ");
+                uint8_t *remote = sig;
+                for (i=0; i<8; i++) {
+                    printf("%02x", remote[i]);
+                }
+                printf("\n");
+#endif
+
+                if (memcmp(&digest, &sig, GROUPCACHE_SIG_LEN) != 0) {
+                    fbuf_set_used(out, initial_len);
+                    sip_hash_free(shash);
+                    return -1;
+                    // AUTH FAILED
+                }
+                sip_hash_free(shash);
+                return 0;
             }
 
-            int initial_len = chunk_len;
             while (chunk_len != 0) {
                 char buf[chunk_len];
                 rb = read_socket(fd, buf, chunk_len);
                 if (rb == -1) {
                     if (errno != EINTR && errno != EAGAIN) {
                         // ERROR 
-                        fbuf_set_used(out, fbuf_used(out) - (initial_len - chunk_len));
+                        fbuf_set_used(out, initial_len);
+                        sip_hash_free(shash);
                         return -1;
                     }
                 } else if (rb == 0) {
-                    fbuf_set_used(out, fbuf_used(out) - (initial_len - chunk_len));
+                    fbuf_set_used(out, initial_len);
+                    sip_hash_free(shash);
                     return -1;
                 }
                 chunk_len -= rb;
                 fbuf_add_binary(out, buf, rb);
+                sip_hash_update(shash, buf, rb);
             }
-        } else if (rb == -1 && errno != EINTR && errno != EAGAIN) {
+        } else if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
             // ERROR 
             break;
-        } else if (rb == 0) {
-            break;
-        } 
+        }
     }
+    sip_hash_free(shash);
     return -1;
 }
 
@@ -120,7 +176,7 @@ int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, s
         return -1;
     }
 
-    if (hdr != GROUPCACHE_HDR_RES && auth) {
+    if (auth) {
         uint64_t digest;
         size_t dlen = sizeof(digest);
         sip_hash *shash = sip_hash_new(auth, 2, 4);
@@ -136,7 +192,6 @@ int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, s
         }
         printf("\n");
 
-        int i;
         printf("computed digest: ");
         for (i=0; i < dlen; i++) {
             printf("%02x", (unsigned char)((char *)&digest)[i]);
@@ -173,8 +228,8 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner) 
         if (rc == 0) {
             groupcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
-            int rb = read_message(fd, &resp, &hdr);
-            if (hdr == GROUPCACHE_HDR_RES && rb > 0) {
+            rc = read_message(fd, auth, &resp, &hdr);
+            if (hdr == GROUPCACHE_HDR_RES && rc == 0) {
 #ifdef DEBUG_GROUPCACHE
                 fprintf(stderr, "Got (set) response from peer %s : %s\n", peer, fbuf_data(&resp));
 #endif
@@ -212,8 +267,8 @@ int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, si
             groupcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             errno = 0;
-            int rb = read_message(fd, &resp, &hdr);
-            if (hdr == GROUPCACHE_HDR_RES && rb > 0) {
+            rc = read_message(fd, auth, &resp, &hdr);
+            if (hdr == GROUPCACHE_HDR_RES && rc == 0) {
 #ifdef DEBUG_GROUPCACHE
                 fprintf(stderr, "Got (set) response from peer %s : %s\n", peer, fbuf_data(&resp));
 #endif
@@ -221,7 +276,7 @@ int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, si
                 fbuf_destroy(&resp);
                 return 0;
             } else {
-                fprintf(stderr, "Bad response (%d) from %s : %s\n", hdr, peer, strerror(errno));
+                fprintf(stderr, "Bad response (%02x) from %s : %s\n", hdr, peer, strerror(errno));
             }
             fbuf_destroy(&resp);
         } else {
@@ -245,8 +300,8 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out) 
         int rc = write_message(fd, auth, GROUPCACHE_HDR_GET, key, len, NULL, 0);
         if (rc == 0) {
             groupcache_hdr_t hdr = 0;
-            int rb = read_message(fd, out, &hdr);
-            if (hdr == GROUPCACHE_HDR_RES && rb > 0) {
+            int rc = read_message(fd, auth, out, &hdr);
+            if (hdr == GROUPCACHE_HDR_RES && rc == 0) {
 #ifdef DEBUG_GROUPCACHE
                 // XXX - casting to (char *) here is dangerous ...
                 //       but this would happen only in debugging

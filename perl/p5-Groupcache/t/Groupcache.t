@@ -50,6 +50,7 @@ foreach my $i (0..20) {
 # check their existance/value
 foreach my $i (0..20) {
     is($gc2->get("test_key$i"), "test_value$i");
+    is($gc->get("test_key$i"), "test_value$i");
 }
 
 

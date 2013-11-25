@@ -10,8 +10,6 @@
 
 #define GROUPCACHE_PORT_DEFAULT 9874
 
-#define GROUPCACHE_AUTHKEY_LEN 8
-
 /**
  * @brief Opaque structure representing the actual groupcache instance
  */

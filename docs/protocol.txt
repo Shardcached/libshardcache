@@ -1,4 +1,34 @@
-The internal communication uses a very simple protocol:
+The internal communication uses a very simple protocol described by the following grammar:
+
+MESSAGE      : <MSG><SIG>
+MSG          : <HDR><RECORD>[<RECORD>]<EOR>
+HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_RES>
+MSG_GET      : 0x01
+MSG_SET      : 0x02
+MSG_DEL      : 0x03
+MSG_EVI      : 0x04
+MSG_RES      : 0x11
+RECORD       : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
+SIZE         : <HIGH_BYTE><LOW_BYTE>
+EOR          : <NULL_BYTE><NULL_BYTE>
+HIGH_BYTE    : <BYTE>
+LOW_BYTE     : <BYTE>
+DATA         : <BYTE>...<BYTE>
+BYTE         : 0x00 - 0xFF
+NULL_BYTE    : 0x00
+SIG          : <BYTE>[8]
+KEY          : <RECORD>
+VALUE        : <RECORD>
+
+The only Supported Messages are :
+
+GET_MESSAGE  : <MSG_GET><KEY><SIG>
+SET_MESSAGE  : <MSG_SET><KEY><VALUE><SIG>
+DEL_MESSAGE  : <MSG_DEL><KEY><SIG>
+EVI_MESSAGE  : <MSG_EVI><KEY><SIG>
+RES_MESSAGE  : <MSG_RES><RECORD><SIG>
+
+The fields taking part in a message packet can be summarized in the following :
 
 ============================================================================================
 |  FIELD   |   SIZE   |  DESC                                                              |
@@ -9,32 +39,6 @@ The internal communication uses a very simple protocol:
 |   EOR    |  2 Bytes |  End Of Record                                                     |
 |   SIG    |  8 Bytes |  SIPHASH digest computed on the message using the shared secret    |
 --------------------------------------------------------------------------------------------
-
-The only valid messages are :
-
-GET_MESSAGE      : <HDR><KEY><SIG>
-SET_MESSAGE      : <HDR><KEY><VALUE><SIG>
-DEL_MESSAGE      : <HDR><KEY><SIG>
-EVI_MESSAGE      : <HDR><KEY><SIG>
-RESP_MESSAGE     : <HDR><VALUE>
-
-BYTE      : 0x00 - 0xFF
-HDR       : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_RESP>
-MSG_GET   : 0x01
-MSG_SET   : 0x02
-MSG_DEL   : 0x03
-MSG_EVI   : 0x04
-MSG_RESP  : 0x11
-KEY       : <RECORD>
-VALUE     : <RECORD>
-RECORD    : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
-SIZE      : <HIGH_BYTE><LOW_BYTE>
-HIGH_BYTE : <BYTE>
-LOW_BYTE  : <BYTE>
-DATA      : <BYTE>...<BYTE>
-EOR       : <NULL_BYTE><NULL_BYTE>
-NULL_BYTE : 0x00
-SIG      : <BYTE>[20]
 
 Examples
 
@@ -60,13 +64,13 @@ An EVI message would look exactly like a DEL message but with an HDR byte equal 
 
 --------------------------------------------------------------------------------------------
 
-A RESP message containing a value "OK" (0x4f 0x4b) would look like:
+A RES message containing a value "OK" (0x4f 0x4b) would look like:
 
 <11><00><02><4f><4b><00><00>
 
 --------------------------------------------------------------------------------------------
 
-A RESP with an empty value (for instance if querying a not-existing key):
+A RES with an empty value (for instance if querying a not-existing key):
 
 <11><00><00>
 
@@ -74,14 +78,17 @@ A RESP with an empty value (for instance if querying a not-existing key):
 
 NOTES:
 
-Responses don't include the signature (SIG postfix)
+The SIG postfix is a siphash digest computed using a shared secret and the complete message
+(obviously excluding the signature itself)
 
-Responses to 'GET' requests will return the value for the requested key if any,
+Responses don't include the signature
+
+Responses to 'GET' requests will return the value for the requested key if found,
 an empty value otherwise
 
 Responses to 'SET', 'DEL' and 'EVI' requests will return either the string 'OK' or 'ERR'
 depending on the status of the operation
 
-The reference implementation serves only one request per connection, so implementing the protocol
+The actual implementation serves only one request per connection, so implementing the protocol
 you should expect the peer to close its socket just after serving the response (and it may close
 its reading part of the socket just after reading exactly one complete request)

@@ -76,15 +76,27 @@ sub send_msg {
     while (read($sock, $data, 1024) > 0) {
         $in .= $data;
     }
-    my ($rhdr, $len, $chunk) = unpack("Cna*", $in);
 
-    return undef if ($len == 0);
+    # now that we have the whole message, let's compute the signature
+    # (we know it's 8 bytes long and is the trailer of the message
+    my $signature = Groupcache::groupcache_compute_signature($self->{_secret}, substr($in, 0, length($in)-8));
 
-    my $out = substr($chunk, 0, $len, "");
-    while ($len == 65535) {
+    my $csig = pack("Q", $signature);
+
+    my ($rhdr, $chunk) = unpack("Ca*", $in);
+
+    my $out; 
+    my $len;
+    do {
         ($len, $chunk) = unpack("na*", $chunk);
         $out .= substr($chunk, 0, $len, "");
+    } while ($len > 0);
+
+    # $chunk now points at the signature
+    if ($csig != $chunk) {
+        return undef;
     }
+
     return $out;
 }
 
@@ -96,7 +108,7 @@ sub get {
 sub set {
     my ($self, $key, $value) = @_;
     my $resp = $self->send_msg(0x02, $key, $value);
-    return ($resp eq "OK")
+    return (defined $resp && $resp eq "OK")
 }
 
 sub del {

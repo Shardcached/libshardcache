@@ -61,9 +61,9 @@ static void groupcache_destroy_connection_context(groupcache_worker_context_t *c
 static void write_status(groupcache_worker_context_t *ctx, int rc) {
     if (rc != 0) {
         fprintf(stderr, "Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
-        write_message(ctx->fd, NULL, GROUPCACHE_HDR_RES, "ERR", 3, NULL, 0);
+        write_message(ctx->fd, (char *)ctx->auth, GROUPCACHE_HDR_RES, "ERR", 3, NULL, 0);
     } else {
-        write_message(ctx->fd, NULL, GROUPCACHE_HDR_RES, "OK", 2, NULL, 0);
+        write_message(ctx->fd, (char *)ctx->auth, GROUPCACHE_HDR_RES, "OK", 2, NULL, 0);
     }
 
 }
@@ -94,7 +94,7 @@ static void *serve_request(void *priv) {
         {
             size_t vlen = 0;
             void *v = groupcache_get(cache, key, klen, &vlen);
-            write_message(fd, NULL, GROUPCACHE_HDR_RES, v, vlen, NULL, 0);
+            write_message(fd, (char *)ctx->auth, GROUPCACHE_HDR_RES, v, vlen, NULL, 0);
             break;
         }
         case GROUPCACHE_HDR_SET:
@@ -201,7 +201,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     }
 
     if (ctx->state == STATE_READING_AUTH) {
-        if (fbuf_used(ctx->input) < GROUPCACHE_AUTHKEY_LEN)
+        if (fbuf_used(ctx->input) < GROUPCACHE_SIG_LEN)
             return;
 
         uint64_t digest;

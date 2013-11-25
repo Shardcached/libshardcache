@@ -27,6 +27,7 @@
  *  BYTE      : 0x00 - 0xFF
  */
 
+#define GROUPCACHE_SIG_LEN 8
 
 typedef enum {
     GROUPCACHE_HDR_GET  = 0x01,
@@ -36,7 +37,7 @@ typedef enum {
     GROUPCACHE_HDR_RES  = 0x11
 } groupcache_hdr_t;
 
-int read_message(int fd, fbuf_t *out, groupcache_hdr_t *hdr);
+int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *hdr);
 int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen);
 int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner);
 int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen);
