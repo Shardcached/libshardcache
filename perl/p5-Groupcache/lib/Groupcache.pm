@@ -26,7 +26,7 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 	groupcache_set
         groupcache_evict
 	groupcache_test_ownership
-        groupcache_compute_authkey
+        groupcache_compute_signature
 ) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
@@ -87,6 +87,7 @@ sub new {
     $self->{_storage} = $storage;
     $self->{_peers} = $peers;
     $self->{_me} = $me;
+    $self->{_secret} = $secret;
     $self->{_gc} = groupcache_create($me, $peers, $storage, $secret);
     return unless ($self->{_gc});
     bless $self, $class;
@@ -125,6 +126,11 @@ sub get_owner {
 sub me {
     my ($self) = @_;
     return $self->{_me};
+}
+
+sub signature {
+    my ($self, $msg) = @_;
+    return groupcache_compute_signature($self->{_secret}, $msg);
 }
 
 sub DESTROY {
@@ -182,7 +188,7 @@ None by default.
   int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, size_t vlen)
   int groupcache_evict(groupcache_t *cache, void *key, size_t klen);
   int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const char **owner)
-int groupcache_compute_authkey(char *secret, unsigned char *auth);
+int groupcache_compute_signature(char *secret, uint8_t *msg, size_t len);
 
 
 

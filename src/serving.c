@@ -9,13 +9,14 @@
 #include <pthread.h>
 #include <iomux.h>
 
-#include <siphash.h>
-
 #include "messaging.h"
 #include "connections.h"
 #include "groupcache.h"
 
 #include "serving.h"
+
+#define HAVE_UINT64_T
+#include <siphash.h>
 
 typedef struct {
     fbuf_t *input;
@@ -33,7 +34,6 @@ typedef struct {
     char    state;
     const char    *auth;
     sip_hash *shash;
-    fbuf_t *accum;
 } groupcache_worker_context_t;
 
 static groupcache_worker_context_t *groupcache_create_connection_context(groupcache_t *cache, const char *auth) {
@@ -46,7 +46,6 @@ static groupcache_worker_context_t *groupcache_create_connection_context(groupca
     context->cache = cache;
     context->auth = auth;
     context->shash = sip_hash_new((uint8_t *)auth, 2, 4);
-    context->accum = fbuf_create(0);
     return context;
 }
 
@@ -149,13 +148,18 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             hdr != GROUPCACHE_HDR_RES)
         {
             // BAD REQUEST
+#ifdef GROUPCACHE_DEBUG
+            struct sockaddr_in saddr;
+            socklen_t addr_len;
+            getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
+            fprintf(stderr, "BAD REQUEST from %s\n", inet_ntoa(saddr.sin_addr));
+#endif
             iomux_close(iomux, fd);
             return;
         }
         ctx->hdr = hdr;
         ctx->state = STATE_READING_KEY;
         sip_hash_update(ctx->shash, &hdr, 1);
-        fbuf_add_binary(ctx->accum, fbuf_data(ctx->input), 1); 
         fbuf_remove(ctx->input, 1);
     }
 
@@ -178,11 +182,9 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                 fbuf_add_binary(ctx->value, chunk, clen);
             }
             sip_hash_update(ctx->shash, fbuf_data(ctx->input), 2+clen);
-            fbuf_add_binary(ctx->accum, fbuf_data(ctx->input), 2+clen); 
             fbuf_remove(ctx->input, 2+clen);
         } else {
             sip_hash_update(ctx->shash, fbuf_data(ctx->input), 2);
-            fbuf_add_binary(ctx->accum, fbuf_data(ctx->input), 2); 
             fbuf_remove(ctx->input, 2);
             if (ctx->state == STATE_READING_KEY) {
                 if (ctx->hdr == GROUPCACHE_HDR_SET) {
@@ -219,13 +221,12 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         printf("\n");
 
         printf("digest from received data: ");
-        uint8_t *blah = fbuf_data(ctx->input);
+        uint8_t *remote = fbuf_data(ctx->input);
         for (i=0; i<8; i++) {
-            printf("%02x", blah[i]);
+            printf("%02x", remote[i]);
         }
         printf("\n");
 #endif
-
         if (memcmp(&digest, (uint8_t *)fbuf_data(ctx->input), sizeof(digest)) != 0) {
             // AUTH FAILED
             struct sockaddr_in saddr;
@@ -233,7 +234,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
 
             fprintf(stderr, "Unauthorized request from %s\n",
-            inet_ntoa(saddr.sin_addr));
+                    inet_ntoa(saddr.sin_addr));
 
             iomux_close(iomux, fd);
             return;
@@ -252,7 +253,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         shutdown(fd, SHUT_RD); // we don't want to read anymore from this socket
 
 #ifdef GROUPCACHE_DEBUG
-        fprintf(stderr, "Creating thread to serve request: (%d) %02x:%s\n", fd, ctx->cmd, fbuf_data(ctx->key));
+        fprintf(stderr, "Creating thread to serve request: (%d) %02x:%s\n", fd, ctx->hdr, fbuf_data(ctx->key));
 #endif
         pthread_create(&worker_thread, NULL, serve_request, ctx);
         pthread_detach(worker_thread);

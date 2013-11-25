@@ -151,11 +151,10 @@ int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const 
 /**
  * @brief Compute the authentication digest based on the shared secret
  * @arg secret : The shared secret against which to compute the digest
- * @arg auth   : A pointer here to store the computed digest
- *               enough memory must have been allocated to hold the digest 
- *               (GROUPCACHE_AUTHKEY_LEN)
- * @return 0 if the digest has been computed successfully, -1 otherwise
+ * @arg msg    : A pointer to the message on which compute the digest
+ * @arg len    : The length of the message
+ * @return the computed digest
  */
-int groupcache_compute_authkey(char *secret, unsigned char *auth);
+uint64_t groupcache_compute_signature(char *secret, uint8_t *msg, size_t len);
 
 #endif

@@ -15,7 +15,7 @@ sub new {
 
     my $self = { _addr => $addr,
                  _port => $port,
-                 _auth => Groupcache::groupcache_compute_authkey($secret)
+                 _secret => $secret,
                };
 
     bless $self, $class;
@@ -46,8 +46,8 @@ sub _chunkize_var {
 sub send_msg {
     my ($self, $hdr, $key, $value) = @_;
 
-    my $templ = "a20C";
-    my @vars = ($self->{_auth}, $hdr);
+    my $templ = "C";
+    my @vars = ($hdr);
 
     my $kbuf = _chunkize_var($key);
     $templ .= sprintf "a%dCC", length($kbuf);
@@ -60,6 +60,9 @@ sub send_msg {
     }
 
     my $msg = pack $templ, @vars;
+
+    my $sig = Groupcache::groupcache_compute_signature($self->{_secret}, $msg);
+    $msg .= pack("Q", $sig);
 
     my $sock = IO::Socket::INET->new(PeerAddr => $self->{_addr},
                                      PeerPort => $self->{_port},

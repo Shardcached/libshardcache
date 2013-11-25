@@ -70,7 +70,6 @@ if ($pid) {
     sleep(1);
     my $c = Groupcache::Client->new("localhost:4443");
     warn Dumper($c);
-
     foreach my $i (4..24) {
         $c->set("test_key$i", "test_value$i");
     }

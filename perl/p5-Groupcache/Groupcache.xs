@@ -252,14 +252,16 @@ groupcache_evict(cache, key, klen)
         size_t klen
 
 SV *
-groupcache_compute_authkey(secret)
+groupcache_compute_signature(secret, msg)
         char *secret
+        SV   *msg
     CODE:
-        unsigned char auth[GROUPCACHE_AUTHKEY_LEN];
-        RETVAL = &PL_sv_undef;
-        if (groupcache_compute_authkey(secret, auth) == 0) {
-            RETVAL = newSVpv((const char *)auth, GROUPCACHE_AUTHKEY_LEN);
-        }
+        STRLEN l;
+        char *ptr = SvPVbyte(msg, l);
+        char key[16];
+        strncpy(key, secret, sizeof(key));
+        uint64_t digest = groupcache_compute_signature(key, (uint8_t *)ptr, l);
+        RETVAL = newSViv(digest);
     OUTPUT:
         RETVAL
 

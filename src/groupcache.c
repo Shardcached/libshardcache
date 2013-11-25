@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <iomux.h>
 #include <fbuf.h>
+#include <siphash.h>
 
 #include "groupcache.h"
 #include "arc.h"
@@ -359,13 +360,6 @@ int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const 
     return (strcmp(node_name, cache->me) == 0);
 }
 
-int groupcache_compute_authkey(char *secret, unsigned char *auth) {
-    SHA1Context sha;
-    SHA1Reset(&sha);
-    SHA1Input(&sha, (const unsigned char *)secret, strlen(secret));
-    if (!SHA1Result(&sha)) {
-        return -1;
-    }
-    memcpy(auth, &sha.Message_Digest, GROUPCACHE_AUTHKEY_LEN);
-    return 0;
+uint64_t groupcache_compute_signature(char *secret, uint8_t *msg, size_t len) {
+    return sip_hash24(secret, msg, len);    
 }
