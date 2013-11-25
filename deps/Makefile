@@ -16,6 +16,7 @@ all:
 	    fi; \
 	    export LIBDIR=$(LIBDIR); \
 	    export INCDIR=$(INCDIR); \
+	    export CFLAGS="-DHAVE_UINT64_T"; \
 	    make -eC $$name; \
 	    make -eC $$name install; \
 	done
