@@ -1,6 +1,7 @@
 DEPS=https://github.com/dgryski/libchash \
      https://github.com/xant/libhl \
-     https://github.com/xant/libiomux
+     https://github.com/xant/libiomux \
+     https://github.com/xant/siphash-c
 
 export LIBDIR := $(shell pwd)/.libs
 export INCDIR := $(shell pwd)/.incs

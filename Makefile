@@ -1,7 +1,11 @@
 UNAME := $(shell uname)
 LIBGROUPCACHE_DIR := $(shell pwd)
 
-LDFLAGS += -L. deps/.libs/libhl.a deps/.libs/libchash.a deps/.libs/libiomux.a
+LDFLAGS += deps/.libs/libhl.a \
+	   deps/.libs/libchash.a \
+	   deps/.libs/libiomux.a \
+	   deps/.libs/libsiphash.a \
+	   -L.
 
 ifeq ($(UNAME), Linux)
 LDFLAGS += -pthread
@@ -54,7 +58,10 @@ standalone: objects
 	dir="/tmp/libgroupcache_build$$$$"; \
 	mkdir $$dir; \
 	cd $$dir; \
-	ar x $$cwd/deps/.libs/libchash.a; ar x $$cwd/deps/.libs/libhl.a; \
+	ar x $$cwd/deps/.libs/libchash.a; \
+	ar x $$cwd/deps/.libs/libhl.a; \
+	ar x $$cwd/deps/.libs/libiomux.a; \
+	ar x $$cwd/deps/.libs/libsiphash.a; \
 	cd $$cwd; \
 	ar -r libgroupcache.a $$dir/*.o src/*.o; \
 	rm -rf $$dir

@@ -4,6 +4,9 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <errno.h>
+
+#include <siphash.h>
+
 #include "messaging.h"
 #include "connections.h"
 #include "groupcache.h"
@@ -64,45 +67,97 @@ int read_message(int fd, fbuf_t *out, groupcache_hdr_t *hdr) {
     return -1;
 }
 
-int write_message(int fd, char hdr, void *v, size_t vlen)  {
-    int wb;
-
-    if (hdr > 0) {
-        wb = write_socket(fd, (char *)&hdr, 1);
-        if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
+int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out) {
+    int orig_used = fbuf_used(out);
+    do {
+        int writelen = (blen > (size_t)UINT16_MAX) ? UINT16_MAX : blen;
+        blen -= writelen;
+        uint16_t size = htons(writelen);
+        int wb = fbuf_add_binary(out, (char *)&size, 2);
+        if (wb == -1) {
             return -1;
-        }
-    }
-
-    if (v && vlen) {
-        do {
-            int writelen = (vlen > (size_t)UINT16_MAX) ? UINT16_MAX : vlen;
-            vlen -= writelen;
-            uint16_t size = htons(writelen);
-            wb = write_socket(fd, (char *)&size, 2);
-            if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
-                return -1;
-            } else if (wb == 2) {
-                int wrote = 0;
-                while (wrote != writelen) {
-                    wb = write_socket(fd, v, writelen);
-                    if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
-                        return -1;
-                    }
-                    wrote += wb;
+        } else if (wb == 2) {
+            int wrote = 0;
+            while (wrote != writelen) {
+                wb = fbuf_add_binary(out, buf + wrote, writelen - wrote);
+                if (wb == -1) {
+                    // discard what written so far
+                    fbuf_set_used(out, orig_used);
+                    return -1;
                 }
+                wrote += wb;
             }
-        } while (vlen != 0);
-    }
-    uint16_t terminator = 0;
-    wb = write_socket(fd, (char *)&terminator, 2);
-    if (wb == 2)
-        return 0;
+            if (wrote == writelen) {
+                uint16_t terminator = 0;
+                fbuf_add_binary(out, (char *)&terminator, 2);
+                return 0;
+            }
+        }
+    } while (blen != 0);
     return -1;
 }
 
+int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, fbuf_t *out) {
+    fbuf_clear(out);
+    fbuf_add_binary(out, &hdr, 1);
+    if (k && klen) {
+        if (_chunkize_buffer(k, klen, out) != 0)
+            return -1;
+    }
+    if (hdr == GROUPCACHE_HDR_SET && v && vlen) {
+        if (_chunkize_buffer(v, vlen, out) != 0)
+            return -1;
+    }
+    return 0;
+}
 
-int delete_from_peer(char *peer, unsigned char *auth, void *key, size_t klen, int owner) {
+int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen)  {
+
+    fbuf_t msg = FBUF_STATIC_INITIALIZER;
+    if (build_message(hdr, k, klen, v, vlen, &msg) != 0) {
+        // TODO - Error Messages
+        fbuf_destroy(&msg);
+        return -1;
+    }
+
+    if (hdr != GROUPCACHE_HDR_RES && auth) {
+        uint64_t digest;
+        size_t dlen = sizeof(digest);
+        sip_hash *shash = sip_hash_new(auth, 2, 4);
+        sip_hash_digest_integer(shash, fbuf_data(&msg), fbuf_used(&msg), &digest);
+        sip_hash_free(shash);
+        fbuf_add_binary(&msg, (char *)&digest, dlen);
+
+#ifdef GROUPCACHE_DEBUG
+        int i;
+        printf("sending message: ");
+        for (i = 0; i < fbuf_used(&msg) - dlen; i++) {
+            printf("%02x", (unsigned char)(fbuf_data(&msg))[i]);
+        }
+        printf("\n");
+
+        int i;
+        printf("computed digest: ");
+        for (i=0; i < dlen; i++) {
+            printf("%02x", (unsigned char)((char *)&digest)[i]);
+        }
+        printf("\n");
+#endif
+    }
+
+    while(fbuf_used(&msg) > 0) {
+        int wb = fbuf_write(&msg, fd, 0);
+        if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
+            fbuf_destroy(&msg);
+            return -1;
+        }
+    }
+    fbuf_destroy(&msg);
+    return 0;
+}
+
+
+int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner) {
     char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
@@ -113,22 +168,10 @@ int delete_from_peer(char *peer, unsigned char *auth, void *key, size_t klen, in
 
     if (fd >= 0) {
 
-        if (auth) {
-            int wb = write_socket(fd, auth, GROUPCACHE_AUTHKEY_LEN);
-            if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
-                close(fd);
-                return -1;
-            }
-        }
+        int rc = write_message(fd, auth, owner ? GROUPCACHE_HDR_DEL : GROUPCACHE_HDR_EVI, key, klen, NULL, 0);
 
-        int rc = write_message(fd, owner ? GROUPCACHE_HDR_DEL : GROUPCACHE_HDR_EVI, key, klen);
-        if (rc != 0) {
-            close(fd);
-            return -1;
-        }
-
-        groupcache_hdr_t hdr = 0;
         if (rc == 0) {
+            groupcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             int rb = read_message(fd, &resp, &hdr);
             if (hdr == GROUPCACHE_HDR_RES && rb > 0) {
@@ -149,7 +192,7 @@ int delete_from_peer(char *peer, unsigned char *auth, void *key, size_t klen, in
 }
 
 
-int send_to_peer(char *peer, unsigned char *auth, void *key, size_t klen, void *value, size_t vlen) {
+int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen) {
     char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
@@ -159,24 +202,14 @@ int send_to_peer(char *peer, unsigned char *auth, void *key, size_t klen, void *
     free(addr);
 
     if (fd >= 0) {
-        if (auth) {
-            int wb = write_socket(fd, auth, GROUPCACHE_AUTHKEY_LEN);
-            if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
-                close(fd);
-                return -1;
-            }
-        }
-
-        int rc = write_message(fd, GROUPCACHE_HDR_SET, key, klen);
+        int rc = write_message(fd, auth, GROUPCACHE_HDR_SET, key, klen, value, vlen);
         if (rc != 0) {
             close(fd);
             return -1;
         }
 
-        groupcache_hdr_t hdr = 0;
-        rc = write_message(fd, 0, value, vlen);
-
         if (rc == 0) {
+            groupcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             errno = 0;
             int rb = read_message(fd, &resp, &hdr);
@@ -190,6 +223,7 @@ int send_to_peer(char *peer, unsigned char *auth, void *key, size_t klen, void *
             } else {
                 fprintf(stderr, "Bad response (%d) from %s : %s\n", hdr, peer, strerror(errno));
             }
+            fbuf_destroy(&resp);
         } else {
             fprintf(stderr, "Error reading from socket %d (%s) : %s\n", fd, peer, strerror(errno));
         }
@@ -198,7 +232,7 @@ int send_to_peer(char *peer, unsigned char *auth, void *key, size_t klen, void *
     return -1;
 }
 
-int fetch_from_peer(char *peer, unsigned char *auth, void *key, size_t len, fbuf_t *out) {
+int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out) {
     char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
@@ -208,16 +242,7 @@ int fetch_from_peer(char *peer, unsigned char *auth, void *key, size_t len, fbuf
     free(addr);
 
     if (fd >= 0) {
-
-        if (auth) {
-            int wb = write_socket(fd, auth, GROUPCACHE_AUTHKEY_LEN);
-            if (wb == 0 || (wb == -1 && errno != EINTR && errno != EAGAIN)) {
-                close(fd);
-                return -1;
-            }
-        }
-
-        int rc = write_message(fd, GROUPCACHE_HDR_GET, key, len);
+        int rc = write_message(fd, auth, GROUPCACHE_HDR_GET, key, len, NULL, 0);
         if (rc == 0) {
             groupcache_hdr_t hdr = 0;
             int rb = read_message(fd, out, &hdr);

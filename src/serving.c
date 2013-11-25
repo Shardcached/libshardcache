@@ -8,6 +8,9 @@
 #include <errno.h>
 #include <pthread.h>
 #include <iomux.h>
+
+#include <siphash.h>
+
 #include "messaging.h"
 #include "connections.h"
 #include "groupcache.h"
@@ -23,15 +26,17 @@ typedef struct {
     fbuf_t *key;
     fbuf_t *value;
 #define STATE_READING_NONE  0x00
-#define STATE_READING_AUTH  0x01
-#define STATE_READING_KEY   0x02
-#define STATE_READING_VALUE 0x03
+#define STATE_READING_KEY   0x01
+#define STATE_READING_VALUE 0x02
+#define STATE_READING_AUTH  0x03
 #define STATE_READING_DONE  0x04
     char    state;
-    unsigned char    *auth;
+    const char    *auth;
+    sip_hash *shash;
+    fbuf_t *accum;
 } groupcache_worker_context_t;
 
-static groupcache_worker_context_t *groupcache_create_connection_context(groupcache_t *cache, unsigned char *auth) {
+static groupcache_worker_context_t *groupcache_create_connection_context(groupcache_t *cache, const char *auth) {
     groupcache_worker_context_t *context = calloc(1, sizeof(groupcache_worker_context_t));
 
     context->input = fbuf_create(0);
@@ -40,6 +45,8 @@ static groupcache_worker_context_t *groupcache_create_connection_context(groupca
     context->value = fbuf_create(0);
     context->cache = cache;
     context->auth = auth;
+    context->shash = sip_hash_new((uint8_t *)auth, 2, 4);
+    context->accum = fbuf_create(0);
     return context;
 }
 
@@ -48,15 +55,16 @@ static void groupcache_destroy_connection_context(groupcache_worker_context_t *c
     fbuf_free(ctx->output);
     fbuf_free(ctx->key);
     fbuf_free(ctx->value);
+    sip_hash_free(ctx->shash);
     free(ctx);
 }
 
 static void write_status(groupcache_worker_context_t *ctx, int rc) {
     if (rc != 0) {
         fprintf(stderr, "Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
-        write_message(ctx->fd, GROUPCACHE_HDR_RES, "ERR", 3);
+        write_message(ctx->fd, NULL, GROUPCACHE_HDR_RES, "ERR", 3, NULL, 0);
     } else {
-        write_message(ctx->fd, GROUPCACHE_HDR_RES, "OK", 2);
+        write_message(ctx->fd, NULL, GROUPCACHE_HDR_RES, "OK", 2, NULL, 0);
     }
 
 }
@@ -87,7 +95,7 @@ static void *serve_request(void *priv) {
         {
             size_t vlen = 0;
             void *v = groupcache_get(cache, key, klen, &vlen);
-            write_message(fd, GROUPCACHE_HDR_RES, v, vlen);
+            write_message(fd, NULL, GROUPCACHE_HDR_RES, v, vlen, NULL, 0);
             break;
         }
         case GROUPCACHE_HDR_SET:
@@ -126,30 +134,11 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         return;
 
     fbuf_add_binary(ctx->input, data, len);
-    if (ctx->state == STATE_READING_NONE) {
-        if (fbuf_used(ctx->input) < GROUPCACHE_AUTHKEY_LEN)
-        return;
-
-        if (memcmp(ctx->auth, (unsigned char *)fbuf_data(ctx->input), GROUPCACHE_AUTHKEY_LEN) != 0) {
-            // AUTH FAILED
-            struct sockaddr_in saddr;
-            socklen_t addr_len;
-            getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
-
-            fprintf(stderr, "Unauthorized request from %s\n",
-            inet_ntoa(saddr.sin_addr));
-
-            iomux_close(iomux, fd);
-            return;
-        }
-        ctx->state = STATE_READING_AUTH;
-        fbuf_remove(ctx->input, GROUPCACHE_AUTHKEY_LEN);
-    }
 
     if (!fbuf_used(ctx->input) > 0)
         return;
     
-    if (ctx->state == STATE_READING_AUTH) {
+    if (ctx->state == STATE_READING_NONE) {
         char *input = fbuf_data(ctx->input);
         char hdr = *input;
 
@@ -165,6 +154,8 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         }
         ctx->hdr = hdr;
         ctx->state = STATE_READING_KEY;
+        sip_hash_update(ctx->shash, &hdr, 1);
+        fbuf_add_binary(ctx->accum, fbuf_data(ctx->input), 1); 
         fbuf_remove(ctx->input, 1);
     }
 
@@ -186,21 +177,69 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             } else if (ctx->state == STATE_READING_VALUE) {
                 fbuf_add_binary(ctx->value, chunk, clen);
             }
+            sip_hash_update(ctx->shash, fbuf_data(ctx->input), 2+clen);
+            fbuf_add_binary(ctx->accum, fbuf_data(ctx->input), 2+clen); 
             fbuf_remove(ctx->input, 2+clen);
         } else {
+            sip_hash_update(ctx->shash, fbuf_data(ctx->input), 2);
+            fbuf_add_binary(ctx->accum, fbuf_data(ctx->input), 2); 
+            fbuf_remove(ctx->input, 2);
             if (ctx->state == STATE_READING_KEY) {
                 if (ctx->hdr == GROUPCACHE_HDR_SET) {
                     ctx->state = STATE_READING_VALUE;
                 } else {
-                    ctx->state = STATE_READING_DONE;
+                    ctx->state = STATE_READING_AUTH;
                     break;
                 }
             } else if (ctx->state == STATE_READING_VALUE) {
-                ctx->state = STATE_READING_DONE;
+                ctx->state = STATE_READING_AUTH;
                 break;
             }
-            fbuf_remove(ctx->input, 2);
         }
+    }
+
+    if (ctx->state == STATE_READING_AUTH) {
+        if (fbuf_used(ctx->input) < GROUPCACHE_AUTHKEY_LEN)
+            return;
+
+        uint64_t digest;
+        size_t dlen = sizeof(digest);
+        if (!sip_hash_final_integer(ctx->shash, &digest)) {
+            // TODO - Error Messages
+            iomux_close(iomux, fd);
+            return;
+        }
+
+#ifdef GROUPCACHE_DEBUG
+        int i;
+        printf("computed digest for received data: ");
+        for (i=0; i<8; i++) {
+            printf("%02x", (unsigned char)((char *)&digest)[i]);
+        }
+        printf("\n");
+
+        printf("digest from received data: ");
+        uint8_t *blah = fbuf_data(ctx->input);
+        for (i=0; i<8; i++) {
+            printf("%02x", blah[i]);
+        }
+        printf("\n");
+#endif
+
+        if (memcmp(&digest, (uint8_t *)fbuf_data(ctx->input), sizeof(digest)) != 0) {
+            // AUTH FAILED
+            struct sockaddr_in saddr;
+            socklen_t addr_len;
+            getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
+
+            fprintf(stderr, "Unauthorized request from %s\n",
+            inet_ntoa(saddr.sin_addr));
+
+            iomux_close(iomux, fd);
+            return;
+        }
+        ctx->state = STATE_READING_DONE;
+        fbuf_remove(ctx->input, dlen);
     }
 
     if (ctx->state == STATE_READING_DONE) {

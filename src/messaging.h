@@ -37,8 +37,8 @@ typedef enum {
 } groupcache_hdr_t;
 
 int read_message(int fd, fbuf_t *out, groupcache_hdr_t *hdr);
-int write_message(int fd, char hdr, void *v, size_t vlen);
-int delete_from_peer(char *peer, unsigned char *auth, void *key, size_t klen, int owner);
-int send_to_peer(char *peer, unsigned char *auth, void *key, size_t klen, void *value, size_t vlen);
-int fetch_from_peer(char *peer, unsigned char *auth, void *key, size_t len, fbuf_t *out);
+int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen);
+int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner);
+int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen);
+int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out);
 

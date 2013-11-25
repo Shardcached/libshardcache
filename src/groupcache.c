@@ -45,7 +45,7 @@ struct __groupcache_s {
 
     int evict_on_delete;
 
-    unsigned char auth[GROUPCACHE_AUTHKEY_LEN];
+    const char auth[16];
 };
 
 /* This is the object we're managing. It has a key
@@ -90,7 +90,7 @@ static int __op_fetch(void *item, void * priv)
 #endif
         // another peer is responsible for this item, let's get the value from there
         fbuf_t value = FBUF_STATIC_INITIALIZER;
-        int rc = fetch_from_peer((char *)node_name, cache->auth, obj->key, obj->len, &value);
+        int rc = fetch_from_peer((char *)node_name, (char *)cache->auth, obj->key, obj->len, &value);
         if (rc == 0) {
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
@@ -211,12 +211,16 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers,
 
     free(addr); // we don't need it anymore
     
+    /*
     int rc = groupcache_compute_authkey(secret, cache->auth);
     if (rc != 0) {
         fprintf(stderr, "ERROR-- could not compute message digest\n");
         groupcache_destroy(cache);
         return NULL;
     } 
+    */
+
+    strncpy((char *)cache->auth, secret, sizeof(cache->auth));
     cache->serv.auth = cache->auth;
 
 #ifdef GROUPCACHE_DEBUG
@@ -231,7 +235,7 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers,
     cache->serv.sock = cache->sock;
 
     // and start a background thread to handle incoming connections
-    rc = pthread_create(&cache->listener, NULL, accept_requests, &cache->serv);
+    int rc = pthread_create(&cache->listener, NULL, accept_requests, &cache->serv);
     if (rc != 0) {
         fprintf(stderr, "Can't create new thread: %s\n", strerror(errno));
         groupcache_destroy(cache);
@@ -288,7 +292,7 @@ int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, siz
 #ifdef GROUPCACHE_DEBUG
         fprintf(stderr, "Forwarding set command %s => %s to %s\n", (char *)key, (char *)value, node_name);
 #endif
-        return send_to_peer((char *)node_name, cache->auth, key, klen, value, vlen);
+        return send_to_peer((char *)node_name, (char *)cache->auth, key, klen, value, vlen);
     }
 
     return -1;
@@ -319,13 +323,13 @@ int groupcache_del(groupcache_t *cache, void *key, size_t klen) {
             for (i = 0; i < cache->num_shards; i++) {
                 char *peer = cache->shards[i];
                 if (strcmp(peer, cache->me) != 0) {
-                    delete_from_peer(peer, cache->auth, key, klen, 0);
+                    delete_from_peer(peer, (char *)cache->auth, key, klen, 0);
                 }
             }
         }
         return 0;
     } else {
-        return delete_from_peer((char *)node_name, cache->auth, key, klen, 1);
+        return delete_from_peer((char *)node_name, (char *)cache->auth, key, klen, 1);
     }
 
     return -1;
