@@ -73,7 +73,7 @@ typedef struct __groupcache_storage_s {
  *                NOTE: The newly created instance will copy the pointers to its internal descriptor so
  *                      the resources allocated for the storage structure can be safely released after
  *                      calling groupcache_create()
- * @arg secret : a null-terminated string containing the shared secret used to authenticate message
+ * @arg secret : a null-terminated string containing the shared secret used to authenticate incoming messages
  */
 groupcache_t *groupcache_create(char *me, 
                         char **peers,
@@ -142,12 +142,20 @@ char **groupcache_get_peers(groupcache_t *cache, int *num_peers);
  * @arg cache : A valid pointer to a groupcache_t structure
  * @arg key : A valid pointer to the key
  * @arg klen : The length of the key
- * @arg owner : If provided the owner pointer will be set to the name
+ * @arg owner : If provided the pointed pointer will be set to the name
  *              (<address:port>) of the peer owning the key
  * @return 1 if the current node (represented by cache) is the owner of the key, 0 otherwise
  */
 int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const char **owner);
 
+/**
+ * @brief Compute the authentication digest based on the shared secret
+ * @arg secret : The shared secret against which to compute the digest
+ * @arg auth   : A pointer here to store the computed digest
+ *               enough memory must have been allocated to hold the digest 
+ *               (GROUPCACHE_AUTHKEY_LEN)
+ * @return 0 if the digest has been computed successfully, -1 otherwise
+ */
 int groupcache_compute_authkey(char *secret, unsigned char *auth);
 
 #endif
