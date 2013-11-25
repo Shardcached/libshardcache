@@ -3,4 +3,5 @@
 libhl
 libchash
 libiomux
+siphash-c
 

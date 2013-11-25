@@ -1,6 +1,7 @@
 *~
 *.swp
 *.swo
+*.swn
 *.o
 *.a
 *.out
