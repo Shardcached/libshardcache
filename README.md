@@ -3,6 +3,12 @@ groupcached
 
 C implementation of groupcache (golang/groupcache)
 
+Note that this is a fresh implementation of the logic/strategy
+implemented in groupcache. It's not a straight porting but an
+implementation from scratch, it uses its own custom protocol for internal
+communication that differs from the one used by the Go implementation
+(which is instead based on protobuf + httpd)
+
 Like the Go package (https://github.com/golang/groupcache.git),
 this library, together with the groupcached daemon implementation)
 is intended as a replacement for memcached with some additions:
