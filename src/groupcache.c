@@ -92,7 +92,7 @@ static int __op_fetch(void *item, void * priv)
         // another peer is responsible for this item, let's get the value from there
         fbuf_t value = FBUF_STATIC_INITIALIZER;
         int rc = fetch_from_peer((char *)node_name, (char *)cache->auth, obj->key, obj->len, &value);
-        if (rc == 0) {
+        if (rc == 0 && fbuf_used(&value)) {
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
             return 0;
@@ -112,8 +112,9 @@ static int __op_fetch(void *item, void * priv)
         }
     }
 
-    if (!obj->data)
+    if (!obj->data) {
         return -1;
+    }
     return 0;
 }
 
@@ -226,10 +227,10 @@ groupcache_t *groupcache_create(char *me, char **peers, int npeers,
 
 #ifdef GROUPCACHE_DEBUG
     fprintf(stderr, "AUTH KEY (secret: %s): ", secret);
-    for (i = 0; i < GROUPCACHE_AUTHKEY_LEN; i++) {
+    for (i = 0; i < GROUPCACHE_MSG_SIG_LEN; i++) {
         fprintf(stderr, "%02x", (unsigned char)cache->serv.auth[i]); 
     }
-    fprintf(stderr"\n");
+    fprintf(stderr, "\n");
 #endif
 
     cache->serv.cache = cache;
