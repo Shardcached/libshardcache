@@ -43,7 +43,7 @@ int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
         }
 
         rb = read_socket(fd, (char *)&clen, 2);
-        // XXX - bug if read only one bit at this point
+        // XXX - bug if read only one byte at this point
         if (rb == 2) {
             sip_hash_update(shash, (char *)&clen, 2);
             uint16_t chunk_len = ntohs(clen);
@@ -167,10 +167,19 @@ int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, fbuf_t *
     if (k && klen) {
         if (_chunkize_buffer(k, klen, out) != 0)
             return -1;
+    } else {
+        uint16_t terminator = 0;
+        fbuf_add_binary(out, (char *)&terminator, 2);
+        return 0;
     }
-    if (hdr == GROUPCACHE_HDR_SET && v && vlen) {
-        if (_chunkize_buffer(v, vlen, out) != 0)
-            return -1;
+    if (hdr == GROUPCACHE_HDR_SET) {
+        if (v && vlen) {
+            if (_chunkize_buffer(v, vlen, out) != 0)
+                return -1;
+        } else {
+            uint16_t terminator = 0;
+            fbuf_add_binary(out, (char *)&terminator, 2);
+        }
     }
     return 0;
 }
