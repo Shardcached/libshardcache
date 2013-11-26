@@ -143,12 +143,11 @@ static void send_response(groupcached_connection_context *ctx)
             "Connection: Close\r\n\r\n",
             ctx->is_http10 ? "HTTP/1.0" : "HTTP/1.1", fbuf_used(ctx->output));
 
-    int err = write_socket(ctx->fd, response_header, strlen(response_header));
-    if (err != 0) {
+    if (write_socket(ctx->fd, response_header, strlen(response_header)) <= 0) {
         ERROR("(%p) Can't write the response header : %s", pthread_self(), strerror(errno));
     }
 
-    if (write_socket(ctx->fd, fbuf_data(ctx->output), fbuf_used(ctx->output)) != 0) {
+    if (write_socket(ctx->fd, fbuf_data(ctx->output), fbuf_used(ctx->output)) <= 0) {
         ERROR("(%p) Can't write the response data : %s", pthread_self(), strerror(errno));
     }
 }
