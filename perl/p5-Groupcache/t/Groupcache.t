@@ -76,4 +76,9 @@ foreach my $i (10..20) {
     }
 }
 
+$gc->set("test_key1", "test_value1");
+
+$gc->run(sub { is(shift->get("test_key1"), undef); return -1; }, 500, $gc);
+is($gc->get("test_key1"), "test_value1");
+
 done_testing();

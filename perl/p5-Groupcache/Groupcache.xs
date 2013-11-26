@@ -10,11 +10,42 @@
 
 #include <pthread.h>
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+#if (!defined(PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP))
+#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP PTHREAD_RECURSIVE_MUTEX_INITIALIZER
+#endif
+
+static pthread_mutex_t lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+
 static PerlInterpreter *orig_perl = NULL;
 
+static inline int __acquire_lock() {
+    int rc;
+    int retries = 0;
+    rc = pthread_mutex_trylock(&lock);
+    while(rc != 0) {
+        if (retries++ == 100) {
+            return -1;
+        }
+        struct timespec tv = { 0, 10000000 }; // 10 ms
+        struct timespec remainder = { 0, 0 };
+        int ret;
+        do {
+            ret = nanosleep(&tv, &remainder);
+            if (ret == -1) {
+                memcpy(&tv, &remainder, sizeof(struct timespec));
+                memset(&remainder, 0, sizeof(struct timespec));
+            }
+        } while (ret != 0);
+        rc = pthread_mutex_trylock(&lock);
+    }
+    return 0;
+}
+
 static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
-    pthread_mutex_lock(&lock);
+    if (__acquire_lock() != 0) {
+        fprintf(stderr, "__st_fetch can't acquire lock\n");
+        return NULL;
+    }
     PERL_SET_CONTEXT(orig_perl);
     dTHX;
     dSP;
@@ -68,7 +99,10 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
 }
 
 static void __st_store(void *key, size_t len, void *value, size_t vlen, void *priv) {
-    pthread_mutex_lock(&lock);
+    if (__acquire_lock() != 0) {
+        fprintf(stderr, "__st_store can't acquire lock\n");
+        return;
+    }
     PERL_SET_CONTEXT(orig_perl);
     dTHX;
     dSP;
@@ -91,7 +125,10 @@ static void __st_store(void *key, size_t len, void *value, size_t vlen, void *pr
 }
 
 static void __st_remove(void *key, size_t len, void *priv) {
-    pthread_mutex_lock(&lock);
+    if (__acquire_lock() != 0) {
+        fprintf(stderr, "__st_remove can't acquire lock\n");
+        return;
+    }
     PERL_SET_CONTEXT(orig_perl);
     dTHX;
     dSP;
@@ -264,4 +301,68 @@ groupcache_compute_signature(secret, msg)
         RETVAL = newSViv(digest);
     OUTPUT:
         RETVAL
+
+void
+groupcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
+        SV *coderef
+        IV timeout
+        SV *priv
+    CODE:
+        struct timespec tv = { 1, 0 };
+        if (!SvTRUE(coderef) || ! SvROK(coderef) || SvTYPE(SvRV(coderef)) != SVt_PVCV) {
+            croak("missing coderef or not a CODE reference");
+        }
+
+        int secs = timeout/1000;
+        int nsecs = (timeout%1000)*1000000;
+        tv.tv_sec = secs;
+        tv.tv_nsec = nsecs;
+
+        for(;;) {
+            struct timespec remainder = { 0, 0 };
+            struct timespec tosleep = { tv.tv_sec, tv.tv_nsec };
+            pthread_mutex_lock(&lock);
+
+            PERL_SET_CONTEXT(orig_perl);
+            dTHX;
+            dSP;
+
+            ENTER;
+            SAVETMPS;
+
+            PUSHMARK(SP);
+            XPUSHs(priv);
+            PUTBACK;
+
+            int count = call_sv(coderef, G_SCALAR);
+
+            SPAGAIN;
+
+            if (count != 1) {
+                croak("Unexpected errors calling the registered runloop callback");
+            }
+
+            IV ret = POPi;
+
+            PUTBACK;
+            FREETMPS;
+            LEAVE;
+
+            pthread_mutex_unlock(&lock);
+            
+            if (ret == -1)  {
+                // TODO - WARN
+                break;
+            }
+
+            int rc;
+            do {
+                rc = nanosleep(&tosleep, &remainder);
+                if (rc == -1) {
+                    fprintf(stderr, "nanosleep exited: %s\n", strerror(errno));
+                    memcpy(&tosleep, &remainder, sizeof(struct timespec));
+                    memset(&remainder, 0, sizeof(struct timespec));
+                }
+            } while (rc != 0);
+        }
 

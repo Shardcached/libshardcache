@@ -128,6 +128,11 @@ sub me {
     return $self->{_me};
 }
 
+sub run {
+    my ($self, $coderef, $timeout, $priv) = @_;
+    return groupcache_run($coderef, $timeout, $priv);
+}
+
 sub signature {
     my ($self, $msg) = @_;
     return groupcache_compute_signature($self->{_secret}, $msg);
@@ -178,6 +183,89 @@ Client libraries are also provided in Groupcache::Client
 
 None by default.
 
+=head1 METHODS
+
+=over 4
+
+=item * new (%params)
+
+=head3 REQUIRED PARAMS
+    
+=over 4
+
+L<me>
+
+    A 'address:port' string describing the current node
+
+L<storage>
+
+    A valid Groupcache::Storage subclass, implementing the underlying storage
+
+=back
+
+=head3 OPTIONAL PARAMS
+
+=over
+
+L<peers>
+
+    An arrayref containing the peers in our groupcache 'cloud'
+
+L<secret>
+
+    A secret used to compute the signature used for internal communication.
+    If not specified the string 'default' will be used 
+
+
+=back
+
+=item * get ($key)
+
+    Get the value for $key. 
+    If found in the cache it will be returned immediately, 
+    if this node is responsible for $key, the underlying storage will be queried for the value,
+    otherwise a request to the responsible node in the groupcache 'cloud' will be done to obtain the value
+    (and the local cache will be populated)
+
+=item * set ($key, $value)
+
+    Set a new value for $key in the underlying storage
+
+=item * del ($key)
+
+    Remove the value associated to $key from the underlying storage (note the cache of all nodes will be evicted as well)
+
+=item * evict ($key)
+
+    Evict the value associated to $key from the cache (note this will not remove the value from the underlying storage)
+
+=item * get_owner ($key)
+
+    Returns the 'address:port' string identifying the node responsible for $key
+
+=item * me ()
+
+    Returns the 'address:port' string identifying the current node
+
+=item * run($coderef, $timeout, $priv)
+
+    Takes over the runloop (AKA : doesn't return) and keeps running the groupcache daemon.
+    A callback ($coderef) is registered and it will be called every $timeout milliseconds.
+    $priv will be passed as argumend to the $coderef callback.
+    If the callback returns '-1' the loop will be stopped and run() will return.
+    NOTE: while run() is being executed (and the runloop is taken over) it will not be possible
+    to access the Groupcache object, not even throguh the callback.
+
+    So a pattern like this would be WRONG :
+
+    $gc->run(sub { is(shift->get("test_key1"), undef); return -1; }, 500, $gc);
+    
+    the call to get() done in the callback will fail because while calling the $coderef callback
+    a lock will be hold and it will not be possible to call more groupcache methods until it is released.
+    So passing the same Groupcache object instance as $priv argument of the $coderef is not supported.
+
+=back
+
 =head2 Exportable functions
 
   groupcache_t *groupcache_create(char *me, char **peers, int num_peers, groupcache_storage_t *storage)
@@ -188,7 +276,7 @@ None by default.
   int groupcache_set(groupcache_t *cache, void *key, size_t klen, void *value, size_t vlen)
   int groupcache_evict(groupcache_t *cache, void *key, size_t klen);
   int groupcache_test_ownership(groupcache_t *cache, void *key, size_t len, const char **owner)
-int groupcache_compute_signature(char *secret, uint8_t *msg, size_t len);
+  int groupcache_compute_signature(char *secret, uint8_t *msg, size_t len);
 
 
 
