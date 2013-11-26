@@ -49,17 +49,17 @@ int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
             uint16_t chunk_len = ntohs(clen);
 
             if (chunk_len == 0) {
-                char sig[GROUPCACHE_SIG_LEN];
+                char sig[GROUPCACHE_MSG_SIG_LEN];
                 int ofx = 0;
                 do {
-                    rb = read_socket(fd, &sig[ofx], GROUPCACHE_SIG_LEN-ofx);
+                    rb = read_socket(fd, &sig[ofx], GROUPCACHE_MSG_SIG_LEN-ofx);
                     if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
                         fbuf_set_used(out, initial_len);
                         sip_hash_free(shash);
                         return -1;
                     } 
                     ofx += rb;
-                } while (ofx != GROUPCACHE_SIG_LEN);
+                } while (ofx != GROUPCACHE_MSG_SIG_LEN);
 
                 uint64_t digest;
                 if (!sip_hash_final_integer(shash, &digest)) {
@@ -85,7 +85,7 @@ int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
                 printf("\n");
 #endif
 
-                if (memcmp(&digest, &sig, GROUPCACHE_SIG_LEN) != 0) {
+                if (memcmp(&digest, &sig, GROUPCACHE_MSG_SIG_LEN) != 0) {
                     fbuf_set_used(out, initial_len);
                     sip_hash_free(shash);
                     return -1;

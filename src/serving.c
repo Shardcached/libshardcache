@@ -201,7 +201,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     }
 
     if (ctx->state == STATE_READING_AUTH) {
-        if (fbuf_used(ctx->input) < GROUPCACHE_SIG_LEN)
+        if (fbuf_used(ctx->input) < GROUPCACHE_MSG_SIG_LEN)
             return;
 
         uint64_t digest;
