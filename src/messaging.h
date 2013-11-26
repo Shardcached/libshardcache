@@ -27,7 +27,9 @@
  *  BYTE      : 0x00 - 0xFF
  */
 
-#define GROUPCACHE_SIG_LEN 8
+// in byte
+#define GROUPCACHE_MSG_SIG_LEN 8
+#define GROUPCACHE_MSG_MAX_RECORD_LEN (1<<28) // 256MB
 
 typedef enum {
     GROUPCACHE_HDR_GET  = 0x01,

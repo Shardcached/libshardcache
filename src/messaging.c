@@ -113,6 +113,14 @@ int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
                 chunk_len -= rb;
                 fbuf_add_binary(out, buf, rb);
                 sip_hash_update(shash, buf, rb);
+                if (fbuf_used(out) > GROUPCACHE_MSG_MAX_RECORD_LEN) {
+                    // we have exceeded the maximum size for a record
+                    // let's abort this request
+                    fprintf(stderr, "Maximum record size exceeded (%dMB)", GROUPCACHE_MSG_MAX_RECORD_LEN >> 20);
+                    fbuf_set_used(out, initial_len);
+                    sip_hash_free(shash);
+                    return -1;
+                }
             }
         } else if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
             // ERROR 
@@ -303,9 +311,6 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out) 
             int rc = read_message(fd, auth, out, &hdr);
             if (hdr == GROUPCACHE_HDR_RES && rc == 0) {
 #ifdef DEBUG_GROUPCACHE
-                // XXX - casting to (char *) here is dangerous ...
-                //       but this would happen only in debugging
-                //       so let's assume we know what we are doing
                 fprintf(stderr, "Got new data from peer %s : %s => %s \n", peer, key, fbuf_data(out));
 #endif
                 close(fd);
