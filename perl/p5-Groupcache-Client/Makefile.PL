@@ -5,8 +5,8 @@ WriteMakefile(
     VERSION_FROM   => 'lib/Groupcache/Client.pm',
     PREREQ_PM      => {
       'Test::More'       => 0,
-      'Groupcache'       => 0,
       'IO::Socket::INET' => 0,
+      'Digest::SipHash'  => 0,
     },
     ABSTRACT_FROM  => 'lib/Groupcache/Client.pm',
     AUTHOR         => 'Andrea Guzzo <xant@cpan.org>',

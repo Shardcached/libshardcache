@@ -2,12 +2,15 @@ package Groupcache::Client;
 
 use strict;
 use IO::Socket::INET;
-use Groupcache;
+use Digest::SipHash qw/siphash64/;
 
 our $VERSION = "0.01";
 
 sub new {
     my ($class, $host, $secret) = @_;
+
+    croak("The host parameter is mandatory!")
+        unless($host);
 
     my ($addr, $port) = split(':', $host);
 
@@ -61,7 +64,7 @@ sub send_msg {
 
     my $msg = pack $templ, @vars;
 
-    my $sig = Groupcache::groupcache_compute_signature($self->{_secret}, $msg);
+    my $sig = siphash64($msg,  pack("a16", $self->{_secret}));
     $msg .= pack("Q", $sig);
 
     my $sock = IO::Socket::INET->new(PeerAddr => $self->{_addr},
@@ -79,7 +82,7 @@ sub send_msg {
 
     # now that we have the whole message, let's compute the signature
     # (we know it's 8 bytes long and is the trailer of the message
-    my $signature = Groupcache::groupcache_compute_signature($self->{_secret}, substr($in, 0, length($in)-8));
+    my $signature = siphash64(substr($in, 0, length($in)-8),  pack("a16", $self->{_secret}));
 
     my $csig = pack("Q", $signature);
 
@@ -89,7 +92,7 @@ sub send_msg {
     my $len;
     do {
         ($len, $chunk) = unpack("na*", $chunk);
-        $out .= substr($chunk, 0, $len, "");
+        $out .= $len ? substr($chunk, 0, $len, "") : "";
     } while ($len > 0);
 
     # $chunk now points at the signature
