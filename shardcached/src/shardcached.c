@@ -24,8 +24,9 @@
 #include <regex.h>
 
 #include <fbuf.h>
-#include <hashtable.h>
 #include <shardcache.h>
+
+#include "storage_mem.h"
 
 #define SHARDCACHED_ADDRESS_DEFAULT "4321"
 #define SHARDCACHED_LOGLEVEL_DEFAULT 0
@@ -81,37 +82,20 @@ static void shardcached_do_nothing(int sig)
 
 static void *cache_fetch_item(void *key, size_t len, size_t *vlen, void *priv)
 {
-    hashtable_t *storage = (hashtable_t *)priv;
-    shardcached_stored_item *item = (shardcached_stored_item *)ht_get(storage, key, len);
-    if (!item)
-        return NULL;
-    if (vlen)
-        *vlen = item->size;
-    return item->value;
+    shc_storage_t *storage = (shc_storage_t *)priv;
+    return shc_storage_fetch(storage, key, len, vlen);
 }
 
 static void cache_store_item(void *key, size_t len, void *value, size_t vlen, void *priv)
 {
-    hashtable_t *storage = (hashtable_t *)priv;
-    shardcached_stored_item *item = malloc(sizeof(shardcached_stored_item));
-    item->value = malloc(vlen);
-    memcpy(item->value, value, vlen);
-    item->size = vlen;
-    ht_set(storage, key, len, item);
+    shc_storage_t *storage = (shc_storage_t *)priv;
+    shc_storage_store(storage, key, len, value, vlen);
 }
 
 static void cache_delete_item(void *key, size_t len, void *priv)
 {
-    hashtable_t *storage = (hashtable_t *)priv;
-    ht_delete(storage, key, len);
-}
-
-
-static void free_stored_item(void *v)
-{
-    shardcached_stored_item *item = (shardcached_stored_item *)v;
-    free(item->value);
-    free(item);
+    shc_storage_t *storage = (shc_storage_t *)priv;
+    shc_storage_remove(storage, key, len);
 }
 
 static int shardcached_request_handler(struct mg_connection *conn) {
@@ -283,6 +267,7 @@ int main(int argc, char **argv)
 
     regfree(&addr_regexp);
 
+    // go daemon if we have to
     if (!foreground) {
         int rc = daemon(0, 0);
         if (rc != 0) {
@@ -291,10 +276,19 @@ int main(int argc, char **argv)
         }
     }
 
+    signal(SIGHUP, shardcached_stop);
+    signal(SIGINT, shardcached_stop);
+    signal(SIGQUIT, shardcached_stop);
+    signal(SIGPIPE, shardcached_do_nothing);
+
     log_init("shardcached", loglevel);
 
-    hashtable_t *storage = ht_create(1024);
-    ht_set_free_item_callback(storage, free_stored_item);
+
+    // initialize the storage layer 
+    char *storage_options[] = { "initial_table_size", "1024",
+                               "max_table_size", "1000000",
+                               NULL };
+    shc_storage_t *storage = shc_storage_create(&shc_storage_mem, storage_options);
 
     shardcache_storage_t st = {
         .fetch  = cache_fetch_item,
@@ -318,12 +312,7 @@ int main(int argc, char **argv)
         exit(-1);
     }
 
-    signal(SIGHUP, shardcached_stop);
-    signal(SIGINT, shardcached_stop);
-    signal(SIGQUIT, shardcached_stop);
-    signal(SIGPIPE, shardcached_do_nothing);
-
-    // initialize the callbacks descriptor
+    // initialize the mongoose callbacks descriptor
     struct mg_callbacks shardcached_callbacks = {
         .begin_request = shardcached_request_handler,
         .end_request = shardcached_end_request_handler,
@@ -333,8 +322,10 @@ int main(int argc, char **argv)
         listen_address += 2;
 
     const char *mongoose_options[] = { "listening_ports", listen_address, NULL };
+    // let's start mongoose
     struct mg_context *ctx = mg_start(&shardcached_callbacks, cache, mongoose_options);
     
+    // and keep working until we are told to exit
     pthread_cond_wait(&exit_cond, &exit_lock);
     pthread_mutex_unlock(&exit_lock);
 
@@ -342,7 +333,7 @@ int main(int argc, char **argv)
 
     mg_stop(ctx);  
     shardcache_destroy(cache);
-    ht_destroy(storage);
+    shc_storage_destroy(storage);
     
     exit(0);
 }
