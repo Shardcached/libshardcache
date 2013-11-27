@@ -94,10 +94,10 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
     return (void *)out;
 }
 
-static void __st_store(void *key, size_t len, void *value, size_t vlen, void *priv) {
+static int __st_store(void *key, size_t len, void *value, size_t vlen, void *priv) {
     if (__acquire_lock() != 0) {
         fprintf(stderr, "__st_store can't acquire lock\n");
-        return;
+        return -1;
     }
     PERL_SET_CONTEXT(orig_perl);
     dTHX;
@@ -118,12 +118,13 @@ static void __st_store(void *key, size_t len, void *value, size_t vlen, void *pr
 
     call_method("store", G_DISCARD);
     pthread_mutex_unlock(&lock);
+    return 0;
 }
 
-static void __st_remove(void *key, size_t len, void *priv) {
+static int __st_remove(void *key, size_t len, void *priv) {
     if (__acquire_lock() != 0) {
         fprintf(stderr, "__st_remove can't acquire lock\n");
-        return;
+        return -1;
     }
     PERL_SET_CONTEXT(orig_perl);
     dTHX;
@@ -142,10 +143,21 @@ static void __st_remove(void *key, size_t len, void *priv) {
 
     call_method("remove", G_DISCARD);
     pthread_mutex_unlock(&lock);
+    return 0;
 }
 
-static void __st_free(void *val) {
+static void __st_free(void *val, void *priv) {
     Safefree(val);
+}
+
+static void *__st_init(char **options) {
+    SV *storage = (SV *)options[1];
+    return storage;
+}
+
+static void __st_destroy(void *priv) {
+    SV *storage = (SV *)priv;
+    SvREFCNT_dec(storage);
 }
 
 MODULE = Shardcache		PACKAGE = Shardcache		
@@ -193,12 +205,15 @@ shardcache_create(me, peers, storage, secret)
             }
         }
 
+        char *options[] = { "storage", (char *)SvREFCNT_inc(storage), NULL };
         shardcache_storage_t storage_struct = {
-            .fetch  = __st_fetch,
-            .store  = __st_store,
-            .remove = __st_remove,
-            .free   = __st_free,
-            .priv   = SvREFCNT_inc(storage)
+            .init_storage    = __st_init,
+            .destroy_storage = __st_destroy,
+            .fetch_item      = __st_fetch,
+            .store_item      = __st_store,
+            .remove_item     = __st_remove,
+            .free_item       = __st_free,
+            .options         = options
         };
 
         RETVAL = shardcache_create(me, shards, num_peers, &storage_struct, secret);

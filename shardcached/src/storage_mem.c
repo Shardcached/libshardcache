@@ -80,12 +80,12 @@ static void st_destroy(void *priv) {
     ht_destroy(storage);
 }
 
-shc_storage_callbacks_t shc_storage_mem = {
-    .init    = st_init,
-    .fetch   = st_fetch,
-    .store   = st_store,
-    .remove  = st_remove,
-    .destroy = st_destroy
+shardcache_storage_t storage_mem = {
+    .init_storage    = st_init,
+    .fetch_item      = st_fetch,
+    .store_item      = st_store,
+    .remove_item     = st_remove,
+    .destroy_storage = st_destroy
 };
 
 

@@ -80,24 +80,6 @@ static void shardcached_do_nothing(int sig)
     DEBUG1("Signal %d received ... doing nothing\n", sig);
 }
 
-static void *cache_fetch_item(void *key, size_t len, size_t *vlen, void *priv)
-{
-    shc_storage_t *storage = (shc_storage_t *)priv;
-    return shc_storage_fetch(storage, key, len, vlen);
-}
-
-static void cache_store_item(void *key, size_t len, void *value, size_t vlen, void *priv)
-{
-    shc_storage_t *storage = (shc_storage_t *)priv;
-    shc_storage_store(storage, key, len, value, vlen);
-}
-
-static void cache_delete_item(void *key, size_t len, void *priv)
-{
-    shc_storage_t *storage = (shc_storage_t *)priv;
-    shc_storage_remove(storage, key, len);
-}
-
 static int shardcached_request_handler(struct mg_connection *conn) {
 
     struct mg_request_info *request_info = mg_get_request_info(conn);
@@ -288,16 +270,9 @@ int main(int argc, char **argv)
     char *storage_options[] = { "initial_table_size", "1024",
                                "max_table_size", "1000000",
                                NULL };
-    shc_storage_t *storage = shc_storage_create(&shc_storage_mem, storage_options);
+    storage_mem.options = storage_options;
 
-    shardcache_storage_t st = {
-        .fetch  = cache_fetch_item,
-        .store  = cache_store_item,
-        .remove = cache_delete_item,
-        .free   = free,
-        .priv   = storage
-    };
-    shardcache_t *cache = shardcache_create(me, shard_names, cnt, &st, secret);
+    shardcache_t *cache = shardcache_create(me, shard_names, cnt, &storage_mem, secret);
 
     int num_peers = 0;
     char **peer_names = shardcache_get_peers(cache, &num_peers);
@@ -333,7 +308,6 @@ int main(int argc, char **argv)
 
     mg_stop(ctx);  
     shardcache_destroy(cache);
-    shc_storage_destroy(storage);
     
     exit(0);
 }

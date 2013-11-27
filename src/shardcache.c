@@ -46,6 +46,7 @@ struct __shardcache_s {
     int evict_on_delete;
 
     const char auth[16];
+    void *priv;
 };
 
 /* This is the object we're managing. It has a key
@@ -99,8 +100,8 @@ static int __op_fetch(void *item, void * priv)
     }
 
     // we are responsible for this item ... so let's fetch it
-    if (cache->storage.fetch) {
-        void *v = cache->storage.fetch(obj->key, obj->len, &obj->dlen, cache->storage.priv);
+    if (cache->storage.fetch_item) {
+        void *v = cache->storage.fetch_item(obj->key, obj->len, &obj->dlen, cache->priv);
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Fetch storage callback returned value %s (%lu) for key %s\n",
                 v, (unsigned long)obj->dlen, (char *)obj->key); 
@@ -121,8 +122,8 @@ static void __op_evict(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
-    if (obj->data && cache->storage.free) {
-        cache->storage.free(obj->data);
+    if (obj->data && cache->storage.free_item) {
+        cache->storage.free_item(obj->data, cache->priv);
         obj->data = NULL;
         obj->dlen = 0;
     }
@@ -133,8 +134,8 @@ static void __op_destroy(void *item, void *priv)
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
 
-    if (obj->data && cache->storage.free) {
-        cache->storage.free(obj->data);
+    if (obj->data && cache->storage.free_item) {
+        cache->storage.free_item(obj->data, cache->storage.free_item);
     }
     free(obj->key);
     free(obj);
@@ -155,10 +156,18 @@ shardcache_t *shardcache_create(char *me, char **peers, int npeers,
 
     cache->evict_on_delete = 1;
 
-    cache->me = strdup(me);
 
-    if (st)
-        memcpy(&cache->storage, st, sizeof(cache->storage));;
+    if (!st) {
+        fprintf(stderr, "No storage defined");
+        free(cache);
+        return NULL;
+    }
+
+    memcpy(&cache->storage, st, sizeof(cache->storage));;
+    if (cache->storage.init_storage)
+        cache->priv = st->init_storage(cache->storage.options);
+
+    cache->me = strdup(me);
 
     cache->ops.create  = __op_create;
     cache->ops.fetch   = __op_fetch;
@@ -251,6 +260,8 @@ void shardcache_destroy(shardcache_t *cache) {
     pthread_cancel(cache->listener);
     pthread_join(cache->listener, NULL);
     arc_destroy(cache->arc);
+    if (cache->storage.destroy_storage)
+        cache->storage.destroy_storage(cache->priv);
     chash_free(cache->chash);
     //free(cache->me);
     for (i = 0; i < cache->num_shards; i++)
@@ -287,8 +298,8 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Storing value %s for key %s\n", (char *)value, (char *)key);
 #endif
-        if (cache->storage.store)
-            cache->storage.store(key, klen, value, vlen, cache->storage.priv);
+        if (cache->storage.store_item)
+            cache->storage.store_item(key, klen, value, vlen, cache->priv);
         return 0;
     } else {
 #ifdef SHARDCACHE_DEBUG
@@ -309,8 +320,8 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
     const char *node_name;
     if (shardcache_test_ownership(cache, key, klen, &node_name))
     {
-        if (cache->storage.remove)
-            cache->storage.remove(key, klen, cache->storage.priv);
+        if (cache->storage.remove_item)
+            cache->storage.remove_item(key, klen, cache->priv);
 
         if (cache->evict_on_delete)
         {

@@ -27,7 +27,7 @@ typedef void *(*shardcache_fetch_item_callback_t)(void *key, size_t len, size_t 
  *        The shardcache instance will call this callback
  *        if a new value needs to be set in the underlying storage
  */
-typedef void (*shardcache_store_item_callback_t)(void *key, size_t len, void *value, size_t vlen, void *priv);
+typedef int (*shardcache_store_item_callback_t)(void *key, size_t len, void *value, size_t vlen, void *priv);
 
 /**
  * @brief Callback to remove an existing value for a given key.
@@ -39,7 +39,7 @@ typedef void (*shardcache_store_item_callback_t)(void *key, size_t len, void *va
  *              The shardcache_remove_item_callback_t will be called by the shardcache
  *              instance when the memory associated to the value can be safely released
  */
-typedef void (*shardcache_remove_item_callback_t)(void *key, size_t len, void *priv);
+typedef int (*shardcache_remove_item_callback_t)(void *key, size_t len, void *priv);
 
 /**
  * @brief Callback to release the resources of a previously provided value
@@ -47,19 +47,24 @@ typedef void (*shardcache_remove_item_callback_t)(void *key, size_t len, void *p
  *        if a value object can now be released since not anymore referenced
  *        by the shardcache instance
  */
-typedef void (*shardcache_free_item_callback_t)(void *val);
+typedef void (*shardcache_free_item_callback_t)(void *val, void *priv);
 
+typedef void *(*shardcache_init_storage_callback_t)(char **options);
+
+typedef void (*shardcache_destroy_storage_callback_t)(void *priv);
 
 /**
  * @brief Structure holding all the callback pointers required
  *        by shardcache to interact with underlying storage
  */
 typedef struct __shardcache_storage_s {
-    shardcache_fetch_item_callback_t  fetch;
-    shardcache_store_item_callback_t  store;
-    shardcache_remove_item_callback_t remove;
-    shardcache_free_item_callback_t   free;
-    void *priv;
+    shardcache_init_storage_callback_t     init_storage;
+    shardcache_destroy_storage_callback_t  destroy_storage;
+    shardcache_fetch_item_callback_t       fetch_item;
+    shardcache_store_item_callback_t       store_item;
+    shardcache_remove_item_callback_t      remove_item;
+    shardcache_free_item_callback_t        free_item;
+    char                                 **options;
 } shardcache_storage_t;
 
 /**

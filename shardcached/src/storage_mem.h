@@ -1,3 +1,3 @@
-#include "storage.h"
+#include <shardcache.h>
 
-extern shc_storage_callbacks_t shc_storage_mem;
+extern shardcache_storage_t storage_mem;
