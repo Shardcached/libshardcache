@@ -1,5 +1,5 @@
 UNAME := $(shell uname)
-LIBGROUPCACHE_DIR := $(shell pwd)
+LIBSHARDCACHE_DIR := $(shell pwd)
 
 LDFLAGS += deps/.libs/libhl.a \
 	   deps/.libs/libchash.a \
@@ -36,7 +36,7 @@ TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
 TEST_EXEC_ORDER = 
 
-all: build_deps objects static shared groupcache_daemon
+all: build_deps objects static shared shardcache_daemon
 
 build_deps:
 	@make -C deps all
@@ -47,15 +47,15 @@ update_deps:
 purge_deps:
 	@make -C deps purge
 
-groupcache_daemon:
-	@LIBGROUPCACHE_DIR="`pwd`" make -C groupcached all
+shardcache_daemon:
+	@LIBSHARDCACHE_DIR="`pwd`" make -C shardcached all
 
 static: objects
-	ar -r libgroupcache.a src/*.o
+	ar -r libshardcache.a src/*.o
 
 standalone: objects
 	@cwd=`pwd`; \
-	dir="/tmp/libgroupcache_build$$$$"; \
+	dir="/tmp/libshardcache_build$$$$"; \
 	mkdir $$dir; \
 	cd $$dir; \
 	ar x $$cwd/deps/.libs/libchash.a; \
@@ -63,11 +63,11 @@ standalone: objects
 	ar x $$cwd/deps/.libs/libiomux.a; \
 	ar x $$cwd/deps/.libs/libsiphash.a; \
 	cd $$cwd; \
-	ar -r libgroupcache.a $$dir/*.o src/*.o; \
+	ar -r libshardcache.a $$dir/*.o src/*.o; \
 	rm -rf $$dir
 
 shared: objects
-	$(CC) src/*.o $(LDFLAGS) $(SHAREDFLAGS) -o libgroupcache.$(SHAREDEXT)
+	$(CC) src/*.o $(LDFLAGS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
 
 objects: CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 objects: $(TARGETS)
@@ -75,11 +75,11 @@ objects: $(TARGETS)
 clean:
 	rm -f src/*.o
 	rm -f test/*_test
-	rm -f libgroupcache.a
-	rm -f libgroupcache.$(SHAREDEXT)
+	rm -f libshardcache.a
+	rm -f libshardcache.$(SHAREDEXT)
 	rm -f support/testing.o
 	make -C deps clean
-	make -C groupcached clean
+	make -C shardcached clean
 
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
@@ -88,8 +88,8 @@ tests: CFLAGS += -Isrc -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sig
 
 tests: support/testing.o static
 	@for i in $(TESTS); do\
-	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libgroupcache.a $(LDFLAGS) -lm";\
-	  $(CC) $(CFLAGS) $$i.c -o $$i libgroupcache.a support/testing.o $(LDFLAGS) -lm;\
+	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(LDFLAGS) -lm";\
+	  $(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a support/testing.o $(LDFLAGS) -lm;\
 	done;\
 	for i in $(TEST_EXEC_ORDER); do echo; test/$$i; echo; done
 
@@ -104,8 +104,8 @@ perl_build:
 
 install:
 	 @echo "Installing libraries in $(LIBDIR)"; \
-	 cp -v libgroupcache.a $(LIBDIR)/;\
-	 cp -v libgroupcache.$(SHAREDEXT) $(LIBDIR)/;\
+	 cp -v libshardcache.a $(LIBDIR)/;\
+	 cp -v libshardcache.$(SHAREDEXT) $(LIBDIR)/;\
 	 echo "Installing headers in $(INCDIR)"; \
-	 cp -v src/groupcache.h $(INCDIR)/; \
+	 cp -v src/shardcache.h $(INCDIR)/; \
 

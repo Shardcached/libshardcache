@@ -1,0 +1,6 @@
+Changes
+lib/Shardcache/Client.pm
+Makefile.PL
+MANIFEST
+README.md
+t/Shardcache_client.t

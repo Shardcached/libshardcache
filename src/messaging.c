@@ -10,9 +10,9 @@
 
 #include "messaging.h"
 #include "connections.h"
-#include "groupcache.h"
+#include "shardcache.h"
 
-int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
+int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr) {
     uint16_t clen;
     int initial_len = fbuf_used(out);;
     int reading_message = 0;
@@ -27,11 +27,11 @@ int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
                 sip_hash_free(shash);
                 return -1;
             }
-            if (hdr != GROUPCACHE_HDR_GET &&
-                hdr != GROUPCACHE_HDR_SET &&
-                hdr != GROUPCACHE_HDR_DEL &&
-                hdr != GROUPCACHE_HDR_EVI &&
-                hdr != GROUPCACHE_HDR_RES)
+            if (hdr != SHARDCACHE_HDR_GET &&
+                hdr != SHARDCACHE_HDR_SET &&
+                hdr != SHARDCACHE_HDR_DEL &&
+                hdr != SHARDCACHE_HDR_EVI &&
+                hdr != SHARDCACHE_HDR_RES)
             {
                 sip_hash_free(shash);
                 return -1;
@@ -49,17 +49,17 @@ int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
             uint16_t chunk_len = ntohs(clen);
 
             if (chunk_len == 0) {
-                char sig[GROUPCACHE_MSG_SIG_LEN];
+                char sig[SHARDCACHE_MSG_SIG_LEN];
                 int ofx = 0;
                 do {
-                    rb = read_socket(fd, &sig[ofx], GROUPCACHE_MSG_SIG_LEN-ofx);
+                    rb = read_socket(fd, &sig[ofx], SHARDCACHE_MSG_SIG_LEN-ofx);
                     if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
                         fbuf_set_used(out, initial_len);
                         sip_hash_free(shash);
                         return -1;
                     } 
                     ofx += rb;
-                } while (ofx != GROUPCACHE_MSG_SIG_LEN);
+                } while (ofx != SHARDCACHE_MSG_SIG_LEN);
 
                 uint64_t digest;
                 if (!sip_hash_final_integer(shash, &digest)) {
@@ -69,7 +69,7 @@ int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
                     return -1;
                 }
 
-#ifdef GROUPCACHE_DEBUG
+#ifdef SHARDCACHE_DEBUG
                 int i;
                 printf("computed digest for received data: (%s) ", auth);
                 for (i=0; i<8; i++) {
@@ -85,7 +85,7 @@ int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
                 printf("\n");
 #endif
 
-                if (memcmp(&digest, &sig, GROUPCACHE_MSG_SIG_LEN) != 0) {
+                if (memcmp(&digest, &sig, SHARDCACHE_MSG_SIG_LEN) != 0) {
                     fbuf_set_used(out, initial_len);
                     sip_hash_free(shash);
                     return -1;
@@ -113,10 +113,10 @@ int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *ohdr) {
                 chunk_len -= rb;
                 fbuf_add_binary(out, buf, rb);
                 sip_hash_update(shash, buf, rb);
-                if (fbuf_used(out) > GROUPCACHE_MSG_MAX_RECORD_LEN) {
+                if (fbuf_used(out) > SHARDCACHE_MSG_MAX_RECORD_LEN) {
                     // we have exceeded the maximum size for a record
                     // let's abort this request
-                    fprintf(stderr, "Maximum record size exceeded (%dMB)", GROUPCACHE_MSG_MAX_RECORD_LEN >> 20);
+                    fprintf(stderr, "Maximum record size exceeded (%dMB)", SHARDCACHE_MSG_MAX_RECORD_LEN >> 20);
                     fbuf_set_used(out, initial_len);
                     sip_hash_free(shash);
                     return -1;
@@ -172,7 +172,7 @@ int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, fbuf_t *
         fbuf_add_binary(out, (char *)&terminator, 2);
         return 0;
     }
-    if (hdr == GROUPCACHE_HDR_SET) {
+    if (hdr == SHARDCACHE_HDR_SET) {
         if (v && vlen) {
             if (_chunkize_buffer(v, vlen, out) != 0)
                 return -1;
@@ -201,7 +201,7 @@ int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, s
         sip_hash_free(shash);
         fbuf_add_binary(&msg, (char *)&digest, dlen);
 
-#ifdef GROUPCACHE_DEBUG
+#ifdef SHARDCACHE_DEBUG
         int i;
         printf("sending message: ");
         for (i = 0; i < fbuf_used(&msg) - dlen; i++) {
@@ -234,20 +234,20 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner) 
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
     char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
+    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
     int fd = open_connection(host, port, 30);
     free(addr);
 
     if (fd >= 0) {
 
-        int rc = write_message(fd, auth, owner ? GROUPCACHE_HDR_DEL : GROUPCACHE_HDR_EVI, key, klen, NULL, 0);
+        int rc = write_message(fd, auth, owner ? SHARDCACHE_HDR_DEL : SHARDCACHE_HDR_EVI, key, klen, NULL, 0);
 
         if (rc == 0) {
-            groupcache_hdr_t hdr = 0;
+            shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
-            if (hdr == GROUPCACHE_HDR_RES && rc == 0) {
-#ifdef DEBUG_GROUPCACHE
+            if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
+#ifdef DEBUG_SHARDCACHE
                 fprintf(stderr, "Got (set) response from peer %s : %s\n", peer, fbuf_data(&resp));
 #endif
                 close(fd);
@@ -269,24 +269,24 @@ int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, si
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
     char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
+    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
     int fd = open_connection(host, port, 30);
     free(addr);
 
     if (fd >= 0) {
-        int rc = write_message(fd, auth, GROUPCACHE_HDR_SET, key, klen, value, vlen);
+        int rc = write_message(fd, auth, SHARDCACHE_HDR_SET, key, klen, value, vlen);
         if (rc != 0) {
             close(fd);
             return -1;
         }
 
         if (rc == 0) {
-            groupcache_hdr_t hdr = 0;
+            shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             errno = 0;
             rc = read_message(fd, auth, &resp, &hdr);
-            if (hdr == GROUPCACHE_HDR_RES && rc == 0) {
-#ifdef DEBUG_GROUPCACHE
+            if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
+#ifdef DEBUG_SHARDCACHE
                 fprintf(stderr, "Got (set) response from peer %s : %s\n", peer, fbuf_data(&resp));
 #endif
                 close(fd);
@@ -309,17 +309,17 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out) 
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
     char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : GROUPCACHE_PORT_DEFAULT;
+    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
     int fd = open_connection(host, port, 30);
     free(addr);
 
     if (fd >= 0) {
-        int rc = write_message(fd, auth, GROUPCACHE_HDR_GET, key, len, NULL, 0);
+        int rc = write_message(fd, auth, SHARDCACHE_HDR_GET, key, len, NULL, 0);
         if (rc == 0) {
-            groupcache_hdr_t hdr = 0;
+            shardcache_hdr_t hdr = 0;
             int rc = read_message(fd, auth, out, &hdr);
-            if (hdr == GROUPCACHE_HDR_RES && rc == 0) {
-#ifdef DEBUG_GROUPCACHE
+            if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
+#ifdef DEBUG_SHARDCACHE
                 fprintf(stderr, "Got new data from peer %s : %s => %s \n", peer, key, fbuf_data(out));
 #endif
                 close(fd);

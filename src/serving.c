@@ -11,7 +11,7 @@
 
 #include "messaging.h"
 #include "connections.h"
-#include "groupcache.h"
+#include "shardcache.h"
 
 #include "serving.h"
 
@@ -22,8 +22,8 @@ typedef struct {
     fbuf_t *input;
     fbuf_t *output;
     int fd;
-    groupcache_t *cache;
-    groupcache_hdr_t hdr;
+    shardcache_t *cache;
+    shardcache_hdr_t hdr;
     fbuf_t *key;
     fbuf_t *value;
 #define STATE_READING_NONE  0x00
@@ -34,10 +34,10 @@ typedef struct {
     char    state;
     const char    *auth;
     sip_hash *shash;
-} groupcache_worker_context_t;
+} shardcache_worker_context_t;
 
-static groupcache_worker_context_t *groupcache_create_connection_context(groupcache_t *cache, const char *auth) {
-    groupcache_worker_context_t *context = calloc(1, sizeof(groupcache_worker_context_t));
+static shardcache_worker_context_t *shardcache_create_connection_context(shardcache_t *cache, const char *auth) {
+    shardcache_worker_context_t *context = calloc(1, sizeof(shardcache_worker_context_t));
 
     context->input = fbuf_create(0);
     context->output = fbuf_create(0);
@@ -49,7 +49,7 @@ static groupcache_worker_context_t *groupcache_create_connection_context(groupca
     return context;
 }
 
-static void groupcache_destroy_connection_context(groupcache_worker_context_t *ctx) {
+static void shardcache_destroy_connection_context(shardcache_worker_context_t *ctx) {
     fbuf_free(ctx->input);
     fbuf_free(ctx->output);
     fbuf_free(ctx->key);
@@ -58,19 +58,19 @@ static void groupcache_destroy_connection_context(groupcache_worker_context_t *c
     free(ctx);
 }
 
-static void write_status(groupcache_worker_context_t *ctx, int rc) {
+static void write_status(shardcache_worker_context_t *ctx, int rc) {
     if (rc != 0) {
         fprintf(stderr, "Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
-        write_message(ctx->fd, (char *)ctx->auth, GROUPCACHE_HDR_RES, "ERR", 3, NULL, 0);
+        write_message(ctx->fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, "ERR", 3, NULL, 0);
     } else {
-        write_message(ctx->fd, (char *)ctx->auth, GROUPCACHE_HDR_RES, "OK", 2, NULL, 0);
+        write_message(ctx->fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, "OK", 2, NULL, 0);
     }
 
 }
 
 static void *serve_request(void *priv) {
-    groupcache_worker_context_t *ctx = (groupcache_worker_context_t *)priv;
-    groupcache_t *cache = ctx->cache;
+    shardcache_worker_context_t *ctx = (shardcache_worker_context_t *)priv;
+    shardcache_t *cache = ctx->cache;
     int fd = ctx->fd;
 
     // let's ensure setting the fd to blocking mode
@@ -90,29 +90,29 @@ static void *serve_request(void *priv) {
     size_t klen = fbuf_used(ctx->key);
     switch(ctx->hdr) {
 
-        case GROUPCACHE_HDR_GET:
+        case SHARDCACHE_HDR_GET:
         {
             size_t vlen = 0;
-            void *v = groupcache_get(cache, key, klen, &vlen);
-            write_message(fd, (char *)ctx->auth, GROUPCACHE_HDR_RES, v, vlen, NULL, 0);
+            void *v = shardcache_get(cache, key, klen, &vlen);
+            write_message(fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, v, vlen, NULL, 0);
             break;
         }
-        case GROUPCACHE_HDR_SET:
+        case SHARDCACHE_HDR_SET:
         {
-            rc = groupcache_set(cache, key, klen,
+            rc = shardcache_set(cache, key, klen,
                     fbuf_data(ctx->value), fbuf_used(ctx->value));
             write_status(ctx, rc);
             break;
         }
-        case GROUPCACHE_HDR_DEL:
+        case SHARDCACHE_HDR_DEL:
         {
-            rc = groupcache_del(cache, key, klen);
+            rc = shardcache_del(cache, key, klen);
             write_status(ctx, rc);
             break;
         }
-        case GROUPCACHE_HDR_EVI:
+        case SHARDCACHE_HDR_EVI:
         {
-            groupcache_evict(cache, key, klen);
+            shardcache_evict(cache, key, klen);
             write_status(ctx, 0);
             break;
         }
@@ -122,13 +122,13 @@ static void *serve_request(void *priv) {
     }
 
     close(fd);
-    groupcache_destroy_connection_context(ctx);
+    shardcache_destroy_connection_context(ctx);
     return NULL;
 }
 
-static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len, void *priv)
+static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len, void *priv)
 {
-    groupcache_worker_context_t *ctx = (groupcache_worker_context_t *)priv;
+    shardcache_worker_context_t *ctx = (shardcache_worker_context_t *)priv;
     if (!ctx)
         return;
 
@@ -141,14 +141,14 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         char *input = fbuf_data(ctx->input);
         char hdr = *input;
 
-        if (hdr != GROUPCACHE_HDR_GET &&
-            hdr != GROUPCACHE_HDR_SET &&
-            hdr != GROUPCACHE_HDR_DEL &&
-            hdr != GROUPCACHE_HDR_EVI &&
-            hdr != GROUPCACHE_HDR_RES)
+        if (hdr != SHARDCACHE_HDR_GET &&
+            hdr != SHARDCACHE_HDR_SET &&
+            hdr != SHARDCACHE_HDR_DEL &&
+            hdr != SHARDCACHE_HDR_EVI &&
+            hdr != SHARDCACHE_HDR_RES)
         {
             // BAD REQUEST
-#ifdef GROUPCACHE_DEBUG
+#ifdef SHARDCACHE_DEBUG
             struct sockaddr_in saddr;
             socklen_t addr_len;
             getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
@@ -187,7 +187,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             sip_hash_update(ctx->shash, fbuf_data(ctx->input), 2);
             fbuf_remove(ctx->input, 2);
             if (ctx->state == STATE_READING_KEY) {
-                if (ctx->hdr == GROUPCACHE_HDR_SET) {
+                if (ctx->hdr == SHARDCACHE_HDR_SET) {
                     ctx->state = STATE_READING_VALUE;
                 } else {
                     ctx->state = STATE_READING_AUTH;
@@ -201,7 +201,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     }
 
     if (ctx->state == STATE_READING_AUTH) {
-        if (fbuf_used(ctx->input) < GROUPCACHE_MSG_SIG_LEN)
+        if (fbuf_used(ctx->input) < SHARDCACHE_MSG_SIG_LEN)
             return;
 
         uint64_t digest;
@@ -212,7 +212,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             return;
         }
 
-#ifdef GROUPCACHE_DEBUG
+#ifdef SHARDCACHE_DEBUG
         int i;
         printf("computed digest for received data: ");
         for (i=0; i<8; i++) {
@@ -252,7 +252,7 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         iomux_remove(iomux, fd); // this fd doesn't belong to the mux anymore
         shutdown(fd, SHUT_RD); // we don't want to read anymore from this socket
 
-#ifdef GROUPCACHE_DEBUG
+#ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Creating thread to serve request: (%d) %02x:%s\n", fd, ctx->hdr, fbuf_data(ctx->key));
 #endif
         pthread_create(&worker_thread, NULL, serve_request, ctx);
@@ -260,26 +260,26 @@ static void groupcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     }
 }
 
-static void groupcache_eof_handler(iomux_t *iomux, int fd, void *priv)
+static void shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
 {
-    groupcache_worker_context_t *ctx = (groupcache_worker_context_t *)priv;
+    shardcache_worker_context_t *ctx = (shardcache_worker_context_t *)priv;
     close(fd);
     if (ctx) {
-        groupcache_destroy_connection_context(ctx);
+        shardcache_destroy_connection_context(ctx);
     }
 }
 
-static void groupcache_connection_handler(iomux_t *iomux, int fd, void *priv)
+static void shardcache_connection_handler(iomux_t *iomux, int fd, void *priv)
 {
-    groupcache_serving_t *serv = (groupcache_serving_t *)priv;
+    shardcache_serving_t *serv = (shardcache_serving_t *)priv;
 
     // create and initialize the context for the new connection
-    groupcache_worker_context_t *ctx = groupcache_create_connection_context(serv->cache, serv->auth);
+    shardcache_worker_context_t *ctx = shardcache_create_connection_context(serv->cache, serv->auth);
 
     iomux_callbacks_t connection_callbacks = {
         .mux_connection = NULL,
-        .mux_input = groupcache_input_handler,
-        .mux_eof = groupcache_eof_handler,
+        .mux_input = shardcache_input_handler,
+        .mux_eof = shardcache_eof_handler,
         .mux_output = NULL,
         .mux_timeout = NULL,
         .priv = ctx
@@ -291,10 +291,10 @@ static void groupcache_connection_handler(iomux_t *iomux, int fd, void *priv)
 
 
 void *accept_requests(void *priv) {
-    groupcache_serving_t *serv = (groupcache_serving_t *)priv;
+    shardcache_serving_t *serv = (shardcache_serving_t *)priv;
 
-    iomux_callbacks_t groupcache_callbacks = {
-        .mux_connection = groupcache_connection_handler,
+    iomux_callbacks_t shardcache_callbacks = {
+        .mux_connection = shardcache_connection_handler,
         .mux_input = NULL,
         .mux_eof = NULL,
         .mux_output = NULL,
@@ -304,7 +304,7 @@ void *accept_requests(void *priv) {
 
     iomux_t *iomux = iomux_create();
     
-    iomux_add(iomux, serv->sock, &groupcache_callbacks);
+    iomux_add(iomux, serv->sock, &shardcache_callbacks);
     iomux_listen(iomux, serv->sock);
 
     iomux_loop(iomux, 0);

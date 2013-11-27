@@ -28,18 +28,18 @@
  */
 
 // in byte
-#define GROUPCACHE_MSG_SIG_LEN 8
-#define GROUPCACHE_MSG_MAX_RECORD_LEN (1<<28) // 256MB
+#define SHARDCACHE_MSG_SIG_LEN 8
+#define SHARDCACHE_MSG_MAX_RECORD_LEN (1<<28) // 256MB
 
 typedef enum {
-    GROUPCACHE_HDR_GET  = 0x01,
-    GROUPCACHE_HDR_SET  = 0x02,
-    GROUPCACHE_HDR_DEL  = 0x03,
-    GROUPCACHE_HDR_EVI  = 0x04,
-    GROUPCACHE_HDR_RES  = 0x11
-} groupcache_hdr_t;
+    SHARDCACHE_HDR_GET  = 0x01,
+    SHARDCACHE_HDR_SET  = 0x02,
+    SHARDCACHE_HDR_DEL  = 0x03,
+    SHARDCACHE_HDR_EVI  = 0x04,
+    SHARDCACHE_HDR_RES  = 0x11
+} shardcache_hdr_t;
 
-int read_message(int fd, char *auth, fbuf_t *out, groupcache_hdr_t *hdr);
+int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr);
 int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen);
 int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner);
 int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen);

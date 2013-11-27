@@ -1,0 +1,11 @@
+Changes
+Shardcache.xs
+Makefile.PL
+MANIFEST
+ppport.h
+README
+typemap
+t/Shardcache.t
+lib/Shardcache.pm
+lib/Shardcache/Storage.pm
+lib/Shardcache/Storage/Mem.pm

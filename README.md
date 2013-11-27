@@ -1,21 +1,22 @@
-groupcached
+shardcache
 ======
 
-C implementation of groupcache (golang/groupcache)
+C implementation of a sharded key/value storage + caching 
+initially inspired to groupcache (golang/groupcache)
 
 Note that this is a fresh implementation of the logic/strategy
-implemented in groupcache. It's not a straight porting but an
-implementation from scratch, it uses its own custom protocol for internal
-communication that differs from the one used by the Go implementation
+implemented in groupcache. It's not a porting but an implementation
+from scratch. It uses its own custom protocol for internal communication
+that differs from the one used by the groupcache Go implementation
 (which is instead based on protobuf + httpd)
 
-Like the Go package (https://github.com/golang/groupcache.git),
-this library, together with the groupcached daemon implementation)
+Like groupcache (https://github.com/golang/groupcache.git),
+this library, together with the shardcached daemon implementation)
 is intended as a replacement for memcached with some additions:
 
  * does not require running a separate set of servers, thus massively
-   reducing deployment/configuration pain. As the Go implementation,
-   libgroupcache is a client library as well as a server.
+   reducing deployment/configuration pain. As for groupcache,
+   libshardcache is a client library as well as a server.
    It connects to its own peers.
 
  * cache filling mechanism based on ARC (Adaptive Replacement Cache)
@@ -24,7 +25,7 @@ is intended as a replacement for memcached with some additions:
    processes.  This prevents memcached hot spotting where a machine's
    CPU and/or NIC are overloaded by very popular keys/values.
 
-Differently from the Go implementation :
+Differently from the groupcache :
 
  * supports SET operations, If the node which receives the SET operation
    is responsible for the specified KEY, the new value will be provided to
@@ -45,7 +46,7 @@ Differently from the Go implementation :
 
 ## Lookup process
 
-Exactly like in the Go implementation, a groupcache lookup of **get("foo")** looks like:
+Exactly like in groupcache implementation, a shardcache lookup of **get("foo")** looks like:
 
 (On machine #5 of a set of N machines running the same code)
 

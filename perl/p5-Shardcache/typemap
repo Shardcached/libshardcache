@@ -1,0 +1,5 @@
+const char **					T_PTROBJ
+shardcache_storage_t *				T_PTROBJ
+shardcache_t *					T_PTROBJ
+int *						T_PTROBJ
+size_t *					T_PTROBJ

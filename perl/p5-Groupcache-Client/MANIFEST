@@ -1,6 +1,0 @@
-Changes
-lib/Groupcache/Client.pm
-Makefile.PL
-MANIFEST
-README.md
-t/groupcache_client.t
