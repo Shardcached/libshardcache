@@ -201,7 +201,7 @@ shardcache_t *shardcache_create(char *me, char **peers, int npeers,
     char *addr = strdup(cache->me); // we need a temporary copy to be used by strtok
     char *host = strtok_r(addr, ":", &brkt);
     char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : shardCACHE_PORT_DEFAULT;
+    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
 
     cache->sock = open_socket(host, port);
     if (cache->sock == -1) {
