@@ -49,8 +49,21 @@ typedef int (*shardcache_remove_item_callback_t)(void *key, size_t len, void *pr
  */
 typedef void (*shardcache_free_item_callback_t)(void *val, void *priv);
 
+/**
+ * @brief This callback is called when creating the shardcache instance
+ *        to initialize the underlying storage.
+ * @return if a pointer is returned by the callback, the same pointer will
+ *         be passed as 'priv' to all further calls to the storage
+ */
 typedef void *(*shardcache_init_storage_callback_t)(char **options);
 
+/**
+ * @brief Callback called when the shardcache is going to be destroyed
+ *        so that the underlying storage can take all the necessary
+ *        actions before exiting.
+ *        If a pointer was returned from the init_storage() callback
+ *        it will be passed to this function as well
+ */
 typedef void (*shardcache_destroy_storage_callback_t)(void *priv);
 
 /**
@@ -150,14 +163,5 @@ char **shardcache_get_peers(shardcache_t *cache, int *num_peers);
  * @return 1 if the current node (represented by cache) is the owner of the key, 0 otherwise
  */
 int shardcache_test_ownership(shardcache_t *cache, void *key, size_t len, const char **owner);
-
-/**
- * @brief Compute the authentication digest based on the shared secret
- * @arg secret : The shared secret against which to compute the digest
- * @arg msg    : A pointer to the message on which compute the digest
- * @arg len    : The length of the message
- * @return the computed digest
- */
-uint64_t shardcache_compute_signature(char *secret, uint8_t *msg, size_t len);
 
 #endif

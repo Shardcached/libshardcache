@@ -26,7 +26,6 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 	shardcache_set
         shardcache_evict
 	shardcache_test_ownership
-        shardcache_compute_signature
 ) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
@@ -131,11 +130,6 @@ sub me {
 sub run {
     my ($self, $coderef, $timeout, $priv) = @_;
     return shardcache_run($coderef, $timeout, $priv);
-}
-
-sub signature {
-    my ($self, $msg) = @_;
-    return shardcache_compute_signature($self->{_secret}, $msg);
 }
 
 sub DESTROY {
@@ -276,9 +270,6 @@ L<secret>
   int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen)
   int shardcache_evict(shardcache_t *cache, void *key, size_t klen);
   int shardcache_test_ownership(shardcache_t *cache, void *key, size_t len, const char **owner)
-  int shardcache_compute_signature(char *secret, uint8_t *msg, size_t len);
-
-
 
 =head1 SEE ALSO
 

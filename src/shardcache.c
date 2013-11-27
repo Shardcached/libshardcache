@@ -221,15 +221,6 @@ shardcache_t *shardcache_create(char *me, char **peers, int npeers,
 
     free(addr); // we don't need it anymore
     
-    /*
-    int rc = shardcache_compute_authkey(secret, cache->auth);
-    if (rc != 0) {
-        fprintf(stderr, "ERROR-- could not compute message digest\n");
-        shardcache_destroy(cache);
-        return NULL;
-    } 
-    */
-
     strncpy((char *)cache->auth, secret, sizeof(cache->auth));
     cache->serv.auth = cache->auth;
     cache->serv.me = cache->me;
@@ -370,8 +361,4 @@ int shardcache_test_ownership(shardcache_t *cache, void *key, size_t len, const 
     if (owner)
         *owner = node_name;
     return (strcmp(node_name, cache->me) == 0);
-}
-
-uint64_t shardcache_compute_signature(char *secret, uint8_t *msg, size_t len) {
-    return sip_hash24(secret, msg, len);    
 }

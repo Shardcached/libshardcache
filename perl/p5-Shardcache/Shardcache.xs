@@ -327,20 +327,6 @@ shardcache_evict(cache, key, klen)
         char *key
         size_t klen
 
-SV *
-shardcache_compute_signature(secret, msg)
-        char *secret
-        SV   *msg
-    CODE:
-        STRLEN l;
-        char *ptr = SvPVbyte(msg, l);
-        char key[16];
-        strncpy(key, secret, sizeof(key));
-        uint64_t digest = shardcache_compute_signature(key, (uint8_t *)ptr, l);
-        RETVAL = newSViv(digest);
-    OUTPUT:
-        RETVAL
-
 void
 shardcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
         SV *coderef
