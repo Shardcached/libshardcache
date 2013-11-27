@@ -45,6 +45,7 @@ static iomux_t *iomux = NULL;
 static hashtable_t *storage = NULL;
 static groupcache_t *cache = NULL;
 static struct chash_t *chash = NULL;
+static char *basepath = NULL;
 
 typedef struct {
     fbuf_t *input;
@@ -155,13 +156,30 @@ static void send_response(groupcached_connection_context *ctx)
 static char *extract_key(char *url)
 {
     char *key = NULL;
-    if (*url == '/')
-        url++;
+
     char *reqline_start = url;
+
+    if (basepath) {
+        if (strncmp(url, basepath, strlen(basepath)) != 0) {
+            reqline_start += strlen(basepath);
+            while (*url == '/')
+                url++;
+        } else {
+            return NULL;
+        }
+    }
+
+    if (*reqline_start == 0)
+        return NULL;
+
     char *reqline_end = reqline_start;
 
-    while (*reqline_end != '\r' && *reqline_end != '\n')
+    while (*reqline_end != '\r' && *reqline_end != '\n' && *reqline_end != 0)
         reqline_end++;
+
+    if (*reqline_end == 0)
+        return NULL;
+
     reqline_end++;
 
     char reqline[reqline_end-reqline_start];
@@ -361,9 +379,9 @@ static void usage(char *progname, char *msg, ...)
            "    -f                    run in foreground\n"
            "    -d <level>            debug level\n"
            "    -l <ip_address:port>  ip address:port where to listen for incoming http connections\n"
+           "    -b                    HTTP url basepath\n"
            "    -p <peers>            list of peers participating in the groupcache in the form : 'address:port,address2:port2'\n"
-           "    -s                    no multithreading, handle all requests in the main thread\n"
-           "                          socket, terminated by a newline\n", progname);
+           "    -s                    shared secret used for message signing\n", progname);
     exit(-2);
 }
 
@@ -514,6 +532,7 @@ int main(int argc, char **argv)
     char *secret = "default";
 
     static struct option long_options[] = {
+        {"base", 2, 0, 'b'},
         {"debug", 2, 0, 'd'},
         {"foreground", 0, 0, 'f'},
         {"listen", 2, 0, 'l'},
@@ -524,11 +543,17 @@ int main(int argc, char **argv)
     };
 
     char c;
-    while ((c = getopt_long (argc, argv, "d:fhl:p:s?", long_options, &option_index))) {
+    while ((c = getopt_long (argc, argv, "b:d:fhl:p:s?", long_options, &option_index))) {
         if (c == -1) {
             break;
         }
         switch (c) {
+            case 'b':
+                basepath = optarg;
+                // skip leading '/'s
+                while (*basepath == '/')
+                    basepath++;
+                break;
             case 'd':
                 loglevel = optarg ? atoi(optarg) : 1;
                 break;
@@ -543,6 +568,7 @@ int main(int argc, char **argv)
                 break;
             case 's':
                 secret = optarg;
+                break;
             case 'h':
             case '?':
                 usage(argv[0], NULL);
