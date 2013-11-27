@@ -9,7 +9,6 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-use Groupcache::Client;
 use Test::More; # tests => 3;
 BEGIN { use_ok('Groupcache');
         use_ok('Groupcache::Storage::Mem');
@@ -85,9 +84,11 @@ $gc->run(sub {
             # within the callback works
             is(shift->get("test_key1"), "test_value1");
 
-            # and also using a client
-            my $c = Groupcache::Client->new($gc->me);
-            is ($c->get("test_key2"), "test_value2");
+            # and also using a client (if the module is available)
+            if (eval "require Groupcache::Client; 1") {
+                my $c = Groupcache::Client->new($gc->me);
+                is ($c->get("test_key2"), "test_value2");
+            }
 
             return -1;
         }, 500, $gc);
