@@ -1,4 +1,4 @@
-The internal communication uses a very simple protocol described by the following grammar:
+The internal communication protocol may described by the following grammar:
 
 MESSAGE      : <MSG><SIG>
 MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
@@ -30,67 +30,175 @@ DEL_MESSAGE  : <MSG_DEL><KEY><EOM>
 EVI_MESSAGE  : <MSG_EVI><KEY><EOM>
 RES_MESSAGE  : <MSG_RES><RECORD><EOM>
 
-The fields taking part in a message packet can be summarized in the following :
+The layout for an empty (but still valid) message would be :
 
-============================================================================================
-|  FIELD   |   SIZE   |  DESC                                                              |
-|----------|----------|--------------------------------------------------------------------|
-|   HDR    |  1 Byte  |  The message type                                                  |
-|   SIZE   |  2 Bytes |  The length of the following chunk of data (in network byte order) |
-|  RECORD  |  N Bytes |  The actual chunk of data                                          |
-|   EOR    |  2 Bytes |  End Of Record                                                     |
-|   SIG    |  8 Bytes |  SIPHASH digest computed on the message using the shared secret    |
---------------------------------------------------------------------------------------------
+===============================================================================
+|  FIELD   |  SIZE   |  DESC                                                  |
+|----------|---------|--------------------------------------------------------|
+|   HDR    | 1 Byte  |  The message type                                      |
+|----------|---------|--------------------------------------------------------|
+|   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
+|----------|---------|--------------------------------------------------------|
+|   NULL   | 1 Byte  |  Message Terminator (0x00)                             |
+|----------|---------|--------------------------------------------------------|
+|   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
+|          |         |  using the shared secret                               |
+-------------------------------------------------------------------------------
 
-Examples
+A message containing one record (fitting a single chunk) would look like :
+
+===============================================================================
+|  FIELD   |  SIZE   |  DESC                                                  |
+|----------|---------|--------------------------------------------------------|
+|   HDR    | 1 Byte  |  The message type                                      |
+|----------|---------|--------------------------------------------------------|
+|   SIZE   | 2 Bytes |  The length of the following chunk of data             |
+|          |         |  (in network byte order)                               |
+|----------|---------|--------------------------------------------------------|
+|   DATA   | N Bytes |  The actual chunk of data                              |
+|----------|---------|--------------------------------------------------------|
+|   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
+|----------|---------|--------------------------------------------------------|
+|   NULL   | 1 Byte  |  Message Terminator (0x00)                             |
+|----------|---------|--------------------------------------------------------|
+|   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
+|          |         |  using the shared secret                               |
+-------------------------------------------------------------------------------
+
+
+A message containing 2 records,  for instance a 'SET' request where 
+both key and value need to be provided (still fitting in one chunk) :
+
+===============================================================================
+|  FIELD   |  SIZE   |  DESC                                                  |
+|----------|---------|--------------------------------------------------------|
+|   HDR    | 1 Byte  |  The message type                                      |
+|----------|---------|--------------------------------------------------------|
+|   SIZE   | 2 Bytes |  The length of the following chunk of data             |
+|          |         |  (in network byte order)                               |
+|----------|---------|--------------------------------------------------------|
+|   DATA   | N Bytes |  The actual chunk of data                              |
+|----------|---------|--------------------------------------------------------|
+|   RSEP   | 1 Bytes |  Record Separator (0x80)                               |
+|----------|---------|--------------------------------------------------------|
+|   SIZE   | 2 Bytes |                                                        |
+|----------|---------|--------------------------------------------------------|
+|   DATA   | N Bytes |                                                        |
+|----------|---------|--------------------------------------------------------|
+|   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
+|----------|---------|--------------------------------------------------------|
+|   NULL   | 1 Byte  |  Message Terminator (0x00)                             |
+|----------|---------|--------------------------------------------------------|
+|   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
+|          |         |  using the shared secret                               |
+-------------------------------------------------------------------------------
+
+
+
+A more complex message with 2 records but not fitting in a single chunk would 
+look like :
+
+===============================================================================
+|  FIELD   |  SIZE   |  DESC                                                  |
+|----------|---------|--------------------------------------------------------|
+|   HDR    | 1 Byte  |  The message type                                      |
+|----------|---------|--------------------------------------------------------|
+|   SIZE   | 2 Bytes |  The length of the following chunk of data             |
+|          |         |  (in network byte order)                               |
+|----------|---------|--------------------------------------------------------|
+|   DATA   | N Bytes |  The actual chunk of data                              |
+|----------|---------|--------------------------------------------------------|
+|    .     |   .     |                          .                             |
+|----------|---------|--------------------------------------------------------|
+|    .     |   .     |                          .                             |
+|----------|---------|--------------------------------------------------------|
+|    .     |   .     |                          .                             |
+|----------|---------|--------------------------------------------------------|
+|   SIZE   | 2 Bytes |                                                        |
+|----------|---------|--------------------------------------------------------|
+|   DATA   | N Bytes |                                                        |
+|----------|---------|--------------------------------------------------------|
+|   RSEP   | 1 Bytes |  Record Separator (0x80)                               |
+|----------|---------|--------------------------------------------------------|
+|   SIZE   | 2 Bytes |                                                        |
+|----------|---------|--------------------------------------------------------|
+|   DATA   | N Bytes |                                                        |
+|----------|---------|--------------------------------------------------------|
+|    .     |   .     |                          .                             |
+|----------|---------|--------------------------------------------------------|
+|    .     |   .     |                          .                             |
+|----------|---------|--------------------------------------------------------|
+|    .     |   .     |                          .                             |
+|----------|---------|--------------------------------------------------------|
+|   SIZE   | 2 Bytes |                                                        |
+|----------|---------|--------------------------------------------------------|
+|   DATA   | N Bytes |                                                        |
+|----------|---------|--------------------------------------------------------|
+|   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
+|----------|---------|--------------------------------------------------------|
+|   NULL   | 1 Byte  |  Message Terminator (0x00)                             |
+|----------|---------|--------------------------------------------------------|
+|   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
+|          |         |  using the shared secret                               |
+-------------------------------------------------------------------------------
+
+NOTE: The protocol allows for an unlimited amount of records, even though 
+      only 2 records have a practical use since no implemented message 
+      makes use of more than 2 (apart SET, which requires both key and value,
+      all other request types require only one record to be provided
+
+
+More Examples
 
 A GET message for the key FOO (hex sequence: 0x46 0x4f 0x4f) would look like:
 
-<01><00><03><46><4f><4f><00><00><SIG>
+<01><00><03><46><4f><4f><00><00><00><SIG>
 
---------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 
 A SET message for the key FOO (hex sequence: 0x46 0x4f 0x4f)
 assigning the value TEST (hex sequence: 0x54 0x45 0x53 0x54) would look like:
 
-<02><00><03><46><4f><4f><00><00><00><04><54><45><53><54><00><00><SIG>
+<02><00><03><46><4f><4f><00><00><80><00><04><54><45><53><54><00><00><00><SIG>
 
---------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 
-A DEL message for the FOO would look exactly like a GET message but with a different
-HDR value :
+A DEL message for the FOO would look exactly like a GET message but with a
+different HDR value :
 
-<03><00><03><46><4f><4f><00><00><SIG>
+<03><00><03><46><4f><4f><00><00><00><SIG>
 
-An EVI message would look exactly like a DEL message but with an HDR byte equal to 0x04
+An EVI message would look exactly like a DEL message but with an HDR byte equal
+to 0x04
 
---------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 
 A RES message containing a value "OK" (0x4f 0x4b) would look like:
 
-<11><00><02><4f><4b><00><00>
+<11><00><02><4f><4b><00><00><00><SIG>
 
---------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 
 A RES with an empty value (for instance if querying a not-existing key):
 
-<11><00><00>
+<11><00><00><00><SIG>
 
---------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 
 NOTES:
 
-The SIG postfix is a siphash digest computed using a shared secret and the complete message
-(obviously excluding the signature itself)
+The SIG postfix is a siphash digest computed using a shared secret and the
+complete message (obviously excluding the signature itself)
 
 Responses don't include the signature
 
-Responses to 'GET' requests will return the value for the requested key if found,
-an empty value otherwise
+Responses to 'GET' requests will return the value for the requested key
+if found, an empty value otherwise
 
-Responses to 'SET', 'DEL' and 'EVI' requests will return either the string 'OK' or 'ERR'
-depending on the status of the operation
+Responses to 'SET', 'DEL' and 'EVI' requests will return either the string
+'OK' or 'ERR' depending on the status of the operation
 
-The actual implementation serves only one request per connection, so implementing the protocol
-you should expect the peer to close its socket just after serving the response (and it may close
+The actual implementation serves only one request per connection, so
+implementing the protocol you should expect the peer to close its socket
+just after serving the response (and it may close
 its reading part of the socket just after reading exactly one complete request)
