@@ -20,7 +20,6 @@
 #include "connections.h"
 #include "messaging.h"
 #include "serving.h"
-#include "sha1.h"
 
 #include <chash.h>
 
@@ -224,6 +223,7 @@ shardcache_t *shardcache_create(char *me, char **peers, int npeers,
 
     strncpy((char *)cache->auth, secret, sizeof(cache->auth));
     cache->serv.auth = cache->auth;
+    cache->serv.me = cache->me;
 
 #ifdef SHARDCACHE_DEBUG
     fprintf(stderr, "AUTH KEY (secret: %s): ", secret);

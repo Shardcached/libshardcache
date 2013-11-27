@@ -57,10 +57,17 @@ sub send_msg {
     push @vars, $kbuf, 0x00, 0x00;
 
     if ($hdr == 0x02 && $value) {
+        $templ .= "C";
+        push @vars, 0x80;
+
         my $vbuf = _chunkize_var($value);
+
         $templ .= sprintf "a%dCC", length($vbuf);
         push @vars, $vbuf, 0x00, 0x00;
     }
+
+    $templ .= "C";
+    push @vars, 0x00;
 
     my $msg = pack $templ, @vars;
 
@@ -89,11 +96,22 @@ sub send_msg {
     my ($rhdr, $chunk) = unpack("Ca*", $in);
 
     my $out; 
-    my $len;
-    do {
-        ($len, $chunk) = unpack("na*", $chunk);
-        $out .= $len ? substr($chunk, 0, $len, "") : "";
-    } while ($len > 0);
+    for (;;) {
+        my $len;
+        do {
+            ($len, $chunk) = unpack("na*", $chunk);
+            $out .= $len ? substr($chunk, 0, $len, "") : "";
+        } while ($len > 0);
+        my $char = unpack("C", substr($chunk,0, 1, ""));
+        if ($char == 0x80) {
+            next;
+        } elsif($char == 0x00) {
+            last;
+        } else {
+            # BAD FORMAT
+            return;
+        }
+    }
 
     # $chunk now points at the signature
     if ($csig != $chunk) {
@@ -105,17 +123,20 @@ sub send_msg {
 
 sub get {
     my ($self, $key) = @_;
+    return unless $key;
     return $self->send_msg(0x01, $key);
 }
 
 sub set {
     my ($self, $key, $value) = @_;
+    return unless $key && defined $value;
     my $resp = $self->send_msg(0x02, $key, $value);
     return (defined $resp && $resp eq "OK")
 }
 
 sub del {
     my ($self, $key) = @_;
+    return unless $key;
     my $resp = $self->send_msg(0x03, $key);
     return ($resp eq "OK")
 }

@@ -1,3 +1,6 @@
+#ifndef __MESSAGING_H__
+#define __MESSAGING_H__
+
 #include <sys/types.h>
 
 /* protocol specification
@@ -39,9 +42,12 @@ typedef enum {
     SHARDCACHE_HDR_RES  = 0x11
 } shardcache_hdr_t;
 
+#define SHARDCACHE_RSEP 0x80
+
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr);
 int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen);
 int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner);
 int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen);
 int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out);
 
+#endif

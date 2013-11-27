@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <errno.h>
 
 #define HAVE_UINT64_T
@@ -49,50 +50,75 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr) {
             uint16_t chunk_len = ntohs(clen);
 
             if (chunk_len == 0) {
-                char sig[SHARDCACHE_MSG_SIG_LEN];
-                int ofx = 0;
-                do {
-                    rb = read_socket(fd, &sig[ofx], SHARDCACHE_MSG_SIG_LEN-ofx);
-                    if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                unsigned char rsep = 0;
+                rb = read_socket(fd, &rsep, 1);
+                if (rb != 1) {
+                    fbuf_set_used(out, initial_len);
+                    sip_hash_free(shash);
+                    return -1;
+                }
+                sip_hash_update(shash, &rsep, 1);
+                if (rsep == SHARDCACHE_RSEP) {
+                    // go ahead fetching the next record
+                    // XXX - should we separate the records in the output buffer?
+                    continue;
+                } else if (rsep == 0) {
+                    char sig[SHARDCACHE_MSG_SIG_LEN];
+                    int ofx = 0;
+                    do {
+                        rb = read_socket(fd, &sig[ofx], SHARDCACHE_MSG_SIG_LEN-ofx);
+                        if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                            fbuf_set_used(out, initial_len);
+                            sip_hash_free(shash);
+                            return -1;
+                        }
+                        ofx += rb;
+                    } while (ofx != SHARDCACHE_MSG_SIG_LEN);
+
+                    uint64_t digest;
+                    if (!sip_hash_final_integer(shash, &digest)) {
+                        // TODO - Error Messages
                         fbuf_set_used(out, initial_len);
                         sip_hash_free(shash);
                         return -1;
-                    } 
-                    ofx += rb;
-                } while (ofx != SHARDCACHE_MSG_SIG_LEN);
-
-                uint64_t digest;
-                if (!sip_hash_final_integer(shash, &digest)) {
-                    // TODO - Error Messages
-                    fbuf_set_used(out, initial_len);
-                    sip_hash_free(shash);
-                    return -1;
-                }
+                    }
 
 #ifdef SHARDCACHE_DEBUG
-                int i;
-                printf("computed digest for received data: (%s) ", auth);
-                for (i=0; i<8; i++) {
-                    printf("%02x", (unsigned char)((char *)&digest)[i]);
-                }
-                printf("\n");
+                    int i;
+                    printf("computed digest for received data: (%s) ", auth);
+                    for (i=0; i<8; i++) {
+                        printf("%02x", (unsigned char)((char *)&digest)[i]);
+                    }
+                    printf("\n");
 
-                printf("digest from received data: ");
-                uint8_t *remote = sig;
-                for (i=0; i<8; i++) {
-                    printf("%02x", remote[i]);
-                }
-                printf("\n");
+                    printf("digest from received data: ");
+                    uint8_t *remote = sig;
+                    for (i=0; i<8; i++) {
+                        printf("%02x", remote[i]);
+                    }
+                    printf("\n");
 #endif
 
-                if (memcmp(&digest, &sig, SHARDCACHE_MSG_SIG_LEN) != 0) {
+                    if (memcmp(&digest, &sig, SHARDCACHE_MSG_SIG_LEN) != 0) {
+                        struct sockaddr_in saddr;
+                        socklen_t addr_len;
+                        getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
+
+                        fprintf(stderr, "Unauthorized message from %s\n",
+                        inet_ntoa(saddr.sin_addr));
+                        fbuf_set_used(out, initial_len);
+                        sip_hash_free(shash);
+                        return -1;
+                        // AUTH FAILED
+                    }
+                    sip_hash_free(shash);
+                    return 0;
+                } else {
+                    // BOGUS RESPONSE
                     fbuf_set_used(out, initial_len);
                     sip_hash_free(shash);
                     return -1;
-                    // AUTH FAILED
                 }
-                sip_hash_free(shash);
-                return 0;
             }
 
             while (chunk_len != 0) {
@@ -152,8 +178,8 @@ int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out) {
                 wrote += wb;
             }
             if (wrote == writelen) {
-                uint16_t terminator = 0;
-                fbuf_add_binary(out, (char *)&terminator, 2);
+                uint16_t eor = 0;
+                fbuf_add_binary(out, (char *)&eor, 2);
                 return 0;
             }
         }
@@ -162,25 +188,29 @@ int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out) {
 }
 
 int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, fbuf_t *out) {
+    static char eom = 0;
+    static char sep = SHARDCACHE_RSEP;
+    uint16_t    eor = 0;
+
     fbuf_clear(out);
     fbuf_add_binary(out, &hdr, 1);
     if (k && klen) {
         if (_chunkize_buffer(k, klen, out) != 0)
             return -1;
     } else {
-        uint16_t terminator = 0;
-        fbuf_add_binary(out, (char *)&terminator, 2);
+        fbuf_add_binary(out, (char *)&eor, 2);
         return 0;
     }
     if (hdr == SHARDCACHE_HDR_SET) {
         if (v && vlen) {
+            fbuf_add_binary(out, &sep, 1);
             if (_chunkize_buffer(v, vlen, out) != 0)
                 return -1;
         } else {
-            uint16_t terminator = 0;
-            fbuf_add_binary(out, (char *)&terminator, 2);
+            fbuf_add_binary(out, (char *)&eor, 2);
         }
     }
+    fbuf_add_binary(out, &eom, 1);
     return 0;
 }
 

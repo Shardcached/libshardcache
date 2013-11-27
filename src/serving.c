@@ -164,7 +164,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     }
 
     for (;;) {
-        char *chunk = fbuf_data(ctx->input);
+        unsigned char *chunk = fbuf_data(ctx->input);
         if (fbuf_used(ctx->input) < 2)
             break;
 
@@ -173,6 +173,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         uint16_t clen = ntohs(nlen);
         if (clen > 0) {
             if (fbuf_used(ctx->input) < 2+clen) {
+                // TRUNCATED
                 break;
             }
             chunk += 2;
@@ -184,17 +185,36 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             sip_hash_update(ctx->shash, fbuf_data(ctx->input), 2+clen);
             fbuf_remove(ctx->input, 2+clen);
         } else {
+            if (fbuf_used(ctx->input) < 3) {
+                // TRUNCATED
+                break;
+            }
             sip_hash_update(ctx->shash, fbuf_data(ctx->input), 2);
             fbuf_remove(ctx->input, 2);
-            if (ctx->state == STATE_READING_KEY) {
-                if (ctx->hdr == SHARDCACHE_HDR_SET) {
-                    ctx->state = STATE_READING_VALUE;
-                } else {
+            chunk = fbuf_data(ctx->input);
+            if (*chunk == SHARDCACHE_RSEP) {
+                chunk++;
+                sip_hash_update(ctx->shash, fbuf_data(ctx->input), 1);
+                fbuf_remove(ctx->input, 1);
+                if (ctx->state == STATE_READING_KEY) {
+                    if (ctx->hdr == SHARDCACHE_HDR_SET) {
+                        ctx->state = STATE_READING_VALUE;
+                    } else {
+                        // BAD FORMAT - Ignore
+                        //              we don't support multiple records if the message is not SET
+                        //ctx->state = STATE_READING_AUTH;
+                        break;
+                    }
+                } else if (ctx->state == STATE_READING_VALUE) {
                     ctx->state = STATE_READING_AUTH;
                     break;
                 }
-            } else if (ctx->state == STATE_READING_VALUE) {
+            } else if (*chunk == 0) {
+                sip_hash_update(ctx->shash, fbuf_data(ctx->input), 1);
+                fbuf_remove(ctx->input, 1);
                 ctx->state = STATE_READING_AUTH;
+            } else {
+                // BAD FORMAT
                 break;
             }
         }
@@ -305,6 +325,8 @@ void *accept_requests(void *priv) {
     iomux_t *iomux = iomux_create();
     
     iomux_add(iomux, serv->sock, &shardcache_callbacks);
+
+    fprintf(stderr, "Listening on %s\n", serv->me);
     iomux_listen(iomux, serv->sock);
 
     iomux_loop(iomux, 0);
