@@ -22,7 +22,7 @@ SIG          : <BYTE>[8]
 KEY          : <RECORD>
 VALUE        : <RECORD>
 
-The only Supported Messages are :
+The only supported messages are :
 
 GET_MESSAGE  : <MSG_GET><KEY><EOM><SIG>
 SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE><EOM><SIG>
@@ -79,6 +79,8 @@ both key and value need to be provided (still fitting in one chunk) :
 |----------|---------|--------------------------------------------------------|
 |   DATA   | N Bytes |  The actual chunk of data                              |
 |----------|---------|--------------------------------------------------------|
+|   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
+|----------|---------|--------------------------------------------------------|
 |   RSEP   | 1 Bytes |  Record Separator (0x80)                               |
 |----------|---------|--------------------------------------------------------|
 |   SIZE   | 2 Bytes |                                                        |
@@ -117,6 +119,8 @@ look like :
 |   SIZE   | 2 Bytes |                                                        |
 |----------|---------|--------------------------------------------------------|
 |   DATA   | N Bytes |                                                        |
+|----------|---------|--------------------------------------------------------|
+|   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
 |   RSEP   | 1 Bytes |  Record Separator (0x80)                               |
 |----------|---------|--------------------------------------------------------|

@@ -67,11 +67,6 @@ static void usage(char *progname, char *msg, ...)
     exit(-2);
 }
 
-static void shardcached_reload(int sig)
-{
-    NOTICE("reloading database");
-}
-
 static void shardcached_stop(int sig)
 {
     pthread_mutex_lock(&exit_lock);
@@ -323,7 +318,7 @@ int main(int argc, char **argv)
         exit(-1);
     }
 
-    signal(SIGHUP, shardcached_reload);
+    signal(SIGHUP, shardcached_stop);
     signal(SIGINT, shardcached_stop);
     signal(SIGQUIT, shardcached_stop);
     signal(SIGPIPE, shardcached_do_nothing);
