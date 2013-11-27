@@ -17,18 +17,18 @@ LOW_BYTE     : <BYTE>
 DATA         : <BYTE>...<BYTE>
 BYTE         : 0x00 - 0xFF
 NULL_BYTE    : 0x00
-EOM          : <NULL_BYTE><SIG>
+EOM          : <NULL_BYTE>
 SIG          : <BYTE>[8]
 KEY          : <RECORD>
 VALUE        : <RECORD>
 
 The only Supported Messages are :
 
-GET_MESSAGE  : <MSG_GET><KEY><EOM>
-SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE><EOM>
-DEL_MESSAGE  : <MSG_DEL><KEY><EOM>
-EVI_MESSAGE  : <MSG_EVI><KEY><EOM>
-RES_MESSAGE  : <MSG_RES><RECORD><EOM>
+GET_MESSAGE  : <MSG_GET><KEY><EOM><SIG>
+SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE><EOM><SIG>
+DEL_MESSAGE  : <MSG_DEL><KEY><EOM><SIG>
+EVI_MESSAGE  : <MSG_EVI><KEY><EOM><SIG>
+RES_MESSAGE  : <MSG_RES><RECORD><EOM><SIG>
 
 The layout for an empty (but still valid) message would be :
 
@@ -39,7 +39,7 @@ The layout for an empty (but still valid) message would be :
 |----------|---------|--------------------------------------------------------|
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
-|   NULL   | 1 Byte  |  Message Terminator (0x00)                             |
+|   EOM    | 1 Byte  |  Message Terminator (0x00)                             |
 |----------|---------|--------------------------------------------------------|
 |   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
 |          |         |  using the shared secret                               |
@@ -59,7 +59,7 @@ A message containing one record (fitting a single chunk) would look like :
 |----------|---------|--------------------------------------------------------|
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
-|   NULL   | 1 Byte  |  Message Terminator (0x00)                             |
+|   EOM    | 1 Byte  |  Message Terminator (0x00)                             |
 |----------|---------|--------------------------------------------------------|
 |   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
 |          |         |  using the shared secret                               |
@@ -87,7 +87,7 @@ both key and value need to be provided (still fitting in one chunk) :
 |----------|---------|--------------------------------------------------------|
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
-|   NULL   | 1 Byte  |  Message Terminator (0x00)                             |
+|   EOM    | 1 Byte  |  Message Terminator (0x00)                             |
 |----------|---------|--------------------------------------------------------|
 |   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
 |          |         |  using the shared secret                               |
@@ -136,7 +136,7 @@ look like :
 |----------|---------|--------------------------------------------------------|
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
-|   NULL   | 1 Byte  |  Message Terminator (0x00)                             |
+|   EOM    | 1 Byte  |  Message Terminator (0x00)                             |
 |----------|---------|--------------------------------------------------------|
 |   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
 |          |         |  using the shared secret                               |
