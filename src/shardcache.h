@@ -55,7 +55,7 @@ typedef void (*shardcache_free_item_callback_t)(void *val, void *priv);
  * @return if a pointer is returned by the callback, the same pointer will
  *         be passed as 'priv' to all further calls to the storage
  */
-typedef void *(*shardcache_init_storage_callback_t)(char **options);
+typedef void *(*shardcache_init_storage_callback_t)(const char **options);
 
 /**
  * @brief Callback called when the shardcache is going to be destroyed
@@ -77,7 +77,7 @@ typedef struct __shardcache_storage_s {
     shardcache_store_item_callback_t       store_item;
     shardcache_remove_item_callback_t      remove_item;
     shardcache_free_item_callback_t        free_item;
-    char                                 **options;
+    const char                           **options;
 } shardcache_storage_t;
 
 /**

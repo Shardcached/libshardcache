@@ -17,16 +17,16 @@ static void free_item_cb(void *ptr) {
     free(item);
 }
 
-static void *st_init(char **args)
+static void *st_init(const char **args)
 {
     int size = 1024;
 
     if (args) {
         while (*args) {
-            char *key = *args++;
+            char *key = (char *)*args++;
             char *value = NULL;
             if (*args) {
-                value = *args++;
+                value = (char *)*args++;
             } else {
                 ERROR("Odd element in the options array");
                 continue;
@@ -80,12 +80,17 @@ static void st_destroy(void *priv) {
     ht_destroy(storage);
 }
 
-shardcache_storage_t storage_mem = {
-    .init_storage    = st_init,
-    .fetch_item      = st_fetch,
-    .store_item      = st_store,
-    .remove_item     = st_remove,
-    .destroy_storage = st_destroy
-};
+shardcache_storage_t *storage_mem_create(const char **options) {
+    shardcache_storage_t *st = calloc(1, sizeof(shardcache_storage_t));
+    st->init_storage    = st_init;
+    st->fetch_item      = st_fetch;
+    st->store_item      = st_store;
+    st->remove_item     = st_remove;
+    st->destroy_storage = st_destroy;
+    st->options = options;
+    return st;
+}
 
-
+void storage_mem_destroy(shardcache_storage_t *st) {
+    free(st);
+}

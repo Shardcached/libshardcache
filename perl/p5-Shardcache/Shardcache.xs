@@ -150,7 +150,7 @@ static void __st_free(void *val, void *priv) {
     Safefree(val);
 }
 
-static void *__st_init(char **options) {
+static void *__st_init(const char **options) {
     SV *storage = (SV *)options[1];
     return storage;
 }
@@ -205,7 +205,7 @@ shardcache_create(me, peers, storage, secret)
             }
         }
 
-        char *options[] = { "storage", (char *)SvREFCNT_inc(storage), NULL };
+        const char *options[] = { "storage", (char *)SvREFCNT_inc(storage), NULL };
         shardcache_storage_t storage_struct = {
             .init_storage    = __st_init,
             .destroy_storage = __st_destroy,

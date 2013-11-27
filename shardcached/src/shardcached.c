@@ -267,12 +267,12 @@ int main(int argc, char **argv)
 
 
     // initialize the storage layer 
-    char *storage_options[] = { "initial_table_size", "1024",
-                               "max_table_size", "1000000",
-                               NULL };
-    storage_mem.options = storage_options;
+    const char *storage_options[] = { "initial_table_size", "1024",
+                                      "max_table_size", "1000000",
+                                      NULL };
+    shardcache_storage_t *storage_mem = storage_mem_create(storage_options);
 
-    shardcache_t *cache = shardcache_create(me, shard_names, cnt, &storage_mem, secret);
+    shardcache_t *cache = shardcache_create(me, shard_names, cnt, storage_mem, secret);
 
     int num_peers = 0;
     char **peer_names = shardcache_get_peers(cache, &num_peers);
@@ -308,6 +308,7 @@ int main(int argc, char **argv)
 
     mg_stop(ctx);  
     shardcache_destroy(cache);
+    storage_mem_destroy(storage_mem);
     
     exit(0);
 }
