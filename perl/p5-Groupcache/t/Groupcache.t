@@ -9,6 +9,7 @@ use strict;
 use warnings;
 use Data::Dumper;
 
+use Groupcache::Client;
 use Test::More; # tests => 3;
 BEGIN { use_ok('Groupcache');
         use_ok('Groupcache::Storage::Mem');
@@ -77,8 +78,22 @@ foreach my $i (10..20) {
 }
 
 $gc->set("test_key1", "test_value1");
+$gc->set("test_key2", "test_value2");
 
-$gc->run(sub { is(shift->get("test_key1"), undef); return -1; }, 500, $gc);
+$gc->run(sub {
+            # check accessing the $gc instance from
+            # within the callback works
+            is(shift->get("test_key1"), "test_value1");
+
+            # and also using a client
+            my $c = Groupcache::Client->new($gc->me);
+            is ($c->get("test_key2"), "test_value2");
+
+            return -1;
+        }, 500, $gc);
+
+# and outside it still works
 is($gc->get("test_key1"), "test_value1");
+is($gc2->get("test_key1"), "test_value1");
 
 done_testing();

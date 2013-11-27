@@ -10,11 +10,7 @@
 
 #include <pthread.h>
 
-#if (!defined(PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP))
-#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP PTHREAD_RECURSIVE_MUTEX_INITIALIZER
-#endif
-
-static pthread_mutex_t lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 static PerlInterpreter *orig_perl = NULL;
 
@@ -220,6 +216,17 @@ groupcache_del(cache, key, klen)
 	groupcache_t *	cache
 	char *	key
 	size_t	klen
+    CODE:
+        int should_lock = 0;
+        if (pthread_mutex_trylock(&lock) == EDEADLK)
+            should_lock = 1;
+        pthread_mutex_unlock(&lock);
+        int ret = groupcache_del(cache, key, klen);
+        if (should_lock)
+            pthread_mutex_lock(&lock);
+        RETVAL = ret;
+    OUTPUT:
+        RETVAL
 
 void
 groupcache_destroy(cache)
@@ -234,7 +241,13 @@ groupcache_get(cache, key, klen)
         size_t vlen = 0;
         const char *v = NULL;
     CODE:
+        int should_lock = 0;
+        if (pthread_mutex_trylock(&lock) == EDEADLK)
+            should_lock = 1;
+        pthread_mutex_unlock(&lock);
         v = groupcache_get(cache, key, klen, &vlen);
+        if (should_lock)
+            pthread_mutex_lock(&lock);
         RETVAL = v ? newSVpv(v, vlen) : &PL_sv_undef;
     OUTPUT:
         RETVAL
@@ -264,6 +277,17 @@ groupcache_set(cache, key, klen, value, vlen)
 	size_t	klen
 	char *	value
 	size_t	vlen
+    CODE:
+        int should_lock = 0;
+        if (pthread_mutex_trylock(&lock) == EDEADLK)
+            should_lock = 1;
+        pthread_mutex_unlock(&lock);
+        int ret = groupcache_set(cache, key, klen, value, vlen);
+        if (should_lock)
+            pthread_mutex_lock(&lock);
+        RETVAL = ret;
+    OUTPUT:
+        RETVAL
 
 SV *
 groupcache_test_ownership(cache, key, len)
@@ -318,12 +342,16 @@ groupcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
         tv.tv_sec = secs;
         tv.tv_nsec = nsecs;
 
+        /*
+        PerlInterpreter *slave_perl = perl_clone(my_perl, CLONEf_KEEP_PTR_TABLE|CLONEf_COPY_STACKS);
+        PERL_SET_CONTEXT(slave_perl);
+        */
         for(;;) {
             struct timespec remainder = { 0, 0 };
             struct timespec tosleep = { tv.tv_sec, tv.tv_nsec };
+
             pthread_mutex_lock(&lock);
 
-            PERL_SET_CONTEXT(orig_perl);
             dTHX;
             dSP;
 
@@ -334,7 +362,7 @@ groupcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
             XPUSHs(priv);
             PUTBACK;
 
-            int count = call_sv(coderef, G_SCALAR);
+            int count = call_sv(coderef, G_SCALAR|G_EVAL);
 
             SPAGAIN;
 
@@ -349,7 +377,7 @@ groupcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
             LEAVE;
 
             pthread_mutex_unlock(&lock);
-            
+
             if (ret == -1)  {
                 // TODO - WARN
                 break;
@@ -365,4 +393,8 @@ groupcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
                 }
             } while (rc != 0);
         }
+        /*
+        perl_free(slave_perl);
+        PERL_SET_CONTEXT(orig_perl);        
+        */
 
