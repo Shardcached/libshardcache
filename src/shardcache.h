@@ -95,7 +95,8 @@ shardcache_t *shardcache_create(char *me,
                         char **peers,
                         int num_peers,
                         shardcache_storage_t *storage,
-                        char *secret);
+                        char *secret,
+                        int num_workers);
 
 /**
  * @brief Release all the resources used by the shardcache instance

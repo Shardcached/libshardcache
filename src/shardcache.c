@@ -28,8 +28,6 @@ typedef struct chash_t chash_t;
 struct __shardcache_s {
     char *me;
 
-    shardcache_serving_t serv;
-
     char **shards;
     int num_shards;
 
@@ -40,13 +38,13 @@ struct __shardcache_s {
 
     shardcache_storage_t storage;
 
-    int sock;
-    pthread_t listener;
-
     int evict_on_delete;
+
+    shardcache_serving_t *serv;
 
     const char auth[16];
     void *priv;
+
 };
 
 /* This is the object we're managing. It has a key
@@ -57,6 +55,7 @@ typedef struct {
     size_t len;
     void *data;
     size_t dlen;
+    pthread_mutex_t lock;
 } cache_object_t;
 
 /**
@@ -71,6 +70,7 @@ static void *__op_create(const void *key, size_t len, void *priv)
     obj->key = malloc(len);
     memcpy(obj->key, key, len);
     obj->data = NULL;
+    pthread_mutex_init(&obj->lock, NULL);
 
     return obj;
 }
@@ -80,8 +80,11 @@ static int __op_fetch(void *item, void * priv)
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
 
-    if (obj->data) // the value is already loaded, we don't need to fetch
+    pthread_mutex_lock(&obj->lock);
+    if (obj->data) { // the value is already loaded, we don't need to fetch
+        pthread_mutex_unlock(&obj->lock);
         return 0;
+    }
 
     const char *node_name;
     // if we are not the owner try asking our peer responsible for this data
@@ -95,6 +98,7 @@ static int __op_fetch(void *item, void * priv)
         if (rc == 0 && fbuf_used(&value)) {
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
+            pthread_mutex_unlock(&obj->lock);
             return 0;
         }
     }
@@ -113,8 +117,10 @@ static int __op_fetch(void *item, void * priv)
     }
 
     if (!obj->data) {
+        pthread_mutex_unlock(&obj->lock);
         return -1;
     }
+    pthread_mutex_unlock(&obj->lock);
     return 0;
 }
 
@@ -122,11 +128,13 @@ static void __op_evict(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
+    pthread_mutex_lock(&obj->lock);
     if (obj->data && cache->storage.free_item) {
         cache->storage.free_item(obj->data, cache->priv);
         obj->data = NULL;
         obj->dlen = 0;
     }
+    pthread_mutex_unlock(&obj->lock);
 }
 
 static void __op_destroy(void *item, void *priv)
@@ -134,6 +142,8 @@ static void __op_destroy(void *item, void *priv)
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
 
+    // no lock is necessary here ... if we are here
+    // nobody is referencing us anymore
     if (obj->data && cache->storage.free_item) {
         cache->storage.free_item(obj->data, cache->storage.free_item);
     }
@@ -146,8 +156,12 @@ static void shardcache_do_nothing(int sig)
     // do_nothing
 }
 
-shardcache_t *shardcache_create(char *me, char **peers, int npeers,
-                                shardcache_storage_t *st, char *secret)
+shardcache_t *shardcache_create(char *me,
+                                char **peers,
+                                int npeers,
+                                shardcache_storage_t *st,
+                                char *secret,
+                                int num_workers)
 {
     int i;
     size_t shard_lens[npeers + 1];
@@ -156,6 +170,10 @@ shardcache_t *shardcache_create(char *me, char **peers, int npeers,
 
     cache->evict_on_delete = 1;
 
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutexattr_destroy(&attr);
 
     if (!st) {
         fprintf(stderr, "No storage defined");
@@ -204,26 +222,7 @@ shardcache_t *shardcache_create(char *me, char **peers, int npeers,
     if (sa.sa_handler == NULL)
         signal(SIGPIPE, shardcache_do_nothing);
 
-    // open the listening socket
-    char *brkt = NULL;
-    char *addr = strdup(cache->me); // we need a temporary copy to be used by strtok
-    char *host = strtok_r(addr, ":", &brkt);
-    char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
-
-    cache->sock = open_socket(host, port);
-    if (cache->sock == -1) {
-        fprintf(stderr, "Can't open listening socket: %s\n",strerror(errno));
-        shardcache_destroy(cache);
-        free(addr);
-        return NULL;
-    }
-
-    free(addr); // we don't need it anymore
-    
     strncpy((char *)cache->auth, secret, sizeof(cache->auth));
-    cache->serv.auth = cache->auth;
-    cache->serv.me = cache->me;
 
 #ifdef SHARDCACHE_DEBUG
     fprintf(stderr, "AUTH KEY (secret: %s): ", secret);
@@ -233,23 +232,14 @@ shardcache_t *shardcache_create(char *me, char **peers, int npeers,
     fprintf(stderr, "\n");
 #endif
 
-    cache->serv.cache = cache;
-    cache->serv.sock = cache->sock;
+    cache->serv = start_serving(cache, cache->auth, cache->me, num_workers);
 
-    // and start a background thread to handle incoming connections
-    int rc = pthread_create(&cache->listener, NULL, accept_requests, &cache->serv);
-    if (rc != 0) {
-        fprintf(stderr, "Can't create new thread: %s\n", strerror(errno));
-        shardcache_destroy(cache);
-        return NULL;
-    }
     return cache;
 }
 
 void shardcache_destroy(shardcache_t *cache) {
     int i;
-    pthread_cancel(cache->listener);
-    pthread_join(cache->listener, NULL);
+    stop_serving(cache->serv);
     arc_destroy(cache->arc);
     if (cache->storage.destroy_storage)
         cache->storage.destroy_storage(cache->priv);
@@ -265,15 +255,24 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
     if (!key)
         return NULL;
 
-    cache_object_t *obj = arc_lookup(cache->arc, (const void *)key, len);
-
-    if (!obj)
+    char *value = NULL;
+    cache_object_t *obj = NULL;
+    arc_resource_t res = arc_lookup(cache->arc, (const void *)key, len, (void **)&obj);
+    if (!res)
         return NULL;
 
-    if (vlen)
-        *vlen = obj->dlen;
-
-    return obj->data;
+    if (obj) {
+        pthread_mutex_lock(&obj->lock);
+        if (obj->data) {
+            value = malloc(obj->dlen);
+            memcpy(value, obj->data, obj->dlen);
+            if (vlen)
+                *vlen = obj->dlen;
+        }
+        pthread_mutex_unlock(&obj->lock);
+    }
+    arc_release_resource(cache->arc, res);
+    return value;
 }
 
 int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen) {
