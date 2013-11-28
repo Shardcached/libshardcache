@@ -8,7 +8,7 @@ LDFLAGS += $(LIBSHARDCACHE_DIR)/libshardcache.a \
 	   -L. 
 
 ifeq ($(UNAME), Linux)
-LDFLAGS += -pthread
+LDFLAGS += -pthread -ldl
 else
 LDFLAGS +=
 CFLAGS += -Wno-deprecated-declarations
