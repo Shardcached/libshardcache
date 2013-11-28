@@ -165,11 +165,12 @@ MODULE = Shardcache		PACKAGE = Shardcache
 INCLUDE: const-xs.inc
 
 shardcache_t *
-shardcache_create(me, peers, storage, secret)
+shardcache_create(me, peers, storage, secret, num_workers)
         char *  me
         SV   *  peers
         SV   *  storage
         char *  secret
+        int     num_workers
     PREINIT:
         int i;
 	int	num_peers = 0;
@@ -216,7 +217,7 @@ shardcache_create(me, peers, storage, secret)
             .options         = options
         };
 
-        RETVAL = shardcache_create(me, shards, num_peers, &storage_struct, secret);
+        RETVAL = shardcache_create(me, shards, num_peers, &storage_struct, secret, num_workers);
         if (shards)
             Safefree(shards);
 
@@ -254,16 +255,20 @@ shardcache_get(cache, key, klen)
 	size_t	klen
     PREINIT:
         size_t vlen = 0;
-        const char *v = NULL;
+        void *v = NULL;
     CODE:
+        RETVAL = &PL_sv_undef;
         int should_lock = 0;
         if (pthread_mutex_trylock(&lock) == EDEADLK)
             should_lock = 1;
         pthread_mutex_unlock(&lock);
         v = shardcache_get(cache, key, klen, &vlen);
+        if (v) {
+            RETVAL = newSVpv(v, vlen);
+            free(v);
+        }
         if (should_lock)
             pthread_mutex_lock(&lock);
-        RETVAL = v ? newSVpv(v, vlen) : &PL_sv_undef;
     OUTPUT:
         RETVAL
 

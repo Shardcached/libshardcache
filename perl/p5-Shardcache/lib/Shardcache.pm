@@ -83,11 +83,13 @@ sub new {
 
     my $secret = $params{secret} || 'default';
 
+    my $num_workers = $params{num_workers} || 10;
+
     $self->{_storage} = $storage;
     $self->{_peers} = $peers;
     $self->{_me} = $me;
     $self->{_secret} = $secret;
-    $self->{_gc} = shardcache_create($me, $peers, $storage, $secret);
+    $self->{_gc} = shardcache_create($me, $peers, $storage, $secret, $num_workers);
     return unless ($self->{_gc});
     bless $self, $class;
     return $self;
