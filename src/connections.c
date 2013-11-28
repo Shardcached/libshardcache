@@ -45,44 +45,59 @@ string2sockaddr(const char *host, int port, struct sockaddr_in *sockaddr)
     errno = EINVAL;
 
     if (host) {
-	char host2[512];
-	char *p;
-	char *pe;
+        char host2[512];
+        char *p;
+        char *pe;
 
-	strncpy(host2, host, sizeof(host2)-1);
-	p = strchr(host2, ':');
+        strncpy(host2, host, sizeof(host2)-1);
+        p = strchr(host2, ':');
 
-	if (p) {				// check for <host>:<port>
-	    *p = '\0';				// point to port part
-	    p++;
-	    port = strtol(p, &pe, 10);		// convert string to number
-	    if (*pe != '\0') {			// did not match complete string? try as string
-		struct servent *e = getservbyname(p, "tcp");
-		if (!e) {
-		    errno = ENOENT;		// to avoid errno == 0 in error case
-		    return -1;
-		}
-		port = ntohs(e->s_port);
-	    }
-	}
+        if (p) {                // check for <host>:<port>
+            *p = '\0';                // point to port part
+            p++;
+            port = strtol(p, &pe, 10);        // convert string to number
+            if (*pe != '\0') {            // did not match complete string? try as string
+#if (defined(__APPLE__) && defined(__MACH__))
+		        struct servent *e = getservbyname(p, "tcp");
+#else
+                struct servent *e = NULL, ebuf;
+                char buf[1024];
+                getservbyname_r(p, "tcp", &ebuf, buf, sizeof(buf), &e);
+#endif
+                if (!e) {
+                    errno = ENOENT;        // to avoid errno == 0 in error case
+                    return -1;
+                }
+                port = ntohs(e->s_port);
+            }
+        }
 
         if (strcmp(host2, "*") == 0) {
             ip = INADDR_ANY;
         } else {
             if (!inet_aton(host2, (struct in_addr *)&ip)) {
-                struct hostent *e = gethostbyname(host2);
-		if (!e || e->h_addrtype != AF_INET) {
-		    errno = ENOENT;		// to avoid errno == 0 in error case
-		    return -1;
-		}
+
+                struct hostent *e = NULL;
+#if (defined(__APPLE__) && defined(__MACH__))
+                e = gethostbyname(host2);
+#else
+                struct hostent ebuf;
+                char buf[1024];
+                int herrno;
+                gethostbyname_r(host2, &ebuf, buf, sizeof(buf), &e, &herrno);
+#endif
+                if (!e || e->h_addrtype != AF_INET) {
+                    errno = ENOENT;        // to avoid errno == 0 in error case
+                    return -1;
+                }
                 ip = ((unsigned long *) (e->h_addr_list[0]))[0];
             }
         }
     }
     if (port == 0)
-	return -1;
+        return -1;
     else
-	port = htons(port);
+        port = htons(port);
 
     bzero(sockaddr, sizeof(struct sockaddr_in));
 #ifndef __linux
@@ -112,20 +127,20 @@ open_socket(const char *host, int port)
 
     errno = EINVAL;
     if (host == NULL || strlen(host) == 0 || port == 0)
-	return -1;
+    return -1;
 
     sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == -1)
-	return -1;
+    return -1;
 
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &val,  sizeof(val));
 
     if (string2sockaddr(host, port, &sockaddr) == -1
-	|| bind(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1) {
-	shutdown(sock, SHUT_RDWR);
-	close(sock);
-	return -1;
+    || bind(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1) {
+    shutdown(sock, SHUT_RDWR);
+    close(sock);
+    return -1;
     }
 
     listen(sock, -1);
@@ -149,7 +164,7 @@ int write_socket(int fd, char *buf, int len) {
         ofx += wb;
         wb =  write(fd, buf+ofx, len);
         if (wb == -1) {
-            if (errno != EINTR || errno != EAGAIN) {
+            if (errno != EINTR && errno != EAGAIN) {
                 fprintf(stderr, "write on fd %d failed: %s", fd, strerror(errno));
                 return -1;
             }
@@ -172,7 +187,7 @@ int write_socket(int fd, char *buf, int len) {
 int read_socket(int fd, char *buf, int len) {
     int rb = 0;
     rb =  read(fd, buf, len);
-    if (rb == -1 && (errno != EINTR || errno != EAGAIN)) { 
+    if (rb == -1 && (errno != EINTR && errno != EAGAIN)) { 
         fprintf(stderr, "Read on fd %d failed: %s", fd, strerror(errno));
         return -1;
     }
@@ -199,25 +214,26 @@ open_connection(const char *host, int port, unsigned int timeout)
 
     errno = EINVAL;
     if (host == NULL || strlen(host) == 0 || port == 0)
-	return -1;
+    return -1;
 
     sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == -1)
-	return -1;
+    return -1;
 
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &val,  sizeof(val));
     if (timeout > 0) {
-	struct timeval tv = { timeout, 0 };
-	if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == -1
-	    || setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1)
-	    fprintf(stderr, "%s:%d: Failed to set timeout to %d\n", host, port, timeout);
+    struct timeval tv = { timeout, 0 };
+    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == -1
+        || setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1)
+        fprintf(stderr, "%s:%d: Failed to set timeout to %d\n", host, port, timeout);
     }
 
-    if (string2sockaddr(host, port, &sockaddr) == -1
-	|| connect(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1) {
-	shutdown(sock, SHUT_RDWR);
-	close(sock);
-	return -1;
+    if (string2sockaddr(host, port, &sockaddr) == -1 ||
+        connect(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1)
+    {
+        shutdown(sock, SHUT_RDWR);
+        close(sock);
+        return -1;
     }
 
     fcntl(sock, F_SETFD, FD_CLOEXEC);
@@ -238,22 +254,22 @@ open_lsocket(const char *filename)
 
     errno = EINVAL;
     if (filename == NULL || strlen(filename) == 0)
-	return -1;
+    return -1;
 
     sock = socket(PF_UNIX, SOCK_STREAM, 0);
     if (sock == -1)
-	return -1;
+    return -1;
 
     unlink(filename);
 
     sockaddr.sun_family = AF_UNIX;
     strncpy(sockaddr.sun_path, filename, sizeof(sockaddr.sun_path));
 
-    if (bind(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1
-	|| listen(sock, -1) == -1) {
-	shutdown(sock, SHUT_RDWR);
-	close(sock);
-	return -1;
+    if (bind(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1 || listen(sock, -1) == -1)
+    {
+        shutdown(sock, SHUT_RDWR);
+        close(sock);
+        return -1;
     }
 
     fcntl(sock, F_SETFD, FD_CLOEXEC);
@@ -274,21 +290,21 @@ open_fifo(const char *filename)
     int fd;
 
     if (mkfifo(filename, S_IFIFO | 0600) != 0) {
-	if (errno == EEXIST) {
-	    if (stat(filename, &sb) == -1) {
-		errno = EEXIST;		// reset errno to the previous value
-		return -1;
-	    } else if (!S_ISFIFO(sb.st_mode)) {
-		return -1;
-	    }
-	} else {
-	    return -1;
-	}
+    if (errno == EEXIST) {
+        if (stat(filename, &sb) == -1) {
+        errno = EEXIST;        // reset errno to the previous value
+        return -1;
+        } else if (!S_ISFIFO(sb.st_mode)) {
+        return -1;
+        }
+    } else {
+        return -1;
+    }
     }
 
     fd = open(filename, O_RDWR|O_EXCL|O_NONBLOCK);
     if (fd == -1)
-	return -1;
+    return -1;
 
     fcntl(fd, F_SETFD, FD_CLOEXEC);
 

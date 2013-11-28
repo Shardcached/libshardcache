@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <pthread.h>
 #include <iomux.h>
+#include <rbuf.h>
+#include <linklist.h>
 
 #include "messaging.h"
 #include "connections.h"
@@ -17,6 +19,22 @@
 
 #define HAVE_UINT64_T
 #include <siphash.h>
+
+typedef struct {
+    pthread_t thread;
+    linked_list_t *jobs;
+    int busy;
+} shardcache_worker_context_t;
+
+struct __shardcache_serving_s {
+    shardcache_t *cache;
+    int sock;
+    pthread_t listener;
+    const char *auth;
+    const char *me;
+    int num_workers;
+    shardcache_worker_context_t *workers;
+};
 
 typedef struct {
     fbuf_t *input;
@@ -34,22 +52,29 @@ typedef struct {
     char    state;
     const char    *auth;
     sip_hash *shash;
-} shardcache_worker_context_t;
+    shardcache_worker_context_t *worker_ctx;
+} shardcache_connection_context_t;
 
-static shardcache_worker_context_t *shardcache_create_connection_context(shardcache_t *cache, const char *auth) {
-    shardcache_worker_context_t *context = calloc(1, sizeof(shardcache_worker_context_t));
+static shardcache_connection_context_t *shardcache_create_connection_context(shardcache_t *cache,
+        const char *auth, int fd, shardcache_worker_context_t *worker_ctx)
+{
+    shardcache_connection_context_t *context = calloc(1, sizeof(shardcache_connection_context_t));
 
     context->input = fbuf_create(0);
     context->output = fbuf_create(0);
+
     context->key = fbuf_create(0);
     context->value = fbuf_create(0);
+
     context->cache = cache;
     context->auth = auth;
     context->shash = sip_hash_new((uint8_t *)auth, 2, 4);
+    context->fd = fd;
+    context->worker_ctx = worker_ctx;
     return context;
 }
 
-static void shardcache_destroy_connection_context(shardcache_worker_context_t *ctx) {
+static void shardcache_destroy_connection_context(shardcache_connection_context_t *ctx) {
     fbuf_free(ctx->input);
     fbuf_free(ctx->output);
     fbuf_free(ctx->key);
@@ -58,7 +83,7 @@ static void shardcache_destroy_connection_context(shardcache_worker_context_t *c
     free(ctx);
 }
 
-static void write_status(shardcache_worker_context_t *ctx, int rc) {
+static void write_status(shardcache_connection_context_t *ctx, int rc) {
     if (rc != 0) {
         fprintf(stderr, "Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
         write_message(ctx->fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, "ERR", 3, NULL, 0);
@@ -68,8 +93,8 @@ static void write_status(shardcache_worker_context_t *ctx, int rc) {
 
 }
 
-static void *serve_request(void *priv) {
-    shardcache_worker_context_t *ctx = (shardcache_worker_context_t *)priv;
+static void *serve_response(void *priv) {
+    shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
     shardcache_t *cache = ctx->cache;
     int fd = ctx->fd;
 
@@ -128,7 +153,7 @@ static void *serve_request(void *priv) {
 
 static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len, void *priv)
 {
-    shardcache_worker_context_t *ctx = (shardcache_worker_context_t *)priv;
+    shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
     if (!ctx)
         return;
 
@@ -264,9 +289,10 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     }
 
     if (ctx->state == STATE_READING_DONE) {
+#if 0
         // we have a complete request so we can now start 
         // a background worker to take care of it
-        pthread_t worker_thread;
+        pthread_t request_thread;
         ctx->fd = fd;
 
         iomux_remove(iomux, fd); // this fd doesn't belong to the mux anymore
@@ -275,64 +301,140 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Creating thread to serve request: (%d) %02x:%s\n", fd, ctx->hdr, fbuf_data(ctx->key));
 #endif
-        pthread_create(&worker_thread, NULL, serve_request, ctx);
-        pthread_detach(worker_thread);
+        pthread_create(&request_thread, NULL, serve_response, ctx);
+        pthread_detach(request_thread);
+#else
+        shardcache_worker_context_t *wrkctx = ctx->worker_ctx;
+        __sync_bool_compare_and_swap(&wrkctx->busy, 0, 1);
+        iomux_remove(iomux, fd); // this fd doesn't belong to the mux anymore
+        shutdown(fd, SHUT_RD); // we don't want to read anymore from this socket
+        serve_response(ctx);
+        __sync_bool_compare_and_swap(&wrkctx->busy, 1, 0);
+#endif
     }
 }
 
 static void shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
 {
-    shardcache_worker_context_t *ctx = (shardcache_worker_context_t *)priv;
+    shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
     close(fd);
     if (ctx) {
         shardcache_destroy_connection_context(ctx);
     }
 }
 
-static void shardcache_connection_handler(iomux_t *iomux, int fd, void *priv)
-{
-    shardcache_serving_t *serv = (shardcache_serving_t *)priv;
-
-    // create and initialize the context for the new connection
-    shardcache_worker_context_t *ctx = shardcache_create_connection_context(serv->cache, serv->auth);
-
-    iomux_callbacks_t connection_callbacks = {
-        .mux_connection = NULL,
-        .mux_input = shardcache_input_handler,
-        .mux_eof = shardcache_eof_handler,
-        .mux_output = NULL,
-        .mux_timeout = NULL,
-        .priv = ctx
-    };
-
-    // and wait for input data
-    iomux_add(iomux, fd, &connection_callbacks);
-}
-
-
-void *accept_requests(void *priv) {
-    shardcache_serving_t *serv = (shardcache_serving_t *)priv;
-
-    iomux_callbacks_t shardcache_callbacks = {
-        .mux_connection = shardcache_connection_handler,
-        .mux_input = NULL,
-        .mux_eof = NULL,
-        .mux_output = NULL,
-        .mux_timeout = NULL,
-        .priv = serv
-    };
+void *worker(void *priv) {
+    linked_list_t *jobs = (linked_list_t *)priv;
 
     iomux_t *iomux = iomux_create();
-    
-    iomux_add(iomux, serv->sock, &shardcache_callbacks);
-
-    fprintf(stderr, "Listening on %s\n", serv->me);
-    iomux_listen(iomux, serv->sock);
-
-    iomux_loop(iomux, 0);
-    
+    for (;;) {
+        shardcache_connection_context_t *ctx = shift_value(jobs);
+        while(ctx) {
+            iomux_callbacks_t connection_callbacks = {
+                .mux_connection = NULL,
+                .mux_input = shardcache_input_handler,
+                .mux_eof = shardcache_eof_handler,
+                .mux_output = NULL,
+                .mux_timeout = NULL,
+                .priv = ctx
+            };
+            iomux_add(iomux, ctx->fd, &connection_callbacks);
+            ctx = shift_value(jobs);
+        }
+        pthread_testcancel();
+        struct timeval timeout = { 0, 500 };
+        iomux_run(iomux, &timeout);
+    }
     iomux_destroy(iomux);
     return NULL;
 }
 
+void *serve_cache(void *priv) {
+    shardcache_serving_t *serv = (shardcache_serving_t *)priv;
 
+#ifdef SHARDCACHE_DEBUG
+    fprintf(stderr, "Listening on %s (num_workers: %d)\n", serv->me, serv->num_workers);
+#endif
+
+    if (listen(serv->sock, -1) != 0) {
+        fprintf(stderr, "%s: Error listening on fd %d: %s", __FUNCTION__, serv->sock, strerror(errno));
+        return NULL;
+    }
+
+    int idx = 0;
+    for (;;) {
+        struct sockaddr peer_addr;
+        socklen_t addr_len;
+
+        int fd = accept(serv->sock, &peer_addr, &addr_len);
+        if (fd >= 0) {
+            shardcache_worker_context_t wrkctx = serv->workers[idx++ % serv->num_workers];
+            // skip over workers who are busy computing/serving a response
+            while (__sync_fetch_and_add(&wrkctx.busy, 0) != 0) {
+                wrkctx = serv->workers[idx++ % serv->num_workers];
+            }
+            // create and initialize the context for the new connection
+            shardcache_connection_context_t *ctx = shardcache_create_connection_context(serv->cache, serv->auth, fd, &wrkctx);
+            push_value(wrkctx.jobs, ctx);
+        }
+    }
+ 
+    return NULL;
+}
+
+shardcache_serving_t *start_serving(shardcache_t *cache, const char *auth, const char *me, int num_workers) {
+    shardcache_serving_t *s = calloc(1, sizeof(shardcache_serving_t));
+    s->cache = cache;
+    s->me = me;
+    s->auth = auth;
+    s->num_workers = num_workers;
+
+    // open the listening socket
+    char *brkt = NULL;
+    char *addr = strdup(me); // we need a temporary copy to be used by strtok
+    char *host = strtok_r(addr, ":", &brkt);
+    char *port_string = strtok_r(NULL, ":", &brkt);
+    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
+
+    s->sock = open_socket(host, port);
+    if (s->sock == -1) {
+        fprintf(stderr, "Can't open listening socket %s:%d : %s\n", host, port, strerror(errno));
+        free(s);
+        return NULL;
+    }
+
+    free(addr); // we don't need it anymore
+    
+    // create the workers' pool
+    s->workers = calloc(num_workers, sizeof(shardcache_worker_context_t));
+    
+    int i;
+    for (i = 0; i < num_workers; i++) {
+        s->workers[i].jobs = create_list();
+        pthread_create(&s->workers[i].thread, NULL, worker, s->workers[i].jobs);
+    }
+
+     // and start a background thread to handle incoming connections
+    int rc = pthread_create(&s->listener, NULL, serve_cache, s);
+    if (rc != 0) {
+        fprintf(stderr, "Can't create new thread: %s\n", strerror(errno));
+        stop_serving(s);
+        return NULL;
+    }
+
+    return s;
+}
+
+void stop_serving(shardcache_serving_t *s) {
+    int i;
+
+    pthread_cancel(s->listener);
+    pthread_join(s->listener, NULL);
+    for (i = 0; i < s->num_workers; i++) {
+        pthread_cancel(s->workers[i].thread);
+        pthread_join(s->workers[i].thread, NULL);
+    }
+    free(s->workers);
+    close(s->sock);
+    free(s);
+}

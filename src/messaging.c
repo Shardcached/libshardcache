@@ -13,7 +13,8 @@
 #include "connections.h"
 #include "shardcache.h"
 
-int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr) {
+int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
+{
     uint16_t clen;
     int initial_len = fbuf_used(out);;
     int reading_message = 0;
@@ -157,7 +158,8 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr) {
     return -1;
 }
 
-int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out) {
+int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out)
+{
     int orig_used = fbuf_used(out);
     do {
         int writelen = (blen > (size_t)UINT16_MAX) ? UINT16_MAX : blen;
@@ -187,7 +189,8 @@ int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out) {
     return -1;
 }
 
-int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, fbuf_t *out) {
+int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, fbuf_t *out)
+{
     static char eom = 0;
     static char sep = SHARDCACHE_RSEP;
     uint16_t    eor = 0;
@@ -214,7 +217,8 @@ int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, fbuf_t *
     return 0;
 }
 
-int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen)  {
+int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen)
+{
 
     fbuf_t msg = FBUF_STATIC_INITIALIZER;
     if (build_message(hdr, k, klen, v, vlen, &msg) != 0) {
@@ -259,7 +263,8 @@ int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, s
 }
 
 
-int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner) {
+int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner)
+{
     char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
@@ -269,16 +274,20 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner) 
     free(addr);
 
     if (fd >= 0) {
+        char hdr = owner ? SHARDCACHE_HDR_DEL : SHARDCACHE_HDR_EVI;
+        int rc = write_message(fd, auth, hdr, key, klen, NULL, 0);
 
-        int rc = write_message(fd, auth, owner ? SHARDCACHE_HDR_DEL : SHARDCACHE_HDR_EVI, key, klen, NULL, 0);
-
-        if (rc == 0) {
+        // if we are not forwarding a delete command to the owner
+        // of the key, but only an eviction request to a peer,
+        // we don't need to wait for the response
+        if (owner && rc == 0) {
             shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
 #ifdef DEBUG_SHARDCACHE
-                fprintf(stderr, "Got (set) response from peer %s : %s\n", peer, fbuf_data(&resp));
+                fprintf(stderr, "Got (set) response from peer %s : %s\n",
+                        peer, fbuf_data(&resp));
 #endif
                 close(fd);
                 fbuf_destroy(&resp);
@@ -289,12 +298,15 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner) 
             fbuf_destroy(&resp);
         }
         close(fd);
+        return 0;
     }
     return -1;
 }
 
 
-int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen) {
+int send_to_peer(char *peer, char *auth, void *key,
+        size_t klen, void *value, size_t vlen)
+{
     char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
@@ -304,7 +316,8 @@ int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, si
     free(addr);
 
     if (fd >= 0) {
-        int rc = write_message(fd, auth, SHARDCACHE_HDR_SET, key, klen, value, vlen);
+        int rc = write_message(fd, auth, SHARDCACHE_HDR_SET,
+                key, klen, value, vlen);
         if (rc != 0) {
             close(fd);
             return -1;
@@ -317,24 +330,28 @@ int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, si
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
 #ifdef DEBUG_SHARDCACHE
-                fprintf(stderr, "Got (set) response from peer %s : %s\n", peer, fbuf_data(&resp));
+                fprintf(stderr, "Got (set) response from peer %s : %s\n",
+                        peer, fbuf_data(&resp));
 #endif
                 close(fd);
                 fbuf_destroy(&resp);
                 return 0;
             } else {
-                fprintf(stderr, "Bad response (%02x) from %s : %s\n", hdr, peer, strerror(errno));
+                fprintf(stderr, "Bad response (%02x) from %s : %s\n",
+                        hdr, peer, strerror(errno));
             }
             fbuf_destroy(&resp);
         } else {
-            fprintf(stderr, "Error reading from socket %d (%s) : %s\n", fd, peer, strerror(errno));
+            fprintf(stderr, "Error reading from socket %d (%s) : %s\n",
+                    fd, peer, strerror(errno));
         }
         close(fd);
     }
     return -1;
 }
 
-int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out) {
+int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out)
+{
     char *brkt = NULL;
     char *addr = strdup(peer);
     char *host = strtok_r(addr, ":", &brkt);
@@ -350,7 +367,8 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out) 
             int rc = read_message(fd, auth, out, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
 #ifdef DEBUG_SHARDCACHE
-                fprintf(stderr, "Got new data from peer %s : %s => %s \n", peer, key, fbuf_data(out));
+                fprintf(stderr, "Got new data from peer %s : %s => %s \n",
+                        peer, key, fbuf_data(out));
 #endif
                 close(fd);
                 return 0;
