@@ -50,16 +50,21 @@ static void *st_fetch(void *key, size_t len, size_t *vlen, void *priv)
 {
     hashtable_t *storage = (hashtable_t *)priv;
     stored_item_t *item =  ht_get(storage, key, len);
-    if (item && vlen)
+    if (item) {
         *vlen = item->size;
-    return item;
+        char *v = malloc(item->size);
+        memcpy(v, item->value, item->size);
+        return v;
+    }
+    return NULL;
 }
 
 static int st_store(void *key, size_t len, void *value, size_t vlen, void *priv)
 {
     hashtable_t *storage = (hashtable_t *)priv;
     stored_item_t *new_item = malloc(sizeof(stored_item_t));
-    new_item->value = value;
+    new_item->value = malloc(vlen);
+    memcpy(new_item->value, value, vlen);
     new_item->size = vlen;
     stored_item_t *previous_item = (stored_item_t *)ht_set(storage, key, len, new_item);
     if (previous_item) {
@@ -67,6 +72,10 @@ static int st_store(void *key, size_t len, void *value, size_t vlen, void *priv)
         free(previous_item);
     }
     return 0;
+}
+
+static void st_free(void *v, void *priv) {
+    free(v);
 }
 
 static int st_remove(void *key, size_t len, void *priv) {
@@ -86,6 +95,7 @@ shardcache_storage_t *storage_mem_create(const char **options) {
     st->fetch_item      = st_fetch;
     st->store_item      = st_store;
     st->remove_item     = st_remove;
+    st->free_item       = st_free;
     st->destroy_storage = st_destroy;
     st->options = options;
     return st;
