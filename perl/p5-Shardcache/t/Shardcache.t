@@ -32,15 +32,52 @@ ok( $fail == 0 , 'Constants' );
 # Insert your test code below, the Test::More module is use()ed here so read
 # its man page ( perldoc Test::More ) for help writing this test script.
 
+sub check_deletion {
+    my ($gc, $gc2, $from_owner, @nums) = @_;
+    foreach my $i (@nums) {
+        my $test_key = "test_key$i";
+        if ($from_owner) {
+            if ($gc2->get_owner($test_key) eq $gc2->me) {
+                $gc2->del($test_key);
+            } else {
+                $gc->del($test_key);
+            }
+        } else {
+            if ($gc2->get_owner($test_key) ne $gc2->me) {
+                $gc2->del($test_key);
+            } else {
+                $gc->del($test_key);
+            }
+        }
+    }
+    foreach my $i (@nums) {
+        my $test_key = "test_key$i";
+        if ($from_owner) {
+            if ($gc2->get_owner($test_key) eq $gc2->me) {
+                ok ( !defined $gc->get($test_key) );
+            } else {
+                ok ( !defined $gc2->get($test_key) );
+            }
+        } else {
+            if ($gc2->get_owner($test_key) ne $gc2->me) {
+                ok ( !defined $gc->get($test_key) );
+            } else {
+                ok ( !defined $gc2->get($test_key) );
+            }
+        }
+    }
+}
 my $gc_name = "localhost:4444";
 my $gc2_name = "localhost:4443";
 my $gc = Shardcache->new(me => $gc_name,
                          peers => [$gc2_name],
-                         storage => Shardcache::Storage::Mem->new());
+                         storage => Shardcache::Storage::Mem->new(),
+                         num_workers => 5);
 
 my $gc2 = Shardcache->new(me => $gc2_name,
                           peers => [$gc_name],
-                          storage => Shardcache::Storage::Mem->new());
+                          storage => Shardcache::Storage::Mem->new(),
+                          num_workers => 5);
 
 # set some keys
 foreach my $i (0..20) {
@@ -54,26 +91,12 @@ foreach my $i (0..20) {
 }
 
 
-foreach my $i (0..9) {
-    my $test_key = "test_key$i";
-    if ($gc2->get_owner($test_key) ne $gc2->me) {
-        $gc2->del($test_key);
-        ok ( !defined $gc->get($test_key) );
-    } else {
-        $gc->del($test_key);
-        ok ( !defined $gc2->get($test_key) );
-    }
-}
 
+
+check_deletion($gc, $gc2, 0, 0..20);
+check_deletion($gc, $gc2, 1, 0..20);
 foreach my $i (10..20) {
     my $test_key = "test_key$i";
-    if ($gc2->get_owner($test_key) eq $gc2->me) {
-        $gc2->del($test_key);
-        ok ( !defined $gc->get($test_key) );
-    } else {
-        $gc->del($test_key);
-        ok ( !defined $gc2->get($test_key) );
-    }
 }
 
 $gc->set("test_key1", "test_value1");
