@@ -1,11 +1,11 @@
 UNAME := $(shell uname)
 LIBSHARDCACHE_DIR := $(shell pwd)
 
-LDFLAGS += deps/.libs/libhl.a \
-	   deps/.libs/libchash.a \
-	   deps/.libs/libiomux.a \
-	   deps/.libs/libsiphash.a \
-	   -L.
+DEPS = deps/.libs/libhl.a \
+       deps/.libs/libchash.a \
+       deps/.libs/libiomux.a \
+       deps/.libs/libsiphash.a \
+       -L.
 
 ifeq ($(UNAME), Linux)
 LDFLAGS += -pthread
@@ -67,7 +67,7 @@ standalone: objects
 	rm -rf $$dir
 
 shared: objects
-	$(CC) src/*.o $(LDFLAGS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
+	$(CC) src/*.o $(LDFLAGS) $(DEPS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
 
 objects: CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 objects: $(TARGETS)
@@ -88,7 +88,7 @@ tests: CFLAGS += -Isrc -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sig
 
 tests: support/testing.o static
 	@for i in $(TESTS); do\
-	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(LDFLAGS) -lm";\
+	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(LDFLAGS) $(DEPS) -lm";\
 	  $(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a support/testing.o $(LDFLAGS) -lm;\
 	done;\
 	for i in $(TEST_EXEC_ORDER); do echo; test/$$i; echo; done
