@@ -111,6 +111,7 @@ static int shardcached_request_handler(struct mg_connection *conn) {
                             "Server: shardcached\r\n"
                             "Connection: Close\r\n\r\n", (int)vlen);
             mg_write(conn, value, vlen);
+            free(value);
         } else {
             mg_printf(conn, "HTTP/1.0 404 Not Found\r\n\r\nNot Found");
         }
@@ -258,8 +259,8 @@ int main(int argc, char **argv)
         }
     }
 
+    //signal(SIGINT, shardcached_stop);
     signal(SIGHUP, shardcached_stop);
-    signal(SIGINT, shardcached_stop);
     signal(SIGQUIT, shardcached_stop);
     signal(SIGPIPE, shardcached_do_nothing);
 
@@ -272,20 +273,7 @@ int main(int argc, char **argv)
                                       NULL };
     shardcache_storage_t *storage_mem = storage_mem_create(storage_options);
 
-    shardcache_t *cache = shardcache_create(me, shard_names, cnt, storage_mem, secret);
-
-    int num_peers = 0;
-    char **peer_names = shardcache_get_peers(cache, &num_peers);
-    if (peer_names) {
-        int i;
-        size_t peer_sizes[num_peers];
-        for (i = 0; i < num_peers; i++) {
-            peer_sizes[i] = strlen(peer_names[i]);
-        }
-    } else {
-        ERROR("No peers configured in shardcache");
-        exit(-1);
-    }
+    shardcache_t *cache = shardcache_create(me, shard_names, cnt, storage_mem, secret, 5);
 
     // initialize the mongoose callbacks descriptor
     struct mg_callbacks shardcached_callbacks = {
@@ -301,6 +289,7 @@ int main(int argc, char **argv)
     struct mg_context *ctx = mg_start(&shardcached_callbacks, cache, mongoose_options);
     
     // and keep working until we are told to exit
+    pthread_mutex_lock(&exit_lock);
     pthread_cond_wait(&exit_cond, &exit_lock);
     pthread_mutex_unlock(&exit_lock);
 
