@@ -7,6 +7,7 @@
 #include <memory.h>
 #include <stddef.h>
 #include <hashtable.h>
+#include <refcnt.h>
 
 #include <pthread.h>
 
@@ -53,8 +54,10 @@ arc_list_splice(arc_list_t *prev, arc_list_t *next)
 static inline void
 arc_list_remove(arc_list_t *head)
 {
-    arc_list_splice(head->prev, head->next);
-    head->next = head->prev = NULL;
+    if (head->prev && head->next) {
+        arc_list_splice(head->prev, head->next);
+        head->next = head->prev = NULL;
+    }
 }
 
 static inline void
@@ -83,6 +86,8 @@ typedef struct __arc_object {
     void *key;
     size_t klen;
     pthread_mutex_t lock;
+    refcnt_node_t *node;
+    arc_t *cache;
 } arc_object_t;
 
 /* The actual cache. */
@@ -94,6 +99,7 @@ struct __arc {
     struct __arc_state mrug, mru, mfu, mfug;
 
     pthread_mutex_t lock;
+    refcnt_t *refcnt; 
 };
 
 
@@ -101,12 +107,13 @@ struct __arc {
 #define MIN(a, b) ( (a) < (b) ? (a) : (b) )
 
 /* Initialize a new object with this function. */
-static arc_object_t *arc_object_create(unsigned long size, void *ptr)
+static arc_object_t *arc_object_create(arc_t *cache, unsigned long size, void *ptr)
 {
     arc_object_t *obj = calloc(1, sizeof(arc_object_t));
     obj->state = NULL;
     obj->size = size;
     obj->ptr = ptr;
+    obj->cache = cache;
 
     arc_list_init(&obj->head);
     arc_list_init(&obj->hash);
@@ -130,12 +137,7 @@ static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *stat
     if (state == NULL) {
         /* The object is being removed from the cache, destroy it. */
         arc_list_remove(&obj->hash);
-        cache->ops->destroy(obj->ptr, cache->ops->priv);
-        if (obj->key) {
-            ht_delete(cache->hash, obj->key, obj->klen);
-            free(obj->key);
-        }
-        free(obj);
+        release_ref(cache->refcnt, obj->node);
         pthread_mutex_unlock(&cache->lock);
         return NULL;
     } else {
@@ -146,7 +148,8 @@ static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *stat
         } else if (obj->state != &cache->mru && obj->state != &cache->mfu) {
             /* The object is being moved from one of the ghost lists into
              * the MRU or MFU list, fetch the object into the cache. */
-            arc_balance(cache, obj->size);
+            if (obj->state)
+                arc_balance(cache, obj->size);
             // unlock the mutex while the backend is fetching the data
             pthread_mutex_unlock(&cache->lock);
             pthread_mutex_lock(&obj->lock);
@@ -215,6 +218,23 @@ static void arc_balance(arc_t *cache, unsigned long size)
 }
 
 
+static void free_node_ptr_callback(void *node) {
+    // we don't need locks here .... nobody references obj anymore
+    arc_object_t *obj = (arc_object_t *)node;
+
+    if (obj->key)
+        free(obj->key);
+    free(obj);
+}
+
+static void terminate_node_callback(refcnt_node_t *node, int concurrent) {
+    arc_object_t *obj = (arc_object_t *)get_node_ptr(node);
+    obj->cache->ops->destroy(obj->ptr, obj->cache->ops->priv);
+    if (obj->key) {
+        ht_delete(obj->cache->hash, obj->key, obj->klen);
+    }
+}
+
 /* Create a new cache. */
 arc_t *arc_create(arc_ops_t *ops, unsigned long c)
 {
@@ -238,6 +258,7 @@ arc_t *arc_create(arc_ops_t *ops, unsigned long c)
     pthread_mutex_init(&cache->lock, &attr);
     pthread_mutexattr_destroy(&attr);
 
+    cache->refcnt = refcnt_create(1, terminate_node_callback, free_node_ptr_callback);
     return cache;
 }
 
@@ -264,7 +285,7 @@ void arc_destroy(arc_t *cache)
     }
 
     ht_destroy(cache->hash);
-    
+    refcnt_destroy(cache->refcnt); 
     free(cache);
 }
 
@@ -277,12 +298,17 @@ void arc_remove(arc_t *cache, const void *key, size_t len)
 }
 
 /* Lookup an object with the given key. */
-void  *arc_lookup(arc_t *cache, const void *key, size_t len)
+void arc_release_resource(arc_t *cache, arc_resource_t *res) {
+    arc_object_t *obj = (arc_object_t *)res;
+    release_ref(cache->refcnt, obj->node);
+}
+
+arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep)
 {
     arc_object_t *obj = ht_get(cache->hash, (void *)key, len);
 
     if (obj) {
-        pthread_mutex_lock(&cache->lock);
+        pthread_mutex_lock(&obj->lock);
         void *ptr = NULL;
         if (obj->state == &cache->mru || obj->state == &cache->mfu) {
             /* Object is already in the cache, move it to the head of the
@@ -300,30 +326,33 @@ void  *arc_lookup(arc_t *cache, const void *key, size_t len)
         } else {
             assert(0);
         }
-        pthread_mutex_unlock(&cache->lock);
-        return ptr;
-    } else {
-        void *ptr = cache->ops->create(key, len, cache->ops->priv);
-        arc_object_t *obj = arc_object_create(rand()%100, ptr);
-        if (!obj)
-            return NULL;
+        retain_ref(cache->refcnt, obj->node);
+        *valuep = ptr;
+        pthread_mutex_unlock(&obj->lock);
+        return obj;
+    }
+    void *ptr = cache->ops->create(key, len, cache->ops->priv);
+    obj = arc_object_create(cache, rand()%100, ptr);
+    if (!obj)
+        return NULL;
+    obj->node = new_node(cache->refcnt, obj);
 
-        /* New objects are always moved to the MRU list. */
-        arc_object_t *moved = arc_move(cache, obj, &cache->mru);
-        if (moved) {
-            pthread_mutex_lock(&moved->lock);
-            if (!moved->key) {
-                moved->key = malloc(len);
-                memcpy(moved->key, key, len);
-                moved->klen = len;
-                ht_set(cache->hash, (void *)key, len, moved);
-            }
-            pthread_mutex_unlock(&moved->lock);
-            return moved->ptr;
-        } else {
-            cache->ops->destroy(obj->ptr, cache->ops->priv);
-            free(obj);
+    /* New objects are always moved to the MRU list. */
+    arc_object_t *moved = arc_move(cache, obj, &cache->mru);
+    if (moved) {
+        pthread_mutex_lock(&moved->lock);
+        if (!moved->key) {
+            moved->key = malloc(len);
+            memcpy(moved->key, key, len);
+            moved->klen = len;
+            ht_set(cache->hash, (void *)key, len, moved);
         }
+        retain_ref(cache->refcnt, moved->node);
+        *valuep = moved->ptr;
+        pthread_mutex_unlock(&moved->lock);
+        return moved;
+    } else {
+        release_ref(cache->refcnt, obj->node);
     }
     return NULL;
 }

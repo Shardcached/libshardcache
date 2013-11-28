@@ -4,6 +4,8 @@
 
 typedef struct __arc arc_t;
 
+typedef void * arc_resource_t;
+
 typedef struct __arc_ops {
     /* Create a new object. The size of the new object must be know at
      * this time. Use the arc_object_init() function to initialize
@@ -30,8 +32,15 @@ arc_t *arc_create(arc_ops_t *ops, unsigned long c);
 void arc_destroy(arc_t *cache);
 
 /* Lookup an object in the cache. The cache automatically allocates and
- * fetches the object if it does not exists yet. */
-void *arc_lookup(arc_t *cache, const void *key, size_t len);
+ * fetches the object if it does not exists yet.
+ * The caller MUST call arc_release_reasource() passing the pointer returned
+ * by this function when done with the returned value.
+ * */
+arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep);
+
+/* Release the resource previously alloc'd by arc_lookup()
+ * */
+void arc_release_resource(arc_t *cache, arc_resource_t *res);
 
 void arc_remove(arc_t *cache, const void *key, size_t len);
 
