@@ -12,7 +12,7 @@ sub store {
 sub fetch {
     my ($self, $key) = @_;
     #warn "$self FETCH: $key -> $self->{_map}->{$key}";
-    return $self->{_map}->{$key};
+    return \$self->{_map}->{$key};
 }
 
 sub remove {

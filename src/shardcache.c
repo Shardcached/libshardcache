@@ -130,10 +130,10 @@ static int __op_fetch(void *item, void * priv)
 static void __op_evict(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
-    shardcache_t *cache = (shardcache_t *)priv;
+    //shardcache_t *cache = (shardcache_t *)priv;
     pthread_mutex_lock(&obj->lock);
-    if (obj->data && cache->storage.free_item) {
-        cache->storage.free_item(obj->data, cache->priv);
+    if (obj->data) {
+        free(obj->data);
         obj->data = NULL;
         obj->dlen = 0;
     }
@@ -143,12 +143,12 @@ static void __op_evict(void *item, void *priv)
 static void __op_destroy(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
-    shardcache_t *cache = (shardcache_t *)priv;
+    //shardcache_t *cache = (shardcache_t *)priv;
 
     // no lock is necessary here ... if we are here
     // nobody is referencing us anymore
-    if (obj->data && cache->storage.free_item) {
-        cache->storage.free_item(obj->data, cache->storage.free_item);
+    if (obj->data) {
+        free(obj->data);
     }
     free(obj->key);
     free(obj);

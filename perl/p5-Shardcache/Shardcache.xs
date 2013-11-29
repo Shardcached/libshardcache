@@ -69,17 +69,21 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
         croak("Unexpected errors calling the 'fetch' method on the storage object");
     }
 
-    SV *val = POPs;
+    SV *valref = POPs;
     char * out = NULL;
 
-    if (SvOK(val)) {
-        STRLEN l;
-        char *str = SvPVbyte(val, l);
-        
-        if (l) {
-            Newx(out, l, char);
-            memcpy(out, str, l);
+    if (SvOK(valref)) {
+        if (!SvROK(valref))
+          croak("Expected a scalar reference as return value from a fetch command");
 
+        SV *val = (SV *)SvRV(valref);
+        if (SvOK(val)) {
+            if (SvTYPE(val) != SVt_PV) {
+                croak("Not a scalar value");
+            }
+            STRLEN l;
+            out = SvPVbyte(val, l);
+            
             if (vlen)
                 *vlen = l; 
         }
@@ -146,10 +150,6 @@ static int __st_remove(void *key, size_t len, void *priv) {
     return 0;
 }
 
-static void __st_free(void *val, void *priv) {
-    Safefree(val);
-}
-
 static void *__st_init(const char **options) {
     SV *storage = (SV *)options[1];
     return storage;
@@ -213,7 +213,6 @@ shardcache_create(me, peers, storage, secret, num_workers)
             .fetch_item      = __st_fetch,
             .store_item      = __st_store,
             .remove_item     = __st_remove,
-            .free_item       = __st_free,
             .options         = options
         };
 
@@ -264,7 +263,9 @@ shardcache_get(cache, key, klen)
         pthread_mutex_unlock(&lock);
         v = shardcache_get(cache, key, klen, &vlen);
         if (v) {
-            RETVAL = newSVpv(v, vlen);
+            char *out = malloc(vlen);
+            memcpy(out, v, vlen);
+            RETVAL = newSVpv(out, vlen);
             free(v);
         }
         if (should_lock)
@@ -315,11 +316,12 @@ shardcache_test_ownership(cache, key, len)
 	char *	key
 	size_t	len
     PREINIT:
-        const char *peer = NULL;
+        char peer[1024];
+        size_t plen = 0;
     CODE:
-        shardcache_test_ownership(cache, key, len, &peer);
-        if (peer) {
-            RETVAL = newSVpv(peer, strlen(peer));
+        shardcache_test_ownership(cache, key, len, (char *)&peer, &plen);
+        if (plen) {
+            RETVAL = newSVpv(peer, plen);
         } else {
             RETVAL = &PL_sv_undef;
         }

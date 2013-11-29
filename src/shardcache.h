@@ -42,14 +42,6 @@ typedef int (*shardcache_store_item_callback_t)(void *key, size_t len, void *val
 typedef int (*shardcache_remove_item_callback_t)(void *key, size_t len, void *priv);
 
 /**
- * @brief Callback to release the resources of a previously provided value
- *        The shardcache instance will call this callback
- *        if a value object can now be released since not anymore referenced
- *        by the shardcache instance
- */
-typedef void (*shardcache_free_item_callback_t)(void *val, void *priv);
-
-/**
  * @brief This callback is called when creating the shardcache instance
  *        to initialize the underlying storage.
  * @return if a pointer is returned by the callback, the same pointer will
@@ -76,7 +68,6 @@ typedef struct __shardcache_storage_s {
     shardcache_fetch_item_callback_t       fetch_item;
     shardcache_store_item_callback_t       store_item;
     shardcache_remove_item_callback_t      remove_item;
-    shardcache_free_item_callback_t        free_item;
     const char                           **options;
 } shardcache_storage_t;
 
@@ -111,6 +102,7 @@ void shardcache_destroy(shardcache_t *cache);
  * @arg klen : The length of the key
  * @arg vlen : If provided the length of the returned value will be stored at the location pointed by vlen
  * @return A pointer to the stored value if any, NULL otherwise
+ *         NOTE: the caller is responsible of releasing the memory of the returned value
  */
 void *shardcache_get(shardcache_t *cache, void *key, size_t klen, size_t *vlen);
 
