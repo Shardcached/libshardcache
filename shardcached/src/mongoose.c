@@ -3394,7 +3394,7 @@ static void handle_cgi_request(struct mg_connection *conn, const char *prog) {
   int headers_len, data_len, i, fdin[2], fdout[2];
   const char *status, *status_text;
   char buf[16384], *pbuf, dir[PATH_MAX], *p;
-  struct mg_request_info ri;
+  struct mg_request_info ri = { 0 };
   struct cgi_env_block blk;
   FILE *in = NULL, *out = NULL;
   struct file fout = STRUCT_FILE_INITIALIZER;
