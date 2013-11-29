@@ -117,7 +117,16 @@ static arc_object_t *arc_object_create(arc_t *cache, unsigned long size, void *p
 
     arc_list_init(&obj->head);
     arc_list_init(&obj->hash);
+
+    /*
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&obj->lock, &attr);
+    pthread_mutexattr_destroy(&attr);
+    */
     pthread_mutex_init(&obj->lock, NULL);
+
     return obj;
 }
 
@@ -136,6 +145,7 @@ static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *stat
 
     if (state == NULL) {
         /* The object is being removed from the cache, destroy it. */
+        obj->state = NULL;
         arc_list_remove(&obj->hash);
         release_ref(cache->refcnt, obj->node);
         pthread_mutex_unlock(&cache->lock);
@@ -229,10 +239,13 @@ static void free_node_ptr_callback(void *node) {
 
 static void terminate_node_callback(refcnt_node_t *node, int concurrent) {
     arc_object_t *obj = (arc_object_t *)get_node_ptr(node);
-    obj->cache->ops->destroy(obj->ptr, obj->cache->ops->priv);
+    pthread_mutex_lock(&obj->lock);
+    if (obj->ptr && obj->cache->ops->destroy)
+        obj->cache->ops->destroy(obj->ptr, obj->cache->ops->priv);
     if (obj->key) {
         ht_delete(obj->cache->hash, obj->key, obj->klen);
     }
+    pthread_mutex_unlock(&obj->lock);
 }
 
 /* Create a new cache. */
@@ -261,29 +274,25 @@ arc_t *arc_create(arc_ops_t *ops, unsigned long c)
     cache->refcnt = refcnt_create(1, terminate_node_callback, free_node_ptr_callback);
     return cache;
 }
+static void arc_list_destroy(arc_t *cache, arc_list_t *head) {
+    arc_list_t *pos = (head)->next;
+    while (pos && pos != (head)) {
+        arc_list_t *tmp = pos;
+        arc_object_t *obj = arc_list_entry(pos, arc_object_t, head);
+        pos = pos->next;
+        tmp->prev = tmp->next = NULL;
+        release_ref(cache->refcnt, obj->node);
+    }
+}
+
 
 /* Destroy the given cache. Free all objects which remain in the cache. */
 void arc_destroy(arc_t *cache)
 {
-    arc_list_t *iter;
-    
-    arc_list_each(iter, &cache->mrug.head) {
-        arc_object_t *obj = arc_list_entry(iter, arc_object_t, head);
-		arc_move(cache, obj, NULL);
-    }
-    arc_list_each(iter, &cache->mru.head) {
-        arc_object_t *obj = arc_list_entry(iter, arc_object_t, head);
-        arc_move(cache, obj, NULL);
-    }
-    arc_list_each(iter, &cache->mfu.head) {
-        arc_object_t *obj = arc_list_entry(iter, arc_object_t, head);
-		arc_move(cache, obj, NULL);
-    }
-    arc_list_each(iter, &cache->mfug.head) {
-        arc_object_t *obj = arc_list_entry(iter, arc_object_t, head);
-		arc_move(cache, obj, NULL);
-    }
-
+    arc_list_destroy(cache, &cache->mrug.head);
+    arc_list_destroy(cache, &cache->mru.head);
+    arc_list_destroy(cache, &cache->mfu.head);
+    arc_list_destroy(cache, &cache->mfug.head);
     ht_destroy(cache->hash);
     refcnt_destroy(cache->refcnt); 
     free(cache);

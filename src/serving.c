@@ -24,6 +24,7 @@ typedef struct {
     pthread_t thread;
     linked_list_t *jobs;
     int busy;
+    int leave;
 } shardcache_worker_context_t;
 
 struct __shardcache_serving_s {
@@ -55,8 +56,8 @@ typedef struct {
     shardcache_worker_context_t *worker_ctx;
 } shardcache_connection_context_t;
 
-static shardcache_connection_context_t *shardcache_create_connection_context(shardcache_t *cache,
-        const char *auth, int fd, shardcache_worker_context_t *worker_ctx)
+static shardcache_connection_context_t *
+shardcache_create_connection_context(shardcache_t *cache, const char *auth, int fd)
 {
     shardcache_connection_context_t *context = calloc(1, sizeof(shardcache_connection_context_t));
 
@@ -70,7 +71,6 @@ static shardcache_connection_context_t *shardcache_create_connection_context(sha
     context->auth = auth;
     context->shash = sip_hash_new((uint8_t *)auth, 2, 4);
     context->fd = fd;
-    context->worker_ctx = worker_ctx;
     return context;
 }
 
@@ -120,6 +120,8 @@ static void *serve_response(void *priv) {
             size_t vlen = 0;
             void *v = shardcache_get(cache, key, klen, &vlen);
             write_message(fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, v, vlen, NULL, 0);
+            if (v)
+                free(v);
             break;
         }
         case SHARDCACHE_HDR_SET:
@@ -324,10 +326,11 @@ static void shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
 }
 
 void *worker(void *priv) {
-    linked_list_t *jobs = (linked_list_t *)priv;
+    shardcache_worker_context_t *wrk_ctx = (shardcache_worker_context_t *)priv;
+    linked_list_t *jobs = wrk_ctx->jobs;
 
     iomux_t *iomux = iomux_create();
-    for (;;) {
+    while (__sync_fetch_and_add(&wrk_ctx->leave, 0) == 0) {
         shardcache_connection_context_t *ctx = shift_value(jobs);
         while(ctx) {
             iomux_callbacks_t connection_callbacks = {
@@ -338,6 +341,7 @@ void *worker(void *priv) {
                 .mux_timeout = NULL,
                 .priv = ctx
             };
+            ctx->worker_ctx = wrk_ctx;
             iomux_add(iomux, ctx->fd, &connection_callbacks);
             ctx = shift_value(jobs);
         }
@@ -375,7 +379,7 @@ void *serve_cache(void *priv) {
                 wrkctx = serv->workers[idx++ % serv->num_workers];
             }
             // create and initialize the context for the new connection
-            shardcache_connection_context_t *ctx = shardcache_create_connection_context(serv->cache, serv->auth, fd, &wrkctx);
+            shardcache_connection_context_t *ctx = shardcache_create_connection_context(serv->cache, serv->auth, fd);
             push_value(wrkctx.jobs, ctx);
         }
     }
@@ -412,7 +416,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache, const char *auth, const
     int i;
     for (i = 0; i < num_workers; i++) {
         s->workers[i].jobs = create_list();
-        pthread_create(&s->workers[i].thread, NULL, worker, s->workers[i].jobs);
+        pthread_create(&s->workers[i].thread, NULL, worker, &s->workers[i]);
     }
 
      // and start a background thread to handle incoming connections
@@ -432,7 +436,7 @@ void stop_serving(shardcache_serving_t *s) {
     pthread_cancel(s->listener);
     pthread_join(s->listener, NULL);
     for (i = 0; i < s->num_workers; i++) {
-        pthread_cancel(s->workers[i].thread);
+        __sync_add_and_fetch(&s->workers[i].leave, 1);
         pthread_join(s->workers[i].thread, NULL);
         destroy_list(s->workers[i].jobs);
     }
