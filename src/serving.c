@@ -363,9 +363,10 @@ void *serve_cache(void *priv) {
 
     int idx = 0;
     for (;;) {
-        struct sockaddr peer_addr;
-        socklen_t addr_len;
+        struct sockaddr peer_addr = { 0 };
+        socklen_t addr_len = 0;
 
+        pthread_testcancel();
         int fd = accept(serv->sock, &peer_addr, &addr_len);
         if (fd >= 0) {
             shardcache_worker_context_t wrkctx = serv->workers[idx++ % serv->num_workers];
@@ -433,6 +434,7 @@ void stop_serving(shardcache_serving_t *s) {
     for (i = 0; i < s->num_workers; i++) {
         pthread_cancel(s->workers[i].thread);
         pthread_join(s->workers[i].thread, NULL);
+        destroy_list(s->workers[i].jobs);
     }
     free(s->workers);
     close(s->sock);
