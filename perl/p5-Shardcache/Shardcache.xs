@@ -82,7 +82,10 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
                 croak("Not a scalar value");
             }
             STRLEN l;
-            out = SvPVbyte(val, l);
+            char *v = SvPVbyte(val, l);
+            // make a copy to return, the caller will take care of releasing it
+            out = malloc(l);
+            memcpy(out, v, l);
             
             if (vlen)
                 *vlen = l; 
