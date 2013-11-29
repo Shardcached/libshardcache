@@ -30,7 +30,6 @@ INCDIR=/usr/local/include
 endif
 
 
-#CC = gcc
 TARGETS = $(patsubst %.c, %.o, $(wildcard src/*.c))
 TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
@@ -38,8 +37,14 @@ TEST_EXEC_ORDER =
 
 all: build_deps objects static shared shardcache_daemon
 
+tsan:
+	@export CC=gcc-4.8; \
+	export LDFLAGS="-pie -ltsan"; \
+	export CFLAGS="-fsanitize=thread -g -fPIC -pie"; \
+	make all
+
 build_deps:
-	@make -C deps all
+	@make -eC deps all
 
 update_deps:
 	@make -C deps update
