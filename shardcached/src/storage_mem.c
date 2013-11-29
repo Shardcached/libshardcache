@@ -2,6 +2,7 @@
 #include <string.h>
 #include <log.h>
 #include <hashtable.h>
+#include <pthread.h>
 #include "storage_mem.h"
 
 typedef struct {
@@ -9,6 +10,10 @@ typedef struct {
     size_t size;
 } stored_item_t;
 
+typedef struct {
+    hashtable_t *table;
+    pthread_mutex_t lock;
+} mem_storage_t;
 
 static void free_item_cb(void *ptr) {
     stored_item_t *item = (stored_item_t *)ptr;
@@ -41,32 +46,41 @@ static void *st_init(const char **args)
             }
         }
     }
-    hashtable_t *storage = ht_create(size);
-    ht_set_free_item_callback(storage, free_item_cb);
+    mem_storage_t *storage = calloc(1, sizeof(mem_storage_t));
+    pthread_mutex_init(&storage->lock, NULL);
+    storage->table = ht_create(size);
+    ht_set_free_item_callback(storage->table, free_item_cb);
     return storage;
 }
 
 static void *st_fetch(void *key, size_t len, size_t *vlen, void *priv)
 {
-    hashtable_t *storage = (hashtable_t *)priv;
-    stored_item_t *item =  ht_get(storage, key, len);
+    mem_storage_t *storage = (mem_storage_t *)priv;
+    hashtable_t *table = storage->table;
+    pthread_mutex_lock(&storage->lock);
+    stored_item_t *item =  ht_get(table, key, len);
     void *v = NULL;
     if (item) {
-        v = item->value;
+        v = malloc(item->size);
+        memcpy(v, item->value, item->size);
         if (vlen) 
             *vlen = item->size;
     }
+    pthread_mutex_unlock(&storage->lock);
     return v;
 }
 
 static int st_store(void *key, size_t len, void *value, size_t vlen, void *priv)
 {
-    hashtable_t *storage = (hashtable_t *)priv;
+    mem_storage_t *storage = (mem_storage_t *)priv;
+    hashtable_t *table = storage->table;
     stored_item_t *new_item = malloc(sizeof(stored_item_t));
     new_item->value = malloc(vlen);
     memcpy(new_item->value, value, vlen);
     new_item->size = vlen;
-    stored_item_t *previous_item = (stored_item_t *)ht_set(storage, key, len, new_item);
+    pthread_mutex_lock(&storage->lock);
+    stored_item_t *previous_item = (stored_item_t *)ht_set(table, key, len, new_item);
+    pthread_mutex_unlock(&storage->lock);
     if (previous_item) {
         free(previous_item->value);
         free(previous_item);
@@ -75,14 +89,19 @@ static int st_store(void *key, size_t len, void *value, size_t vlen, void *priv)
 }
 
 static int st_remove(void *key, size_t len, void *priv) {
-    hashtable_t *storage = (hashtable_t *)priv;
-    ht_delete(storage, key, len);
+    mem_storage_t *storage = (mem_storage_t *)priv;
+    hashtable_t *table = storage->table;
+    pthread_mutex_lock(&storage->lock);
+    ht_delete(table, key, len);
+    pthread_mutex_unlock(&storage->lock);
     return 0;
 }
 
 static void st_destroy(void *priv) {
-    hashtable_t *storage = (hashtable_t *)priv;
-    ht_destroy(storage);
+    mem_storage_t *storage = (mem_storage_t *)priv;
+    hashtable_t *table = storage->table;
+    ht_destroy(table);
+    free(storage);
 }
 
 shardcache_storage_t *storage_mem_create(const char **options) {
