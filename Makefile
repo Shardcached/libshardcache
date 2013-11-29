@@ -50,10 +50,10 @@ purge_deps:
 shardcache_daemon:
 	@LIBSHARDCACHE_DIR="`pwd`" make -C shardcached all
 
-static: objects
+static: build_deps objects
 	ar -r libshardcache.a src/*.o
 
-standalone: objects
+standalone: build_deps objects
 	@cwd=`pwd`; \
 	dir="/tmp/libshardcache_build$$$$"; \
 	mkdir $$dir; \
@@ -63,7 +63,7 @@ standalone: objects
 	ar x $$cwd/deps/.libs/libiomux.a; \
 	ar x $$cwd/deps/.libs/libsiphash.a; \
 	cd $$cwd; \
-	ar -r libshardcache.a $$dir/*.o src/*.o; \
+	ar -r libshardcache_standalone.a $$dir/*.o src/*.o; \
 	rm -rf $$dir
 
 shared: objects

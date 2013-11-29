@@ -14,6 +14,10 @@ LDFLAGS +=
 CFLAGS += -Wno-deprecated-declarations
 endif
 
+ifeq ("$(LIBSHARDCACHE_DIR)", "")
+    LIBSHARDCACHE_DIR=$(shell pwd)/..
+endif
+
 #CC = gcc
 TARGETS = $(patsubst %.c, %.o, $(wildcard src/*.c))
 
