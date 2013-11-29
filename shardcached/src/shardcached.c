@@ -259,7 +259,7 @@ int main(int argc, char **argv)
         }
     }
 
-    //signal(SIGINT, shardcached_stop);
+    signal(SIGINT, shardcached_stop);
     signal(SIGHUP, shardcached_stop);
     signal(SIGQUIT, shardcached_stop);
     signal(SIGPIPE, shardcached_do_nothing);
@@ -287,15 +287,18 @@ int main(int argc, char **argv)
     const char *mongoose_options[] = { "listening_ports", listen_address, NULL };
     // let's start mongoose
     struct mg_context *ctx = mg_start(&shardcached_callbacks, cache, mongoose_options);
+    if (ctx) {
+        // and keep working until we are told to exit
+        pthread_mutex_lock(&exit_lock);
+        pthread_cond_wait(&exit_cond, &exit_lock);
+        pthread_mutex_unlock(&exit_lock);
+        mg_stop(ctx);  
+    } else {
+        ERROR("Can't start the http subsystem");
+    }
     
-    // and keep working until we are told to exit
-    pthread_mutex_lock(&exit_lock);
-    pthread_cond_wait(&exit_cond, &exit_lock);
-    pthread_mutex_unlock(&exit_lock);
-
     NOTICE("exiting");
 
-    mg_stop(ctx);  
     shardcache_destroy(cache);
     storage_mem_destroy(storage_mem);
     
