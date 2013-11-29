@@ -18,7 +18,10 @@ typedef struct __shardcache_s shardcache_t;
 /**
  * @brief Callback to provide the value for a given key.
  *        The shardcache instance will call this callback
- *        if the value has not been found in the cache
+ *        if the value has not been found in the cache.
+ * @return A pointer to initialized memory containing the stored value.
+ *         NOTE: The returned value is a volatile copy and the caller
+ *               MUST release its resources
  */
 typedef void *(*shardcache_fetch_item_callback_t)(void *key, size_t len, size_t *vlen, void *priv);
 

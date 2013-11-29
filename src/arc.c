@@ -118,14 +118,11 @@ static arc_object_t *arc_object_create(arc_t *cache, unsigned long size, void *p
     arc_list_init(&obj->head);
     arc_list_init(&obj->hash);
 
-    /*
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
     pthread_mutex_init(&obj->lock, &attr);
     pthread_mutexattr_destroy(&attr);
-    */
-    pthread_mutex_init(&obj->lock, NULL);
 
     return obj;
 }
@@ -138,6 +135,7 @@ static void arc_balance(arc_t *cache, unsigned long size);
 static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 {
     pthread_mutex_lock(&cache->lock);
+
     if (obj->state) {
         obj->state->size -= obj->size;
         arc_list_remove(&obj->head);
@@ -271,7 +269,7 @@ arc_t *arc_create(arc_ops_t *ops, unsigned long c)
     pthread_mutex_init(&cache->lock, &attr);
     pthread_mutexattr_destroy(&attr);
 
-    cache->refcnt = refcnt_create(1, terminate_node_callback, free_node_ptr_callback);
+    cache->refcnt = refcnt_create(1<<8, terminate_node_callback, free_node_ptr_callback);
     return cache;
 }
 static void arc_list_destroy(arc_t *cache, arc_list_t *head) {
@@ -300,10 +298,20 @@ void arc_destroy(arc_t *cache)
 
 void arc_remove(arc_t *cache, const void *key, size_t len)
 {
+    pthread_mutex_lock(&cache->lock);
     arc_object_t *obj = ht_get(cache->hash, (void *)key, len);
     if (obj) {
-        arc_move(cache, obj, NULL);
+        pthread_mutex_lock(&obj->lock);
+        pthread_mutex_unlock(&cache->lock);
+        retain_ref(cache->refcnt, obj->node);
+        if (obj) {
+            arc_move(cache, obj, NULL);
+        }
+        pthread_mutex_unlock(&obj->lock);
+        release_ref(cache->refcnt, obj->node);
+        return;
     }
+    pthread_mutex_unlock(&cache->lock);
 }
 
 /* Lookup an object with the given key. */

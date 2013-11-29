@@ -114,8 +114,7 @@ static int __op_fetch(void *item, void * priv)
                 v, (unsigned long)obj->dlen, (char *)obj->key); 
 #endif
         if (v && obj->dlen) {
-            obj->data = malloc(obj->dlen);
-            memcpy(obj->data, v, obj->dlen);
+            obj->data = v;
         }
     }
 
