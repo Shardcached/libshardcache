@@ -241,7 +241,7 @@ static void terminate_node_callback(refcnt_node_t *node, int concurrent) {
     if (obj->ptr && obj->cache->ops->destroy)
         obj->cache->ops->destroy(obj->ptr, obj->cache->ops->priv);
     if (obj->key) {
-        ht_delete(obj->cache->hash, obj->key, obj->klen);
+        ht_delete(obj->cache->hash, obj->key, obj->klen, NULL, NULL);
     }
     pthread_mutex_unlock(&obj->lock);
 }
@@ -253,7 +253,7 @@ arc_t *arc_create(arc_ops_t *ops, unsigned long c)
 
     cache->ops = ops;
     
-    cache->hash = ht_create(8192);
+    cache->hash = ht_create(8192, NULL);
 
     cache->c = c;
     cache->p = c >> 1;
@@ -298,7 +298,7 @@ void arc_destroy(arc_t *cache)
 
 void arc_remove(arc_t *cache, const void *key, size_t len)
 {
-    arc_object_t *obj = ht_get(cache->hash, (void *)key, len);
+    arc_object_t *obj = ht_get(cache->hash, (void *)key, len, NULL);
     if (obj) {
         pthread_mutex_lock(&obj->lock);
         retain_ref(cache->refcnt, obj->node);
@@ -319,7 +319,7 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res) {
 
 arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep)
 {
-    arc_object_t *obj = ht_get(cache->hash, (void *)key, len);
+    arc_object_t *obj = ht_get(cache->hash, (void *)key, len, NULL);
 
     if (obj) {
         pthread_mutex_lock(&obj->lock);
@@ -359,7 +359,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
             moved->key = malloc(len);
             memcpy(moved->key, key, len);
             moved->klen = len;
-            ht_set(cache->hash, (void *)key, len, moved);
+            ht_set(cache->hash, (void *)key, len, moved, sizeof(arc_object_t), NULL, NULL);
         }
         retain_ref(cache->refcnt, moved->node);
         *valuep = moved->ptr;
