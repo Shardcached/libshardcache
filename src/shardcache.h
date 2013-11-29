@@ -163,6 +163,6 @@ char **shardcache_get_peers(shardcache_t *cache, int *num_peers);
  *              (<address:port>) of the peer owning the key
  * @return 1 if the current node (represented by cache) is the owner of the key, 0 otherwise
  */
-int shardcache_test_ownership(shardcache_t *cache, void *key, size_t len, const char **owner);
+int shardcache_test_ownership(shardcache_t *cache, void *key, size_t klen, char *owner, size_t *len);
 
 #endif

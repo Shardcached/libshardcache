@@ -86,12 +86,15 @@ static int __op_fetch(void *item, void * priv)
         return 0;
     }
 
-    const char *node_name;
+    char node_name[1024];
+    memset(node_name, 0, sizeof(node_name));
+    size_t node_len = 0;
     // if we are not the owner try asking our peer responsible for this data
-    if (!shardcache_test_ownership(cache, obj->key, obj->len, &node_name)) {
+    if (!shardcache_test_ownership(cache, obj->key, obj->len, node_name, &node_len)) {
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Fetching data for key %s from peer %s\n", (char *)obj->key, node_name); 
 #endif
+        node_name[node_len] = 0;
         // another peer is responsible for this item, let's get the value from there
         fbuf_t value = FBUF_STATIC_INITIALIZER;
         int rc = fetch_from_peer((char *)node_name, (char *)cache->auth, obj->key, obj->len, &value);
@@ -239,11 +242,17 @@ shardcache_t *shardcache_create(char *me,
 
 void shardcache_destroy(shardcache_t *cache) {
     int i;
-    stop_serving(cache->serv);
-    arc_destroy(cache->arc);
+    if (cache->serv)
+        stop_serving(cache->serv);
+
+    if (cache->arc)
+        arc_destroy(cache->arc);
+
     if (cache->storage.destroy_storage)
         cache->storage.destroy_storage(cache->priv);
-    chash_free(cache->chash);
+
+    if (cache->chash)
+        chash_free(cache->chash);
     //free(cache->me);
     for (i = 0; i < cache->num_shards; i++)
         free(cache->shards[i]);
@@ -283,15 +292,18 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
 
     arc_remove(cache->arc, (const void *)key, klen);
 
-    const char *node_name;
-    if (shardcache_test_ownership(cache, key, klen, &node_name)) {
+    char node_name[1024];
+    memset(node_name, 0, sizeof(node_name));
+    size_t node_len = 0;
+    if (shardcache_test_ownership(cache, key, klen, node_name, &node_len)) {
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Storing value %s for key %s\n", (char *)value, (char *)key);
 #endif
+        node_name[node_len] = 0;
         if (cache->storage.store_item)
             cache->storage.store_item(key, klen, value, vlen, cache->priv);
         return 0;
-    } else {
+    } else if (node_len) {
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Forwarding set command %s => %s to %s\n", (char *)key, (char *)value, node_name);
 #endif
@@ -307,9 +319,12 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
         return -1;
 
     // if we are not the owner try propagating the command to the responsible peer
-    const char *node_name;
-    if (shardcache_test_ownership(cache, key, klen, &node_name))
+    char node_name[1024];
+    memset(node_name, 0, sizeof(node_name));
+    size_t node_len = 0;
+    if (shardcache_test_ownership(cache, key, klen, node_name, &node_len))
     {
+        node_name[node_len] = 0;
         if (cache->storage.remove_item)
             cache->storage.remove_item(key, klen, cache->priv);
 
@@ -352,12 +367,15 @@ char **shardcache_get_peers(shardcache_t *cache, int *num_peers) {
     return cache->shards;
 }
 
-int shardcache_test_ownership(shardcache_t *cache, void *key, size_t len, const char **owner)
+int shardcache_test_ownership(shardcache_t *cache, void *key, size_t klen, char *owner, size_t *len)
 {
-    const char *node_name = NULL;
+    const char *node_name;
     size_t name_len = 0;
-    chash_lookup(cache->chash, key, len, &node_name, &name_len);
-    if (owner)
-        *owner = node_name;
-    return (strcmp(node_name, cache->me) == 0);
+    chash_lookup(cache->chash, key, klen, &node_name, &name_len);
+    if (owner) {
+        strncpy(owner, node_name, name_len);
+    }
+    if (len)
+        *len = name_len;
+    return (strcmp(owner, cache->me) == 0);
 }
