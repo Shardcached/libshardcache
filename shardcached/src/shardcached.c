@@ -272,6 +272,10 @@ int main(int argc, char **argv)
                                       "max_table_size", "1000000",
                                       NULL };
     shardcache_storage_t *storage_mem = storage_mem_create(storage_options);
+    if (!storage_mem) {
+        ERROR("Can't initialize the storage subsystem");
+        exit(-1);
+    }
 
     shardcache_t *cache = shardcache_create(me, shard_names, cnt, storage_mem, secret, 5);
 
