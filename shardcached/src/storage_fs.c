@@ -92,7 +92,7 @@ static int st_store(void *key, size_t klen, void *value, size_t vlen, void *priv
     storage_fs_t *storage = (storage_fs_t *)priv;
 
     int ret = -1;
-    size_t tmppath_len = strlen(storage->path)+klen+1;
+    size_t tmppath_len = strlen(storage->path)+klen+2;
     char *tmppath = malloc(tmppath_len);
     snprintf(tmppath, tmppath_len, "%s/%s", storage->tmp, key);
     int fd = open(tmppath, O_WRONLY|O_EXLOCK|O_TRUNC|O_CREAT);
@@ -108,7 +108,7 @@ static int st_store(void *key, size_t klen, void *value, size_t vlen, void *priv
             }
         }
         if (ofx == vlen) {
-            size_t fullpath_len = strlen(storage->path)+klen+1;
+            size_t fullpath_len = strlen(storage->path)+klen+2;
             char *fullpath = malloc(fullpath_len);
             snprintf(fullpath, fullpath_len, "%s/%s", storage->path, key);
             ret = link(tmppath, fullpath);
