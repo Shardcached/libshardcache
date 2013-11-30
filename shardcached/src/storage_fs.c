@@ -67,7 +67,7 @@ static void *st_fetch(void *key, size_t klen, size_t *vlen, void *priv)
 {
     storage_fs_t *storage = (storage_fs_t *)priv;
 
-    size_t fullpath_len = strlen(storage->path)+klen+1;
+    size_t fullpath_len = strlen(storage->path)+klen+2;
     char *fullpath = malloc(fullpath_len);
     snprintf(fullpath, fullpath_len, "%s/%s", storage->path, key);
     int fd = open(fullpath, O_RDONLY|O_SHLOCK);
@@ -75,7 +75,9 @@ static void *st_fetch(void *key, size_t klen, size_t *vlen, void *priv)
         fbuf_t buf = FBUF_STATIC_INITIALIZER;
         int rb = fbuf_read(&buf, fd, 1024);
         while (rb != -1) {
-            fbuf_read(&buf, fd, 1024);
+            rb = fbuf_read(&buf, fd, 1024);
+            if (rb == 0)
+                break;
         }
         close(fd);
         if (fbuf_used(&buf)) {
@@ -95,7 +97,7 @@ static int st_store(void *key, size_t klen, void *value, size_t vlen, void *priv
     size_t tmppath_len = strlen(storage->path)+klen+2;
     char *tmppath = malloc(tmppath_len);
     snprintf(tmppath, tmppath_len, "%s/%s", storage->tmp, key);
-    int fd = open(tmppath, O_WRONLY|O_EXLOCK|O_TRUNC|O_CREAT);
+    int fd = open(tmppath, O_WRONLY|O_EXLOCK|O_TRUNC|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);
     if (fd >=0) {
         int ofx = 0;
         while (ofx != vlen) {
