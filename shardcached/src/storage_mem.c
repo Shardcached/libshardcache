@@ -2,7 +2,6 @@
 #include <string.h>
 #include <log.h>
 #include <hashtable.h>
-#include <pthread.h>
 #include "storage_mem.h"
 
 typedef struct {
@@ -20,7 +19,7 @@ static void free_item_cb(void *ptr) {
 static void *st_init(const char **args)
 {
     int size = 1024;
-
+    int maxsize = 1 << 20;
     if (args) {
         while (*args) {
             char *key = (char *)*args++;
@@ -35,13 +34,14 @@ static void *st_init(const char **args)
                 if (strcmp(key, "initial_table_size") == 0) {
                     size = atoi(value);
                 } else if (strcmp(key, "max_table_size") == 0) {
+                    maxsize = atoi(value);
                 } else {
                     ERROR("Unknown option name %s", key);
                 }
             }
         }
     }
-    hashtable_t *storage = ht_create(size, free_item_cb);
+    hashtable_t *storage = ht_create(size, maxsize, free_item_cb);
     return storage;
 }
 
