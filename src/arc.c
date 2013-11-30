@@ -253,7 +253,7 @@ arc_t *arc_create(arc_ops_t *ops, unsigned long c)
 
     cache->ops = ops;
     
-    cache->hash = ht_create(8192, NULL);
+    cache->hash = ht_create(8192, 1048576, NULL);
 
     cache->c = c;
     cache->p = c >> 1;
