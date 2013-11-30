@@ -150,6 +150,7 @@ static void __op_destroy(void *item, void *priv)
         free(obj->data);
     }
     free(obj->key);
+    pthread_mutex_destroy(&obj->lock);
     free(obj);
 }
 
@@ -184,8 +185,14 @@ shardcache_t *shardcache_create(char *me,
     }
 
     memcpy(&cache->storage, st, sizeof(cache->storage));;
-    if (cache->storage.init_storage)
+    if (cache->storage.init_storage) {
         cache->priv = st->init_storage(cache->storage.options);
+        if (!cache->priv) {
+            fprintf(stderr, "Errors initializing the storage subsystem");
+            free(cache);
+            return NULL;
+        }
+    }
 
     cache->me = strdup(me);
 
