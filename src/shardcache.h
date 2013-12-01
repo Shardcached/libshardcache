@@ -15,6 +15,19 @@
  */
 typedef struct __shardcache_s shardcache_t;
 
+typedef struct {
+    uint32_t ngets;
+    uint32_t nsets;
+    uint32_t ndels;
+    uint32_t nevicts;
+    uint32_t ncache_misses;
+    uint32_t nnot_found;
+} shardcache_stats_t;
+
+
+void shardcache_get_stats(shardcache_t *cache, shardcache_stats_t *stats);
+void shardcache_clear_stats(shardcache_t *cache);
+
 /**
  * @brief Callback to provide the value for a given key.
  *        The shardcache instance will call this callback

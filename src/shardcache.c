@@ -41,10 +41,10 @@ struct __shardcache_s {
     int evict_on_delete;
 
     shardcache_serving_t *serv;
+    shardcache_stats_t stats;
 
     const char auth[16];
     void *priv;
-
 };
 
 /* This is the object we're managing. It has a key
@@ -102,6 +102,7 @@ static int __op_fetch(void *item, void * priv)
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
             pthread_mutex_unlock(&obj->lock);
+            __sync_add_and_fetch(&cache->stats.ncache_misses, 1);
             return 0;
         }
     }
@@ -120,9 +121,11 @@ static int __op_fetch(void *item, void * priv)
 
     if (!obj->data) {
         pthread_mutex_unlock(&obj->lock);
+        __sync_add_and_fetch(&cache->stats.nnot_found, 1);
         return -1;
     }
     pthread_mutex_unlock(&obj->lock);
+    __sync_add_and_fetch(&cache->stats.ncache_misses, 1);
     return 0;
 }
 
@@ -270,6 +273,8 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
     if (!key)
         return NULL;
 
+    __sync_add_and_fetch(&cache->stats.ngets, 1);
+
     char *value = NULL;
     cache_object_t *obj = NULL;
     arc_resource_t res = arc_lookup(cache->arc, (const void *)key, len, (void **)&obj);
@@ -295,6 +300,8 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
     
     if (!key || !value)
         return -1;
+
+    __sync_add_and_fetch(&cache->stats.nsets, 1);
 
     arc_remove(cache->arc, (const void *)key, klen);
 
@@ -323,6 +330,8 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
 
     if (!key)
         return -1;
+
+    __sync_add_and_fetch(&cache->stats.ndels, 1);
 
     // if we are not the owner try propagating the command to the responsible peer
     char node_name[1024];
@@ -371,6 +380,30 @@ char **shardcache_get_peers(shardcache_t *cache, int *num_peers) {
     if (num_peers)
         *num_peers = cache->num_shards;
     return cache->shards;
+}
+
+void shardcache_get_stats(shardcache_t *cache, shardcache_stats_t *stats) {
+    stats->ngets = __sync_fetch_and_add(&cache->stats.ngets, 0);
+    stats->nsets = __sync_fetch_and_add(&cache->stats.nsets, 0);
+    stats->ndels = __sync_fetch_and_add(&cache->stats.ndels, 0);
+    stats->ncache_misses = __sync_fetch_and_add(&cache->stats.ncache_misses, 0);
+    stats->nnot_found = __sync_fetch_and_add(&cache->stats.nnot_found, 0);
+}
+
+static void reset_stat_figure(uint32_t *figure_ptr) {
+    int done = 0;
+    do {
+        uint32_t old_val = __sync_fetch_and_add(figure_ptr, 0);
+        done = __sync_bool_compare_and_swap(figure_ptr, old_val, 0);
+    } while (!done);
+}
+
+void shardcache_clear_stats(shardcache_t *cache) {
+    reset_stat_figure(&cache->stats.ngets);
+    reset_stat_figure(&cache->stats.nsets);
+    reset_stat_figure(&cache->stats.ndels);
+    reset_stat_figure(&cache->stats.ncache_misses);
+    reset_stat_figure(&cache->stats.nnot_found);
 }
 
 int shardcache_test_ownership(shardcache_t *cache, void *key, size_t klen, char *owner, size_t *len)
