@@ -67,6 +67,7 @@ static void usage(char *progname, char *msg, ...)
            "Possible options:\n"
            "    -f                    run in foreground\n"
            "    -d <level>            debug level\n"
+           "    -i <interval>         change the time interval (in seconds) after which stats are reported via syslog (defaults to '30')\n"
            "    -l <ip_address:port>  ip address:port where to listen for incoming http connections\n"
            "    -b                    HTTP url basepath\n"
            "    -p <peers>            list of peers participating in the shardcache in the form : 'address:port,address2:port2'\n"
