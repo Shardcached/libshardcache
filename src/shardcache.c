@@ -112,7 +112,7 @@ static int __op_fetch(void *item, void * priv)
         void *v = cache->storage.fetch_item(obj->key, obj->len, &obj->dlen, cache->priv);
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Fetch storage callback returned value %s (%lu) for key %s\n",
-                v, (unsigned long)obj->dlen, (char *)obj->key); 
+                (char *)v, (unsigned long)obj->dlen, (char *)obj->key); 
 #endif
         if (v && obj->dlen) {
             obj->data = v;
@@ -238,8 +238,8 @@ shardcache_t *shardcache_create(char *me,
 
 #ifdef SHARDCACHE_DEBUG
     fprintf(stderr, "AUTH KEY (secret: %s): ", secret);
-    for (i = 0; i < shardCACHE_MSG_SIG_LEN; i++) {
-        fprintf(stderr, "%02x", (unsigned char)cache->serv.auth[i]); 
+    for (i = 0; i < SHARDCACHE_MSG_SIG_LEN; i++) {
+        fprintf(stderr, "%02x", (unsigned char)cache->auth[i]); 
     }
     fprintf(stderr, "\n");
 #endif
