@@ -6,7 +6,9 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
+#ifndef HAVE_UINT64_T
 #define HAVE_UINT64_T
+#endif
 #include <siphash.h>
 
 #include "messaging.h"

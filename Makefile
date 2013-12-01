@@ -1,10 +1,14 @@
 UNAME := $(shell uname)
 LIBSHARDCACHE_DIR := $(shell pwd)
 
-DEPS = deps/.libs/libhl.a \
-       deps/.libs/libchash.a \
-       deps/.libs/libiomux.a \
-       deps/.libs/libsiphash.a \
+ifeq ("$(DEPS_INSTALL_DIR)", "")
+DEPS_INSTALL_DIR=$(LIBSHARDCACHE_DIR)/deps
+endif
+
+DEPS = $(DEPS_INSTALL_DIR)/.libs/libhl.a \
+       $(DEPS_INSTALL_DIR)/.libs/libchash.a \
+       $(DEPS_INSTALL_DIR)/.libs/libiomux.a \
+       $(DEPS_INSTALL_DIR)/.libs/libsiphash.a \
        -L.
 
 ifeq ($(UNAME), Linux)
@@ -35,7 +39,7 @@ TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
 TEST_EXEC_ORDER = 
 
-all: build_deps objects static shared shardcache_daemon
+all: build_deps objects static shared
 
 tsan:
 	@export CC=gcc-4.8; \
@@ -52,9 +56,6 @@ update_deps:
 purge_deps:
 	@make -C deps purge
 
-shardcache_daemon:
-	@LIBSHARDCACHE_DIR="`pwd`" make -C shardcached all
-
 static: build_deps objects
 	ar -r libshardcache.a src/*.o
 
@@ -63,10 +64,10 @@ standalone: build_deps objects
 	dir="/tmp/libshardcache_build$$$$"; \
 	mkdir $$dir; \
 	cd $$dir; \
-	ar x $$cwd/deps/.libs/libchash.a; \
-	ar x $$cwd/deps/.libs/libhl.a; \
-	ar x $$cwd/deps/.libs/libiomux.a; \
-	ar x $$cwd/deps/.libs/libsiphash.a; \
+	ar x $(DEPS_INSTALL_DIR)/.libs/libchash.a; \
+	ar x $(DEPS_INSTALL_DIR)/.libs/libhl.a; \
+	ar x $(DEPS_INSTALL_DIR)/.libs/libiomux.a; \
+	ar x $(DEPS_INSTALL_DIR)/.libs/libsiphash.a; \
 	cd $$cwd; \
 	ar -r libshardcache_standalone.a $$dir/*.o src/*.o; \
 	rm -rf $$dir
@@ -74,7 +75,7 @@ standalone: build_deps objects
 shared: objects
 	$(CC) src/*.o $(LDFLAGS) $(DEPS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
 
-objects: CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
+objects: CFLAGS += -fPIC -Isrc -I$(DEPS_INSTALL_DIR)/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 objects: $(TARGETS)
 
 clean:
@@ -84,7 +85,6 @@ clean:
 	rm -f libshardcache.$(SHAREDEXT)
 	rm -f support/testing.o
 	make -C deps clean
-	make -C shardcached clean
 
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
