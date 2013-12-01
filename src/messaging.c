@@ -163,6 +163,7 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
 int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out)
 {
     int orig_used = fbuf_used(out);
+    int ofx = 0;
     do {
         int writelen = (blen > (size_t)UINT16_MAX) ? UINT16_MAX : blen;
         blen -= writelen;
@@ -173,7 +174,7 @@ int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out)
         } else if (wb == 2) {
             int wrote = 0;
             while (wrote != writelen) {
-                wb = fbuf_add_binary(out, buf + wrote, writelen - wrote);
+                wb = fbuf_add_binary(out, buf + ofx + wrote, writelen - wrote);
                 if (wb == -1) {
                     // discard what written so far
                     fbuf_set_used(out, orig_used);
@@ -186,6 +187,7 @@ int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out)
                 fbuf_add_binary(out, (char *)&eor, 2);
                 return 0;
             }
+            ofx += wrote;
         }
     } while (blen != 0);
     return -1;
