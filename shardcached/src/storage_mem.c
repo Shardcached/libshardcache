@@ -87,7 +87,6 @@ static int st_remove(void *key, size_t len, void *priv) {
 static void st_destroy(void *priv) {
     hashtable_t *storage = (hashtable_t *)priv;
     ht_destroy(storage);
-    free(storage);
 }
 
 shardcache_storage_t *storage_mem_create(const char **options) {
