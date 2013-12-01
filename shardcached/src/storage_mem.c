@@ -32,9 +32,9 @@ static void *st_init(const char **args)
             }
             if (key && value) {
                 if (strcmp(key, "initial_table_size") == 0) {
-                    size = atoi(value);
+                    size = strtol(value, NULL, 10);
                 } else if (strcmp(key, "max_table_size") == 0) {
-                    maxsize = atoi(value);
+                    maxsize = strtol(value, NULL, 10);
                 } else {
                     ERROR("Unknown option name %s", key);
                 }
