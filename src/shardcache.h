@@ -7,6 +7,7 @@
  * @brief shardcache C implementation
  */
 #include <sys/types.h>
+#include <stdint.h>
 
 #define SHARDCACHE_PORT_DEFAULT 9874
 
