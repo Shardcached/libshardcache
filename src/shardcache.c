@@ -179,7 +179,7 @@ shardcache_t *shardcache_create(char *me,
     pthread_mutexattr_destroy(&attr);
 
     if (!st) {
-        fprintf(stderr, "No storage defined");
+        fprintf(stderr, "No storage defined\n");
         free(cache);
         return NULL;
     }
@@ -188,7 +188,7 @@ shardcache_t *shardcache_create(char *me,
     if (cache->storage.init_storage) {
         cache->priv = st->init_storage(cache->storage.options);
         if (!cache->priv) {
-            fprintf(stderr, "Errors initializing the storage subsystem");
+            fprintf(stderr, "Errors initializing the storage subsystem\n");
             free(cache);
             return NULL;
         }
