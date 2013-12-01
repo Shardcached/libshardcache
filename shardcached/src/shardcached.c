@@ -27,6 +27,7 @@
 #include <shardcache.h>
 
 #include "storage_mem.h"
+#include "storage_fs.h"
 
 #define SHARDCACHED_ADDRESS_DEFAULT "4321"
 #define SHARDCACHED_LOGLEVEL_DEFAULT 0
@@ -37,6 +38,8 @@
 #define ATOMIC_CMPXCHG(__p, __v1, __v2) __sync_bool_compare_and_swap(&__p, __v1, __v2)
 
 #define ADDR_REGEXP "^[a-z0-9_\\.\\-]+(:[0-9]+)?$"
+
+#define MAX_STORAGE_OPTIONS 256
 
 static char *me = NULL;
 static char *basepath = NULL;
@@ -64,7 +67,21 @@ static void usage(char *progname, char *msg, ...)
            "    -l <ip_address:port>  ip address:port where to listen for incoming http connections\n"
            "    -b                    HTTP url basepath\n"
            "    -p <peers>            list of peers participating in the shardcache in the form : 'address:port,address2:port2'\n"
-           "    -s                    shared secret used for message signing\n", progname);
+           "    -s                    shared secret used for message signing\n"
+           "    -t <type>             storage type (available are : 'mem' and 'fs' (defaults to 'mem')\n"
+           "    -o <options>          storage options\n"
+           "       Storage Types:\n"
+           "         * mem       memory based storage\n"
+           "            Options:\n"
+           "              - initial_table_size     the initial size of the internal hashtable\n"
+           "              - max_table_size         maximum limit the internal hashtable can be grown up to\n"
+           "\n"
+           "         * fs        filesystem based storage\n"
+           "            Options:\n"
+           "              - storage_path           the parh where to store the keys/values on the filesystem\n"
+           "              - tmp_path               the path to a temporary directory to use while new data is being uploaded\n"
+           , progname);
+
     exit(-2);
 }
 
@@ -158,6 +175,43 @@ static int shardcached_request_handler(struct mg_connection *conn) {
 void shardcached_end_request_handler(const struct mg_connection *conn, int reply_status_code) {
 }
 
+typedef void (*shardcache_storage_destroyer_t)(shardcache_storage_t *);
+
+shardcache_storage_destroyer_t
+shardcached_init_storage(char *storage_type, char *options_string, shardcache_storage_t **storage)
+{
+    const char *storage_options[MAX_STORAGE_OPTIONS];
+    shardcache_storage_destroyer_t storage_destroy = NULL;
+
+    int optidx = 0;
+    char *p = options_string;
+    char *str = p;
+    while (*p != 0 && optidx < MAX_STORAGE_OPTIONS) {
+        if (*p == '=' || *p == ',') {
+            *p = 0;
+            storage_options[optidx++] = str;
+            str = p+1;
+        }
+        p++;
+    }
+    storage_options[optidx++] = str;
+    storage_options[optidx] = NULL;
+    // initialize the storage layer 
+    if (strcmp(storage_type, "mem") == 0) {
+        // TODO - validate options
+        *storage = storage_mem_create(storage_options);
+        storage_destroy = storage_mem_destroy;
+
+    } else if (strcmp(storage_type, "fs") == 0) {
+        // TODO - validate options
+        *storage = storage_fs_create(storage_options);
+        storage_destroy = storage_fs_destroy;
+    } else {
+        usage("Unknown storage type: %s\n", storage_type);
+    }
+    return storage_destroy;
+}
+
 int main(int argc, char **argv)
 {
 
@@ -167,6 +221,10 @@ int main(int argc, char **argv)
     char *listen_address = SHARDCACHED_ADDRESS_DEFAULT;
     char *peers = NULL;
     char *secret = "default";
+    char *storage_type = "mem";
+    char options_string[2048];
+    
+    strcpy(options_string, "initial_table_size=1024,max_table_size=1000000");
 
     static struct option long_options[] = {
         {"base", 2, 0, 'b'},
@@ -175,12 +233,14 @@ int main(int argc, char **argv)
         {"listen", 2, 0, 'l'},
         {"peers", 2, 0, 'p'},
         {"secret", 2, 0, 's'},
+        {"type", 2, 0, 't'},
+        {"options", 2, 0, 'o'},
         {"help", 0, 0, 'h'},
         {0, 0, 0, 0}
     };
 
     char c;
-    while ((c = getopt_long (argc, argv, "b:d:fhl:p:s?", long_options, &option_index))) {
+    while ((c = getopt_long (argc, argv, "b:d:fhl:p:s:t:o:?", long_options, &option_index))) {
         if (c == -1) {
             break;
         }
@@ -205,6 +265,12 @@ int main(int argc, char **argv)
                 break;
             case 's':
                 secret = optarg;
+                break;
+            case 't':
+                storage_type = optarg;
+                break;
+            case 'o':
+                snprintf(options_string, sizeof(options_string), "%s", optarg);
                 break;
             case 'h':
             case '?':
@@ -266,18 +332,18 @@ int main(int argc, char **argv)
 
     log_init("shardcached", loglevel);
 
-
-    // initialize the storage layer 
-    const char *storage_options[] = { "initial_table_size", "1024",
-                                      "max_table_size", "1000000",
-                                      NULL };
-    shardcache_storage_t *storage_mem = storage_mem_create(storage_options);
-    if (!storage_mem) {
+    shardcache_storage_t *storage = NULL;
+    shardcache_storage_destroyer_t storage_destroy = shardcached_init_storage(storage_type, options_string, &storage);
+    if (!storage) {
         ERROR("Can't initialize the storage subsystem");
         exit(-1);
     }
 
-    shardcache_t *cache = shardcache_create(me, shard_names, cnt, storage_mem, secret, 5);
+    shardcache_t *cache = shardcache_create(me, shard_names, cnt, storage, secret, 5);
+    if (!cache) {
+        ERROR("Can't initialize the shardcache engine");
+        exit(-1);
+    }
 
     // initialize the mongoose callbacks descriptor
     struct mg_callbacks shardcached_callbacks = {
@@ -304,7 +370,8 @@ int main(int argc, char **argv)
     NOTICE("exiting");
 
     shardcache_destroy(cache);
-    storage_mem_destroy(storage_mem);
+    if (storage_destroy)
+        storage_destroy(storage);
     
     exit(0);
 }
