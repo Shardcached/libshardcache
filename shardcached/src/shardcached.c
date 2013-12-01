@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <signal.h>
 #include <errno.h>
+#include <sys/time.h>
 
 #include "log.h"
 
@@ -46,6 +47,7 @@ static char *me = NULL;
 static char *basepath = NULL;
 static pthread_cond_t exit_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t exit_lock = PTHREAD_MUTEX_INITIALIZER;
+static int should_exit = 0;
 
 typedef struct {
     void *value;
@@ -91,6 +93,7 @@ static void shardcached_stop(int sig)
     pthread_mutex_lock(&exit_lock);
     pthread_cond_signal(&exit_cond);
     pthread_mutex_unlock(&exit_lock);
+    __sync_add_and_fetch(&should_exit, 1);
 }
 
 static void shardcached_do_nothing(int sig)
@@ -213,9 +216,41 @@ shardcached_init_storage(char *storage_type, char *options_string, shardcache_st
     return storage_destroy;
 }
 
+static void shardcached_run(shardcache_t *cache, uint32_t stats_interval)
+{
+    if (stats_interval) {
+        while (!__sync_fetch_and_add(&should_exit, 0)) {
+            int rc = 0;
+            struct timespec to_sleep = {
+                .tv_sec = stats_interval,
+                .tv_nsec = 0
+            };
+            struct timespec remainder = { 0, 0 };
+
+            do {
+                rc = nanosleep(&to_sleep, &remainder);
+                if (__sync_fetch_and_add(&should_exit, 0))
+                    break;
+                memcpy(&to_sleep, &remainder, sizeof(struct timespec));
+                memset(&remainder, 0, sizeof(struct timespec));
+            } while (rc != 0);
+
+            shardcache_stats_t stats;
+            shardcache_get_stats(cache, &stats);
+            NOTICE("Shardcache stats:  gets => %u, sets => %u, dels => %u, cache misses => %u, not found => %u\n",
+                    stats.ngets, stats.nsets, stats.ndels, stats.ncache_misses, stats.nnot_found);
+            shardcache_clear_stats(cache);
+        }
+    } else {
+        // and keep working until we are told to exit
+        pthread_mutex_lock(&exit_lock);
+        pthread_cond_wait(&exit_cond, &exit_lock);
+        pthread_mutex_unlock(&exit_lock);
+    }
+}
+
 int main(int argc, char **argv)
 {
-
     int option_index = 0;
     int foreground = 0;
     int loglevel = SHARDCACHED_LOGLEVEL_DEFAULT;
@@ -224,6 +259,7 @@ int main(int argc, char **argv)
     char *secret = "default";
     char *storage_type = "mem";
     char options_string[MAX_OPTIONS_STRING_LEN];
+    uint32_t stats_interval = 30;
     
     strcpy(options_string, "initial_table_size=1024,max_table_size=1000000");
 
@@ -231,6 +267,7 @@ int main(int argc, char **argv)
         {"base", 2, 0, 'b'},
         {"debug", 2, 0, 'd'},
         {"foreground", 0, 0, 'f'},
+        {"stats_interval", 2, 0, 'i'},
         {"listen", 2, 0, 'l'},
         {"peers", 2, 0, 'p'},
         {"secret", 2, 0, 's'},
@@ -241,7 +278,7 @@ int main(int argc, char **argv)
     };
 
     char c;
-    while ((c = getopt_long (argc, argv, "b:d:fhl:p:s:t:o:?", long_options, &option_index))) {
+    while ((c = getopt_long (argc, argv, "b:d:fhi:l:p:s:t:o:?", long_options, &option_index))) {
         if (c == -1) {
             break;
         }
@@ -253,10 +290,13 @@ int main(int argc, char **argv)
                     basepath++;
                 break;
             case 'd':
-                loglevel = optarg ? atoi(optarg) : 1;
+                loglevel = strtol(optarg, NULL, 10);
                 break;
             case 'f':
                 foreground = 1;
+                break;
+            case 'i':
+                stats_interval = strtol(optarg, NULL, 10);
                 break;
             case 'l':
                 listen_address = optarg;
@@ -359,18 +399,17 @@ int main(int argc, char **argv)
     // let's start mongoose
     struct mg_context *ctx = mg_start(&shardcached_callbacks, cache, mongoose_options);
     if (ctx) {
-        // and keep working until we are told to exit
-        pthread_mutex_lock(&exit_lock);
-        pthread_cond_wait(&exit_cond, &exit_lock);
-        pthread_mutex_unlock(&exit_lock);
-        mg_stop(ctx);  
+        shardcached_run(cache, stats_interval);
     } else {
         ERROR("Can't start the http subsystem");
     }
     
     NOTICE("exiting");
 
+    mg_stop(ctx);  
+
     shardcache_destroy(cache);
+
     if (storage_destroy)
         storage_destroy(storage);
     
