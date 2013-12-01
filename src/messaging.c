@@ -181,7 +181,7 @@ int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out)
                 }
                 wrote += wb;
             }
-            if (wrote == writelen) {
+            if (blen == 0 && wrote == writelen) {
                 uint16_t eor = 0;
                 fbuf_add_binary(out, (char *)&eor, 2);
                 return 0;
