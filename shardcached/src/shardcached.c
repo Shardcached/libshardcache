@@ -40,6 +40,7 @@
 #define ADDR_REGEXP "^[a-z0-9_\\.\\-]+(:[0-9]+)?$"
 
 #define MAX_STORAGE_OPTIONS 256
+#define MAX_OPTIONS_STRING_LEN 2048
 
 static char *me = NULL;
 static char *basepath = NULL;
@@ -69,7 +70,7 @@ static void usage(char *progname, char *msg, ...)
            "    -p <peers>            list of peers participating in the shardcache in the form : 'address:port,address2:port2'\n"
            "    -s                    shared secret used for message signing\n"
            "    -t <type>             storage type (available are : 'mem' and 'fs' (defaults to 'mem')\n"
-           "    -o <options>          storage options\n"
+           "    -o <options>          storage options (defaults to 'initial_table_size=1024,max_table_size=1000000'\n"
            "       Storage Types:\n"
            "         * mem       memory based storage\n"
            "            Options:\n"
@@ -222,7 +223,7 @@ int main(int argc, char **argv)
     char *peers = NULL;
     char *secret = "default";
     char *storage_type = "mem";
-    char options_string[2048];
+    char options_string[MAX_OPTIONS_STRING_LEN];
     
     strcpy(options_string, "initial_table_size=1024,max_table_size=1000000");
 
