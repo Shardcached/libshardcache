@@ -137,7 +137,7 @@ sub run {
 sub DESTROY {
     my $self = shift;
     shardcache_destroy($self->{_gc})
-        if ($self->{_gc})
+        if ($self->{_gc});
 }
 
 # Preloaded methods go here.

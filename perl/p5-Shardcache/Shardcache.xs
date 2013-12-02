@@ -153,16 +153,6 @@ static int __st_remove(void *key, size_t len, void *priv) {
     return 0;
 }
 
-static void *__st_init(const char **options) {
-    SV *storage = (SV *)options[1];
-    return storage;
-}
-
-static void __st_destroy(void *priv) {
-    SV *storage = (SV *)priv;
-    SvREFCNT_dec(storage);
-}
-
 MODULE = Shardcache		PACKAGE = Shardcache		
 
 INCLUDE: const-xs.inc
@@ -209,14 +199,11 @@ shardcache_create(me, peers, storage, secret, num_workers)
             }
         }
 
-        const char *options[] = { "storage", (char *)SvREFCNT_inc(storage), NULL };
         shardcache_storage_t storage_struct = {
-            .init_storage    = __st_init,
-            .destroy_storage = __st_destroy,
             .fetch_item      = __st_fetch,
             .store_item      = __st_store,
             .remove_item     = __st_remove,
-            .options         = options
+            .priv            = SvREFCNT_inc(storage)
         };
 
         RETVAL = shardcache_create(me, shards, num_peers, &storage_struct, secret, num_workers);
