@@ -44,7 +44,6 @@ struct __shardcache_s {
     shardcache_stats_t stats;
 
     const char auth[16];
-    void *priv;
 };
 
 /* This is the object we're managing. It has a key
@@ -109,7 +108,7 @@ static int __op_fetch(void *item, void * priv)
 
     // we are responsible for this item ... so let's fetch it
     if (cache->storage->fetch_item) {
-        void *v = cache->storage->fetch_item(obj->key, obj->len, &obj->dlen, cache->priv);
+        void *v = cache->storage->fetch_item(obj->key, obj->len, &obj->dlen, cache->storage->priv);
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Fetch storage callback returned value %s (%lu) for key %s\n",
                 (char *)v, (unsigned long)obj->dlen, (char *)obj->key); 
@@ -303,7 +302,7 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
 #endif
         node_name[node_len] = 0;
         if (cache->storage->store_item)
-            cache->storage->store_item(key, klen, value, vlen, cache->priv);
+            cache->storage->store_item(key, klen, value, vlen, cache->storage->priv);
         return 0;
     } else if (node_len) {
 #ifdef SHARDCACHE_DEBUG
@@ -330,7 +329,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
     {
         node_name[node_len] = 0;
         if (cache->storage->remove_item)
-            cache->storage->remove_item(key, klen, cache->priv);
+            cache->storage->remove_item(key, klen, cache->storage->priv);
 
         if (cache->evict_on_delete)
         {
