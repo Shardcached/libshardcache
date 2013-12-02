@@ -23,10 +23,26 @@
 #endif
 #include <siphash.h>
 
+#define ATOMIC_READ(__v) __sync_fetch_and_add(&(__v), 0)
+
+#define ATOMIC_INCREMENT(__v) __sync_add_and_fetch(&(__v), 1)
+
+#define ATOMIC_DECREMENT(__v) __sync_sub_and_fetch(&(__v), 1)
+
+#define ATOMIC_CAS(__v, __o, __n) __sync_bool_compare_and_swap(&(__v), __o, __n)
+
+#define ATOMIC_SET(__v, __n) {\
+    int __b = 0;\
+    do {\
+        __b = __sync_bool_compare_and_swap(&__v, ATOMIC_READ(__v), __n);\
+    } while (!__b);\
+}
+
 typedef struct {
     pthread_t thread;
     linked_list_t *jobs;
     int busy;
+    int num_fds;
     int leave;
     pthread_cond_t wakeup_cond;
     pthread_mutex_t wakeup_lock;
@@ -312,11 +328,12 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         pthread_detach(request_thread);
 #else
         shardcache_worker_context_t *wrkctx = ctx->worker_ctx;
-        __sync_bool_compare_and_swap(&wrkctx->busy, 0, 1);
+        ATOMIC_CAS(wrkctx->busy, 0, 1);
         iomux_remove(iomux, fd); // this fd doesn't belong to the mux anymore
         shutdown(fd, SHUT_RD); // we don't want to read anymore from this socket
         serve_response(ctx);
-        __sync_bool_compare_and_swap(&wrkctx->busy, 1, 0);
+        ATOMIC_CAS(wrkctx->busy, 1, 0);
+        ATOMIC_DECREMENT(wrkctx->num_fds);
 #endif
     }
 }
@@ -326,6 +343,8 @@ static void shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
     shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
     close(fd);
     if (ctx) {
+        shardcache_worker_context_t *wrkctx = ctx->worker_ctx;
+        ATOMIC_DECREMENT(wrkctx->num_fds);
         shardcache_destroy_connection_context(ctx);
     }
 }
@@ -335,7 +354,7 @@ void *worker(void *priv) {
     linked_list_t *jobs = wrk_ctx->jobs;
 
     iomux_t *iomux = iomux_create();
-    while (__sync_fetch_and_add(&wrk_ctx->leave, 0) == 0) {
+    while (ATOMIC_READ(wrk_ctx->leave) == 0) {
         shardcache_connection_context_t *ctx = shift_value(jobs);
         while(ctx) {
             iomux_callbacks_t connection_callbacks = {
@@ -348,6 +367,7 @@ void *worker(void *priv) {
             };
             ctx->worker_ctx = wrk_ctx;
             iomux_add(iomux, ctx->fd, &connection_callbacks);
+            ATOMIC_INCREMENT(wrk_ctx->num_fds);
             ctx = shift_value(jobs);
         }
         pthread_testcancel();
@@ -357,7 +377,12 @@ void *worker(void *priv) {
         } else {
             struct timespec abstime;
             struct timeval now;
-            int rc = gettimeofday(&now, NULL);
+            int rc = 0;
+
+            // reset the num_fds
+            ATOMIC_SET(wrk_ctx->num_fds, 0);
+
+            rc = gettimeofday(&now, NULL);
             if (rc == 0) {
                 abstime.tv_sec = now.tv_sec + 1;
                 abstime.tv_nsec = now.tv_usec * 1000;
@@ -394,25 +419,33 @@ void *serve_cache(void *priv) {
 
         int fd = accept(serv->sock, &peer_addr, &addr_len);
         if (fd >= 0) {
+            // begin the worker slection process
+            // first get the next worker in the array
             shardcache_worker_context_t *wrkctx = &serv->workers[idx++ % serv->num_workers];
-            // skip over workers who are busy computing/serving a response
-            int cnt = 0;
             shardcache_worker_context_t *freemost_worker = NULL;
-            while (__sync_fetch_and_add(&wrkctx->busy, 0) != 0) {
+            int cnt = 0;
+
+            // skip over workers who are busy computing/serving a response
+            while (ATOMIC_READ(wrkctx->busy) != 0) {
+
+                // update the ponter to the freemost worker, we might need it 
+                // if all workers are busy
                 if (!freemost_worker)
                     freemost_worker = wrkctx;
-                else if (list_count(wrkctx->jobs) < list_count(freemost_worker->jobs))
+                else if (ATOMIC_READ(wrkctx->num_fds) < ATOMIC_READ(freemost_worker->num_fds))
                     freemost_worker = wrkctx;
 
                 wrkctx = &serv->workers[idx++ % serv->num_workers];
-                // well ...if we go through the whole list and all threads are busy)
+                // well ...if we've gone through the whole list and all threads are busy)
                 // let's queue this filedescriptor to the one with the least queued  fildescriptors
-                if (cnt++ == serv->num_workers) {
+                if (++cnt == serv->num_workers) {
                     wrkctx = freemost_worker;
                     break;
                 }
             }
+            // now we have selected a worker, let's see if it makes sense to go ahead
             pthread_testcancel();
+
             // create and initialize the context for the new connection
             shardcache_connection_context_t *ctx = shardcache_create_connection_context(serv->cache, serv->auth, fd);
             push_value(wrkctx->jobs, ctx);
@@ -459,7 +492,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache, const char *auth, const
         pthread_create(&s->workers[i].thread, NULL, worker, &s->workers[i]);
     }
 
-     // and start a background thread to handle incoming connections
+    // and start a background thread to handle incoming connections
     int rc = pthread_create(&s->listener, NULL, serve_cache, s);
     if (rc != 0) {
         fprintf(stderr, "Can't create new thread: %s\n", strerror(errno));
@@ -479,12 +512,17 @@ void stop_serving(shardcache_serving_t *s) {
     fprintf(stderr, "Collecting worker threads (might have to wait until i/o is finished)\n");
 #endif
     for (i = 0; i < s->num_workers; i++) {
-        __sync_add_and_fetch(&s->workers[i].leave, 1);
+        ATOMIC_INCREMENT(s->workers[i].leave);
+
+        // wake up the worker if slacking
         pthread_mutex_lock(&s->workers[i].wakeup_lock);
         pthread_cond_signal(&s->workers[i].wakeup_cond);
         pthread_mutex_unlock(&s->workers[i].wakeup_lock);
+
         pthread_join(s->workers[i].thread, NULL);
+
         destroy_list(s->workers[i].jobs);
+
         pthread_mutex_destroy(&s->workers[i].wakeup_lock);
         pthread_cond_destroy(&s->workers[i].wakeup_cond);
     }

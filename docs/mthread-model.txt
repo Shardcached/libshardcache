@@ -1,19 +1,37 @@
 =======================
-| shardcache_create() |--------------------------------------------------------
------------------------     |       pthread_create()      |                   |
-                            |                             |                   |
-                            |                             |                   |
-                            v                             v                   v
-                      ==============                  ==========          ==========
-                      |  listener  |                  | worker |   ....   | worker |
-                      --------------                  ----------          ----------
-                            |                             |                   |
-                            |                             |shift_value(fd)    | shift_value(fd)
-                            |                             |                   |
-                            |                             v                   v
-                            |                          ========            ========
-                            |                          | jobs |            | jobs |
-                            |                          --------            --------
-                            |                             ^                   ^
-                            |    push_value(fd)           |                   |
-                            |--------------------------------------------------
+| shardcache_create() |-----------------------------------------------------------------
+-----------------------     |       pthread_create()         |                         |
+                            |                                |                         |
+                            |                                |                         |
+                            v                                v                         v
+                      ==============                  ================          ================
+                      |  listener  |                  | worker/iomux |  ......  | worker/iomux |
+                      --------------                  ----------------          ----------------
+                            |                                |                         |
+                            |                                | shift_value(fd)         | shift_value(fd)
+                            |                                |                         |
+                            |                                v                         v
+                            |                             ========                  ========
+                            |                             | jobs |                  | jobs |
+                            |                             --------                  --------
+                            |                                ^                         ^
+                            |    push_value(fd)              |                         |
+                            |-----------------------------------------------------------
+
+When the library creates a new shardcache context a (single) listener thread is created together
+with a pool of workers waiting for filedescriptor to handle (the size of the worker's pool is configurable
+via a parameter of shardcache_crate()) Each worker thread creates an iomux and waits for filedescriptors to handle
+
+The listener thread waits on the accept() call and as soon as a new connection arrives select a new worker thread.
+The file descriptor is then handed to the selected worker which puts it in its internal iomux and start reading
+from the connection (more file descriptors might be handed to the same worker)
+
+Each worker keeps reading asynchronously from all the fildescriptors is has been assigned until a full request is received,
+in which case it computes the response,  writes it back to the same connection the full request was received from and finally
+goes back reading from its filedescriptors (until a new full request is received again ... and so on)
+
+The worker selection takes into account both if the worker is handling a response at the time the new connection
+has been established and how many filedescriptor the worker has in its pool.
+The listener will slect the first worker not busy in handling responses (wrkctx->busy == 0) if none is found found,
+then the listener will choose the worker with less filedescriptors in its queue.
+
