@@ -23,6 +23,19 @@
 
 #include <chash.h>
 
+#define HEXDUMP_DATA(__d, __l) {\
+    int __i;\
+    char *__datap = __d;\
+    size_t __datalen = __l;\
+    if (__datalen > 256)\
+        __datalen = 256;\
+    for (__i = 0; __i < __datalen; __i++) {\
+        fprintf(stderr, "%02x", __datap[__i]);\
+    }\
+    if (__datalen < __l)\
+        fprintf(stderr, "...");\
+}
+
 typedef struct chash_t chash_t;
 
 struct __shardcache_s {
@@ -91,7 +104,10 @@ static int __op_fetch(void *item, void * priv)
     // if we are not the owner try asking our peer responsible for this data
     if (!shardcache_test_ownership(cache, obj->key, obj->len, node_name, &node_len)) {
 #ifdef SHARDCACHE_DEBUG
-        fprintf(stderr, "Fetching data for key %s from peer %s\n", (char *)obj->key, node_name); 
+        char keystr[1024];
+        memcpy(keystr, obj->key, obj->len < 1024 ? obj->len : 1024);
+        keystr[obj->len] = 0;
+        fprintf(stderr, "Fetching data for key %s from peer %s\n", keystr, node_name); 
 #endif
         node_name[node_len] = 0;
         // another peer is responsible for this item, let's get the value from there
@@ -110,8 +126,15 @@ static int __op_fetch(void *item, void * priv)
     if (cache->storage->fetch_item) {
         void *v = cache->storage->fetch_item(obj->key, obj->len, &obj->dlen, cache->storage->priv);
 #ifdef SHARDCACHE_DEBUG
-        fprintf(stderr, "Fetch storage callback returned value %s (%lu) for key %s\n",
-                (char *)v, (unsigned long)obj->dlen, (char *)obj->key); 
+        char keystr[1024];
+        memcpy(keystr, obj->key, obj->len < 1024 ? obj->len : 1024);
+        keystr[obj->len] = 0;
+
+        fprintf(stderr, "Fetch storage callback returned value ");
+        
+        HEXDUMP_DATA(v, obj->dlen);
+
+        fprintf(stderr, " (%lu) for key %s\n", (unsigned long)obj->dlen, keystr); 
 #endif
         if (v && obj->dlen) {
             obj->data = v;
@@ -298,7 +321,15 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
     size_t node_len = 0;
     if (shardcache_test_ownership(cache, key, klen, node_name, &node_len)) {
 #ifdef SHARDCACHE_DEBUG
-        fprintf(stderr, "Storing value %s for key %s\n", (char *)value, (char *)key);
+        char keystr[1024];
+        memcpy(keystr, key, klen < 1024 ? klen : 1024);
+        keystr[klen] = 0;
+
+        fprintf(stderr, "Storing value ");
+
+        HEXDUMP_DATA(value, vlen);
+
+        fprintf(stderr, " (%d) for key %s\n", (int)vlen, keystr);
 #endif
         node_name[node_len] = 0;
         if (cache->storage->store_item)
@@ -306,7 +337,15 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
         return 0;
     } else if (node_len) {
 #ifdef SHARDCACHE_DEBUG
-        fprintf(stderr, "Forwarding set command %s => %s to %s\n", (char *)key, (char *)value, node_name);
+        char keystr[1024];
+        memcpy(keystr, key, klen < 1024 ? klen : 1024);
+        keystr[klen] = 0;
+
+        fprintf(stderr, "Forwarding set command %s => ", keystr);
+        
+        HEXDUMP_DATA(value, vlen);
+
+        fprintf(stderr, " (%d) to %s\n", (int)vlen, node_name);
 #endif
         return send_to_peer((char *)node_name, (char *)cache->auth, key, klen, value, vlen);
     }

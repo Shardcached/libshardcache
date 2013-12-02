@@ -377,7 +377,7 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out)
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
 #ifdef SHARDCACHE_DEBUG
                 char keystr[1024];
-                memcpy(keystr, key, len);
+                memcpy(keystr, key, len < 1024 ? len : 1024);
                 keystr[len] = 0;
                 fprintf(stderr, "Got new data from peer %s : %s => ", peer, keystr);
                 int i;
