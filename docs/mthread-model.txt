@@ -1,11 +1,17 @@
-=======================
-| shardcache_create() |-----------------------------------------------------------------
------------------------     |       pthread_create()         |                         |
-                            |                                |                         |
-                            |                                |                         |
-                            v                                v                         v
-                      ==============                  ================          ================
-                      |  listener  |                  | worker/iomux |  ......  | worker/iomux |
+
+
+                                            =============        get(key) / set(key, value) / del(key)
+                                            |  Storage  |<-------------------------------------------
+                                            -------------                                           |
+                                                                                                    |
+=======================                                                                             |
+| shardcache_create() |-----------------------------------------------------------------            |
+-----------------------     |       pthread_create()         |                         |            |
+                            |                                |                         |            |
+                            |                                |                         |            |
+                            v                                v                         v            |
+                      ==============                  ================          ================    |
+                      |  listener  |                  | worker/iomux |  ......  | worker/iomux |-----
                       --------------                  ----------------          ----------------
                             |                                |                         |
                             |                                | shift_value(conn)       | shift_value(conn)
@@ -17,6 +23,7 @@
                             |                                ^                         ^
                             |    push_value(conn)            |                         |
                             |-----------------------------------------------------------
+
 
 When the library creates a new shardcache context one single listener thread is created together
 with a pool of workers (the size of the worker's pool is configurable via the last argument
@@ -33,9 +40,11 @@ Each worker keeps receiving data from all its connections until a full request i
 it computes the response,  writes it back to the same connection itreceived the requestfrom and finally
 goes back collecting data from its connections (until a new full request is received again ... and so on)
 New connections might be assigned to the worker while doing its job
+Any worker can access the storage anytime to fetch/store/remove keys (note: the storage MUST be thread safe)
 
 The worker selection takes into account both if the worker is busy handling a response at the time
 the new connection has been established and how many connections the worker has in its pool.
 The listener will slect the first worker not busy in handling responses (wrkctx->busy == 0),
 if none is found found, then the listener will choose the worker with less connections in its queue.
 
+shardcache_destroy() will stop the listener and all workers (waiting for them to finish serving responses if in progress)
