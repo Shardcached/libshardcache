@@ -476,7 +476,7 @@ void stop_serving(shardcache_serving_t *s) {
     pthread_cancel(s->listener);
     pthread_join(s->listener, NULL);
 #ifdef SHARDCACHE_DEBUG
-    fprintf(stderr, "Collecting worker threads (might have to wait until i/o is finished)");
+    fprintf(stderr, "Collecting worker threads (might have to wait until i/o is finished)\n");
 #endif
     for (i = 0; i < s->num_workers; i++) {
         __sync_add_and_fetch(&s->workers[i].leave, 1);
