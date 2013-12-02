@@ -104,7 +104,7 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
 
                     if (memcmp(&digest, &sig, SHARDCACHE_MSG_SIG_LEN) != 0) {
                         struct sockaddr_in saddr;
-                        socklen_t addr_len;
+                        socklen_t addr_len = sizeof(struct sockaddr_in);
                         getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
 
                         fprintf(stderr, "Unauthorized message from %s\n",

@@ -198,7 +198,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             // BAD REQUEST
 #ifdef SHARDCACHE_DEBUG
             struct sockaddr_in saddr;
-            socklen_t addr_len;
+            socklen_t addr_len = sizeof(struct sockaddr_in);
             getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
             fprintf(stderr, "BAD REQUEST from %s\n", inet_ntoa(saddr.sin_addr));
 #endif
@@ -298,7 +298,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         if (memcmp(&digest, (uint8_t *)fbuf_data(ctx->input), sizeof(digest)) != 0) {
             // AUTH FAILED
             struct sockaddr_in saddr;
-            socklen_t addr_len;
+            socklen_t addr_len = sizeof(struct sockaddr_in);
             getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
 
             fprintf(stderr, "Unauthorized request from %s\n",
