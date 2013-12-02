@@ -59,34 +59,20 @@ typedef int (*shardcache_store_item_callback_t)(void *key, size_t len, void *val
 typedef int (*shardcache_remove_item_callback_t)(void *key, size_t len, void *priv);
 
 /**
- * @brief This callback is called when creating the shardcache instance
- *        to initialize the underlying storage.
- * @return if a pointer is returned by the callback, the same pointer will
- *         be passed as 'priv' to all further calls to the storage
- */
-typedef void *(*shardcache_init_storage_callback_t)(const char **options);
-
-/**
- * @brief Callback called when the shardcache is going to be destroyed
- *        so that the underlying storage can take all the necessary
- *        actions before exiting.
- *        If a pointer was returned from the init_storage() callback
- *        it will be passed to this function as well
- */
-typedef void (*shardcache_destroy_storage_callback_t)(void *priv);
-
-/**
  * @brief Structure holding all the callback pointers required
  *        by shardcache to interact with underlying storage
  */
 typedef struct __shardcache_storage_s {
-    shardcache_init_storage_callback_t     init_storage;
-    shardcache_destroy_storage_callback_t  destroy_storage;
     shardcache_fetch_item_callback_t       fetch_item;
     shardcache_store_item_callback_t       store_item;
     shardcache_remove_item_callback_t      remove_item;
-    const char                           **options;
+    void                                   *priv;
 } shardcache_storage_t;
+
+typedef shardcache_storage_t *(*shardcache_storage_constructor)(const char **options);
+typedef void (*shardcache_storage_destructor)(shardcache_storage_t *storage);
+
+
 
 /**
  * @brief Create a new shardcache instance
