@@ -475,6 +475,9 @@ void stop_serving(shardcache_serving_t *s) {
 
     pthread_cancel(s->listener);
     pthread_join(s->listener, NULL);
+#ifdef SHARDCACHE_DEBUG
+    fprintf(stderr, "Collecting worker threads (might have to wait until i/o is finished)");
+#endif
     for (i = 0; i < s->num_workers; i++) {
         __sync_add_and_fetch(&s->workers[i].leave, 1);
         pthread_mutex_lock(&s->workers[i].wakeup_lock);
@@ -482,6 +485,8 @@ void stop_serving(shardcache_serving_t *s) {
         pthread_mutex_unlock(&s->workers[i].wakeup_lock);
         pthread_join(s->workers[i].thread, NULL);
         destroy_list(s->workers[i].jobs);
+        pthread_mutex_destroy(&s->workers[i].wakeup_lock);
+        pthread_cond_destroy(&s->workers[i].wakeup_cond);
     }
     free(s->workers);
     close(s->sock);
