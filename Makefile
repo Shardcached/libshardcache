@@ -8,9 +8,9 @@ endif
 DEPS = $(DEPS_INSTALL_DIR)/.libs/libhl.a \
        $(DEPS_INSTALL_DIR)/.libs/libchash.a \
        $(DEPS_INSTALL_DIR)/.libs/libiomux.a \
-       $(DEPS_INSTALL_DIR)/.libs/libsiphash.a \
-       -L.
+       $(DEPS_INSTALL_DIR)/.libs/libsiphash.a
 
+LDFLAGS += -L.
 ifeq ($(UNAME), Linux)
 LDFLAGS += -pthread
 else
@@ -39,7 +39,7 @@ TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
 TEST_EXEC_ORDER = 
 
-all: build_deps objects static shared
+allu: objects static shared
 
 tsan:
 	@export CC=gcc-4.8; \
@@ -47,8 +47,9 @@ tsan:
 	export CFLAGS="-fsanitize=thread -g -fPIC -pie"; \
 	make all
 
+.PHONY: build_deps
 build_deps:
-	@make -eC deps all
+	@make -eC deps all;
 
 update_deps:
 	@make -C deps update
@@ -56,10 +57,10 @@ update_deps:
 purge_deps:
 	@make -C deps purge
 
-static: build_deps objects
+static:  objects
 	ar -r libshardcache.a src/*.o
 
-standalone: build_deps objects
+standalone: objects
 	@cwd=`pwd`; \
 	dir="/tmp/libshardcache_build$$$$"; \
 	mkdir $$dir; \
@@ -75,8 +76,10 @@ standalone: build_deps objects
 shared: objects
 	$(CC) src/*.o $(LDFLAGS) $(DEPS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
 
+$(DEPS): build_deps
+
 objects: CFLAGS += -fPIC -Isrc -I$(DEPS_INSTALL_DIR)/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
-objects: $(TARGETS)
+objects: $(DEPS) $(TARGETS)
 
 clean:
 	rm -f src/*.o

@@ -6,6 +6,8 @@ DEPS=https://github.com/dgryski/libchash \
 export LIBDIR := $(shell pwd)/.libs
 export INCDIR := $(shell pwd)/.incs
 
+.PHONY: all update purge clean
+
 all:
 	@mkdir -p .libs; \
 	mkdir -p .incs; \
@@ -18,6 +20,7 @@ all:
 	    export INCDIR=$(INCDIR); \
 	    export CFLAGS="$(CFLAGS) -DHAVE_UINT64_T"; \
 	    make -eC $$name; \
+	    if [ $$? -ne 0 ] ; then exit $$?; fi; \
 	    make -eC $$name install; \
 	done
 
