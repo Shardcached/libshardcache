@@ -8,30 +8,34 @@
                       |  listener  |                  | worker/iomux |  ......  | worker/iomux |
                       --------------                  ----------------          ----------------
                             |                                |                         |
-                            |                                | shift_value(fd)         | shift_value(fd)
+                            |                                | shift_value(conn)       | shift_value(conn)
                             |                                |                         |
                             |                                v                         v
                             |                             ========                  ========
                             |                             | jobs |                  | jobs |
                             |                             --------                  --------
                             |                                ^                         ^
-                            |    push_value(fd)              |                         |
+                            |    push_value(conn)            |                         |
                             |-----------------------------------------------------------
 
-When the library creates a new shardcache context a (single) listener thread is created together
-with a pool of workers waiting for filedescriptor to handle (the size of the worker's pool is configurable
-via a parameter of shardcache_crate()) Each worker thread creates an iomux and waits for filedescriptors to handle
+When the library creates a new shardcache context one single listener thread is created together
+with a pool of workers (the size of the worker's pool is configurable via the last argument
+of the shardcache_crate() function.
 
-The listener thread waits on the accept() call and as soon as a new connection arrives select a new worker thread.
-The file descriptor is then handed to the selected worker which puts it in its internal iomux and start reading
-from the connection (more file descriptors might be handed to the same worker)
+Each worker thread creates an iomux and waits for connections to handle.
 
-Each worker keeps reading asynchronously from all the fildescriptors is has been assigned until a full request is received,
-in which case it computes the response,  writes it back to the same connection the full request was received from and finally
-goes back reading from its filedescriptors (until a new full request is received again ... and so on)
+The listener thread waits on the accept() call and as soon as a new connection arrives it proceeds selecting a worker thread.
+The connection is then handed to the selected worker which puts it in its internal iomux so that new data
+from the connection will be notified via the iomux input handler (more connections can/will be handled asynchronously
+from the same worker)
 
-The worker selection takes into account both if the worker is handling a response at the time the new connection
-has been established and how many filedescriptor the worker has in its pool.
-The listener will slect the first worker not busy in handling responses (wrkctx->busy == 0) if none is found found,
-then the listener will choose the worker with less filedescriptors in its queue.
+Each worker keeps receiving data from all its connections until a full request is received, in which case
+it computes the response,  writes it back to the same connection itreceived the requestfrom and finally
+goes back collecting data from its connections (until a new full request is received again ... and so on)
+New connections might be assigned to the worker while doing its job
+
+The worker selection takes into account both if the worker is busy handling a response at the time
+the new connection has been established and how many connections the worker has in its pool.
+The listener will slect the first worker not busy in handling responses (wrkctx->busy == 0),
+if none is found found, then the listener will choose the worker with less connections in its queue.
 
