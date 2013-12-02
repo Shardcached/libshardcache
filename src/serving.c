@@ -205,7 +205,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         uint16_t clen = ntohs(nlen);
         if (clen > 0) {
             if (fbuf_used(ctx->input) < 2+clen) {
-                // TRUNCATED
+                // TRUNCATED - we need more data
                 break;
             }
             chunk += 2;
@@ -218,7 +218,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             fbuf_remove(ctx->input, 2+clen);
         } else {
             if (fbuf_used(ctx->input) < 3) {
-                // TRUNCATED
+                // TRUNCATED - we need more data
                 break;
             }
             sip_hash_update(ctx->shash, fbuf_data(ctx->input), 2);
@@ -233,9 +233,9 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                         ctx->state = STATE_READING_VALUE;
                     } else {
                         // BAD FORMAT - Ignore
-                        //              we don't support multiple records if the message is not SET
-                        //ctx->state = STATE_READING_AUTH;
-                        break;
+                        // we don't support multiple records if the message is not SET
+                        iomux_close(iomux, fd);
+                        return;
                     }
                 } else if (ctx->state == STATE_READING_VALUE) {
                     ctx->state = STATE_READING_AUTH;
@@ -391,19 +391,34 @@ void *serve_cache(void *priv) {
         socklen_t addr_len = 0;
 
         pthread_testcancel();
+
         int fd = accept(serv->sock, &peer_addr, &addr_len);
         if (fd >= 0) {
-            shardcache_worker_context_t wrkctx = serv->workers[idx++ % serv->num_workers];
+            shardcache_worker_context_t *wrkctx = &serv->workers[idx++ % serv->num_workers];
             // skip over workers who are busy computing/serving a response
-            while (__sync_fetch_and_add(&wrkctx.busy, 0) != 0) {
-                wrkctx = serv->workers[idx++ % serv->num_workers];
+            int cnt = 0;
+            shardcache_worker_context_t *freemost_worker = NULL;
+            while (__sync_fetch_and_add(&wrkctx->busy, 0) != 0) {
+                if (!freemost_worker)
+                    freemost_worker = wrkctx;
+                else if (list_count(wrkctx->jobs) < list_count(freemost_worker->jobs))
+                    freemost_worker = wrkctx;
+
+                wrkctx = &serv->workers[idx++ % serv->num_workers];
+                // well ...if we go through the whole list and all threads are busy)
+                // let's queue this filedescriptor to the one with the least queued  fildescriptors
+                if (cnt++ == serv->num_workers) {
+                    wrkctx = freemost_worker;
+                    break;
+                }
             }
+            pthread_testcancel();
             // create and initialize the context for the new connection
             shardcache_connection_context_t *ctx = shardcache_create_connection_context(serv->cache, serv->auth, fd);
-            push_value(wrkctx.jobs, ctx);
-            pthread_mutex_lock(&wrkctx.wakeup_lock);
-            pthread_cond_signal(&wrkctx.wakeup_cond);
-            pthread_mutex_unlock(&wrkctx.wakeup_lock);
+            push_value(wrkctx->jobs, ctx);
+            pthread_mutex_lock(&wrkctx->wakeup_lock);
+            pthread_cond_signal(&wrkctx->wakeup_cond);
+            pthread_mutex_unlock(&wrkctx->wakeup_lock);
         }
     }
  
