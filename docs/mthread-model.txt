@@ -1,28 +1,29 @@
 
 
-                                  =============    get(key) / set(key, value) / del(key)
-                                  |  Storage  |<-----------------------------------------
-                                  -------------                                         |
-                                                                                        |
-    =======================             pthread_create()                                |
-    | shardcache_create() |-------------------------------------------------            |
-    -----------------------                      |                         |            |
-                |                                |                         |            |
-                |                                |                         |            |
-                v                                v                         v            |
-          ==============                  ================          ================    |
-          |  listener  |                  | worker/iomux |  ......  | worker/iomux |-----
-          --------------                  ----------------          ----------------
-                |                                |                         |
-                |                                | shift_value(conn)       | shift_value(conn)
-                |                                |                         |
-                |                                v                         v
-                |                             ========                  ========
-                |                             | jobs |                  | jobs |
-                |                             --------                  --------
-                |                                ^                         ^
-                |    push_value(conn)            |                         |
-                ------------------------------------------------------------
+                              =============   get(key) / set(key, value) / del(key)
+                              |  Storage  |<---------------------------------------
+                              -------------                                       |
+    =======================                                                       |
+    | shardcache_create() |                                                       |
+    -----------------------            pthread_create()                           |
+                |-----------------------------------------------------            |
+                |                          |                         |            |
+                |                          |                         |            |
+                |                          |                         |            |
+                v                          v                         v            |
+          ==============            ================          ================    |
+          |  listener  |            | worker/iomux |  ......  | worker/iomux |-----
+          --------------            ----------------          ----------------
+                |                          |                         |
+                |                          | shift_value(conn)       | shift_value(conn)
+                |                          |                         |
+                |                          v                         v
+                |                       ========                  ========
+                |                       | jobs |                  | jobs |
+                |                       --------                  --------
+                |                          ^                         ^
+                |     push_value(conn)     |                         |
+                ------------------------------------------------------
 
 
 When the library creates a new shardcache context one single listener thread is created together
@@ -40,6 +41,7 @@ Each worker keeps receiving data from all its connections until a full request i
 it computes the response,  writes it back to the same connection itreceived the requestfrom and finally
 goes back collecting data from its connections (until a new full request is received again ... and so on)
 New connections might be assigned to the worker while doing its job
+
 Any worker can access the storage anytime to fetch/store/remove keys (note: the storage MUST be thread safe)
 
 The worker selection takes into account both if the worker is busy handling a response at the time
