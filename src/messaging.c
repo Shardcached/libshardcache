@@ -88,18 +88,18 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
 
 #ifdef SHARDCACHE_DEBUG
                     int i;
-                    printf("computed digest for received data: (%s) ", auth);
+                    fprintf(stderr, "computed digest for received data: (%s) ", auth);
                     for (i=0; i<8; i++) {
-                        printf("%02x", (unsigned char)((char *)&digest)[i]);
+                        fprintf(stderr, "%02x", (unsigned char)((char *)&digest)[i]);
                     }
-                    printf("\n");
+                    fprintf(stderr, "\n");
 
-                    printf("digest from received data: ");
+                    fprintf(stderr, "digest from received data: ");
                     uint8_t *remote = sig;
                     for (i=0; i<8; i++) {
-                        printf("%02x", remote[i]);
+                        fprintf(stderr, "%02x", remote[i]);
                     }
-                    printf("\n");
+                    fprintf(stderr, "\n");
 #endif
 
                     if (memcmp(&digest, &sig, SHARDCACHE_MSG_SIG_LEN) != 0) {
@@ -241,17 +241,22 @@ int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, s
 
 #ifdef SHARDCACHE_DEBUG
         int i;
-        printf("sending message: ");
-        for (i = 0; i < fbuf_used(&msg) - dlen; i++) {
-            printf("%02x", (unsigned char)(fbuf_data(&msg))[i]);
+        fprintf(stderr, "sending message: ");
+	size_t mlen = fbuf_used(&msg);
+        if (mlen > 256)
+           mlen = 256;
+        for (i = 0; i < mlen - dlen; i++) {
+            fprintf(stderr, "%02x", (unsigned char)(fbuf_data(&msg))[i]);
         }
-        printf("\n");
+        if (mlen < fbuf_used(&msg))
+            fprintf(stderr, "...");
+        fprintf(stderr, "\n");
 
-        printf("computed digest: ");
+        fprintf(stderr, "computed digest: ");
         for (i=0; i < dlen; i++) {
-            printf("%02x", (unsigned char)((char *)&digest)[i]);
+            fprintf(stderr, "%02x", (unsigned char)((char *)&digest)[i]);
         }
-        printf("\n");
+        fprintf(stderr, "\n");
 #endif
     }
 
