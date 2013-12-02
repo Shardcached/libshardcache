@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/time.h>
 #include <errno.h>
 #include <pthread.h>
 #include <iomux.h>
@@ -27,6 +28,8 @@ typedef struct {
     linked_list_t *jobs;
     int busy;
     int leave;
+    pthread_cond_t wakeup_cond;
+    pthread_mutex_t wakeup_lock;
 } shardcache_worker_context_t;
 
 struct __shardcache_serving_s {
@@ -348,8 +351,23 @@ void *worker(void *priv) {
             ctx = shift_value(jobs);
         }
         pthread_testcancel();
-        struct timeval timeout = { 0, 500 };
-        iomux_run(iomux, &timeout);
+        if (!iomux_isempty(iomux)) {
+            struct timeval timeout = { 0, 1000 };
+            iomux_run(iomux, &timeout);
+        } else {
+            struct timespec abstime;
+            struct timeval now;
+            int rc = gettimeofday(&now, NULL);
+            if (rc == 0) {
+                abstime.tv_sec = now.tv_sec + 1;
+                abstime.tv_nsec = now.tv_usec * 1000;
+                pthread_mutex_lock(&wrk_ctx->wakeup_lock);
+                pthread_cond_timedwait(&wrk_ctx->wakeup_cond, &wrk_ctx->wakeup_lock, &abstime);
+                pthread_mutex_unlock(&wrk_ctx->wakeup_lock);
+            } else {
+                // TODO - Error messsages
+            }
+        }
     }
     iomux_destroy(iomux);
     return NULL;
@@ -383,6 +401,9 @@ void *serve_cache(void *priv) {
             // create and initialize the context for the new connection
             shardcache_connection_context_t *ctx = shardcache_create_connection_context(serv->cache, serv->auth, fd);
             push_value(wrkctx.jobs, ctx);
+            pthread_mutex_lock(&wrkctx.wakeup_lock);
+            pthread_cond_signal(&wrkctx.wakeup_cond);
+            pthread_mutex_unlock(&wrkctx.wakeup_lock);
         }
     }
  
@@ -418,6 +439,8 @@ shardcache_serving_t *start_serving(shardcache_t *cache, const char *auth, const
     int i;
     for (i = 0; i < num_workers; i++) {
         s->workers[i].jobs = create_list();
+        pthread_mutex_init(&s->workers[i].wakeup_lock, NULL);
+        pthread_cond_init(&s->workers[i].wakeup_cond, NULL);
         pthread_create(&s->workers[i].thread, NULL, worker, &s->workers[i]);
     }
 
@@ -439,6 +462,9 @@ void stop_serving(shardcache_serving_t *s) {
     pthread_join(s->listener, NULL);
     for (i = 0; i < s->num_workers; i++) {
         __sync_add_and_fetch(&s->workers[i].leave, 1);
+        pthread_mutex_lock(&s->workers[i].wakeup_lock);
+        pthread_cond_signal(&s->workers[i].wakeup_cond);
+        pthread_mutex_unlock(&s->workers[i].wakeup_lock);
         pthread_join(s->workers[i].thread, NULL);
         destroy_list(s->workers[i].jobs);
     }
