@@ -289,7 +289,7 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner)
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
-#ifdef DEBUG_SHARDCACHE
+#ifdef SHARDCACHE_DEBUG
                 fprintf(stderr, "Got (set) response from peer %s : %s\n",
                         peer, fbuf_data(&resp));
 #endif
@@ -333,7 +333,7 @@ int send_to_peer(char *peer, char *auth, void *key,
             errno = 0;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
-#ifdef DEBUG_SHARDCACHE
+#ifdef SHARDCACHE_DEBUG
                 fprintf(stderr, "Got (set) response from peer %s : %s\n",
                         peer, fbuf_data(&resp));
 #endif
@@ -370,7 +370,7 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out)
             shardcache_hdr_t hdr = 0;
             int rc = read_message(fd, auth, out, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
-#ifdef DEBUG_SHARDCACHE
+#ifdef SHARDCACHE_DEBUG
                 fprintf(stderr, "Got new data from peer %s : %s => ", peer, key);
                 int i;
                 char *datap = fbuf_data(out);
