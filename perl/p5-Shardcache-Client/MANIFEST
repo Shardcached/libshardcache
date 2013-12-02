@@ -3,4 +3,6 @@ lib/Shardcache/Client.pm
 Makefile.PL
 MANIFEST
 README.md
-t/Shardcache_client.t
+t/shardcache_client.t
+examples/sh_fetch_file.pl
+examples/sh_upload_file.pl
