@@ -371,8 +371,13 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out)
             int rc = read_message(fd, auth, out, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
 #ifdef DEBUG_SHARDCACHE
-                fprintf(stderr, "Got new data from peer %s : %s => %s \n",
-                        peer, key, fbuf_data(out));
+                fprintf(stderr, "Got new data from peer %s : %s => ", peer, key);
+                int i;
+                char *datap = fbuf_data(out);
+                size_t datalen = fbuf_used(out);
+                for (i = 0; i < datalen; i++)
+                    fprintf(stderr, "%02x", datap[i]); 
+                fprintf(stderr, "\n");
 #endif
                 close(fd);
                 return 0;
