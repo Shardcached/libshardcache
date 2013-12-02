@@ -375,8 +375,12 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out)
                 int i;
                 char *datap = fbuf_data(out);
                 size_t datalen = fbuf_used(out);
+                if (datalen > 256)
+                    datalen = 256;
                 for (i = 0; i < datalen; i++)
                     fprintf(stderr, "%02x", datap[i]); 
+                if (datalen < fbuf_used(out))
+                    fprintf(stderr, "...");
                 fprintf(stderr, "\n");
 #endif
                 close(fd);
