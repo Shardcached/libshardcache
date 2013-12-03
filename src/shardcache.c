@@ -14,12 +14,14 @@
 #include <iomux.h>
 #include <fbuf.h>
 #include <siphash.h>
+#include <limits.h>
 
 #include "shardcache.h"
 #include "arc.h"
 #include "connections.h"
 #include "messaging.h"
 #include "serving.h"
+#include "counters.h"
 
 #include <chash.h>
 
@@ -38,6 +40,25 @@
 
 typedef struct chash_t chash_t;
 
+#define SHARDCACHE_COUNTER_GETS         0
+#define SHARDCACHE_COUNTER_SETS         1
+#define SHARDCACHE_COUNTER_DELS         2
+#define SHARDCACHE_COUNTER_EVICTS       3
+#define SHARDCACHE_COUNTER_CACHE_MISSES 4
+#define SHARDCACHE_COUNTER_NOT_FOUND    5
+#define SHARDCACHE_NUM_COUNTERS 6
+static struct {
+    const char *name;
+    uint32_t value;
+} internal_counters[] = {
+    { "gets", 0 },
+    { "sets", 0 },
+    { "dels", 0 },
+    { "evicts", 0 },
+    { "cache_misses", 0 },
+    { "not_found", 0 },
+};
+
 struct __shardcache_s {
     char *me;
 
@@ -54,7 +75,6 @@ struct __shardcache_s {
     int evict_on_delete;
 
     shardcache_serving_t *serv;
-    shardcache_stats_t stats;
 
     const char auth[16];
 };
@@ -117,19 +137,20 @@ static int __op_fetch(void *item, void * priv)
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
             pthread_mutex_unlock(&obj->lock);
-            __sync_add_and_fetch(&cache->stats.ncache_misses, 1);
+            __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
             return 0;
         }
     }
 
-    // we are responsible for this item ... so let's fetch it
-    if (cache->storage.fetch) {
-        void *v = cache->storage.fetch(obj->key, obj->len, &obj->dlen, cache->storage.priv);
 #ifdef SHARDCACHE_DEBUG
         char keystr[1024];
         memcpy(keystr, obj->key, obj->len < 1024 ? obj->len : 1024);
         keystr[obj->len] = 0;
-
+#endif
+    // we are responsible for this item ... so let's fetch it
+    if (cache->storage.fetch) {
+        void *v = cache->storage.fetch(obj->key, obj->len, &obj->dlen, cache->storage.priv);
+#ifdef SHARDCACHE_DEBUG
         if (v && obj->dlen) {
             fprintf(stderr, "Fetch storage callback returned value ");
             
@@ -147,11 +168,14 @@ static int __op_fetch(void *item, void * priv)
 
     if (!obj->data) {
         pthread_mutex_unlock(&obj->lock);
-        __sync_add_and_fetch(&cache->stats.nnot_found, 1);
+#ifdef SHARDCACHE_DEBUG
+        fprintf(stderr, "Item not found for key %s\n", keystr);
+#endif
+        __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_NOT_FOUND].value, 1);
         return -1;
     }
     pthread_mutex_unlock(&obj->lock);
-    __sync_add_and_fetch(&cache->stats.ncache_misses, 1);
+    __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
     return 0;
 }
 
@@ -164,6 +188,7 @@ static void __op_evict(void *item, void *priv)
         free(obj->data);
         obj->data = NULL;
         obj->dlen = 0;
+        __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_EVICTS].value, 1);
     }
     pthread_mutex_unlock(&obj->lock);
 }
@@ -262,6 +287,11 @@ shardcache_t *shardcache_create(char *me,
     fprintf(stderr, "\n");
 #endif
 
+    shardcache_init_counters();
+    for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
+        shardcache_counter_add(internal_counters[i].name, &internal_counters[i].value); 
+    }
+
     cache->serv = start_serving(cache, cache->auth, cache->me, num_workers);
 
     return cache;
@@ -269,6 +299,11 @@ shardcache_t *shardcache_create(char *me,
 
 void shardcache_destroy(shardcache_t *cache) {
     int i;
+    for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
+        shardcache_counter_remove(internal_counters[i].name);
+    }
+    shardcache_release_counters();
+
     if (cache->serv)
         stop_serving(cache->serv);
 
@@ -281,6 +316,7 @@ void shardcache_destroy(shardcache_t *cache) {
     for (i = 0; i < cache->num_shards; i++)
         free(cache->shards[i]);
     free(cache->shards);
+
     free(cache);
 }
 
@@ -288,7 +324,7 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
     if (!key)
         return NULL;
 
-    __sync_add_and_fetch(&cache->stats.ngets, 1);
+    __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_GETS].value, 1);
 
     char *value = NULL;
     cache_object_t *obj = NULL;
@@ -316,7 +352,7 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
     if (!key || !value)
         return -1;
 
-    __sync_add_and_fetch(&cache->stats.nsets, 1);
+    __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_SETS].value, 1);
 
     arc_remove(cache->arc, (const void *)key, klen);
 
@@ -362,7 +398,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
     if (!key)
         return -1;
 
-    __sync_add_and_fetch(&cache->stats.ndels, 1);
+    __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_DELS].value, 1);
 
     // if we are not the owner try propagating the command to the responsible peer
     char node_name[1024];
@@ -413,12 +449,8 @@ char **shardcache_get_peers(shardcache_t *cache, int *num_peers) {
     return cache->shards;
 }
 
-void shardcache_get_stats(shardcache_t *cache, shardcache_stats_t *stats) {
-    stats->ngets = __sync_fetch_and_add(&cache->stats.ngets, 0);
-    stats->nsets = __sync_fetch_and_add(&cache->stats.nsets, 0);
-    stats->ndels = __sync_fetch_and_add(&cache->stats.ndels, 0);
-    stats->ncache_misses = __sync_fetch_and_add(&cache->stats.ncache_misses, 0);
-    stats->nnot_found = __sync_fetch_and_add(&cache->stats.nnot_found, 0);
+int shardcache_get_counters(shardcache_t *cache, shardcache_counter_t **counters) {
+    return shardcache_get_all_counters(counters); 
 }
 
 static void reset_stat_figure(uint32_t *figure_ptr) {
@@ -429,12 +461,12 @@ static void reset_stat_figure(uint32_t *figure_ptr) {
     } while (!done);
 }
 
-void shardcache_clear_stats(shardcache_t *cache) {
-    reset_stat_figure(&cache->stats.ngets);
-    reset_stat_figure(&cache->stats.nsets);
-    reset_stat_figure(&cache->stats.ndels);
-    reset_stat_figure(&cache->stats.ncache_misses);
-    reset_stat_figure(&cache->stats.nnot_found);
+void shardcache_clear_counters(shardcache_t *cache) {
+    if (cache) { }
+    int i;
+    for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i++) {
+        reset_stat_figure(&internal_counters[i].value);
+    }
 }
 
 int shardcache_test_ownership(shardcache_t *cache, void *key, size_t klen, char *owner, size_t *len)

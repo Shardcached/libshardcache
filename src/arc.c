@@ -359,7 +359,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
             moved->key = malloc(len);
             memcpy(moved->key, key, len);
             moved->klen = len;
-            ht_set(cache->hash, (void *)key, len, moved, sizeof(arc_object_t), NULL, NULL);
+            ht_set(cache->hash, (void *)key, len, moved, sizeof(arc_object_t));
         }
         retain_ref(cache->refcnt, moved->node);
         *valuep = moved->ptr;

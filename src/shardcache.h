@@ -17,17 +17,13 @@
 typedef struct __shardcache_s shardcache_t;
 
 typedef struct {
-    uint32_t ngets;
-    uint32_t nsets;
-    uint32_t ndels;
-    uint32_t nevicts;
-    uint32_t ncache_misses;
-    uint32_t nnot_found;
-} shardcache_stats_t;
+    char name[256];
+    uint32_t value;
+} shardcache_counter_t;
 
+int shardcache_get_counters(shardcache_t *cache, shardcache_counter_t **counters);
+void shardcache_clear_counters(shardcache_t *cache);
 
-void shardcache_get_stats(shardcache_t *cache, shardcache_stats_t *stats);
-void shardcache_clear_stats(shardcache_t *cache);
 
 /**
  * @brief Callback to provide the value for a given key.
