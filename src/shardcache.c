@@ -476,6 +476,7 @@ void shardcache_free_index(shardcache_storage_index_t *index)
             if (index->items[i].key)
                 free(index->items[i].key);
         }
+        free(index->items);
     }
     free(index);
 }
