@@ -372,9 +372,12 @@ void *worker(void *priv) {
         }
         pthread_testcancel();
         if (!iomux_isempty(iomux)) {
-            struct timeval timeout = { 0, 1000 };
+            struct timeval timeout = { 0, 500 };
             iomux_run(iomux, &timeout);
         } else {
+            // we don't have any filedescriptor to handle in the mux,
+            // let's sit for 1 second waiting for the listener thread to wake
+            // us up if new filedescriptors arrive
             struct timespec abstime;
             struct timeval now;
             int rc = 0;

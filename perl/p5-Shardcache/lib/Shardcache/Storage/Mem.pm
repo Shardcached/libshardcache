@@ -20,4 +20,15 @@ sub remove {
     delete $self->{_map}->{$key};
 }
 
+sub count {
+    my ($self, $key) = @_;
+    return scalar(%{$self->{_map}});
+}
+
+sub index {
+    my ($self, $key) = @_;
+    return map +{ key => $_, size => length($self->{_map}->{$_}) }, keys %{$self->{_map}};
+}
+
+
 1;

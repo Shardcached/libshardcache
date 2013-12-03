@@ -123,18 +123,22 @@ static int __op_fetch(void *item, void * priv)
     }
 
     // we are responsible for this item ... so let's fetch it
-    if (cache->storage.fetch_item) {
-        void *v = cache->storage.fetch_item(obj->key, obj->len, &obj->dlen, cache->storage.priv);
+    if (cache->storage.fetch) {
+        void *v = cache->storage.fetch(obj->key, obj->len, &obj->dlen, cache->storage.priv);
 #ifdef SHARDCACHE_DEBUG
         char keystr[1024];
         memcpy(keystr, obj->key, obj->len < 1024 ? obj->len : 1024);
         keystr[obj->len] = 0;
 
-        fprintf(stderr, "Fetch storage callback returned value ");
-        
-        HEXDUMP_DATA(v, obj->dlen);
+        if (v && obj->dlen) {
+            fprintf(stderr, "Fetch storage callback returned value ");
+            
+            HEXDUMP_DATA(v, obj->dlen);
 
-        fprintf(stderr, " (%lu) for key %s\n", (unsigned long)obj->dlen, keystr); 
+            fprintf(stderr, " (%lu) for key %s\n", (unsigned long)obj->dlen, keystr); 
+        } else {
+            fprintf(stderr, "Fetch storage callback returned an empty value for key %s\n", keystr);
+        }
 #endif
         if (v && obj->dlen) {
             obj->data = v;
@@ -332,8 +336,8 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
         fprintf(stderr, " (%d) for key %s\n", (int)vlen, keystr);
 #endif
         node_name[node_len] = 0;
-        if (cache->storage.store_item)
-            cache->storage.store_item(key, klen, value, vlen, cache->storage.priv);
+        if (cache->storage.store)
+            cache->storage.store(key, klen, value, vlen, cache->storage.priv);
         return 0;
     } else if (node_len) {
 #ifdef SHARDCACHE_DEBUG
@@ -367,8 +371,8 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
     if (shardcache_test_ownership(cache, key, klen, node_name, &node_len))
     {
         node_name[node_len] = 0;
-        if (cache->storage.remove_item)
-            cache->storage.remove_item(key, klen, cache->storage.priv);
+        if (cache->storage.remove)
+            cache->storage.remove(key, klen, cache->storage.priv);
 
         if (cache->evict_on_delete)
         {
@@ -444,4 +448,34 @@ int shardcache_test_ownership(shardcache_t *cache, void *key, size_t klen, char 
     if (len)
         *len = name_len;
     return (strcmp(owner, cache->me) == 0);
+}
+
+shardcache_storage_index_t *shardcache_get_index(shardcache_t *cache)
+{
+    size_t isize = 65535;
+    if (cache->storage.count)
+        isize = cache->storage.count(cache->storage.priv);
+
+    ssize_t count = 0;
+    shardcache_storage_index_item_t *items = NULL;
+    if (cache->storage.index) {
+        items = calloc(sizeof(shardcache_storage_index_item_t), isize);
+        count = cache->storage.index(items, isize, cache->storage.priv);
+    }
+    shardcache_storage_index_t *index = calloc(1, sizeof(shardcache_storage_index_t));
+    index->items = items;
+    index->size = count; 
+    return index;
+}
+
+void shardcache_free_index(shardcache_storage_index_t *index)
+{
+    if (index->items) {
+        int i;
+        for (i = 0; i < index->size; i++) {
+            if (index->items[i].key)
+                free(index->items[i].key);
+        }
+    }
+    free(index);
 }

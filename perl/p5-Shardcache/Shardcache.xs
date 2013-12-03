@@ -37,6 +37,110 @@ static inline int __acquire_lock() {
     return 0;
 }
 
+static size_t __st_index(shardcache_storage_index_item_t *index, size_t isize, void *priv) {
+
+    if (__acquire_lock() != 0) {
+        fprintf(stderr, "__st_fetch can't acquire lock\n");
+        return 0;
+    }
+    PERL_SET_CONTEXT(orig_perl);
+    dTHX;
+    dSP;
+
+    ENTER;
+    SAVETMPS;
+
+    SV *storage = (SV *)priv;
+    if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
+        croak("missing storage or not of class 'Shardcache::Storage'");
+    }
+
+    PUSHMARK(SP);
+    XPUSHs(storage);
+    PUTBACK;
+
+    int count = call_method("count", G_SCALAR);
+
+    SPAGAIN;
+
+    if (count != 1) {
+        croak("Unexpected errors calling the 'fetch' method on the storage object");
+    }
+
+    SV *indexsv = POPs;
+    if (!SvROK(indexsv) || SvTYPE(SvRV(indexsv)) != SVt_PVHV)
+      croak("Expected an hash reference as return value from storage->index()");
+
+    HV *index_hash = (HV *)SvRV(indexsv);
+    I32 rc = hv_iterinit(index_hash);
+    char *key; 
+    I32 klen;
+    SV *val = hv_iternextsv(index_hash, &key, &klen);
+    int icnt = 0;
+    while (val) {
+        if (icnt >= isize)
+            break;
+        STRLEN vlen;
+        shardcache_storage_index_item_t *index = &index[icnt];
+        index->key = malloc(klen);
+        memcpy(index->key, key, klen);
+        index->klen = klen;
+        SvPVbyte(val, vlen);
+        index->vlen = vlen;
+        icnt++;
+        val = hv_iternextsv(index_hash, &key, &klen);
+    }
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+
+    pthread_mutex_unlock(&lock);
+    
+    return icnt;
+}
+
+
+static size_t __st_count(void *priv) {
+    if (__acquire_lock() != 0) {
+        fprintf(stderr, "__st_fetch can't acquire lock\n");
+        return 0;
+    }
+    PERL_SET_CONTEXT(orig_perl);
+    dTHX;
+    dSP;
+
+    ENTER;
+    SAVETMPS;
+
+    SV *storage = (SV *)priv;
+    if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
+        croak("missing storage or not of class 'Shardcache::Storage'");
+    }
+
+    PUSHMARK(SP);
+    XPUSHs(storage);
+    PUTBACK;
+
+    int count = call_method("count", G_SCALAR);
+
+    SPAGAIN;
+
+    if (count != 1) {
+        croak("Unexpected errors calling the 'fetch' method on the storage object");
+    }
+
+    IV ret = POPi;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+
+    pthread_mutex_unlock(&lock);
+    
+    return ret;
+}
+
 static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
     if (__acquire_lock() != 0) {
         fprintf(stderr, "__st_fetch can't acquire lock\n");
@@ -200,9 +304,11 @@ shardcache_create(me, peers, storage, secret, num_workers)
         }
 
         shardcache_storage_t storage_struct = {
-            .fetch_item      = __st_fetch,
-            .store_item      = __st_store,
-            .remove_item     = __st_remove,
+            .fetch   = __st_fetch,
+            .store   = __st_store,
+            .remove  = __st_remove,
+            .index   = __st_index,
+            .count   = __st_count,
             .priv            = SvREFCNT_inc(storage)
         };
 

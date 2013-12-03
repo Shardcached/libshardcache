@@ -114,7 +114,7 @@ sub send_msg {
     }
 
     # $chunk now points at the signature
-    if ($csig != $chunk) {
+    if ($csig ne $chunk) {
         return undef;
     }
 
