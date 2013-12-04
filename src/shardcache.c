@@ -302,7 +302,6 @@ void shardcache_destroy(shardcache_t *cache) {
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
         shardcache_counter_remove(internal_counters[i].name);
     }
-    shardcache_release_counters();
 
     if (cache->serv)
         stop_serving(cache->serv);
@@ -316,6 +315,8 @@ void shardcache_destroy(shardcache_t *cache) {
     for (i = 0; i < cache->num_shards; i++)
         free(cache->shards[i]);
     free(cache->shards);
+
+    shardcache_release_counters();
 
     free(cache);
 }
