@@ -15,6 +15,7 @@
 #include "messaging.h"
 #include "connections.h"
 #include "shardcache.h"
+#include "counters.h"
 
 #include "serving.h"
 
@@ -41,8 +42,8 @@
 typedef struct {
     pthread_t thread;
     linked_list_t *jobs;
-    int busy;
-    int num_fds;
+    uint32_t busy;
+    uint32_t num_fds;
     int leave;
     pthread_cond_t wakeup_cond;
     pthread_mutex_t wakeup_lock;
@@ -490,6 +491,13 @@ shardcache_serving_t *start_serving(shardcache_t *cache, const char *auth, const
     int i;
     for (i = 0; i < num_workers; i++) {
         s->workers[i].jobs = create_list();
+
+        char varname[256];
+        snprintf(varname, sizeof(varname), "worker%d::numfds", i);
+        shardcache_counter_add(varname, &s->workers[i].num_fds);
+        snprintf(varname, sizeof(varname), "worker%d::busy", i);
+        shardcache_counter_add(varname, &s->workers[i].busy);
+
         pthread_mutex_init(&s->workers[i].wakeup_lock, NULL);
         pthread_cond_init(&s->workers[i].wakeup_cond, NULL);
         pthread_create(&s->workers[i].thread, NULL, worker, &s->workers[i]);
@@ -515,6 +523,12 @@ void stop_serving(shardcache_serving_t *s) {
     fprintf(stderr, "Collecting worker threads (might have to wait until i/o is finished)\n");
 #endif
     for (i = 0; i < s->num_workers; i++) {
+        char varname[256];
+        snprintf(varname, sizeof(varname), "worker%d::numfds", i);
+        shardcache_counter_remove(varname);
+        snprintf(varname, sizeof(varname), "worker%d::busy", i);
+        shardcache_counter_remove(varname);
+
         ATOMIC_INCREMENT(s->workers[i].leave);
 
         // wake up the worker if slacking
