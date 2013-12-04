@@ -282,6 +282,10 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner)
     int fd = open_connection(host, port, 30);
     free(addr);
 
+#ifdef SHARDCACHE_DEBUG
+    fprintf(stderr, "Sending del command to peer %s (owner: %d)\n",
+            peer, owner);
+#endif
     if (fd >= 0) {
         char hdr = owner ? SHARDCACHE_HDR_DEL : SHARDCACHE_HDR_EVI;
         int rc = write_message(fd, auth, hdr, key, klen, NULL, 0);
