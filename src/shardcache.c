@@ -337,9 +337,13 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
         pthread_mutex_lock(&obj->lock);
         if (obj->data) {
             value = malloc(obj->dlen);
-            memcpy(value, obj->data, obj->dlen);
-            if (vlen)
-                *vlen = obj->dlen;
+            if (value) {
+                memcpy(value, obj->data, obj->dlen);
+                if (vlen)
+                    *vlen = obj->dlen;
+            } else {
+                fprintf(stderr, "malloc failed for %zu bytes: %s\n", obj->dlen, strerror(errno));
+            }
         }
         pthread_mutex_unlock(&obj->lock);
     }
