@@ -445,6 +445,7 @@ int shardcache_evict(shardcache_t *cache, void *key, size_t klen) {
         return -1;
 
     arc_remove(cache->arc, (const void *)key, klen);
+    __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_EVICTS].value, 1);
     return 0;
 }
 
