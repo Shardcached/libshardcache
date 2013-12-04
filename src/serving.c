@@ -493,9 +493,9 @@ shardcache_serving_t *start_serving(shardcache_t *cache, const char *auth, const
         s->workers[i].jobs = create_list();
 
         char varname[256];
-        snprintf(varname, sizeof(varname), "worker%d::numfds", i);
+        snprintf(varname, sizeof(varname), "worker[%d].numfds", i);
         shardcache_counter_add(varname, &s->workers[i].num_fds);
-        snprintf(varname, sizeof(varname), "worker%d::busy", i);
+        snprintf(varname, sizeof(varname), "worker[%d].busy", i);
         shardcache_counter_add(varname, &s->workers[i].busy);
 
         pthread_mutex_init(&s->workers[i].wakeup_lock, NULL);
