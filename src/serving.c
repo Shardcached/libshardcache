@@ -491,6 +491,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache, const char *auth, const
     int i;
     for (i = 0; i < num_workers; i++) {
         s->workers[i].jobs = create_list();
+        set_free_value_callback(s->workers[i].jobs, (free_value_callback_t)shardcache_destroy_connection_context);
 
         char varname[256];
         snprintf(varname, sizeof(varname), "worker[%d].numfds", i);
