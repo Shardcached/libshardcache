@@ -149,7 +149,7 @@ look like :
 NOTE: The protocol allows for an unlimited amount of records, even though 
       only 2 records have a practical use since no implemented message 
       makes use of more than 2 (apart SET, which requires both key and value,
-      all other request types require only one record to be provided
+      all other request types require only one record to be provided)
 
 
 More Examples
@@ -193,8 +193,6 @@ NOTES:
 
 The SIG postfix is a siphash digest computed using a shared secret and the
 complete message (obviously excluding the signature itself)
-
-Responses don't include the signature
 
 Responses to 'GET' requests will return the value for the requested key
 if found, an empty value otherwise

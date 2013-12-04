@@ -1,36 +1,42 @@
 
 
-                              =============   get(key) / set(key, value) / del(key)
-                              |  Storage  |<---------------------------------------
-                              -------------                                       |
-    =======================                                                       |
-    | shardcache_create() |                                                       |
-    -----------------------            pthread_create()                           |
-                |-----------------------------------------------------            |
-                |                          |                         |            |
-                |                          |                         |            |
-                |                          |                         |            |
-                v                          v                         v            |
-          ==============            ================          ================    |
-          |  listener  |            | worker/iomux |  ......  | worker/iomux |-----
-          --------------            ----------------          ----------------
-                |                          |                         |
-                |                          | shift_value(conn)       | shift_value(conn)
-                |                          |                         |
-                |                          v                         v
-                |                       ========                  ========
-                |                       | jobs |                  | jobs |
-                |                       --------                  --------
-                |                          ^                         ^
-                |     push_value(conn)     |                         |
-                ------------------------------------------------------
+             =======================       ============= get(key) / set(key, value) / del(key)
+             | shardcache_craete() | ----->|  Storage  |<---------------------------------
+             -----------------------       -------------                                 |
+                        |                                                                |
+                        |            pthread_create()                                    |
+      ------------------|---------------------------------------------                   |
+      |                 |                  |                         |                   |
+      |                 |                  |                         |                   |
+      |                 |                  |                         |                   |
+      v                 v                  v                         v                   |
+==============    ==============    ================          ================           |
+|  evictor   |    |  listener  |    | worker/iomux |  ......  | worker/iomux |------------
+--------------    --------------    ----------------          ----------------   |
+      |                 |                  |                         |           |
+      |          push_value(conn)   shift_value(conn)                |      push_value(key)
+      |                 |                  |                         |           |
+      |                 |                  v                         v           v
+      |                 |               ========                  ========    ========
+      |                 |               | jobs |                  | jobs |    | jobs |
+      |                 |               --------                  --------    --------
+      |                 |                  ^                         ^           ^
+      |                 |                  |                         |           |
+      |                 ----------------------------------------------           |
+      |                                                                          |
+      |                                                                          |
+      |                               shift_value(key)                           |
+      ----------------------------------------------------------------------------
 
 
 When the library creates a new shardcache context one single listener thread is created together
 with a pool of workers (the size of the worker's pool is configurable via the last argument
-of the shardcache_crate() function.
+of the shardcache_crate() function) and one more thread which will take care of propagating
+eviction commands to the other peers.
 
 Each worker thread creates an iomux and waits for connections to handle.
+
+The evictor thread starts waiting for eviction commands to handle
 
 The listener thread waits on the accept() call and as soon as a new connection arrives it proceeds selecting a worker thread.
 The connection is then handed to the selected worker which puts it in its internal iomux so that new data
@@ -38,11 +44,15 @@ from the connection will be notified via the iomux input handler (more connectio
 from the same worker)
 
 Each worker keeps receiving data from all its connections until a full request is received, in which case
-it computes the response,  writes it back to the same connection itreceived the requestfrom and finally
+it computes the response,  writes it back to the same connection it received the request from and finally
 goes back collecting data from its connections (until a new full request is received again ... and so on)
 New connections might be assigned to the worker while doing its job
 
 Any worker can access the storage anytime to fetch/store/remove keys (note: the storage MUST be thread safe)
+
+If a delete request is received by the owner of the key to be deleted, an eviction comand needs to be sent
+to all the peers. Instead of waiting for all the messages to be sent and aknowledged will provide the key
+to the evictor thread which will take care of notifying the eviction request to all the other peers.
 
 The worker selection takes into account both if the worker is busy handling a response at the time
 the new connection has been established and how many connections the worker has in its pool.
