@@ -9,12 +9,15 @@
 #include <sys/select.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/time.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <iomux.h>
-#include <fbuf.h>
-#include <siphash.h>
 #include <limits.h>
+#include <fbuf.h>
+#include <linklist.h>
+#include <siphash.h>
+#include <chash.h>
 
 #include "shardcache.h"
 #include "arc.h"
@@ -23,7 +26,6 @@
 #include "serving.h"
 #include "counters.h"
 
-#include <chash.h>
 
 #define HEXDUMP_DATA(__d, __l) {\
     int __i;\
@@ -77,6 +79,11 @@ struct __shardcache_s {
     shardcache_serving_t *serv;
 
     const char auth[16];
+
+    pthread_t evictor_th;
+    pthread_mutex_t evictor_lock;
+    pthread_cond_t evictor_cond;
+    linked_list_t *evictor_jobs;
 };
 
 /* This is the object we're managing. It has a key
@@ -139,6 +146,10 @@ static int __op_fetch(void *item, void * priv)
             pthread_mutex_unlock(&obj->lock);
             __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
             return 0;
+        } else {
+            pthread_mutex_unlock(&obj->lock);
+            fbuf_destroy(&value);
+            return -1;
         }
     }
 
@@ -211,6 +222,69 @@ static void __op_destroy(void *item, void *priv)
 static void shardcache_do_nothing(int sig)
 {
     // do_nothing
+}
+
+typedef struct {
+    void *key;
+    size_t klen;
+} shardcache_evictor_job_t;
+
+static void destroy_evictor_job(shardcache_evictor_job_t *job)
+{
+    free(job->key);
+    free(job);
+}
+
+static shardcache_evictor_job_t *create_evictor_job(void *key, size_t klen)
+{
+    shardcache_evictor_job_t *job = malloc(sizeof(shardcache_evictor_job_t)); 
+    job->key = malloc(klen);
+    memcpy(job->key, key, klen);
+    job->klen = klen; 
+    return job;
+}
+
+static void *evictor(void *priv)
+{
+    shardcache_t *cache = (shardcache_t *)priv;
+    linked_list_t *jobs = cache->evictor_jobs;
+    for (;;) {
+        pthread_testcancel();
+        shardcache_evictor_job_t *job = (shardcache_evictor_job_t *)shift_value(jobs);
+        while (job) {
+#ifdef SHARDCACHE_DEBUG
+            char keystr[1024];
+            memcpy(keystr, job->key, job->klen < 1024 ? job->klen : 1024);
+            keystr[job->klen] = 0;
+            fprintf(stderr, "Eviction job for key '%s' started\n", keystr);
+#endif
+            int i;
+            for (i = 0; i < cache->num_shards; i++) {
+                char *peer = cache->shards[i];
+                if (strcmp(peer, cache->me) != 0) {
+                    delete_from_peer(peer, (char *)cache->auth, job->key, job->klen, 0);
+                }
+            }
+            destroy_evictor_job(job);
+#ifdef SHARDCACHE_DEBUG
+            fprintf(stderr, "Eviction job for key '%s' completed\n", keystr);
+#endif
+            job = (shardcache_evictor_job_t *)shift_value(jobs);
+        }
+        pthread_testcancel();
+        struct timeval now;
+        int rc = 0;
+        rc = gettimeofday(&now, NULL);
+        if (rc == 0) {
+            struct timespec abstime = { now.tv_sec + 1, now.tv_usec * 1000 };
+            pthread_mutex_lock(&cache->evictor_lock);
+            pthread_cond_timedwait(&cache->evictor_cond, &cache->evictor_lock, &abstime);
+            pthread_mutex_unlock(&cache->evictor_lock);
+        } else {
+            // TODO - Error messsages
+        }
+    }
+    return NULL;
 }
 
 shardcache_t *shardcache_create(char *me,
@@ -292,6 +366,14 @@ shardcache_t *shardcache_create(char *me,
         shardcache_counter_add(internal_counters[i].name, &internal_counters[i].value); 
     }
 
+    if (cache->evict_on_delete) {
+        pthread_mutex_init(&cache->evictor_lock, NULL);
+        pthread_cond_init(&cache->evictor_cond, NULL);
+        cache->evictor_jobs = create_list();
+        set_free_value_callback(cache->evictor_jobs, (free_value_callback_t)destroy_evictor_job);
+        pthread_create(&cache->evictor_th, NULL, evictor, cache);
+    }
+
     cache->serv = start_serving(cache, cache->auth, cache->me, num_workers);
 
     return cache;
@@ -315,6 +397,14 @@ void shardcache_destroy(shardcache_t *cache) {
     for (i = 0; i < cache->num_shards; i++)
         free(cache->shards[i]);
     free(cache->shards);
+
+    if (cache->evict_on_delete) {
+        pthread_cancel(cache->evictor_th);
+        pthread_join(cache->evictor_th, NULL);
+        pthread_mutex_destroy(&cache->evictor_lock);
+        pthread_cond_destroy(&cache->evictor_cond);
+        destroy_list(cache->evictor_jobs);
+    }
 
     shardcache_release_counters();
 
@@ -418,19 +508,11 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
         if (cache->evict_on_delete)
         {
             arc_remove(cache->arc, (const void *)key, klen);
-            /* TODO - we might want to use a backgroud thread to propagate the eviction requests
-             *        to all our peers. This would mean that the deleted value might still be found
-             *        in the cache of some other node when we return from this function.
-             *        But on the other hand we wouldn't block the caller until all the connections
-             *        have been handled ... involving eventual timeouts and slowdowns
-             */
-            int i;
-            for (i = 0; i < cache->num_shards; i++) {
-                char *peer = cache->shards[i];
-                if (strcmp(peer, cache->me) != 0) {
-                    delete_from_peer(peer, (char *)cache->auth, key, klen, 0);
-                }
-            }
+            shardcache_evictor_job_t *job = create_evictor_job(key, klen);
+            push_value(cache->evictor_jobs, job);
+            pthread_mutex_lock(&cache->evictor_lock);
+            pthread_cond_signal(&cache->evictor_cond);
+            pthread_mutex_unlock(&cache->evictor_lock);
         }
         return 0;
     } else {
