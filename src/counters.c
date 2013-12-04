@@ -1,31 +1,40 @@
 #include "counters.h"
-#include <hashtable.h>
+#include <linklist.h>
+#include <stdio.h>
 
-#define COUNTERS_ALLOC_CHUNK 64
+#define COUNTERS_ALLOC_CHUNK 128
 
-static hashtable_t *lookup = NULL;
+static linked_list_t *lookup = NULL;
 
 void shardcache_init_counters()
 {
-    lookup = ht_create(1<<8, 1<<16, NULL);  
+    lookup = create_list();
 }
 
 void shardcache_release_counters()
 {
-    ht_destroy(lookup);
+    destroy_list(lookup);
 }
 
 void
 shardcache_counter_add(const char *name, const uint32_t *counter_ptr)
 {
-    ht_set(lookup, (void *)name, strlen(name),
-                   (void *)counter_ptr, sizeof(uint32_t));
+    tagged_value_t *tval = create_tagged_value_nocopy((char *)name, (void *)counter_ptr);
+    push_tagged_value(lookup, tval);
 }
 
 void
 shardcache_counter_remove(const char *name)
 {
-    ht_delete(lookup, (char *)name, strlen(name), NULL, NULL);
+    int i;
+    for (i = 0; i < list_count(lookup); i++) {
+        tagged_value_t *tval = pick_tagged_value(lookup, i);
+        if (strcmp(tval->tag, name) == 0) {
+            tval = fetch_tagged_value(lookup, i);
+            destroy_tagged_value(tval);
+            break;
+        }  
+    }
 }
 
 typedef struct {
@@ -34,34 +43,24 @@ typedef struct {
     uint32_t index;
 } counters_iterator_arg_t;
 
-static int
-collect_counters(hashtable_t *table, void *key, size_t klen, void *value, size_t vlen, void *user)
-{
-    counters_iterator_arg_t *arg = (counters_iterator_arg_t *)user;
-    if (arg->index == arg->size-1) {
-        arg->size += COUNTERS_ALLOC_CHUNK;
-        arg->counters = realloc(arg->counters, arg->size);
-    }
-    shardcache_counter_t *counter = &arg->counters[arg->index++];
-    size_t namelen = klen;
-    if (klen > sizeof(counter->name))
-        namelen = sizeof(counter->name);
-    memcpy(counter->name, key, namelen);
-    counter->name[klen] = 0;
-    counter->value = __sync_fetch_and_add((uint32_t *)value, 0);
-    return 1;
-}
-
 int
-shardcache_get_all_counters(shardcache_counter_t **counters)
+shardcache_get_all_counters(shardcache_counter_t **out_counters)
 {
-    counters_iterator_arg_t collect = { 
-        .counters = calloc(sizeof(shardcache_counter_t), COUNTERS_ALLOC_CHUNK),
-        .size = COUNTERS_ALLOC_CHUNK,
-        .index = 0
-    };
-    ht_foreach_pair(lookup, collect_counters, &collect); 
-    *counters = collect.counters;
-    return collect.index;
+    int i = 0;
+    shardcache_counter_t *counters = calloc(sizeof(shardcache_counter_t), COUNTERS_ALLOC_CHUNK);
+    size_t size = COUNTERS_ALLOC_CHUNK;
+    for (i = 0; i < list_count(lookup); i++) {
+        tagged_value_t *tval = pick_tagged_value(lookup, i);
+        if (i == size-1) {
+            size += COUNTERS_ALLOC_CHUNK;
+            counters = realloc(counters, size);
+        }
+        shardcache_counter_t *counter = &counters[i];
+        snprintf(counter->name, sizeof(counter->name), "%s", tval->tag);
+        counter->value = (uint32_t)__sync_fetch_and_add((uint32_t *)tval->value, 0);
+ 
+    }
+    *out_counters = counters;
+    return i;
 }
 
