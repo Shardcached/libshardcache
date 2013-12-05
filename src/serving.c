@@ -57,6 +57,7 @@ struct __shardcache_serving_s {
     const char *me;
     int num_workers;
     shardcache_worker_context_t *workers;
+    shardcache_counters_t *counters;
 };
 
 typedef struct {
@@ -462,12 +463,18 @@ void *serve_cache(void *priv) {
     return NULL;
 }
 
-shardcache_serving_t *start_serving(shardcache_t *cache, const char *auth, const char *me, int num_workers) {
+shardcache_serving_t *start_serving(shardcache_t *cache,
+                                    const char *auth,
+                                    const char *me,
+                                    int num_workers,
+                                    shardcache_counters_t *counters)
+{
     shardcache_serving_t *s = calloc(1, sizeof(shardcache_serving_t));
     s->cache = cache;
     s->me = me;
     s->auth = auth;
     s->num_workers = num_workers;
+    s->counters = counters;
 
     // open the listening socket
     char *brkt = NULL;
@@ -493,11 +500,13 @@ shardcache_serving_t *start_serving(shardcache_t *cache, const char *auth, const
         s->workers[i].jobs = create_list();
         set_free_value_callback(s->workers[i].jobs, (free_value_callback_t)shardcache_destroy_connection_context);
 
-        char varname[256];
-        snprintf(varname, sizeof(varname), "worker[%d].numfds", i);
-        shardcache_counter_add(varname, &s->workers[i].num_fds);
-        snprintf(varname, sizeof(varname), "worker[%d].busy", i);
-        shardcache_counter_add(varname, &s->workers[i].busy);
+        if (s->counters) {
+            char varname[256];
+            snprintf(varname, sizeof(varname), "worker[%d].numfds", i);
+            shardcache_counter_add(s->counters, varname, &s->workers[i].num_fds);
+            snprintf(varname, sizeof(varname), "worker[%d].busy", i);
+            shardcache_counter_add(s->counters, varname, &s->workers[i].busy);
+        }
 
         pthread_mutex_init(&s->workers[i].wakeup_lock, NULL);
         pthread_cond_init(&s->workers[i].wakeup_cond, NULL);
@@ -524,11 +533,14 @@ void stop_serving(shardcache_serving_t *s) {
     fprintf(stderr, "Collecting worker threads (might have to wait until i/o is finished)\n");
 #endif
     for (i = 0; i < s->num_workers; i++) {
-        char varname[256];
-        snprintf(varname, sizeof(varname), "worker%d::numfds", i);
-        shardcache_counter_remove(varname);
-        snprintf(varname, sizeof(varname), "worker%d::busy", i);
-        shardcache_counter_remove(varname);
+
+        if (s->counters) {
+            char varname[256];
+            snprintf(varname, sizeof(varname), "worker%d::numfds", i);
+            shardcache_counter_remove(s->counters, varname);
+            snprintf(varname, sizeof(varname), "worker%d::busy", i);
+            shardcache_counter_remove(s->counters, varname);
+        }
 
         ATOMIC_INCREMENT(s->workers[i].leave);
 

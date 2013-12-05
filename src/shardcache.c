@@ -64,7 +64,7 @@ static struct {
 struct __shardcache_s {
     char *me;
 
-    char **shards;
+    shardcache_node_t *shards;
     int num_shards;
 
     arc_t *arc;
@@ -84,6 +84,8 @@ struct __shardcache_s {
     pthread_mutex_t evictor_lock;
     pthread_cond_t evictor_cond;
     linked_list_t *evictor_jobs;
+
+    shardcache_counters_t *counters;
 };
 
 /* This is the object we're managing. It has a key
@@ -114,6 +116,18 @@ static void *__op_create(const void *key, size_t len, void *priv)
     return obj;
 }
 
+static char *shardcache_get_node_address(shardcache_t *cache, char *label) {
+    char *addr = NULL;
+    int i;
+    for (i = 0; i < cache->num_shards; i++ ){
+        if (strcmp(cache->shards[i].label, label) == 0) {
+            addr = cache->shards[i].address;
+            break;
+        }
+    }
+    return addr;
+}
+
 static int __op_fetch(void *item, void * priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
@@ -137,9 +151,15 @@ static int __op_fetch(void *item, void * priv)
         fprintf(stderr, "Fetching data for key %s from peer %s\n", keystr, node_name); 
 #endif
         node_name[node_len] = 0;
+        char *peer = shardcache_get_node_address(cache, (char *)node_name);
+        if (!peer) {
+            // TODO - Error Messages
+            pthread_mutex_unlock(&obj->lock);
+            return -1;
+        }
         // another peer is responsible for this item, let's get the value from there
         fbuf_t value = FBUF_STATIC_INITIALIZER;
-        int rc = fetch_from_peer((char *)node_name, (char *)cache->auth, obj->key, obj->len, &value);
+        int rc = fetch_from_peer(peer, (char *)cache->auth, obj->key, obj->len, &value);
         if (rc == 0 && fbuf_used(&value)) {
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
@@ -260,9 +280,9 @@ static void *evictor(void *priv)
 #endif
             int i;
             for (i = 0; i < cache->num_shards; i++) {
-                char *peer = cache->shards[i];
+                char *peer = cache->shards[i].label;
                 if (strcmp(peer, cache->me) != 0) {
-                    delete_from_peer(peer, (char *)cache->auth, job->key, job->klen, 0);
+                    delete_from_peer(cache->shards[i].address, (char *)cache->auth, job->key, job->klen, 0);
                 }
             }
             destroy_evictor_job(job);
@@ -288,14 +308,15 @@ static void *evictor(void *priv)
 }
 
 shardcache_t *shardcache_create(char *me,
-                                char **peers,
-                                int npeers,
+                                shardcache_node_t *nodes,
+                                int nnodes,
                                 shardcache_storage_t *st,
                                 char *secret,
                                 int num_workers)
 {
     int i;
-    size_t shard_lens[npeers + 1];
+    size_t shard_lens[nnodes];
+    char *shard_names[nnodes];
 
     shardcache_t *cache = calloc(1, sizeof(shardcache_t));
 
@@ -322,20 +343,16 @@ shardcache_t *shardcache_create(char *me,
     cache->ops.destroy = __op_destroy;
 
     cache->ops.priv = cache;
-    // shards will contain all the peers (including me) plus a
-    // trailing NULL pointer (thus npeers + 2)
-    cache->shards = malloc(sizeof(char *) * (npeers + 2));
-    for (i = 0; i < npeers; i++) {
-        cache->shards[i] = strdup(peers[i]);
-        shard_lens[i] = strlen(cache->shards[i]);
+    cache->shards = malloc(sizeof(shardcache_node_t) * nnodes);
+    memcpy(cache->shards, nodes, sizeof(shardcache_node_t) * nnodes);
+    for (i = 0; i < nnodes; i++) {
+        shard_names[i] = cache->shards[i].label;
+        shard_lens[i] = strlen(shard_names[i]);
     }
-    cache->shards[npeers] = cache->me;
-    shard_lens[npeers] = strlen(me);
 
-    cache->num_shards = npeers + 1;
-    cache->shards[cache->num_shards] = NULL;
+    cache->num_shards = nnodes;
 
-    cache->chash = chash_create((const char **)cache->shards, shard_lens, cache->num_shards, 200);
+    cache->chash = chash_create((const char **)shard_names, shard_lens, cache->num_shards, 200);
 
     cache->arc = arc_create(&cache->ops, 300);
 
@@ -361,9 +378,9 @@ shardcache_t *shardcache_create(char *me,
     fprintf(stderr, "\n");
 #endif
 
-    shardcache_init_counters();
+    cache->counters = shardcache_init_counters();
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
-        shardcache_counter_add(internal_counters[i].name, &internal_counters[i].value); 
+        shardcache_counter_add(cache->counters, internal_counters[i].name, &internal_counters[i].value); 
     }
 
     if (cache->evict_on_delete) {
@@ -374,15 +391,20 @@ shardcache_t *shardcache_create(char *me,
         pthread_create(&cache->evictor_th, NULL, evictor, cache);
     }
 
-    cache->serv = start_serving(cache, cache->auth, cache->me, num_workers);
-
+    char *addr = shardcache_get_node_address(cache, cache->me);
+    if (!addr) {
+        fprintf(stderr, "Can't find my address (%s) among the configured nodes\n", cache->me);
+        shardcache_destroy(cache);
+        return NULL;
+    }
+    cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
     return cache;
 }
 
 void shardcache_destroy(shardcache_t *cache) {
     int i;
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
-        shardcache_counter_remove(internal_counters[i].name);
+        shardcache_counter_remove(cache->counters, internal_counters[i].name);
     }
 
     if (cache->serv)
@@ -393,9 +415,8 @@ void shardcache_destroy(shardcache_t *cache) {
 
     if (cache->chash)
         chash_free(cache->chash);
-    //free(cache->me);
-    for (i = 0; i < cache->num_shards; i++)
-        free(cache->shards[i]);
+
+    free(cache->me);
     free(cache->shards);
 
     if (cache->evict_on_delete) {
@@ -406,7 +427,7 @@ void shardcache_destroy(shardcache_t *cache) {
         destroy_list(cache->evictor_jobs);
     }
 
-    shardcache_release_counters();
+    shardcache_release_counters(cache->counters);
 
     free(cache);
 }
@@ -466,7 +487,6 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
 
         fprintf(stderr, " (%d) for key %s\n", (int)vlen, keystr);
 #endif
-        node_name[node_len] = 0;
         if (cache->storage.store)
             cache->storage.store(key, klen, value, vlen, cache->storage.priv);
         return 0;
@@ -482,7 +502,13 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
 
         fprintf(stderr, " (%d) to %s\n", (int)vlen, node_name);
 #endif
-        return send_to_peer((char *)node_name, (char *)cache->auth, key, klen, value, vlen);
+        node_name[node_len] = 0;
+        char *peer = shardcache_get_node_address(cache, (char *)node_name);
+        if (!peer) {
+            // TODO - Error Messages
+            return -1;
+        }
+        return send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen);
     }
 
     return -1;
@@ -516,7 +542,13 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
         }
         return 0;
     } else {
-        return delete_from_peer((char *)node_name, (char *)cache->auth, key, klen, 1);
+        node_name[node_len] = 0;
+        char *peer = shardcache_get_node_address(cache, (char *)node_name);
+        if (!peer) {
+            // TODO - Error Messages
+            return -1;
+        }
+        return delete_from_peer(peer, (char *)cache->auth, key, klen, 1);
     }
 
     return -1;
@@ -531,14 +563,14 @@ int shardcache_evict(shardcache_t *cache, void *key, size_t klen) {
     return 0;
 }
 
-char **shardcache_get_peers(shardcache_t *cache, int *num_peers) {
-    if (num_peers)
-        *num_peers = cache->num_shards;
+const shardcache_node_t *shardcache_get_nodes(shardcache_t *cache, int *num_nodes) {
+    if (num_nodes)
+        *num_nodes = cache->num_shards;
     return cache->shards;
 }
 
 int shardcache_get_counters(shardcache_t *cache, shardcache_counter_t **counters) {
-    return shardcache_get_all_counters(counters); 
+    return shardcache_get_all_counters(cache->counters, counters); 
 }
 
 static void reset_stat_figure(uint32_t *figure_ptr) {

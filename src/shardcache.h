@@ -8,6 +8,7 @@
  */
 #include <sys/types.h>
 #include <stdint.h>
+#include "counters.h"
 
 #define SHARDCACHE_PORT_DEFAULT 9874
 
@@ -15,11 +16,6 @@
  * @brief Opaque structure representing the actual shardcache instance
  */
 typedef struct __shardcache_s shardcache_t;
-
-typedef struct {
-    char name[256];
-    uint32_t value;
-} shardcache_counter_t;
 
 int shardcache_get_counters(shardcache_t *cache, shardcache_counter_t **counters);
 void shardcache_clear_counters(shardcache_t *cache);
@@ -97,11 +93,16 @@ typedef struct __shardcache_storage_s {
 typedef shardcache_storage_t *(*shardcache_storage_constructor)(const char **options);
 typedef void (*shardcache_storage_destructor)(shardcache_storage_t *storage);
 
+typedef struct shardcache_node_s {
+    char label[256];
+    char address[256];
+} shardcache_node_t;
+
 /**
  * @brief Create a new shardcache instance
  * @arg me : a valid <address:port> null-terminated string representing the new node to be created
- * @arg peers : a list of <address:port> strings representing the peers taking part to the shardcache 'cloud'
- * @arg num_peers : the number of peers present in the peers list
+ * @arg nodes : a list of <address:port> strings representing the nodes taking part to the shardcache 'cloud'
+ * @arg num_nodes : the number of nodes present in the nodes list
  * @arg storage : a shardcache_storage_t structure holding pointers to the storage callbacks.
  *                NOTE: The newly created instance will copy the pointers to its internal descriptor so
  *                      the resources allocated for the storage structure can be safely released after
@@ -109,8 +110,8 @@ typedef void (*shardcache_storage_destructor)(shardcache_storage_t *storage);
  * @arg secret : a null-terminated string containing the shared secret used to authenticate incoming messages
  */
 shardcache_t *shardcache_create(char *me, 
-                        char **peers,
-                        int num_peers,
+                        shardcache_node_t *nodes,
+                        int num_nodes,
                         shardcache_storage_t *storage,
                         char *secret,
                         int num_workers);
@@ -163,22 +164,22 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen);
 int shardcache_evict(shardcache_t *cache, void *key, size_t klen);
 
 /**
- * @brief Get the list of all peers (including this node itself)
+ * @brief Get the list of all nodes (including this node itself)
  *        taking part to the shardcache 'cloud'
  * @arg cache : A valid pointer to a shardcache_t structure
- * @arg num_peers : If provided the number of peers in the returned array will be 
- *                  will be stored at the location pointed by num_peers
- * @return A NULL terminated list containing all the peers <address:port> strings
+ * @arg num_nodes : If provided the number of nodes in the returned array will be 
+ *                  will be stored at the location pointed by num_nodes
+ * @return A list containing all the nodes <address:port> strings
  */
-char **shardcache_get_peers(shardcache_t *cache, int *num_peers);
+const shardcache_node_t *shardcache_get_nodes(shardcache_t *cache, int *num_nodes);
 
 /**
- * @brief Get the peer owning a specific key
+ * @brief Get the node owning a specific key
  * @arg cache : A valid pointer to a shardcache_t structure
  * @arg key : A valid pointer to the key
  * @arg klen : The length of the key
  * @arg owner : If provided the pointed pointer will be set to the name
- *              (<address:port>) of the peer owning the key
+ *              (<address:port>) of the node owning the key
  * @return 1 if the current node (represented by cache) is the owner of the key, 0 otherwise
  */
 int shardcache_test_ownership(shardcache_t *cache, void *key, size_t klen, char *owner, size_t *len);
