@@ -3,9 +3,6 @@ DEPS=https://github.com/dgryski/libchash \
      https://github.com/xant/libiomux \
      https://github.com/xant/siphash-c
 
-export LIBDIR := $(shell pwd)/.libs
-export INCDIR := $(shell pwd)/.incs
-
 .PHONY: all update purge clean
 
 all:
@@ -16,8 +13,8 @@ all:
 	    if [ ! -d $$name ]; then \
 		git clone $$i; \
 	    fi; \
-	    export LIBDIR=$(LIBDIR); \
-	    export INCDIR=$(INCDIR); \
+	    export LIBDIR="$(shell pwd)/.libs"; \
+	    export INCDIR="$(shell pwd)/.incs"; \
 	    export CFLAGS="$(CFLAGS) -DHAVE_UINT64_T"; \
 	    make -eC $$name; \
 	    if [ $$? -ne 0 ] ; then exit $$?; fi; \
@@ -49,6 +46,6 @@ clean:
 		make -C $$name clean; \
 	    fi; \
 	done;
-	@rm -rf $(LIBDIR);
-	@rm -rf $(INCDIR);
+	@rm -rf "$(shell pwd)/.libs";
+	@rm -rf "$(shell pwd)/.incs";
 
