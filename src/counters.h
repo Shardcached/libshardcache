@@ -1,14 +1,7 @@
 #ifndef __SHARDCACHE_COUNTERS_H__
 #define __SHARDCACHE_COUNTERS_H__
 
-#include "shardcache.h"
-
 typedef struct __shardcache_counters_s shardcache_counters_t;
-
-typedef struct {
-    char name[256];
-    uint32_t value;
-} shardcache_counter_t;
 
 shardcache_counters_t *shardcache_init_counters();
 void shardcache_release_counters(shardcache_counters_t *counters);

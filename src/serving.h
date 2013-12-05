@@ -1,4 +1,5 @@
 #include "shardcache.h"
+#include "counters.h"
 
 typedef struct __shardcache_serving_s shardcache_serving_t;
 

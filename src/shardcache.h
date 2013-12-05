@@ -8,7 +8,12 @@
  */
 #include <sys/types.h>
 #include <stdint.h>
-#include "counters.h"
+
+typedef struct {
+    char name[256];
+    uint32_t value;
+} shardcache_counter_t;
+
 
 #define SHARDCACHE_PORT_DEFAULT 9874
 

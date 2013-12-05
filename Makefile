@@ -1,14 +1,10 @@
 UNAME := $(shell uname)
 LIBSHARDCACHE_DIR := $(shell pwd)
 
-ifeq ("$(DEPS_INSTALL_DIR)", "")
-DEPS_INSTALL_DIR=$(LIBSHARDCACHE_DIR)/deps
-endif
-
-DEPS = $(DEPS_INSTALL_DIR)/.libs/libhl.a \
-       $(DEPS_INSTALL_DIR)/.libs/libchash.a \
-       $(DEPS_INSTALL_DIR)/.libs/libiomux.a \
-       $(DEPS_INSTALL_DIR)/.libs/libsiphash.a
+DEPS = deps/.libs/libhl.a \
+       deps/.libs/libchash.a \
+       deps/.libs/libiomux.a \
+       deps/.libs/libsiphash.a
 
 LDFLAGS += -L.
 ifeq ($(UNAME), Linux)
@@ -33,6 +29,13 @@ ifeq ("$(INCDIR)", "")
 INCDIR=/usr/local/include
 endif
 
+ifeq ("$(SHARDCACHE_INSTALL_LIBDIR)", "")
+SHARDCACHE_INSTALL_LIBDIR=$(LIBDIR)
+endif
+
+ifeq ("$(SHARDCACHE_INSTALL_INCDIR)", "")
+SHARDCACHE_INSTALL_INCDIR=$(INCDIR)
+endif
 
 TARGETS = $(patsubst %.c, %.o, $(wildcard src/*.c))
 TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
@@ -65,10 +68,10 @@ standalone: objects
 	dir="/tmp/libshardcache_build$$$$"; \
 	mkdir $$dir; \
 	cd $$dir; \
-	ar x $(DEPS_INSTALL_DIR)/.libs/libchash.a; \
-	ar x $(DEPS_INSTALL_DIR)/.libs/libhl.a; \
-	ar x $(DEPS_INSTALL_DIR)/.libs/libiomux.a; \
-	ar x $(DEPS_INSTALL_DIR)/.libs/libsiphash.a; \
+	ar x deps/.libs/libchash.a; \
+	ar x deps/.libs/libhl.a; \
+	ar x deps/.libs/libiomux.a; \
+	ar x deps/.libs/libsiphash.a; \
 	cd $$cwd; \
 	ar -r libshardcache_standalone.a $$dir/*.o src/*.o; \
 	rm -rf $$dir
@@ -78,7 +81,7 @@ shared: objects
 
 $(DEPS): build_deps
 
-objects: CFLAGS += -fPIC -Isrc -I$(DEPS_INSTALL_DIR)/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
+objects: CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -g
 objects: $(DEPS) $(TARGETS)
 
 clean:
@@ -92,7 +95,7 @@ clean:
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
 
-tests: CFLAGS += -Isrc -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
+tests: CFLAGS += -Isrc -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -g
 
 tests: support/testing.o static
 	@for i in $(TESTS); do\
@@ -111,9 +114,9 @@ perl_build:
 	make -C perl all
 
 install:
-	 @echo "Installing libraries in $(LIBDIR)"; \
-	 cp -v libshardcache.a $(LIBDIR)/;\
-	 cp -v libshardcache.$(SHAREDEXT) $(LIBDIR)/;\
-	 echo "Installing headers in $(INCDIR)"; \
-	 cp -v src/shardcache.h $(INCDIR)/; \
+	 @echo "Installing libraries in $(SHARDCACHE_INSTALL_LIBDIR)"; \
+	 cp -v libshardcache.a $(SHARDCACHE_INSTALL_LIBDIR)/;\
+	 cp -v libshardcache.$(SHAREDEXT) $(SHARDCACHE_INSTALL_LIBDIR)/;\
+	 echo "Installing headers in $(SHARDCACHE_INSTALL_INCDIR)"; \
+	 cp -v src/shardcache.h $(SHARDCACHE_INSTALL_INCDIR)/; \
 

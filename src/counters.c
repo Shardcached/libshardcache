@@ -1,3 +1,4 @@
+#include "shardcache.h"
 #include "counters.h"
 #include <linklist.h>
 #include <stdio.h>
