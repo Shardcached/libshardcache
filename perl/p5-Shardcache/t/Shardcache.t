@@ -70,12 +70,12 @@ sub check_deletion {
 my $gc_name = "localhost:4444";
 my $gc2_name = "localhost:4443";
 my $gc = Shardcache->new(me => $gc_name,
-                         peers => [$gc2_name],
+                         nodes => [$gc2_name, $gc_name],
                          storage => Shardcache::Storage::Mem->new(),
                          num_workers => 5);
 
 my $gc2 = Shardcache->new(me => $gc2_name,
-                          peers => [$gc_name],
+                          nodes => [$gc_name, $gc2_name],
                           storage => Shardcache::Storage::Mem->new(),
                           num_workers => 5);
 

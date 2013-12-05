@@ -32,11 +32,11 @@ my $pid = fork();
 if ($pid) {
     # we are in the main process ... let's start two shardcache instances
     my $gc = Shardcache->new(me => "localhost:4444",
-                             peers => ["localhost:4443"],
+                             nodes => ["localhost:4443", "localhost:4444"],
                              storage => Shardcache::Storage::Mem->new());
 
     my $gc2 = Shardcache->new(me => "localhost:4443",
-                              peers => ["localhost:4444"],
+                              nodes => ["localhost:4443", "localhost:4444"],
                               storage => Shardcache::Storage::Mem->new());
 
     # set some keys on the first one

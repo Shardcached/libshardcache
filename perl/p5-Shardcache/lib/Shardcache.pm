@@ -22,7 +22,7 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 	shardcache_del
 	shardcache_destroy
 	shardcache_get
-	shardcache_get_peers
+	shardcache_get_nodes
 	shardcache_set
         shardcache_evict
 	shardcache_test_ownership
@@ -74,22 +74,24 @@ sub new {
         croak("'storage' MUST be a subclass of Shardache::Storage");
     }
 
-    my $peers = $params{peers} || [];
-    if ($peers) {
-        unless(ref($peers) && ref($peers) eq 'ARRAY') {
-            croak("'peers' MUST be an arrayref of string in the form 'ADDRESS:PORT'");
+    my $nodes = $params{nodes};
+    if ($nodes) {
+        unless(ref($nodes) && ref($nodes) eq 'ARRAY') {
+            croak("'nodes' MUST be an arrayref of string in the form 'ADDRESS:PORT'");
         }
-    } 
+    } else {
+        $nodes = [ $me ];
+    }
 
     my $secret = $params{secret} || 'default';
 
     my $num_workers = $params{num_workers} || 10;
 
     $self->{_storage} = $storage;
-    $self->{_peers} = $peers;
+    $self->{_nodes} = $nodes;
     $self->{_me} = $me;
     $self->{_secret} = $secret;
-    $self->{_gc} = shardcache_create($me, $peers, $storage, $secret, $num_workers);
+    $self->{_gc} = shardcache_create($me, $nodes, $storage, $secret, $num_workers);
     return unless ($self->{_gc});
     bless $self, $class;
     return $self;
@@ -155,14 +157,21 @@ Shardcache - Perl extension for libshardcache
 
   use Shardcache;
 
-    $gc = Shardcache->new(me => "127.0.0.1:4444",
+    $gc = Shardcache->new(me => "shard1",
                           storage => Shardcache::Storage::Mem->new(),
                           secret  => "my_Shardcache_secret",
-                          peers => ["127.0.0.2:4443"]
+                          nodes => [ [ "shard1", "localhost:4443" ],
+                                     [ "shard2", "otherhost:4444" ]
                           );
 
-    # NOTE: 'peers' and 'secret' are optional params
-    # if no peers are specified, the node will start in standalone mode
+    # NOTE: 'secret' is an optional params
+    # if nodes is set to an array of strings 
+    # (for instance: nodes => [ "localhost:4443", "otherhost:444" ])
+    # the same value will be used as label and address of the shard,
+    # in which case the strings contained in the nodes array are expected
+    # to be in the form 'address:bort'
+    # if no nodes are specified, the node will start in standalone mode
+    # and expect the 'me' param to be an 'address:port' string
     # if no secret is specified, the string 'default' will be used
 
     $gc->set("test_key1", "test_value1");
@@ -203,9 +212,9 @@ L<storage>
 
 =over
 
-L<peers>
+L<nodes>
 
-    An arrayref containing the peers in our shardcache 'cloud'
+    An arrayref containing the nodes in our shardcache 'cloud'
 
 L<secret>
 
@@ -264,11 +273,11 @@ L<secret>
 
 =head2 Exportable functions
 
-  shardcache_t *shardcache_create(char *me, char **peers, int num_peers, shardcache_storage_t *storage)
+  shardcache_t *shardcache_create(char *me, char **nodes, int num_nodes, shardcache_storage_t *storage)
   int shardcache_del(shardcache_t *cache, void *key, size_t klen)
   void shardcache_destroy(shardcache_t *cache)
   void *shardcache_get(shardcache_t *cache, void *key, size_t klen, size_t *vlen)
-  char **shardcache_get_peers(shardcache_t *cache, int *num_peers)
+  shardcache_node_t *shardcache_get_nodes(shardcache_t *cache, int *num_nodes)
   int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen)
   int shardcache_evict(shardcache_t *cache, void *key, size_t klen);
   int shardcache_test_ownership(shardcache_t *cache, void *key, size_t len, const char **owner)

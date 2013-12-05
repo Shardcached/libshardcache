@@ -262,45 +262,70 @@ MODULE = Shardcache		PACKAGE = Shardcache
 INCLUDE: const-xs.inc
 
 shardcache_t *
-shardcache_create(me, peers, storage, secret, num_workers)
+shardcache_create(me, nodes, storage, secret, num_workers)
         char *  me
-        SV   *  peers
+        SV   *  nodes
         SV   *  storage
         char *  secret
         int     num_workers
     PREINIT:
         int i;
-	int	num_peers = 0;
-        char ** shards = NULL;
+	int	num_nodes = 0;
+        shardcache_node_t *shards = NULL;
     CODE:
         orig_perl = my_perl;
         if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
             croak("missing storage or not of class 'Shardcache::Storage'");
         }
         
-        if (peers) {
-            if (!SvROK(peers) || SvTYPE(SvRV(peers)) != SVt_PVAV)
-              croak("Expected an array reference as 'peers' parameter");
+        if (SvOK(nodes)) {
+            if (!SvROK(nodes) || SvTYPE(SvRV(nodes)) != SVt_PVAV)
+              croak("Expected an array reference as 'nodes' parameter");
 
-            AV *peers_array = (AV *)SvRV(peers);
+            AV *nodes_array = (AV *)SvRV(nodes);
 
-            num_peers = av_len(peers_array) + 1;
-            if (num_peers > 0) {
-                Newx(shards, sizeof(char *) * num_peers + 1, char *);
-                for (i = 0; i < num_peers; i++) {
-                    STRLEN len;
-                    char *peer;
-                    SV **svp = av_fetch(peers_array, i, 0);
-                    if (svp == NULL) {
-                        // WRONG
-                        len = 0;
-                        peer = NULL;
-                    } else {
-                        peer = SvPVbyte(*svp, len);
+            num_nodes = av_len(nodes_array) + 1;
+            if (num_nodes > 0) {
+                Newx(shards, sizeof(shardcache_node_t) * num_nodes + 1, shardcache_node_t);
+                for (i = 0; i < num_nodes; i++) {
+                    STRLEN len = 0, alen = 0;
+                    char *node = NULL, *addr = NULL;
+
+                    SV **svp = av_fetch(nodes_array, i, 0);
+                    if (svp) {
+                        if (SvROK(*svp) && SvTYPE(SvRV(*svp)) != SVt_PVAV) {
+                            AV *pa = (AV *)SvRV(*svp);
+                            SV **nodep = av_fetch(pa, i, 0);
+                            node = SvPVbyte(*nodep, len);
+                            if (av_len(pa)) {
+                                SV **addrp = av_fetch(pa, i, 1);
+                                addr = SvPVbyte(*addrp, alen);
+                            } else {
+                                addr = node;
+                                alen = len;
+                            }
+                        } else {
+                            node = SvPVbyte(*svp, len);
+                            addr = node;
+                            alen = len;
+                        }
                     }
-                    shards[i] = peer;
+                    if (node && addr) {
+                        int l = MIN(len, sizeof(shards[i].label)-1);
+                        memcpy(shards[i].label, node, l);
+                        shards[i].label[l] = 0;
+                        int l2 = MIN(alen, sizeof(shards[i].address)-1);
+                        memcpy(shards[i].address, addr, l2);
+                        shards[i].address[l2] = 0;
+                    } else {
+                        croak("Can't parse the 'nodes' array");
+                    }
                 }
+            } else {
+                croak("No items found in the nodes array");
             }
+        } else {
+            croak("No nodes configured");
         }
 
         shardcache_storage_t storage_struct = {
@@ -309,10 +334,10 @@ shardcache_create(me, peers, storage, secret, num_workers)
             .remove  = __st_remove,
             .index   = __st_index,
             .count   = __st_count,
-            .priv            = SvREFCNT_inc(storage)
+            .priv    = SvREFCNT_inc(storage)
         };
 
-        RETVAL = shardcache_create(me, shards, num_peers, &storage_struct, secret, num_workers);
+        RETVAL = shardcache_create(me, shards, num_nodes, &storage_struct, secret, num_workers);
         if (shards)
             Safefree(shards);
 
@@ -370,20 +395,20 @@ shardcache_get(cache, key, klen)
         RETVAL
 
 AV *
-shardcache_get_peers(cache, num_peers)
+shardcache_get_nodes(cache, num_nodes)
 	shardcache_t *	cache
-	int *	num_peers
+	int *	num_nodes
     PREINIT:
         int i;
-        AV *peers;
+        AV *nodes;
     CODE:
-        peers = newAV();
-        char **list = shardcache_get_peers(cache, num_peers);
-        for (i = 0; i < *num_peers; i++) {
-            SV *peer = newSVpv(list[i], strlen(list[i]));
-            av_push(peers, sv_2mortal(peer));
+        nodes = newAV();
+        const shardcache_node_t *list = shardcache_get_nodes(cache, num_nodes);
+        for (i = 0; i < *num_nodes; i++) {
+            SV *node = newSVpv(list[i].label, strlen(list[i].label));
+            av_push(nodes, sv_2mortal(node));
         }
-        RETVAL = peers;
+        RETVAL = nodes;
     OUTPUT:
         RETVAL
 
@@ -412,12 +437,12 @@ shardcache_test_ownership(cache, key, len)
 	char *	key
 	size_t	len
     PREINIT:
-        char peer[1024];
+        char node[1024];
         size_t plen = 0;
     CODE:
-        shardcache_test_ownership(cache, key, len, (char *)&peer, &plen);
+        shardcache_test_ownership(cache, key, len, (char *)&node, &plen);
         if (plen) {
-            RETVAL = newSVpv(peer, plen);
+            RETVAL = newSVpv(node, plen);
         } else {
             RETVAL = &PL_sv_undef;
         }
