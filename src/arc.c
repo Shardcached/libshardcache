@@ -345,29 +345,37 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
         pthread_mutex_unlock(&obj->lock);
         return obj;
     }
-    void *ptr = cache->ops->create(key, len, cache->ops->priv);
-    obj = arc_object_create(cache, rand()%100, ptr);
-    if (!obj)
-        return NULL;
-    obj->node = new_node(cache->refcnt, obj);
+
+    pthread_mutex_lock(&cache->lock);
+    // ensure again there is no obj 
+    obj = ht_get(cache->hash, (void *)key, len, NULL);
+    if (!obj) { 
+        void *ptr = cache->ops->create(key, len, cache->ops->priv);
+        obj = arc_object_create(cache, rand()%100, ptr);
+        if (!obj)
+            return NULL;
+        obj->node = new_node(cache->refcnt, obj);
+        pthread_mutex_lock(&obj->lock);
+        ht_set(cache->hash, (void *)key, len, obj, sizeof(arc_object_t));
+    }
+    pthread_mutex_unlock(&cache->lock);
 
     /* New objects are always moved to the MRU list. */
     arc_object_t *moved = arc_move(cache, obj, &cache->mru);
     if (moved) {
-        pthread_mutex_lock(&moved->lock);
         if (!moved->key) {
             moved->key = malloc(len);
             memcpy(moved->key, key, len);
             moved->klen = len;
-            ht_set(cache->hash, (void *)key, len, moved, sizeof(arc_object_t));
         }
         retain_ref(cache->refcnt, moved->node);
         *valuep = moved->ptr;
-        pthread_mutex_unlock(&moved->lock);
+        pthread_mutex_unlock(&obj->lock);
         return moved;
     } else {
         release_ref(cache->refcnt, obj->node);
     }
+    pthread_mutex_unlock(&obj->lock);
     return NULL;
 }
 
