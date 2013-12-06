@@ -1,0 +1,16 @@
+ * support migrations
+   instances need to be notified someway of begin/end of a migration and
+   be aware of both continua (before and after the migration)
+   during this period the instance should move the items not owned anymore,
+   use the new continuum for all set requests , use the new continuum for all
+   get and delete requests but revert to the old continuum in case those fails
+   because of the item not found.
+   At the end of a migration the old continuum can be disposed
+
+ * parallelize eviction
+   evict commands are very small and can be handled quickly but now it's
+   only one thread making this job and it might be not enough in case of
+   a big number of delete requests for keys not owned by the
+   receiving instance)
+
+ * support expiration of keys

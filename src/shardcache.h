@@ -119,7 +119,8 @@ shardcache_t *shardcache_create(char *me,
                         int num_nodes,
                         shardcache_storage_t *storage,
                         char *secret,
-                        int num_workers);
+                        int num_workers,
+                        int evitct_on_delete);
 
 /**
  * @brief Release all the resources used by the shardcache instance

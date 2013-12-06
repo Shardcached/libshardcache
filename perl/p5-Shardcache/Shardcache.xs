@@ -262,12 +262,13 @@ MODULE = Shardcache		PACKAGE = Shardcache
 INCLUDE: const-xs.inc
 
 shardcache_t *
-shardcache_create(me, nodes, storage, secret, num_workers)
+shardcache_create(me, nodes, storage, secret, num_workers, evict_on_delete = 1)
         char *  me
         SV   *  nodes
         SV   *  storage
         char *  secret
         int     num_workers
+        int     evict_on_delete
     PREINIT:
         int i;
 	int	num_nodes = 0;
@@ -337,7 +338,8 @@ shardcache_create(me, nodes, storage, secret, num_workers)
             .priv    = SvREFCNT_inc(storage)
         };
 
-        RETVAL = shardcache_create(me, shards, num_nodes, &storage_struct, secret, num_workers);
+        RETVAL = shardcache_create(me, shards, num_nodes, &storage_struct,
+                                   secret, num_workers, evict_on_delete);
         if (shards)
             Safefree(shards);
 

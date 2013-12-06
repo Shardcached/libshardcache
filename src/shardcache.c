@@ -312,7 +312,8 @@ shardcache_t *shardcache_create(char *me,
                                 int nnodes,
                                 shardcache_storage_t *st,
                                 char *secret,
-                                int num_workers)
+                                int num_workers,
+                                int evict_on_delete)
 {
     int i;
     size_t shard_lens[nnodes];
@@ -320,7 +321,7 @@ shardcache_t *shardcache_create(char *me,
 
     shardcache_t *cache = calloc(1, sizeof(shardcache_t));
 
-    cache->evict_on_delete = 1;
+    cache->evict_on_delete = evict_on_delete;
 
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
