@@ -156,24 +156,34 @@ static int _shardcache_test_ownership(shardcache_t *cache,
     const char *node_name;
     size_t name_len = 0;
     pthread_mutex_lock(&cache->migration_lock);
-    chash_t *continuum = cache->chash;
 
+    if (len && *len == 0)
+        return -1;
+
+    chash_t *continuum = NULL;
     if (cache->migration && cache->migration_done) { 
         shardcache_migration_end(cache);
-    }
+    } 
 
-    if (migration && cache->migration) {
-        continuum = cache->migration;
+    if (migration) {
+        if (cache->migration) {
+            continuum = cache->migration;
+        } else {
+            if (len)
+                *len = 0;
+            pthread_mutex_unlock(&cache->migration_lock);
+            return -1;
+        }
     } else {
-        if (len)
-            *len = 0;
-        pthread_mutex_unlock(&cache->migration_lock);
-        return -1;
+        continuum = cache->chash;
     }
 
     chash_lookup(continuum, key, klen, &node_name, &name_len);
     if (owner) {
-        strncpy(owner, node_name,len ? *len :  name_len+1);
+        if (len && name_len + 1 > *len)
+            name_len = *len - 1;
+        memcpy(owner, node_name, name_len);
+        owner[name_len] = 0;
     }
     if (len)
         *len = name_len;
@@ -802,7 +812,7 @@ void *migrator(void *priv)
                         __sync_add_and_fetch(&errors, 1);
                     }
                 } else {
-                    fprintf(stderr, "Can't find address for peer %s\n", node_name);
+                    fprintf(stderr, "Can't find address for peer %s (me : %s)\n", node_name, cache->me);
                     __sync_add_and_fetch(&errors, 1);
                 }
             }
@@ -855,20 +865,22 @@ int shardcache_migration_begin(shardcache_t *cache,
                                int forward)
 {
     int i, n;
-    fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
 
     pthread_mutex_lock(&cache->migration_lock);
+    if (cache->migration) {
+        // already in a migration, ignore this command
+        pthread_mutex_unlock(&cache->migration_lock);
+        return -1;
+    }
 
 #ifdef SHARDCACHE_DEBUG
     fprintf(stderr, "Starting migration\n");
 #endif
-    cache->migration_done = 0;
-    cache->migration_shards = malloc(sizeof(shardcache_node_t) * num_nodes);
-    memcpy(cache->migration_shards, nodes, sizeof(shardcache_node_t) * num_nodes);
-    cache->num_migration_shards = num_nodes;
 
     size_t shard_lens[num_nodes];
     char *shard_names[num_nodes];
+
+    fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
 
     for (i = 0; i < num_nodes; i++) {
         shard_names[i] = nodes[i].label;
@@ -878,8 +890,13 @@ int shardcache_migration_begin(shardcache_t *cache,
         fbuf_printf(&mgb_message, "%s:%s", nodes[i].label, nodes[i].address);
     }
 
+
+    int ignore = 0;
+
     if (num_nodes == cache->num_shards) {
-        int differ = 0;
+        // let's assume the lists are the same, if note 
+        // ignore will be set again to 0
+        ignore = 1;
         for (i = 0 ; i < num_nodes; i++) {
             int found = 0;
             for (n = 0; n < num_nodes; n++) {
@@ -889,32 +906,32 @@ int shardcache_migration_begin(shardcache_t *cache,
                 }
             }
             if (!found) {
-                differ = 1;
+                // the lists differ, we don't want to ignore the request
+                ignore = 0;
                 break;
             }
         }
-        if (!differ) {
-            free(cache->migration_shards);
-            cache->migration_shards = NULL;
-            fbuf_destroy(&mgb_message);
-            fprintf(stderr,
-                    "The migration continuum contains exactly the same nodes"
-                    "of the actual continuum... ignoring migration\n");
-            pthread_mutex_unlock(&cache->migration_lock);
-            return -1;
-        }
     }
-    cache->migration = chash_create((const char **)shard_names,
-                                    shard_lens,
-                                    num_nodes,
-                                    200);
 
-    pthread_create(&cache->migrator_th, NULL, migrator, cache);
+    if (!ignore) {
+        cache->migration_done = 0;
+        cache->migration_shards = malloc(sizeof(shardcache_node_t) * num_nodes);
+        memcpy(cache->migration_shards, nodes, sizeof(shardcache_node_t) * num_nodes);
+        cache->num_migration_shards = num_nodes;
+        cache->migration = chash_create((const char **)shard_names,
+                                        shard_lens,
+                                        num_nodes,
+                                        200);
+
+        pthread_create(&cache->migrator_th, NULL, migrator, cache);
+    }
+
     pthread_mutex_unlock(&cache->migration_lock);
+
     if (forward) {
-        for (i = 0; i < num_nodes; i++) {
-            if (strcmp(nodes[i].label, cache->me) != 0) {
-                int rc = migrate_peer(nodes[i].address,
+        for (i = 0; i < cache->num_shards; i++) {
+            if (strcmp(cache->shards[i].label, cache->me) != 0) {
+                int rc = migrate_peer(cache->shards[i].address,
                                       (char *)cache->auth,
                                       fbuf_data(&mgb_message),
                                       fbuf_used(&mgb_message));
@@ -924,6 +941,7 @@ int shardcache_migration_begin(shardcache_t *cache,
             }
         }
     }
+    fbuf_destroy(&mgb_message);
 
     return 0;
 }
@@ -942,6 +960,7 @@ int shardcache_migration_abort(shardcache_t *cache)
     }
     cache->migration = NULL;
     cache->migration_shards = NULL;
+    cache->num_migration_shards = 0;
 
     pthread_mutex_unlock(&cache->migration_lock);
     pthread_join(cache->migrator_th, NULL);
@@ -957,8 +976,10 @@ int shardcache_migration_end(shardcache_t *cache)
         free(cache->shards);
         cache->chash = cache->migration;
         cache->shards = cache->migration_shards;
+        cache->num_shards = cache->num_migration_shards;
         cache->migration = NULL;
         cache->migration_shards = NULL;
+        cache->num_migration_shards = 0;
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Migration ended\n");
 #endif

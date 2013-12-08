@@ -47,7 +47,7 @@ allu: objects static shared
 tsan:
 	@export CC=gcc-4.8; \
 	export LDFLAGS="-pie -ltsan"; \
-	export CFLAGS="-fsanitize=thread -O3 -fPIC -pie"; \
+	export CFLAGS="-fsanitize=thread -g -fPIC -pie"; \
 	make all
 
 .PHONY: build_deps
