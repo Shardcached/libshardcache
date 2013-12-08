@@ -338,7 +338,9 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
             obj = arc_move(cache, obj, &cache->mfu);
             ptr = obj->ptr;
         } else {
-            assert(0);
+            // ignore
+            pthread_mutex_unlock(&obj->lock);
+            return NULL;
         }
         retain_ref(cache->refcnt, obj->node);
         *valuep = ptr;
