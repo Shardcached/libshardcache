@@ -47,7 +47,7 @@ allu: objects static shared
 tsan:
 	@export CC=gcc-4.8; \
 	export LDFLAGS="-pie -ltsan"; \
-	export CFLAGS="-fsanitize=thread -g -fPIC -pie"; \
+	export CFLAGS="-fsanitize=thread -O3 -fPIC -pie"; \
 	make all
 
 .PHONY: build_deps
@@ -81,7 +81,7 @@ shared: objects
 
 $(DEPS): build_deps
 
-objects: CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -g
+objects: CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 objects: $(DEPS) $(TARGETS)
 
 clean:
@@ -95,7 +95,7 @@ clean:
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
 
-tests: CFLAGS += -Isrc -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -g
+tests: CFLAGS += -Isrc -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 
 tests: support/testing.o static
 	@for i in $(TESTS); do\

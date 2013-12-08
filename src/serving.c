@@ -166,6 +166,43 @@ static void *serve_response(void *priv) {
             write_status(ctx, 0);
             break;
         }
+        case SHARDCACHE_HDR_MGB:
+        {
+            int num_shards = 0;
+            shardcache_node_t *nodes = NULL;
+            char *s = (char *)fbuf_data(ctx->key);
+            while (s && *s) {
+                char *tok = strsep(&s, ",");
+                if(tok) {
+                    char *label = strsep(&tok, ":");
+                    char *addr = tok;
+                    num_shards++;
+                    nodes = realloc(nodes, num_shards * sizeof(shardcache_node_t));
+                    shardcache_node_t *node = &nodes[num_shards-1];
+                    snprintf(node->label, sizeof(node->label), "%s", label);
+                    snprintf(node->address, sizeof(node->address), "%s", addr);
+                } 
+            }
+            rc = shardcache_migration_begin(cache, nodes, num_shards, 0);
+            if (rc != 0) {
+                // TODO - Error messages
+            }
+            free(nodes);
+            write_status(ctx, 0);
+            break;
+        }
+        case SHARDCACHE_HDR_MGA:
+        {
+            rc = shardcache_migration_abort(cache);
+            write_status(ctx, rc);
+            break;
+        }
+        case SHARDCACHE_HDR_MGE:
+        {
+            rc = shardcache_migration_end(cache);
+            write_status(ctx, rc);
+            break;
+        }
         default:
             fprintf(stderr, "Unknown command: 0x%02x\n", (char)ctx->hdr);
             break;
@@ -189,12 +226,15 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     
     if (ctx->state == STATE_READING_NONE) {
         char *input = fbuf_data(ctx->input);
-        char hdr = *input;
+        unsigned char hdr = *input;
 
         if (hdr != SHARDCACHE_HDR_GET &&
             hdr != SHARDCACHE_HDR_SET &&
             hdr != SHARDCACHE_HDR_DEL &&
             hdr != SHARDCACHE_HDR_EVI &&
+            hdr != SHARDCACHE_HDR_MGA &&
+            hdr != SHARDCACHE_HDR_MGB &&
+            hdr != SHARDCACHE_HDR_MGE &&
             hdr != SHARDCACHE_HDR_RES)
         {
             // BAD REQUEST
@@ -284,18 +324,18 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
 
 #ifdef SHARDCACHE_DEBUG
         int i;
-        printf("computed digest for received data: ");
+        fprintf(stderr, "computed digest for received data: ");
         for (i=0; i<8; i++) {
-            printf("%02x", (unsigned char)((char *)&digest)[i]);
+            fprintf(stderr, "%02x", (unsigned char)((char *)&digest)[i]);
         }
-        printf("\n");
+        fprintf(stderr, "\n");
 
-        printf("digest from received data: ");
+        fprintf(stderr, "digest from received data: ");
         uint8_t *remote = fbuf_data(ctx->input);
         for (i=0; i<8; i++) {
-            printf("%02x", remote[i]);
+            fprintf(stderr, "%02x", remote[i]);
         }
-        printf("\n");
+        fprintf(stderr, "\n");
 #endif
         if (memcmp(&digest, (uint8_t *)fbuf_data(ctx->input), sizeof(digest)) != 0) {
             // AUTH FAILED

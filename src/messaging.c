@@ -15,12 +15,13 @@
 #include "connections.h"
 #include "shardcache.h"
 
+// synchronous (blocking)  message reading
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
 {
     uint16_t clen;
     int initial_len = fbuf_used(out);;
     int reading_message = 0;
-    char hdr;
+    unsigned char hdr;
     sip_hash *shash = sip_hash_new(auth, 2, 4);
     for(;;) {
         int rb;
@@ -35,6 +36,9 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 hdr != SHARDCACHE_HDR_SET &&
                 hdr != SHARDCACHE_HDR_DEL &&
                 hdr != SHARDCACHE_HDR_EVI &&
+                hdr != SHARDCACHE_HDR_MGB &&
+                hdr != SHARDCACHE_HDR_MGA &&
+                hdr != SHARDCACHE_HDR_MGE &&
                 hdr != SHARDCACHE_HDR_RES)
             {
                 sip_hash_free(shash);
@@ -145,7 +149,8 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 if (fbuf_used(out) > SHARDCACHE_MSG_MAX_RECORD_LEN) {
                     // we have exceeded the maximum size for a record
                     // let's abort this request
-                    fprintf(stderr, "Maximum record size exceeded (%dMB)", SHARDCACHE_MSG_MAX_RECORD_LEN >> 20);
+                    fprintf(stderr, "Maximum record size exceeded (%dMB)",
+                            SHARDCACHE_MSG_MAX_RECORD_LEN >> 20);
                     fbuf_set_used(out, initial_len);
                     sip_hash_free(shash);
                     return -1;
@@ -406,4 +411,45 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out)
     return -1;
 }
 
+int migrate_peer(char *peer, char *auth, void *msgdata, size_t len)
+{
+    char *brkt = NULL;
+    char *addr = strdup(peer);
+    char *host = strtok_r(addr, ":", &brkt);
+    char *port_string = strtok_r(NULL, ":", &brkt);
+    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
+    int fd = open_connection(host, port, 30);
+    free(addr);
+
+#ifdef SHARDCACHE_DEBUG
+    fprintf(stderr, "Sending migration_begin command to peer %s\n", peer);
+#endif
+    if (fd >= 0) {
+        int rc = write_message(fd,
+                               auth,
+                               SHARDCACHE_HDR_MGB,
+                               msgdata,
+                               len,
+                               NULL,
+                               0);
+
+        shardcache_hdr_t hdr = 0;
+        fbuf_t resp = FBUF_STATIC_INITIALIZER;
+        rc = read_message(fd, auth, &resp, &hdr);
+        if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
+#ifdef SHARDCACHE_DEBUG
+            fprintf(stderr, "Got (del) response from peer %s : %s\n",
+                    peer, fbuf_data(&resp));
+#endif
+            close(fd);
+            fbuf_destroy(&resp);
+            return 0;
+        } else {
+            // TODO - Error messages
+        }
+        fbuf_destroy(&resp);
+        close(fd);
+    }
+    return -1;
+}
 

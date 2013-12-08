@@ -70,7 +70,13 @@ struct __shardcache_s {
     arc_t *arc;
     arc_ops_t ops;
 
+    pthread_mutex_t migration_lock;
     chash_t *chash;
+
+    chash_t *migration;
+    shardcache_node_t *migration_shards;
+    int num_migration_shards;
+    int migration_done;
 
     shardcache_storage_t storage;
 
@@ -79,6 +85,8 @@ struct __shardcache_s {
     shardcache_serving_t *serv;
 
     const char auth[16];
+
+    pthread_t migrator_th;
 
     pthread_t evictor_th;
     pthread_mutex_t evictor_lock;
@@ -125,7 +133,102 @@ static char *shardcache_get_node_address(shardcache_t *cache, char *label) {
             break;
         }
     }
+    pthread_mutex_lock(&cache->migration_lock);
+    if (cache->migration && !addr) {
+        for (i = 0; i < cache->num_migration_shards; i++) {
+            if (strcmp(cache->migration_shards[i].label, label) == 0) {
+                addr = cache->migration_shards[i].address;
+                break;
+            }
+        }
+    }
+    pthread_mutex_unlock(&cache->migration_lock);
     return addr;
+}
+
+static int _shardcache_test_ownership(shardcache_t *cache,
+                                      void *key,
+                                      size_t klen,
+                                      char *owner,
+                                      size_t *len,
+                                      int  migration)
+{
+    const char *node_name;
+    size_t name_len = 0;
+    pthread_mutex_lock(&cache->migration_lock);
+    chash_t *continuum = cache->chash;
+
+    if (cache->migration && cache->migration_done) { 
+        shardcache_migration_end(cache);
+    }
+
+    if (migration && cache->migration) {
+        continuum = cache->migration;
+    } else {
+        if (len)
+            *len = 0;
+        pthread_mutex_unlock(&cache->migration_lock);
+        return -1;
+    }
+
+    chash_lookup(continuum, key, klen, &node_name, &name_len);
+    if (owner) {
+        strncpy(owner, node_name,len ? *len :  name_len+1);
+    }
+    if (len)
+        *len = name_len;
+
+    pthread_mutex_unlock(&cache->migration_lock);
+    return (strcmp(owner, cache->me) == 0);
+}
+
+static int shardcache_test_migration_ownership(shardcache_t *cache,
+                                               void *key,
+                                               size_t klen,
+                                               char *owner,
+                                               size_t *len)
+{
+    int ret = _shardcache_test_ownership(cache, key, klen, owner, len, 1);
+    return ret;
+}
+
+int shardcache_test_ownership(shardcache_t *cache,
+                              void *key,
+                              size_t klen,
+                              char *owner,
+                              size_t *len)
+{
+    return _shardcache_test_ownership(cache, key, klen, owner, len, 0);
+}
+
+static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
+{
+
+#ifdef SHARDCACHE_DEBUG
+    char keystr[1024];
+    memcpy(keystr, obj->key, obj->len < 1024 ? obj->len : 1024);
+    keystr[obj->len] = 0;
+    fprintf(stderr, "Fetching data for key %s from peer %s\n", keystr, peer); 
+#endif
+
+    char *peer_addr = shardcache_get_node_address(cache, peer);
+    if (!peer_addr) {
+        // TODO - Error Messages
+        return -1;
+    }
+
+    // another peer is responsible for this item, let's get the value from there
+    fbuf_t value = FBUF_STATIC_INITIALIZER;
+    int rc = fetch_from_peer(peer_addr, (char *)cache->auth, obj->key, obj->len, &value);
+    if (rc == 0 && fbuf_used(&value)) {
+        obj->data = fbuf_data(&value);
+        obj->dlen = fbuf_used(&value);
+        __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
+        return 0;
+    } else {
+        fbuf_destroy(&value);
+        return -1;
+    }
 }
 
 static int __op_fetch(void *item, void * priv)
@@ -140,43 +243,38 @@ static int __op_fetch(void *item, void * priv)
     }
 
     char node_name[1024];
-    memset(node_name, 0, sizeof(node_name));
-    size_t node_len = 0;
+    size_t node_len = sizeof(node_name);
+    memset(node_name, 0, node_len);
     // if we are not the owner try asking our peer responsible for this data
-    if (!shardcache_test_ownership(cache, obj->key, obj->len, node_name, &node_len)) {
-#ifdef SHARDCACHE_DEBUG
-        char keystr[1024];
-        memcpy(keystr, obj->key, obj->len < 1024 ? obj->len : 1024);
-        keystr[obj->len] = 0;
-        fprintf(stderr, "Fetching data for key %s from peer %s\n", keystr, node_name); 
-#endif
+    if (!shardcache_test_ownership(cache, obj->key, obj->len, node_name, &node_len))
+    {
+        int done = 1;
         node_name[node_len] = 0;
-        char *peer = shardcache_get_node_address(cache, (char *)node_name);
-        if (!peer) {
-            // TODO - Error Messages
-            pthread_mutex_unlock(&obj->lock);
-            return -1;
+        int ret = __op_fetch_from_peer(cache, obj, node_name);
+        if (ret == -1) {
+            node_len = sizeof(node_name);
+            int check = shardcache_test_migration_ownership(cache,
+                                                            obj->key,
+                                                            obj->len,
+                                                            node_name,
+                                                            &node_len);
+            if (check == 0) {
+                done = 0;
+            } else if (node_len) {
+                node_name[node_len] = 0;
+                ret = __op_fetch_from_peer(cache, obj, node_name);
+            }
         }
-        // another peer is responsible for this item, let's get the value from there
-        fbuf_t value = FBUF_STATIC_INITIALIZER;
-        int rc = fetch_from_peer(peer, (char *)cache->auth, obj->key, obj->len, &value);
-        if (rc == 0 && fbuf_used(&value)) {
-            obj->data = fbuf_data(&value);
-            obj->dlen = fbuf_used(&value);
+        if (done) {
             pthread_mutex_unlock(&obj->lock);
-            __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
-            return 0;
-        } else {
-            pthread_mutex_unlock(&obj->lock);
-            fbuf_destroy(&value);
-            return -1;
+            return ret;
         }
     }
 
 #ifdef SHARDCACHE_DEBUG
-        char keystr[1024];
-        memcpy(keystr, obj->key, obj->len < 1024 ? obj->len : 1024);
-        keystr[obj->len] = 0;
+    char keystr[1024];
+    memcpy(keystr, obj->key, obj->len < 1024 ? obj->len : 1024);
+    keystr[obj->len] = 0;
 #endif
     // we are responsible for this item ... so let's fetch it
     if (cache->storage.fetch) {
@@ -323,9 +421,11 @@ shardcache_t *shardcache_create(char *me,
 
     cache->evict_on_delete = evict_on_delete;
 
+
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&cache->migration_lock, &attr); 
     pthread_mutexattr_destroy(&attr);
 
     if (!st) {
@@ -404,12 +504,20 @@ shardcache_t *shardcache_create(char *me,
 
 void shardcache_destroy(shardcache_t *cache) {
     int i;
-    for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
-        shardcache_counter_remove(cache->counters, internal_counters[i].name);
-    }
 
     if (cache->serv)
         stop_serving(cache->serv);
+
+    pthread_mutex_lock(&cache->migration_lock);
+    if (cache->migration) {
+        shardcache_migration_abort(cache);    
+    }
+    pthread_mutex_unlock(&cache->migration_lock);
+    pthread_mutex_destroy(&cache->migration_lock);
+
+    for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
+        shardcache_counter_remove(cache->counters, internal_counters[i].name);
+    }
 
     if (cache->arc)
         arc_destroy(cache->arc);
@@ -474,8 +582,8 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
     arc_remove(cache->arc, (const void *)key, klen);
 
     char node_name[1024];
-    memset(node_name, 0, sizeof(node_name));
-    size_t node_len = 0;
+    size_t node_len = sizeof(node_name);
+    memset(node_name, 0, node_len);
     if (shardcache_test_ownership(cache, key, klen, node_name, &node_len)) {
 #ifdef SHARDCACHE_DEBUG
         char keystr[1024];
@@ -503,7 +611,6 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
 
         fprintf(stderr, " (%d) to %s\n", (int)vlen, node_name);
 #endif
-        node_name[node_len] = 0;
         char *peer = shardcache_get_node_address(cache, (char *)node_name);
         if (!peer) {
             // TODO - Error Messages
@@ -524,8 +631,8 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
 
     // if we are not the owner try propagating the command to the responsible peer
     char node_name[1024];
-    memset(node_name, 0, sizeof(node_name));
-    size_t node_len = 0;
+    size_t node_len = sizeof(node_name);
+    memset(node_name, 0, node_len);
     if (shardcache_test_ownership(cache, key, klen, node_name, &node_len))
     {
         node_name[node_len] = 0;
@@ -590,19 +697,6 @@ void shardcache_clear_counters(shardcache_t *cache) {
     }
 }
 
-int shardcache_test_ownership(shardcache_t *cache, void *key, size_t klen, char *owner, size_t *len)
-{
-    const char *node_name;
-    size_t name_len = 0;
-    chash_lookup(cache->chash, key, klen, &node_name, &name_len);
-    if (owner) {
-        strncpy(owner, node_name, name_len);
-    }
-    if (len)
-        *len = name_len;
-    return (strcmp(owner, cache->me) == 0);
-}
-
 shardcache_storage_index_t *shardcache_get_index(shardcache_t *cache)
 {
     size_t isize = 65535;
@@ -632,4 +726,239 @@ void shardcache_free_index(shardcache_storage_index_t *index)
         free(index->items);
     }
     free(index);
+}
+
+void *migrator(void *priv)
+{
+    shardcache_t *cache = (shardcache_t *)priv;
+
+    shardcache_storage_index_t *index = shardcache_get_index(cache);
+
+    uint32_t migrated_items = 0;
+    uint32_t scanned_items = 0;
+    uint32_t errors = 0;
+    uint32_t total_items = index->size;
+
+    shardcache_counter_add(cache->counters, "migrated_items", &migrated_items);
+    shardcache_counter_add(cache->counters, "scanned_items", &scanned_items);
+    shardcache_counter_add(cache->counters, "total_items", &total_items);
+    shardcache_counter_add(cache->counters, "migration_errors", &errors);
+
+#ifdef SHARDCACHE_DEBUG
+    fprintf(stderr, "Migrator starting (%d items to precess)\n", total_items);
+#endif
+
+    int aborted = 0;
+    linked_list_t *to_delete = create_list();
+    int i;
+    for (i = 0; i < index->size; i++) {
+        size_t klen = index->items[i].klen;
+        void *key = index->items[i].key;
+
+        char node_name[1024];
+        size_t node_len = sizeof(node_name);
+        memset(node_name, 0, node_len);
+
+#ifdef SHARDCACHE_DEBUG
+        fprintf(stderr, "Migrator processign key %s\n", key);
+#endif
+
+        pthread_mutex_lock(&cache->migration_lock);
+        if (!cache->migration) {
+            fprintf(stderr, "Migrator running while no migration continuum present ... aborting\n");
+            __sync_add_and_fetch(&errors, 1);
+            pthread_mutex_unlock(&cache->migration_lock);
+            aborted = 1;
+            break;
+        }
+        pthread_mutex_unlock(&cache->migration_lock);
+
+        int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+        
+        // if we are not the owner try asking our peer responsible for this data
+        if (!is_mine)
+        {
+            void *value = NULL;
+            size_t vlen = 0;
+            if (cache->storage.fetch) {
+                value = cache->storage.fetch(key, klen, &vlen, cache->storage.priv);
+            }
+            if (value) {
+                char *peer = shardcache_get_node_address(cache, (char *)node_name);
+                if (peer) {
+#ifdef SHARDCACHE_DEBUG
+                    fprintf(stderr, "Migrator copying %s to peer %s (%s)\n", key, node_name, peer);
+#endif
+                    int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen);
+                    if (rc == 0) {
+                        __sync_add_and_fetch(&migrated_items, 1);
+                        push_value(to_delete, &index->items[i]);
+                    } else {
+                        fprintf(stderr, "Errors copying %s to peer %s (%s)\n", key, node_name, peer);
+                        __sync_add_and_fetch(&errors, 1);
+                    }
+                } else {
+                    fprintf(stderr, "Can't find address for peer %s\n", node_name);
+                    __sync_add_and_fetch(&errors, 1);
+                }
+            }
+        }
+        __sync_add_and_fetch(&scanned_items, 1);
+    }
+
+    shardcache_counter_remove(cache->counters, "migrated_items");
+    shardcache_counter_remove(cache->counters, "scanned_items");
+    shardcache_counter_remove(cache->counters, "total_items");
+    shardcache_counter_remove(cache->counters, "migration_errors");
+
+    if (!aborted) {
+#ifdef SHARDCACHE_DEBUG
+            fprintf(stderr, "Migration completed, now removing not-owned  items\n");
+#endif
+        shardcache_storage_index_item_t *item = shift_value(to_delete);
+        while (item) {
+            if (cache->storage.remove)
+                cache->storage.remove(item->key, item->klen, cache->storage.priv);
+#ifdef SHARDCACHE_DEBUG
+            fprintf(stderr, "removed item %s\n", item->key);
+#endif
+            item = shift_value(to_delete);
+        }
+    }
+    destroy_list(to_delete);
+
+
+    pthread_mutex_lock(&cache->migration_lock);
+    cache->migration_done = 1;
+    pthread_mutex_unlock(&cache->migration_lock);
+#ifdef SHARDCACHE_DEBUG
+    fprintf(stderr, "Migrator ended: processed %d items, migrated %d, errors %d\n",
+            total_items, migrated_items, errors);
+#endif
+
+    if (index)
+        free(index);
+
+    return NULL;
+}
+
+int shardcache_migration_begin(shardcache_t *cache,
+                               shardcache_node_t *nodes,
+                               int num_nodes,
+                               int forward)
+{
+    int i, n;
+    fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
+
+    pthread_mutex_lock(&cache->migration_lock);
+
+#ifdef SHARDCACHE_DEBUG
+    fprintf(stderr, "Starting migration\n");
+#endif
+    cache->migration_done = 0;
+    cache->migration_shards = malloc(sizeof(shardcache_node_t) * num_nodes);
+    memcpy(cache->migration_shards, nodes, sizeof(shardcache_node_t) * num_nodes);
+    cache->num_migration_shards = num_nodes;
+
+    size_t shard_lens[num_nodes];
+    char *shard_names[num_nodes];
+
+    for (i = 0; i < num_nodes; i++) {
+        shard_names[i] = nodes[i].label;
+        shard_lens[i] = strlen(shard_names[i]);
+        if (i > 0) 
+            fbuf_add(&mgb_message, ",");
+        fbuf_printf(&mgb_message, "%s:%s", nodes[i].label, nodes[i].address);
+    }
+
+    if (num_nodes == cache->num_shards) {
+        int differ = 0;
+        for (i = 0 ; i < num_nodes; i++) {
+            int found = 0;
+            for (n = 0; n < num_nodes; n++) {
+                if (strcmp(nodes[i].label, cache->shards[n].label) == 0) {
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) {
+                differ = 1;
+                break;
+            }
+        }
+        if (!differ) {
+            free(cache->migration_shards);
+            cache->migration_shards = NULL;
+            fbuf_destroy(&mgb_message);
+            fprintf(stderr,
+                    "The migration continuum contains exactly the same nodes"
+                    "of the actual continuum... ignoring migration\n");
+            pthread_mutex_unlock(&cache->migration_lock);
+            return -1;
+        }
+    }
+    cache->migration = chash_create((const char **)shard_names,
+                                    shard_lens,
+                                    num_nodes,
+                                    200);
+
+    pthread_create(&cache->migrator_th, NULL, migrator, cache);
+    pthread_mutex_unlock(&cache->migration_lock);
+    if (forward) {
+        for (i = 0; i < num_nodes; i++) {
+            if (strcmp(nodes[i].label, cache->me) != 0) {
+                int rc = migrate_peer(nodes[i].address,
+                                      (char *)cache->auth,
+                                      fbuf_data(&mgb_message),
+                                      fbuf_used(&mgb_message));
+                if (rc != 0) {
+                    // TODO - handle errors
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+int shardcache_migration_abort(shardcache_t *cache)
+{
+    int ret = -1;
+    pthread_mutex_lock(&cache->migration_lock);
+    if (cache->migration) {
+        chash_free(cache->migration);
+        free(cache->migration_shards);
+#ifdef SHARDCACHE_DEBUG
+        fprintf(stderr, "Migration aborted\n");
+#endif
+        ret = 0;
+    }
+    cache->migration = NULL;
+    cache->migration_shards = NULL;
+
+    pthread_mutex_unlock(&cache->migration_lock);
+    pthread_join(cache->migrator_th, NULL);
+    return ret;
+}
+
+int shardcache_migration_end(shardcache_t *cache)
+{
+    int ret = -1;
+    pthread_mutex_lock(&cache->migration_lock);
+    if (cache->migration) {
+        chash_free(cache->chash);
+        free(cache->shards);
+        cache->chash = cache->migration;
+        cache->shards = cache->migration_shards;
+        cache->migration = NULL;
+        cache->migration_shards = NULL;
+#ifdef SHARDCACHE_DEBUG
+        fprintf(stderr, "Migration ended\n");
+#endif
+        ret = 0;
+    }
+    cache->migration_done = 0;
+    pthread_mutex_unlock(&cache->migration_lock);
+    pthread_join(cache->migrator_th, NULL);
+    return ret;
 }

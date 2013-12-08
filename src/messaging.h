@@ -8,11 +8,15 @@
  * MESSAGE      : <MSG><SIG>
  * MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
  * HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_EVI> | <MSG_RES>
+ *                <MSG_MGB> | <MSG_MGA> | <MSG_MGE>
  * MSG_GET      : 0x01
  * MSG_SET      : 0x02
  * MSG_DEL      : 0x03
  * MSG_EVI      : 0x04
  * MSG_RES      : 0x11
+ * MSG_MGA      : 0x21
+ * MSG_MGB      : 0x22
+ * MSG_MGE      : 0x23
  * RSEP         : 0x80
  * RECORD       : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
  * SIZE         : <HIGH_BYTE><LOW_BYTE>
@@ -46,7 +50,10 @@ typedef enum {
     SHARDCACHE_HDR_SET  = 0x02,
     SHARDCACHE_HDR_DEL  = 0x03,
     SHARDCACHE_HDR_EVI  = 0x04,
-    SHARDCACHE_HDR_RES  = 0x11
+    SHARDCACHE_HDR_MGA  = 0x21,
+    SHARDCACHE_HDR_MGB  = 0x22,
+    SHARDCACHE_HDR_MGE  = 0x23,
+    SHARDCACHE_HDR_RES  = 0x99
 } shardcache_hdr_t;
 
 #define SHARDCACHE_RSEP 0x80
@@ -56,5 +63,6 @@ int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, s
 int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner);
 int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen);
 int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out);
+int migrate_peer(char *peer, char *auth, void *msgdata, size_t len);
 
 #endif
