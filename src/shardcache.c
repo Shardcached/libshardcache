@@ -759,8 +759,12 @@ void *migrator(void *priv)
         size_t node_len = sizeof(node_name);
         memset(node_name, 0, node_len);
 
+        char keystr[1024];
+        memcpy(keystr, key, klen < 1024 ? klen : 1024);
+        keystr[klen] = 0;
+
 #ifdef SHARDCACHE_DEBUG
-        fprintf(stderr, "Migrator processign key %s\n", key);
+        fprintf(stderr, "Migrator processign key %s\n", keystr);
 #endif
 
         pthread_mutex_lock(&cache->migration_lock);
@@ -787,14 +791,14 @@ void *migrator(void *priv)
                 char *peer = shardcache_get_node_address(cache, (char *)node_name);
                 if (peer) {
 #ifdef SHARDCACHE_DEBUG
-                    fprintf(stderr, "Migrator copying %s to peer %s (%s)\n", key, node_name, peer);
+                    fprintf(stderr, "Migrator copying %s to peer %s (%s)\n", keystr, node_name, peer);
 #endif
                     int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen);
                     if (rc == 0) {
                         __sync_add_and_fetch(&migrated_items, 1);
                         push_value(to_delete, &index->items[i]);
                     } else {
-                        fprintf(stderr, "Errors copying %s to peer %s (%s)\n", key, node_name, peer);
+                        fprintf(stderr, "Errors copying %s to peer %s (%s)\n", keystr, node_name, peer);
                         __sync_add_and_fetch(&errors, 1);
                     }
                 } else {
@@ -820,7 +824,10 @@ void *migrator(void *priv)
             if (cache->storage.remove)
                 cache->storage.remove(item->key, item->klen, cache->storage.priv);
 #ifdef SHARDCACHE_DEBUG
-            fprintf(stderr, "removed item %s\n", item->key);
+            char ikeystr[1024];
+            memcpy(ikeystr, item->key, item->klen < 1024 ? item->klen : 1024);
+            ikeystr[item->klen] = 0;
+            fprintf(stderr, "removed item %s\n", ikeystr);
 #endif
             item = shift_value(to_delete);
         }
