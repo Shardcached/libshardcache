@@ -3,6 +3,7 @@ package Shardcache::Client;
 use strict;
 use IO::Socket::INET;
 use Digest::SipHash qw/siphash64/;
+use Algorithm::ConsistentHash::CHash;
 
 our $VERSION = "0.01";
 
@@ -12,14 +13,33 @@ sub new {
     croak("The host parameter is mandatory!")
         unless($host);
 
-    my ($addr, $port) = split(':', $host);
-
     $secret = 'default' unless($secret);
 
-    my $self = { _addr => $addr,
-                 _port => $port,
+    my $self = { 
                  _secret => $secret,
+                 _nodes => [],
                };
+
+
+    if (ref($host) && ref($host) eq "ARRAY") {
+        $self->{_port} = [];
+        foreach my $h (@$host) {
+            my ($label, $addr, $port) = split(':', $h);
+            push(@{$self->{_nodes}}, {
+                    label => $label,
+                    addr  => $addr,
+                    port => $port });
+        }
+        $self->{_chash} = Algorithm::ConsistentHash::CHash->new(
+                      ids      => [map { $_->{label} } @{$self->{_nodes}} ],
+                      replicas => 200);
+    } else {
+        my ($addr, $port) = split(':', $host);
+        push(@{$self->{_nodes}}, {
+                addr => $addr,
+                port => $port
+            });
+    }
 
     bless $self, $class;
     
@@ -74,8 +94,22 @@ sub send_msg {
     my $sig = siphash64($msg,  pack("a16", $self->{_secret}));
     $msg .= pack("Q", $sig);
 
-    my $sock = IO::Socket::INET->new(PeerAddr => $self->{_addr},
-                                     PeerPort => $self->{_port},
+
+    my $addr;
+    my $port;
+
+    if (@{$self->{_nodes}} == 1) {
+        $addr = $self->{_nodes}->[0]->{addr};
+        $port = $self->{_nodes}->[0]->{port};
+    } else {
+        my ($node) = grep { $_->{label} eq $self->{_chash}->lookup($key) } @{$self->{_nodes}};
+        $addr = $node->{addr};
+        $port = $node->{port};
+
+    }
+    
+    my $sock = IO::Socket::INET->new(PeerAddr => $addr,
+                                     PeerPort => $port,
                                      Proto    => 'tcp');
                                      
     print $sock $msg;
@@ -153,7 +187,12 @@ Shardcache::Client - Client library to access shardcache nodes
 
     use Shardcache::Client;
 
-    $c = Shardcache::Client->new("http://localhost:4444", "my_shardcache_secret");
+    # To connect to one of the nodes and perform any operation
+    $c = Shardcache::Client->new("localhost:4444", "my_shardcache_secret");
+
+    # If you want Shardcache::Client to make sure requets go to the owner of the key
+    $c = Shardcache::Client->new(["peer1:localhost:4443", "peer2:localhost:4444", ...],
+                                 "my_shardcache_secret");
 
     $c->set("key", "value");
 
