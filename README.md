@@ -2,20 +2,20 @@ shardcache
 ======
 
 C implementation of a sharded key/value storage + caching 
-initially inspired to groupcache (golang/groupcache)
+initially inspired to [groupcache](http://github.com/golang/groupcache groupcache) (golang/groupcache)
 
 Note that this is a fresh implementation of the logic/strategy
-implemented in groupcache. It's not a porting but an implementation
+implemented in [groupcache](http://github.com/golang/groupcache groupcache). It's not a porting but an implementation
 from scratch. It uses its own custom protocol for internal communication
-that differs from the one used by the groupcache Go implementation
+that differs from the one used by the [groupcache](http://github.com/golang/groupcache groupcache) Go implementation
 (which is instead based on protobuf + httpd)
 
-Like groupcache (https://github.com/golang/groupcache.git),
-this library, together with the shardcached daemon implementation)
+Like [groupcache](http://github.com/golang/groupcache groupcache),
+this library, together with the [shardcached](http://github.com/xant/shardcached "shardcached") daemon implementation)
 is intended as a replacement for memcached with some additions:
 
  * does not require running a separate set of servers, thus massively
-   reducing deployment/configuration pain. As for groupcache,
+   reducing deployment/configuration pain. As for [groupcache](http://github.com/golang/groupcache groupcache),
    libshardcache is a client library as well as a server.
    It connects to its own peers.
 
@@ -25,22 +25,22 @@ is intended as a replacement for memcached with some additions:
    even when multiple concurrent request are looking for the same 
    uncached item.
 
-Differently from the groupcache :
+Differently from the [groupcache](http://github.com/golang/groupcache groupcache) :
 
  * supports SET operations, If the node which receives the SET operation
    is responsible for the specified KEY, the new value will be provided to
    the underlying storage and will be provided to next GET requests.
    If the receiving node is not the responsible one for the key, the request
-   will be forwarded (through the internal groupcache communication channel)
+   will be forwarded (through the internal [groupcache](http://github.com/golang/groupcache groupcache) communication channel)
    to the responsible peer which will eventualy store the new value and make it
-   available to all the groupcache nodes
+   available to all the [groupcache](http://github.com/golang/groupcache groupcache) nodes
  
  * supports DEL operations If the node which receives the DEL operation
    is responsible for the specified KEY, the key will be removed from the
    underlying storage and from the cache.
    If the receiving node is not the responsible one for the key, it will still
    be removed from the local cache (if present) and the request will be
-   forwarded (through the internal groupcache communication channel) to the
+   forwarded (through the internal [groupcache](http://github.com/golang/groupcache groupcache) communication channel) to the
    responsible peer which will eventualy remove the key from its storage
    and from the cache
 
@@ -62,7 +62,7 @@ Differently from the groupcache :
 
 ## Lookup process
 
-Exactly like in groupcache implementation, a shardcache lookup of **get("foo")** looks like:
+Exactly like in [groupcache](http://github.com/golang/groupcache groupcache) implementation, a shardcache lookup of **get("foo")** looks like:
 
 (On machine #5 of a set of N machines running the same code)
 
