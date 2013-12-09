@@ -24,6 +24,9 @@ sub new {
     if (ref($host) && ref($host) eq "ARRAY") {
         $self->{_port} = [];
         foreach my $h (@$host) {
+            if ($h !~ /[a-zA-Z0-9_\.]+:[a-zA-Z0-9_\.]+(:[0-9]+)?/) {
+                die "Invalid host string $h";
+            }
             my ($label, $addr, $port) = split(':', $h);
             push(@{$self->{_nodes}}, {
                     label => $label,
@@ -34,6 +37,9 @@ sub new {
                       ids      => [map { $_->{label} } @{$self->{_nodes}} ],
                       replicas => 200);
     } else {
+        if ($host !~ /[a-zA-Z0-9_\.]+:[a-zA-Z0-9_\.]+(:[0-9]+)?/) {
+            die "Invalid host string $host";
+        }
         my ($addr, $port) = split(':', $host);
         push(@{$self->{_nodes}}, {
                 addr => $addr,
@@ -103,8 +109,14 @@ sub send_msg {
         $port = $self->{_nodes}->[0]->{port};
     } else {
         my ($node) = grep { $_->{label} eq $self->{_chash}->lookup($key) } @{$self->{_nodes}};
-        $addr = $node->{addr};
-        $port = $node->{port};
+        if ($node) {
+            $addr = $node->{addr};
+            $port = $node->{port};
+        } else {
+            my $index = rand() % @{$self->{_nodes}};
+            $addr = $self->{_nodes}->[$index]->{addr};
+            $port = $self->{_nodes}->[$index]->{port};
+        }
 
     }
     

@@ -4,5 +4,6 @@ Makefile.PL
 MANIFEST
 README.md
 t/shardcache_client.t
-examples/sh_fetch_file.pl
-examples/sh_upload_file.pl
+examples/shc_get.pl
+examples/shc_set.pl
+examples/shc_del.pl
