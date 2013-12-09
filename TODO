@@ -4,4 +4,6 @@
    a big number of delete requests for keys not owned by the
    receiving instance)
 
+ * parallelize migrations
+
  * support expiration of keys
