@@ -1,4 +1,4 @@
-shardcache
+libshardcache
 ======
 
 C implementation of a sharded key/value storage + caching 
