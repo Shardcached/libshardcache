@@ -303,6 +303,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                 sip_hash_update(ctx->shash, fbuf_data(ctx->input), 1);
                 fbuf_remove(ctx->input, 1);
                 ctx->state = STATE_READING_AUTH;
+                break;
             } else {
                 // BAD FORMAT
                 break;
