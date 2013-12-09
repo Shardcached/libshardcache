@@ -936,7 +936,8 @@ int shardcache_migration_begin(shardcache_t *cache,
                                       fbuf_data(&mgb_message),
                                       fbuf_used(&mgb_message));
                 if (rc != 0) {
-                    // TODO - handle errors
+                    fprintf(stderr, "Node %s (%s) didn't aknowledge the migration\n",
+                            cache->shards[i].label, cache->shards[i].address);
                 }
             }
         }
