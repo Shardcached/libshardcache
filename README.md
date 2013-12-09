@@ -21,9 +21,9 @@ is intended as a replacement for memcached with some additions:
 
  * cache filling mechanism based on ARC (Adaptive Replacement Cache)
 
- * supports automatic mirroring of super-hot items to multiple
-   processes.  This prevents memcached hot spotting where a machine's
-   CPU and/or NIC are overloaded by very popular keys/values.
+ * ensure fetching the items from peers or from the storage only once
+   even when multiple concurrent request are looking for the same 
+   uncached item.
 
 Differently from the groupcache :
 
@@ -43,6 +43,22 @@ Differently from the groupcache :
    forwarded (through the internal groupcache communication channel) to the
    responsible peer which will eventualy remove the key from its storage
    and from the cache
+
+ * supports migrations via the MGB (migration-begin), MGA (migration-abort)
+   and MGE (migration-end) commands. The nodes automatically redistribute
+   the keys taking the newly added ones into account.
+   
+   While the migration is in progress (and keys are being redistributed) 
+   the behaviour is the following :
+
+   - If a get operation arrives, first the old continuum is checked,
+     if not found the new continuum is checked.
+     
+   - If a set/delete operation arrives the new continuum is used
+     to determine where to set/delete the item
+
+   Once the migration is completed the continua are swapped and the new
+   continuum will become the actual one
 
 ## Lookup process
 
