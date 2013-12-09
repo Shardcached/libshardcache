@@ -155,10 +155,11 @@ static int _shardcache_test_ownership(shardcache_t *cache,
 {
     const char *node_name;
     size_t name_len = 0;
-    pthread_mutex_lock(&cache->migration_lock);
 
     if (len && *len == 0)
         return -1;
+
+    pthread_mutex_lock(&cache->migration_lock);
 
     chash_t *continuum = NULL;
     if (cache->migration && cache->migration_done) { 
@@ -169,8 +170,6 @@ static int _shardcache_test_ownership(shardcache_t *cache,
         if (cache->migration) {
             continuum = cache->migration;
         } else {
-            if (len)
-                *len = 0;
             pthread_mutex_unlock(&cache->migration_lock);
             return -1;
         }
@@ -594,7 +593,12 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
     char node_name[1024];
     size_t node_len = sizeof(node_name);
     memset(node_name, 0, node_len);
-    if (shardcache_test_ownership(cache, key, klen, node_name, &node_len)) {
+    
+    int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+    if (is_mine == -1)
+        is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
+
+    if (is_mine == 1) {
 #ifdef SHARDCACHE_DEBUG
         char keystr[1024];
         memcpy(keystr, key, klen < 1024 ? klen : 1024);
@@ -643,7 +647,12 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
     char node_name[1024];
     size_t node_len = sizeof(node_name);
     memset(node_name, 0, node_len);
-    if (shardcache_test_ownership(cache, key, klen, node_name, &node_len))
+
+    int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+    if (is_mine == -1)
+        is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
+
+    if (is_mine == 1)
     {
         node_name[node_len] = 0;
         if (cache->storage.remove)
