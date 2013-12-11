@@ -18,6 +18,7 @@
 #include <linklist.h>
 #include <siphash.h>
 #include <chash.h>
+#include <hashtable.h>
 
 #include "shardcache.h"
 #include "arc.h"
@@ -49,18 +50,6 @@ typedef struct chash_t chash_t;
 #define SHARDCACHE_COUNTER_CACHE_MISSES 4
 #define SHARDCACHE_COUNTER_NOT_FOUND    5
 #define SHARDCACHE_NUM_COUNTERS 6
-static struct {
-    const char *name;
-    uint32_t value;
-} internal_counters[] = {
-    { "gets", 0 },
-    { "sets", 0 },
-    { "dels", 0 },
-    { "evicts", 0 },
-    { "cache_misses", 0 },
-    { "not_found", 0 },
-};
-
 struct __shardcache_s {
     char *me;
 
@@ -80,6 +69,8 @@ struct __shardcache_s {
 
     shardcache_storage_t storage;
 
+    hashtable_t *volatile_storage;
+
     int evict_on_delete;
 
     shardcache_serving_t *serv;
@@ -94,6 +85,10 @@ struct __shardcache_s {
     linked_list_t *evictor_jobs;
 
     shardcache_counters_t *counters;
+    struct {
+        const char *name;
+        uint32_t value;
+    } internal_counters[SHARDCACHE_NUM_COUNTERS];
 };
 
 /* This is the object we're managing. It has a key
@@ -101,7 +96,7 @@ struct __shardcache_s {
  * us to do so. */
 typedef struct {
     void *key;
-    size_t len;
+    size_t klen;
     void *data;
     size_t dlen;
     pthread_mutex_t lock;
@@ -115,7 +110,7 @@ static void *__op_create(const void *key, size_t len, void *priv)
 {
     cache_object_t *obj = malloc(sizeof(cache_object_t));
 
-    obj->len = len;
+    obj->klen = len;
     obj->key = malloc(len);
     memcpy(obj->key, key, len);
     obj->data = NULL;
@@ -215,8 +210,8 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
 
 #ifdef SHARDCACHE_DEBUG
     char keystr[1024];
-    memcpy(keystr, obj->key, obj->len < 1024 ? obj->len : 1024);
-    keystr[obj->len] = 0;
+    memcpy(keystr, obj->key, obj->klen < 1024 ? obj->klen : 1024);
+    keystr[obj->klen] = 0;
     fprintf(stderr, "Fetching data for key %s from peer %s\n", keystr, peer); 
 #endif
 
@@ -228,11 +223,11 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
 
     // another peer is responsible for this item, let's get the value from there
     fbuf_t value = FBUF_STATIC_INITIALIZER;
-    int rc = fetch_from_peer(peer_addr, (char *)cache->auth, obj->key, obj->len, &value);
+    int rc = fetch_from_peer(peer_addr, (char *)cache->auth, obj->key, obj->klen, &value);
     if (rc == 0 && fbuf_used(&value)) {
         obj->data = fbuf_data(&value);
         obj->dlen = fbuf_used(&value);
-        __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
+        __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
         return 0;
     } else {
         fbuf_destroy(&value);
@@ -255,22 +250,20 @@ static int __op_fetch(void *item, void * priv)
     size_t node_len = sizeof(node_name);
     memset(node_name, 0, node_len);
     // if we are not the owner try asking our peer responsible for this data
-    if (!shardcache_test_ownership(cache, obj->key, obj->len, node_name, &node_len))
+    if (!shardcache_test_ownership(cache, obj->key, obj->klen, node_name, &node_len))
     {
         int done = 1;
-        node_name[node_len] = 0;
         int ret = __op_fetch_from_peer(cache, obj, node_name);
         if (ret == -1) {
             node_len = sizeof(node_name);
             int check = shardcache_test_migration_ownership(cache,
                                                             obj->key,
-                                                            obj->len,
+                                                            obj->klen,
                                                             node_name,
                                                             &node_len);
             if (check == 0) {
                 done = 0;
             } else if (node_len) {
-                node_name[node_len] = 0;
                 ret = __op_fetch_from_peer(cache, obj, node_name);
             }
         }
@@ -282,26 +275,28 @@ static int __op_fetch(void *item, void * priv)
 
 #ifdef SHARDCACHE_DEBUG
     char keystr[1024];
-    memcpy(keystr, obj->key, obj->len < 1024 ? obj->len : 1024);
-    keystr[obj->len] = 0;
+    memcpy(keystr, obj->key, obj->klen < 1024 ? obj->klen : 1024);
+    keystr[obj->klen] = 0;
 #endif
-    // we are responsible for this item ... so let's fetch it
-    if (cache->storage.fetch) {
-        void *v = cache->storage.fetch(obj->key, obj->len, &obj->dlen, cache->storage.priv);
+
+    // we are responsible for this item ... 
+    // let's first check if it's among the volatile keys otherwise
+    // fetch it from the storage
+    obj->data = ht_get_copy(cache->volatile_storage, obj->key, obj->klen, &obj->dlen);
+    if (!obj->data && cache->storage.fetch) {
+        obj->data = cache->storage.fetch(obj->key, obj->klen, &obj->dlen, cache->storage.priv);
+
 #ifdef SHARDCACHE_DEBUG
-        if (v && obj->dlen) {
+        if (obj->data && obj->dlen) {
             fprintf(stderr, "Fetch storage callback returned value ");
             
-            HEXDUMP_DATA(v, obj->dlen);
+            HEXDUMP_DATA(obj->data, obj->dlen);
 
             fprintf(stderr, " (%lu) for key %s\n", (unsigned long)obj->dlen, keystr); 
         } else {
             fprintf(stderr, "Fetch storage callback returned an empty value for key %s\n", keystr);
         }
 #endif
-        if (v && obj->dlen) {
-            obj->data = v;
-        }
     }
 
     if (!obj->data) {
@@ -309,24 +304,24 @@ static int __op_fetch(void *item, void * priv)
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Item not found for key %s\n", keystr);
 #endif
-        __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_NOT_FOUND].value, 1);
+        __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_NOT_FOUND].value, 1);
         return -1;
     }
     pthread_mutex_unlock(&obj->lock);
-    __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
+    __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
     return 0;
 }
 
 static void __op_evict(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
-    //shardcache_t *cache = (shardcache_t *)priv;
+    shardcache_t *cache = (shardcache_t *)priv;
     pthread_mutex_lock(&obj->lock);
     if (obj->data) {
         free(obj->data);
         obj->data = NULL;
         obj->dlen = 0;
-        __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_EVICTS].value, 1);
+        __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_EVICTS].value, 1);
     }
     pthread_mutex_unlock(&obj->lock);
 }
@@ -488,9 +483,14 @@ shardcache_t *shardcache_create(char *me,
     fprintf(stderr, "\n");
 #endif
 
+    const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
+        { "gets", "sets", "dels", "evicts", "cache_misses", "not_found" };
+
     cache->counters = shardcache_init_counters();
+
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
-        shardcache_counter_add(cache->counters, internal_counters[i].name, &internal_counters[i].value); 
+        cache->internal_counters[i].name = counters_names[i];
+        shardcache_counter_add(cache->counters, cache->internal_counters[i].name, &cache->internal_counters[i].value); 
     }
 
     if (cache->evict_on_delete) {
@@ -507,11 +507,15 @@ shardcache_t *shardcache_create(char *me,
         shardcache_destroy(cache);
         return NULL;
     }
+
+    cache->volatile_storage = ht_create(1024, 65536, free);
+
     cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
     return cache;
 }
 
-void shardcache_destroy(shardcache_t *cache) {
+void shardcache_destroy(shardcache_t *cache)
+{
     int i;
 
     if (cache->serv)
@@ -525,7 +529,7 @@ void shardcache_destroy(shardcache_t *cache) {
     pthread_mutex_destroy(&cache->migration_lock);
 
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
-        shardcache_counter_remove(cache->counters, internal_counters[i].name);
+        shardcache_counter_remove(cache->counters, cache->internal_counters[i].name);
     }
 
     if (cache->arc)
@@ -547,6 +551,8 @@ void shardcache_destroy(shardcache_t *cache) {
 
     shardcache_release_counters(cache->counters);
 
+    ht_destroy(cache->volatile_storage);
+
     free(cache);
 }
 
@@ -554,7 +560,7 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
     if (!key)
         return NULL;
 
-    __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_GETS].value, 1);
+    __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_GETS].value, 1);
 
     char *value = NULL;
     cache_object_t *obj = NULL;
@@ -580,13 +586,19 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
     return value;
 }
 
-int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen) {
+int shardcache_set_volatile(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            void *value,
+                            size_t vlen,
+                            time_t expire)
+{
     // if we are not the owner try propagating the command to the responsible peer
     
     if (!key || !value)
         return -1;
 
-    __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_SETS].value, 1);
+    __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_SETS].value, 1);
 
     arc_remove(cache->arc, (const void *)key, klen);
 
@@ -610,8 +622,18 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
 
         fprintf(stderr, " (%d) for key %s\n", (int)vlen, keystr);
 #endif
-        if (cache->storage.store)
+        if (expire) {
+            // ensure removing this key from the persistent storage (if present)
+            // since it's now going to be a volatile item
+            if (cache->storage.remove)
+                cache->storage.remove(key, klen, cache->storage.priv);
+            ht_set_copy(cache->volatile_storage, key, klen, value, vlen, NULL, NULL);
+        } else if (cache->storage.store) {
+            // remove this key from the volatile storage (if present)
+            // it's going to be eventually persistent now (depending on the storage type)
+            ht_delete(cache->volatile_storage, key, klen, NULL, NULL);
             cache->storage.store(key, klen, value, vlen, cache->storage.priv);
+        }
         return 0;
     } else if (node_len) {
 #ifdef SHARDCACHE_DEBUG
@@ -634,6 +656,11 @@ int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, siz
     }
 
     return -1;
+
+}
+
+int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen) {
+    return shardcache_set_volatile(cache, key, klen, value, vlen, 0);
 }
 
 int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
@@ -641,7 +668,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
     if (!key)
         return -1;
 
-    __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_DELS].value, 1);
+    __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_DELS].value, 1);
 
     // if we are not the owner try propagating the command to the responsible peer
     char node_name[1024];
@@ -654,9 +681,11 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
 
     if (is_mine == 1)
     {
-        node_name[node_len] = 0;
-        if (cache->storage.remove)
-            cache->storage.remove(key, klen, cache->storage.priv);
+        int rc = ht_delete(cache->volatile_storage, key, klen, NULL, NULL);        
+        if (rc != 0) {
+            if (cache->storage.remove)
+                cache->storage.remove(key, klen, cache->storage.priv);
+        }
 
         if (cache->evict_on_delete)
         {
@@ -669,7 +698,6 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
         }
         return 0;
     } else {
-        node_name[node_len] = 0;
         char *peer = shardcache_get_node_address(cache, (char *)node_name);
         if (!peer) {
             // TODO - Error Messages
@@ -686,7 +714,7 @@ int shardcache_evict(shardcache_t *cache, void *key, size_t klen) {
         return -1;
 
     arc_remove(cache->arc, (const void *)key, klen);
-    __sync_add_and_fetch(&internal_counters[SHARDCACHE_COUNTER_EVICTS].value, 1);
+    __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_EVICTS].value, 1);
     return 0;
 }
 
@@ -712,7 +740,7 @@ void shardcache_clear_counters(shardcache_t *cache) {
     if (cache) { }
     int i;
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i++) {
-        reset_stat_figure(&internal_counters[i].value);
+        reset_stat_figure(&cache->internal_counters[i].value);
     }
 }
 

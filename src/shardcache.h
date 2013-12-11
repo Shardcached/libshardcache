@@ -37,11 +37,15 @@ typedef struct __shardcache_s shardcache_t;
  * @arg cache    : A valid pointer to a shardcache_t structure
  * @arg counters : an array of shardcache_counter_t structures to fill in
  *                 Note the array must be sized
- *
+ * @return the number of counters contained in the counters array
  */
 int shardcache_get_counters(shardcache_t *cache,
                             shardcache_counter_t **counters);
 
+/**
+ * @brief clear all the counters
+ * @arg cache : A valid pointer to a shardcache_t structure
+ */
 void shardcache_clear_counters(shardcache_t *cache);
 
 
@@ -73,12 +77,25 @@ typedef int (*shardcache_store_item_callback_t)
 typedef int
 (*shardcache_remove_item_callback_t)(void *key, size_t len, void *priv);
 
+/**
+ * @brief Callback to check if a specific key exists on the storage
+ */
+typedef int
+(*shardcache_exist_item_callback_t)(void *key, size_t len, void *priv);
+
+/**
+ * @brief structure representing an item in the storage index
+ */
 typedef struct __shardcache_storage_index_item_s {
     void *key;
     size_t klen;
     size_t vlen;
 } shardcache_storage_index_item_t;
 
+/**
+ * @brief structure representing the storage index, holding an array
+ *        of pointers to shardcache_storage_index_item_t structures
+ */
 typedef struct __shardcache_storage_index_s {
     shardcache_storage_index_item_t *items;
     size_t size;
@@ -106,6 +123,9 @@ typedef struct __shardcache_storage_index_s {
 typedef size_t (*shardcache_get_index_callback_t)
     (shardcache_storage_index_item_t *index, size_t isize, void *priv);
 
+/**
+ * @brief Callback returning the number of items in the index
+ */
 typedef size_t (*shardcache_count_items_callback_t)(void *priv);
 
 /**
@@ -116,16 +136,40 @@ typedef struct __shardcache_storage_s {
     shardcache_fetch_item_callback_t       fetch;
     shardcache_store_item_callback_t       store;
     shardcache_remove_item_callback_t      remove;
+    shardcache_exist_item_callback_t       exist;
     shardcache_get_index_callback_t        index;
     shardcache_count_items_callback_t      count;
     void                                   *priv;
 } shardcache_storage_t;
 
+/**
+ * @brief Callback used to create a new instance of a storage module
+ *        All storage modules need to expose this callback which will be 
+ *        called by the shardcache instance at initialization time 
+ *        to let the storage initialize and create the shardcache_storage_t
+ *        structure and its internals
+ *
+ * @arg options  : a null-termianted array of strings holding the options
+ *                 specific to the storage module
+ *
+ * @return A newly initialized shardcache_storage_t structure usable by the
+ *         shardcache instance
+ */
 typedef shardcache_storage_t *
         (*shardcache_storage_constructor)(const char **options);
 
+/**
+ * @brief Callback used to dispose all resources associated to a previously
+ *        initialized storage module
+ *
+ * @arg storage : A pointer to a valid (and previously initialized)
+ *                shardcache_storage_t structure
+ */
 typedef void (*shardcache_storage_destructor)(shardcache_storage_t *storage);
 
+/**
+ * @brief Structure representing a node taking part in the shard cache
+ */
 typedef struct shardcache_node_s {
     char label[256];
     char address[256];
@@ -189,6 +233,25 @@ int shardcache_set(shardcache_t *cache,
                    size_t klen,
                    void *value,
                    size_t vlen);
+/**
+ * @brief Set a volatile value for a key
+ * @arg cache  : A valid pointer to a shardcache_t structure
+ * @arg key    : A valid pointer to the key
+ * @arg klen   : The length of the key
+ * @arg value  : A valid pointer to the value
+ * @arg vlen   : The length of the value
+ * @arg expire : The number of seconds after which the volatile value expires
+ *               If 0 the value will not expire and it will be stored using the
+ *               actual storage module (which might evntually be a presistent
+ *               storage backend as the filesystem or database ones)
+ * @return 0 on success, -1 otherwise
+ */
+int shardcache_set_volatile(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            void *value,
+                            size_t vlen,
+                            time_t expire);
 
 /**
  * @brief Remove the value for a key
@@ -218,7 +281,7 @@ int shardcache_evict(shardcache_t *cache, void *key, size_t klen);
  * @return A list containing all the nodes <address:port> strings
  */
 const shardcache_node_t *
-hardcache_get_nodes(shardcache_t *cache, int *num_nodes);
+shardcache_get_nodes(shardcache_t *cache, int *num_nodes);
 
 /**
  * @brief Get the node owning a specific key
@@ -236,11 +299,54 @@ int shardcache_test_ownership(shardcache_t *cache,
                               char *owner,
                               size_t *len);
 
+/**
+ * @brief Get the index of keys managed by the specific shardcache instance
+ *        by querying the storage module
+ * @return A pointer to a shardcache_storage_index_t structure holding 
+ *         the index.
+ *         NOTE: The caller MUST release the returned pointer once done with it
+ *               by using the shardcache_free_index() function
+ */
 shardcache_storage_index_t *shardcache_get_index(shardcache_t *cache);
+
+/**
+ * @brief Release all resources used by the index provided as argument
+ * @arg index : A pointer to a valid shardcache_storage_index_t structure
+ *              previously obtained via the shardcache_get_index() function
+ */
 void shardcache_free_index(shardcache_storage_index_t *index);
 
-int shardcache_migration_begin(shardcache_t *cache, shardcache_node_t *nodes, int num_nodes, int forward);
+/**
+ * @brief : Start a migration process
+ * @arg cache     : A valid pointer to a shardcache_t structure
+ * @arg nodes     : The list of nodes representing the new group to migrate to
+ * @arg num_nodes : The number of nodes in the list
+ * @arg forward   : A boolean flag indicating if the migration command needs to be
+ *                  forwarded to all other peers
+ * @return 0 on success, -1 otherwise
+ */
+int shardcache_migration_begin(shardcache_t *cache,
+                               shardcache_node_t *nodes,
+                               int num_nodes,
+                               int forward);
+
+/**
+ * @brief : Abort the current migration process
+ * @arg cache     : A valid pointer to a shardcache_t structure
+ * @return 0 on success, -1 in case of errors
+ *         (for instance if no migration is in progress
+ *         when this function is called)
+ */
 int shardcache_migration_abort(shardcache_t *cache);
+
+/**
+ * @brief : End the current migration process by swapping the two continua
+ *          and releasing resources for the old one
+ * @arg cache     : A valid pointer to a shardcache_t structure
+ * @return 0 on success, -1 in case of errors
+ *         (for instance if no migration is in progress
+ *         when this function is called)
+ */
 int shardcache_migration_end(shardcache_t *cache);
 
 
