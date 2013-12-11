@@ -25,12 +25,13 @@ EOM          : <NULL_BYTE>
 SIG          : <BYTE>[8]
 KEY          : <RECORD>
 VALUE        : <RECORD>
+TTL          : <RECORD>
 NODES_LIST   : <RECORD>
 
 The only supported messages are :
 
 GET_MESSAGE  : <MSG_GET><KEY><EOM><SIG>
-SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE><EOM><SIG>
+SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM><SIG>
 DEL_MESSAGE  : <MSG_DEL><KEY><EOM><SIG>
 EVI_MESSAGE  : <MSG_EVI><KEY><EOM><SIG>
 RES_MESSAGE  : <MSG_RES><RECORD><EOM><SIG>
@@ -75,8 +76,8 @@ A message containing one record (fitting a single chunk) would look like :
 -------------------------------------------------------------------------------
 
 
-A message containing 2 records,  for instance a 'SET' request where 
-both key and value need to be provided (still fitting in one chunk) :
+A message containing 2 records,  for instance a 'SET' request where all
+key, value and ttl need to be provided (still fitting in one chunk) :
 
 ===============================================================================
 |  FIELD   |  SIZE   |  DESC                                                  |
@@ -96,6 +97,12 @@ both key and value need to be provided (still fitting in one chunk) :
 |----------|---------|--------------------------------------------------------|
 |   DATA   | N Bytes |                                                        |
 |----------|---------|--------------------------------------------------------|
+|   RSEP   | 1 Bytes |  Record Separator (0x80)                               |
+|----------|---------|--------------------------------------------------------|
+|   SIZE   | 2 Bytes |  Size of the ttl record (must be 4 == 0x00,0x04)       |
+|----------|---------|--------------------------------------------------------|
+|   TTL    | 4 Bytes |  ttl in seconds (uint32_t in network byte order)       |
+|----------|---------|--------------------------------------------------------|
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
 |   EOM    | 1 Byte  |  Message Terminator (0x00)                             |
@@ -107,7 +114,7 @@ both key and value need to be provided (still fitting in one chunk) :
 
 
 A more complex message with 2 records but not fitting in a single chunk would 
-look like :
+look like (this time without the ttl record):
 
 ===============================================================================
 |  FIELD   |  SIZE   |  DESC                                                  |
