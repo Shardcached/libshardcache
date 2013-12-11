@@ -70,6 +70,7 @@ struct __shardcache_s {
     shardcache_storage_t storage;
 
     hashtable_t *volatile_storage;
+    uint32_t next_expire;
 
     int evict_on_delete;
 
@@ -101,6 +102,12 @@ typedef struct {
     size_t dlen;
     pthread_mutex_t lock;
 } cache_object_t;
+
+typedef struct {
+    void *data;
+    size_t dlen;
+    uint32_t expire;
+} volatile_object_t;
 
 /**
  * * Here are the operations implemented
@@ -235,6 +242,17 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
     }
 }
 
+static void * copy_volatile_object_cb(void *ptr, size_t len)
+{
+    volatile_object_t *item = (volatile_object_t *)ptr;
+    volatile_object_t *copy = malloc(sizeof(volatile_object_t));
+    copy->data = malloc(item->dlen);
+    memcpy(copy->data, item->data, item->dlen);
+    copy->dlen = item->dlen;
+    copy->expire = item->expire;
+    return copy;
+}
+
 static int __op_fetch(void *item, void * priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
@@ -282,8 +300,15 @@ static int __op_fetch(void *item, void * priv)
     // we are responsible for this item ... 
     // let's first check if it's among the volatile keys otherwise
     // fetch it from the storage
-    obj->data = ht_get_copy(cache->volatile_storage, obj->key, obj->klen, &obj->dlen);
-    if (!obj->data && cache->storage.fetch) {
+    volatile_object_t *vobj = ht_get_deep_copy(cache->volatile_storage,
+                                               obj->key,
+                                               obj->klen,
+                                               &obj->dlen,
+                                               copy_volatile_object_cb);
+    if (vobj) {
+        obj->data = vobj->data; 
+        free(vobj);
+    } else if (cache->storage.fetch) {
         obj->data = cache->storage.fetch(obj->key, obj->klen, &obj->dlen, cache->storage.priv);
 
 #ifdef SHARDCACHE_DEBUG
@@ -409,6 +434,76 @@ static void *evictor(void *priv)
     return NULL;
 }
 
+static void destroy_volatile(volatile_object_t *obj)
+{
+    if (obj->data)
+        free(obj->data);
+    free(obj);
+}
+
+typedef struct {
+    linked_list_t *list;
+    time_t now;
+    uint32_t next;
+} expire_volatile_arg_t;
+
+typedef struct {
+    void *key;
+    size_t klen;
+} expire_volatile_item_t;
+
+static int expire_volatile(hashtable_t *table, void *key, size_t klen, void *value, size_t vlen, void *user)
+{
+    expire_volatile_arg_t *arg = (expire_volatile_arg_t *)user;
+    volatile_object_t *v = (volatile_object_t *)value;
+    if (v->expire < arg->now) {
+        expire_volatile_item_t *item = malloc(sizeof(expire_volatile_item_t));
+        item->key = malloc(klen);
+        memcpy(item->key, key, klen);
+        item->klen = klen;
+        push_value(arg->list, item);
+    }
+    else if (!arg->next || v->expire < arg->next)
+        arg->next = v->expire;
+    return 1;
+}
+
+void *shardcache_expire_volatile_keys(void *priv)
+{
+    shardcache_t *cache = (shardcache_t *)priv;
+    for (;;) {
+        time_t now = time(NULL);
+        if (now < cache->next_expire)
+            sleep(cache->next_expire - now);
+
+        if (ht_count(cache->volatile_storage)) {
+
+            expire_volatile_arg_t arg = {
+                .list = create_list(),
+                .now = time(NULL),
+                .next = 0
+            };
+
+            ht_foreach_pair(cache->volatile_storage, expire_volatile, &arg);
+
+            expire_volatile_item_t *item = shift_value(arg.list);
+            while (item) {
+                ht_delete(cache->volatile_storage, item->key, item->klen, NULL, NULL);
+                arc_remove(cache->arc, (const void *)item->key, item->klen);
+                free(item->key);
+                free(item);
+                item = shift_value(arg.list);
+            }
+
+            destroy_list(arg.list);
+
+        } else {
+            cache->next_expire = now + 2;
+        }
+    }
+    return NULL;
+}
+
 shardcache_t *shardcache_create(char *me,
                                 shardcache_node_t *nodes,
                                 int nnodes,
@@ -508,7 +603,7 @@ shardcache_t *shardcache_create(char *me,
         return NULL;
     }
 
-    cache->volatile_storage = ht_create(1024, 65536, free);
+    cache->volatile_storage = ht_create(1024, 65536, (ht_free_item_callback_t)destroy_volatile);
 
     cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
     return cache;
@@ -627,7 +722,17 @@ int shardcache_set_volatile(shardcache_t *cache,
             // since it's now going to be a volatile item
             if (cache->storage.remove)
                 cache->storage.remove(key, klen, cache->storage.priv);
-            ht_set_copy(cache->volatile_storage, key, klen, value, vlen, NULL, NULL);
+            volatile_object_t *obj = malloc(sizeof(volatile_object_t));
+            obj->data = malloc(vlen);
+            memcpy(obj->data, value, vlen);
+            obj->dlen = vlen;
+            obj->expire = time(NULL) + expire;
+
+            ht_set(cache->volatile_storage, key, klen, value, vlen);
+
+            if (obj->expire < cache->next_expire)
+                cache->next_expire = obj->expire;
+
         } else if (cache->storage.store) {
             // remove this key from the volatile storage (if present)
             // it's going to be eventually persistent now (depending on the storage type)
@@ -636,6 +741,7 @@ int shardcache_set_volatile(shardcache_t *cache,
         }
         return 0;
     } else if (node_len) {
+
 #ifdef SHARDCACHE_DEBUG
         char keystr[1024];
         memcpy(keystr, key, klen < 1024 ? klen : 1024);
@@ -647,12 +753,13 @@ int shardcache_set_volatile(shardcache_t *cache,
 
         fprintf(stderr, " (%d) to %s\n", (int)vlen, node_name);
 #endif
+
         char *peer = shardcache_get_node_address(cache, (char *)node_name);
         if (!peer) {
             // TODO - Error Messages
             return -1;
         }
-        return send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen);
+        return send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, expire);
     }
 
     return -1;
@@ -840,7 +947,7 @@ void *migrator(void *priv)
 #ifdef SHARDCACHE_DEBUG
                     fprintf(stderr, "Migrator copying %s to peer %s (%s)\n", keystr, node_name, peer);
 #endif
-                    int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen);
+                    int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, 0);
                     if (rc == 0) {
                         __sync_add_and_fetch(&migrated_items, 1);
                         push_value(to_delete, &index->items[i]);
@@ -1028,3 +1135,5 @@ int shardcache_migration_end(shardcache_t *cache)
     pthread_join(cache->migrator_th, NULL);
     return ret;
 }
+
+

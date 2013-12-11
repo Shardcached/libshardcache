@@ -198,7 +198,7 @@ int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out)
     return -1;
 }
 
-int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, fbuf_t *out)
+static int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire, fbuf_t *out)
 {
     static char eom = 0;
     static char sep = SHARDCACHE_RSEP;
@@ -210,7 +210,7 @@ int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, fbuf_t *
         if (_chunkize_buffer(k, klen, out) != 0)
             return -1;
     } else {
-        fbuf_add_binary(out, (char *)&eor, 2);
+        fbuf_add_binary(out, (char *)&eor, sizeof(eor));
         return 0;
     }
     if (hdr == SHARDCACHE_HDR_SET) {
@@ -218,19 +218,28 @@ int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, fbuf_t *
             fbuf_add_binary(out, &sep, 1);
             if (_chunkize_buffer(v, vlen, out) != 0)
                 return -1;
+
+            if (expire) {
+                uint16_t clen = htons(sizeof(uint32_t));
+                uint32_t exp = htonl(expire);
+                fbuf_add_binary(out, &sep, 1);
+                fbuf_add_binary(out, (char *)&clen, sizeof(clen));
+                fbuf_add_binary(out, (char *)&exp, sizeof(exp));
+                fbuf_add_binary(out, (char *)&eor, sizeof(eor));
+            }
         } else {
-            fbuf_add_binary(out, (char *)&eor, 2);
+            fbuf_add_binary(out, (char *)&eor, sizeof(eor));
         }
     }
     fbuf_add_binary(out, &eom, 1);
     return 0;
 }
 
-int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen)
+int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire)
 {
 
     fbuf_t msg = FBUF_STATIC_INITIALIZER;
-    if (build_message(hdr, k, klen, v, vlen, &msg) != 0) {
+    if (build_message(hdr, k, klen, v, vlen, expire, &msg) != 0) {
         // TODO - Error Messages
         fbuf_destroy(&msg);
         return -1;
@@ -293,7 +302,7 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner)
 #endif
     if (fd >= 0) {
         char hdr = owner ? SHARDCACHE_HDR_DEL : SHARDCACHE_HDR_EVI;
-        int rc = write_message(fd, auth, hdr, key, klen, NULL, 0);
+        int rc = write_message(fd, auth, hdr, key, klen, NULL, 0, 0);
 
         // if we are not forwarding a delete command to the owner
         // of the key, but only an eviction request to a peer,
@@ -323,7 +332,7 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner)
 
 
 int send_to_peer(char *peer, char *auth, void *key,
-        size_t klen, void *value, size_t vlen)
+        size_t klen, void *value, size_t vlen, uint32_t expire)
 {
     char *brkt = NULL;
     char *addr = strdup(peer);
@@ -335,7 +344,7 @@ int send_to_peer(char *peer, char *auth, void *key,
 
     if (fd >= 0) {
         int rc = write_message(fd, auth, SHARDCACHE_HDR_SET,
-                key, klen, value, vlen);
+                key, klen, value, vlen, expire);
         if (rc != 0) {
             close(fd);
             return -1;
@@ -379,7 +388,7 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out)
     free(addr);
 
     if (fd >= 0) {
-        int rc = write_message(fd, auth, SHARDCACHE_HDR_GET, key, len, NULL, 0);
+        int rc = write_message(fd, auth, SHARDCACHE_HDR_GET, key, len, NULL, 0, 0);
         if (rc == 0) {
             shardcache_hdr_t hdr = 0;
             int rc = read_message(fd, auth, out, &hdr);
@@ -431,7 +440,7 @@ int migrate_peer(char *peer, char *auth, void *msgdata, size_t len)
                                msgdata,
                                len,
                                NULL,
-                               0);
+                               0, 0);
 
         shardcache_hdr_t hdr = 0;
         fbuf_t resp = FBUF_STATIC_INITIALIZER;

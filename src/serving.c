@@ -68,11 +68,13 @@ typedef struct {
     shardcache_hdr_t hdr;
     fbuf_t *key;
     fbuf_t *value;
-#define STATE_READING_NONE  0x00
-#define STATE_READING_KEY   0x01
-#define STATE_READING_VALUE 0x02
-#define STATE_READING_AUTH  0x03
-#define STATE_READING_DONE  0x04
+    uint32_t expire;
+#define STATE_READING_NONE   0x00
+#define STATE_READING_KEY    0x01
+#define STATE_READING_VALUE  0x02
+#define STATE_READING_EXPIRE 0x03
+#define STATE_READING_AUTH   0x04
+#define STATE_READING_DONE   0x05
     char    state;
     const char    *auth;
     sip_hash *shash;
@@ -109,9 +111,9 @@ static void shardcache_destroy_connection_context(shardcache_connection_context_
 static void write_status(shardcache_connection_context_t *ctx, int rc) {
     if (rc != 0) {
         fprintf(stderr, "Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
-        write_message(ctx->fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, "ERR", 3, NULL, 0);
+        write_message(ctx->fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, "ERR", 3, NULL, 0, 0);
     } else {
-        write_message(ctx->fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, "OK", 2, NULL, 0);
+        write_message(ctx->fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, "OK", 2, NULL, 0, 0);
     }
 
 }
@@ -142,15 +144,21 @@ static void *serve_response(void *priv) {
         {
             size_t vlen = 0;
             void *v = shardcache_get(cache, key, klen, &vlen);
-            write_message(fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, v, vlen, NULL, 0);
+            write_message(fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, v, vlen, NULL, 0, 0);
             if (v)
                 free(v);
             break;
         }
         case SHARDCACHE_HDR_SET:
         {
-            rc = shardcache_set(cache, key, klen,
-                    fbuf_data(ctx->value), fbuf_used(ctx->value));
+            if (ctx->expire) {
+                rc = shardcache_set_volatile(cache, key, klen,
+                        fbuf_data(ctx->value), fbuf_used(ctx->value), ctx->expire);
+
+            } else {
+                rc = shardcache_set(cache, key, klen,
+                        fbuf_data(ctx->value), fbuf_used(ctx->value));
+            }
             write_status(ctx, rc);
             break;
         }
@@ -271,6 +279,14 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                 fbuf_add_binary(ctx->key, chunk, clen);
             } else if (ctx->state == STATE_READING_VALUE) {
                 fbuf_add_binary(ctx->value, chunk, clen);
+            } else if (ctx->state == STATE_READING_EXPIRE && clen == 4) {
+                uint32_t exp;
+                memcpy(&exp, chunk, sizeof(uint32_t));
+                ctx->expire = ntohl(exp);
+            } else {
+                // BAD FORMAT
+                iomux_close(iomux, fd);
+                return;
             }
             sip_hash_update(ctx->shash, fbuf_data(ctx->input), 2+clen);
             fbuf_remove(ctx->input, 2+clen);
@@ -287,6 +303,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                 sip_hash_update(ctx->shash, fbuf_data(ctx->input), 1);
                 fbuf_remove(ctx->input, 1);
                 if (ctx->state == STATE_READING_KEY) {
+
                     if (ctx->hdr == SHARDCACHE_HDR_SET) {
                         ctx->state = STATE_READING_VALUE;
                     } else {
@@ -295,9 +312,19 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                         iomux_close(iomux, fd);
                         return;
                     }
+
                 } else if (ctx->state == STATE_READING_VALUE) {
-                    ctx->state = STATE_READING_AUTH;
-                    break;
+
+                    if (ctx->hdr == SHARDCACHE_HDR_SET) {
+                        // the expiry follows (must be a volatile key)
+                        ctx->state = STATE_READING_EXPIRE;
+                    } else {
+                        iomux_close(iomux, fd);
+                        return;
+                    }
+                } else {
+                    iomux_close(iomux, fd);
+                    return;
                 }
             } else if (*chunk == 0) {
                 sip_hash_update(ctx->shash, fbuf_data(ctx->input), 1);
