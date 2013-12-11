@@ -71,6 +71,8 @@ struct __shardcache_s {
 
     hashtable_t *volatile_storage;
     uint32_t next_expire;
+    pthread_mutex_t next_expire_lock;
+    pthread_t expirer_th;
 
     int evict_on_delete;
 
@@ -473,10 +475,16 @@ void *shardcache_expire_volatile_keys(void *priv)
     shardcache_t *cache = (shardcache_t *)priv;
     for (;;) {
         time_t now = time(NULL);
-        if (now < cache->next_expire)
-            sleep(cache->next_expire - now);
 
-        if (ht_count(cache->volatile_storage)) {
+        pthread_testcancel();
+
+        pthread_mutex_lock(&cache->next_expire_lock);
+
+        if (now >= cache->next_expire && ht_count(cache->volatile_storage)) {
+
+            pthread_mutex_unlock(&cache->next_expire_lock);
+
+            pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 
             expire_volatile_arg_t arg = {
                 .list = create_list(),
@@ -485,6 +493,11 @@ void *shardcache_expire_volatile_keys(void *priv)
             };
 
             ht_foreach_pair(cache->volatile_storage, expire_volatile, &arg);
+            if (arg.next) {
+                pthread_mutex_lock(&cache->next_expire_lock);
+                cache->next_expire = arg.next;
+                pthread_mutex_unlock(&cache->next_expire_lock);
+            }
 
             expire_volatile_item_t *item = shift_value(arg.list);
             while (item) {
@@ -497,9 +510,15 @@ void *shardcache_expire_volatile_keys(void *priv)
 
             destroy_list(arg.list);
 
+            pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         } else {
             cache->next_expire = now + 2;
+            pthread_mutex_unlock(&cache->next_expire_lock);
         }
+
+        pthread_testcancel();
+
+        sleep(1);
     }
     return NULL;
 }
@@ -606,6 +625,10 @@ shardcache_t *shardcache_create(char *me,
     cache->volatile_storage = ht_create(1024, 65536, (ht_free_item_callback_t)destroy_volatile);
 
     cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
+
+    pthread_mutex_init(&cache->next_expire_lock, NULL);
+    pthread_create(&cache->expirer_th, NULL, shardcache_expire_volatile_keys, cache);
+
     return cache;
 }
 
@@ -646,7 +669,11 @@ void shardcache_destroy(shardcache_t *cache)
 
     shardcache_release_counters(cache->counters);
 
+    pthread_cancel(cache->expirer_th);
+    pthread_join(cache->expirer_th, NULL);
+
     ht_destroy(cache->volatile_storage);
+    pthread_mutex_destroy(&cache->next_expire_lock);
 
     free(cache);
 }
@@ -730,8 +757,10 @@ int shardcache_set_volatile(shardcache_t *cache,
 
             ht_set(cache->volatile_storage, key, klen, value, vlen);
 
+            pthread_mutex_lock(&cache->next_expire_lock);
             if (obj->expire < cache->next_expire)
                 cache->next_expire = obj->expire;
+            pthread_mutex_unlock(&cache->next_expire_lock);
 
         } else if (cache->storage.store) {
             // remove this key from the volatile storage (if present)
