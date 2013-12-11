@@ -20,6 +20,11 @@ sub remove {
     delete $self->{_map}->{$key};
 }
 
+sub exist {
+    my ($self, $key) = @_;
+    return exists $self->{_map}->{$key};
+}
+
 sub count {
     my ($self, $key) = @_;
     return scalar(%{$self->{_map}});

@@ -59,13 +59,13 @@ static size_t __st_index(shardcache_storage_index_item_t *index, size_t isize, v
     XPUSHs(storage);
     PUTBACK;
 
-    int count = call_method("count", G_SCALAR);
-
-    SPAGAIN;
+    int count = call_method("index", G_SCALAR);
 
     if (count != 1) {
         croak("Unexpected errors calling the 'fetch' method on the storage object");
     }
+
+    SPAGAIN;
 
     SV *indexsv = POPs;
     if (!SvROK(indexsv) || SvTYPE(SvRV(indexsv)) != SVt_PVHV)
@@ -124,11 +124,11 @@ static size_t __st_count(void *priv) {
 
     int count = call_method("count", G_SCALAR);
 
-    SPAGAIN;
-
     if (count != 1) {
         croak("Unexpected errors calling the 'fetch' method on the storage object");
     }
+
+    SPAGAIN;
 
     IV ret = POPi;
 
@@ -167,11 +167,11 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
 
     int count = call_method("fetch", G_SCALAR);
 
-    SPAGAIN;
-
     if (count != 1) {
         croak("Unexpected errors calling the 'fetch' method on the storage object");
     }
+
+    SPAGAIN;
 
     SV *valref = POPs;
     char * out = NULL;
@@ -257,6 +257,47 @@ static int __st_remove(void *key, size_t len, void *priv) {
     return 0;
 }
 
+static int __st_exist(void *key, size_t len, void *priv) {
+    if (__acquire_lock() != 0) {
+        fprintf(stderr, "__st_exist can't acquire lock\n");
+        return -1;
+    }
+    PERL_SET_CONTEXT(orig_perl);
+    dTHX;
+    dSP;
+    SV *storage = (SV *)priv;
+    SV *k = newSVpv(key, len);
+
+    if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
+        croak("missing storage or not of class 'Shardcache::Storage'");
+    }
+
+    PUSHMARK(SP);
+    XPUSHs(storage);
+    XPUSHs(sv_2mortal(k));
+    PUTBACK;
+
+    int count = call_method("exist", G_SCALAR);
+
+    if (count != 1) {
+        croak("Unexpected errors calling the registered runloop callback");
+    }
+
+    SPAGAIN;
+
+    IV ret = POPi;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+
+
+
+    pthread_mutex_unlock(&lock);
+
+    return ret;
+}
+
 MODULE = Shardcache		PACKAGE = Shardcache		
 
 INCLUDE: const-xs.inc
@@ -333,6 +374,7 @@ shardcache_create(me, nodes, storage, secret, num_workers, evict_on_delete = 1)
             .fetch   = __st_fetch,
             .store   = __st_store,
             .remove  = __st_remove,
+            .exist   = __st_exist,
             .index   = __st_index,
             .count   = __st_count,
             .priv    = SvREFCNT_inc(storage)
@@ -440,7 +482,7 @@ shardcache_test_ownership(cache, key, len)
 	size_t	len
     PREINIT:
         char node[1024];
-        size_t plen = 0;
+        size_t plen = sizeof(node);
     CODE:
         shardcache_test_ownership(cache, key, len, (char *)&node, &plen);
         if (plen) {
@@ -495,11 +537,11 @@ shardcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
 
             int count = call_sv(coderef, G_SCALAR|G_EVAL);
 
-            SPAGAIN;
-
             if (count != 1) {
                 croak("Unexpected errors calling the registered runloop callback");
             }
+
+            SPAGAIN;
 
             IV ret = POPi;
 

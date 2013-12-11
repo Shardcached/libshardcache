@@ -24,6 +24,11 @@ sub remove {
     return -1;
 }
 
+sub exist {
+    my ($self, $key) = @_;
+    return 0;
+}
+
 sub count {
     my ($self, $key) = @_;
     return 0;
