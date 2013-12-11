@@ -211,11 +211,13 @@ static int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, u
             return -1;
     } else {
         fbuf_add_binary(out, (char *)&eor, sizeof(eor));
+        fbuf_add_binary(out, &eom, 1);
         return 0;
     }
     if (hdr == SHARDCACHE_HDR_SET) {
         if (v && vlen) {
             fbuf_add_binary(out, &sep, 1);
+
             if (_chunkize_buffer(v, vlen, out) != 0)
                 return -1;
 
