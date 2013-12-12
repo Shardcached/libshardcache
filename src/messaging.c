@@ -393,26 +393,28 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out)
         int rc = write_message(fd, auth, SHARDCACHE_HDR_GET, key, len, NULL, 0, 0);
         if (rc == 0) {
             shardcache_hdr_t hdr = 0;
-            int rc = read_message(fd, auth, out, &hdr);
+            rc = read_message(fd, auth, out, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
 #ifdef SHARDCACHE_DEBUG
-                char keystr[1024];
-                memcpy(keystr, key, len < 1024 ? len : 1024);
-                keystr[len] = 0;
-                fprintf(stderr, "Got new data from peer %s : %s => ", peer, keystr);
-                int i;
-                char *datap = fbuf_data(out);
-                size_t datalen = fbuf_used(out);
-                if (datalen > 256)
-                    datalen = 256;
-                for (i = 0; i < datalen; i++)
-                    fprintf(stderr, "%02x", datap[i]); 
-                if (datalen < fbuf_used(out))
-                    fprintf(stderr, "...");
-                fprintf(stderr, "\n");
+                if (fbuf_used(out)) {
+                    char keystr[1024];
+                    memcpy(keystr, key, len < 1024 ? len : 1024);
+                    keystr[len] = 0;
+                    fprintf(stderr, "Got new data from peer %s : %s => ", peer, keystr);
+                    int i;
+                    char *datap = fbuf_data(out);
+                    size_t datalen = fbuf_used(out);
+                    if (datalen > 256)
+                        datalen = 256;
+                    for (i = 0; i < datalen; i++)
+                        fprintf(stderr, "%02x", datap[i]); 
+                    if (datalen < fbuf_used(out))
+                        fprintf(stderr, "...");
+                    fprintf(stderr, "\n");
+                }
 #endif
                 close(fd);
-                return 0;
+                return fbuf_used(out) ? 0 : -1;
             } else {
                 // TODO - Error messages
             }
