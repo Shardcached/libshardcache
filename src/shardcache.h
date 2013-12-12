@@ -177,19 +177,22 @@ typedef struct shardcache_node_s {
 
 /**
  * @brief Create a new shardcache instance
- * @arg me        : a valid <address:port> null-terminated string
- *                  representing the new node to be created
- * @arg nodes     : a list of <address:port> strings representing the nodes
- *                  taking part to the shardcache 'cloud'
- * @arg num_nodes : the number of nodes present in the nodes list
- * @arg storage   : a shardcache_storage_t structure holding pointers to the
- *                  storage callbacks.
- *                  NOTE: The newly created instance will copy the pointers to
- *                        its internal descriptor so the resources allocated
- *                        for the storage structure can be safely released after
- *                        calling shardcache_create()
- * @arg secret    : a null-terminated string containing the shared secret used to
- *                  authenticate incoming messages
+ * @arg me              : a valid <address:port> null-terminated string
+ *                        representing the new node to be created
+ * @arg nodes           : a list of <address:port> strings representing the nodes
+ *                        taking part to the shardcache 'cloud'
+ * @arg num_nodes       : the number of nodes present in the nodes list
+ * @arg storage         : a shardcache_storage_t structure holding pointers to the
+ *                        storage callbacks.
+ *                        NOTE: The newly created instance will copy the pointers to
+ *                              its internal descriptor so the resources allocated
+ *                              for the storage structure can be safely released after
+ *                              calling shardcache_create()
+ * @arg secret          : a null-terminated string containing the shared secret used to
+ *                         authenticate incoming messages
+ * @arg num_workers     : number of worker threads taking care of serving input connections
+ * @arg cache_size      : the maximum size of the ARC cache
+ * @arg evict_on_delete : controls if an evict command is sent to all nodes when an item is removed
  */
 shardcache_t *shardcache_create(char *me, 
                         shardcache_node_t *nodes,
@@ -197,6 +200,7 @@ shardcache_t *shardcache_create(char *me,
                         shardcache_storage_t *storage,
                         char *secret,
                         int num_workers,
+                        size_t cache_size,
                         int evitct_on_delete);
 
 /**

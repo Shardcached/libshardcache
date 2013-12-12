@@ -49,7 +49,9 @@ typedef struct chash_t chash_t;
 #define SHARDCACHE_COUNTER_EVICTS       3
 #define SHARDCACHE_COUNTER_CACHE_MISSES 4
 #define SHARDCACHE_COUNTER_NOT_FOUND    5
-#define SHARDCACHE_NUM_COUNTERS 6
+#define SHARDCACHE_COUNTER_TABLE_SIZE   6
+#define SHARDCACHE_COUNTER_CACHE_SIZE   7
+#define SHARDCACHE_NUM_COUNTERS 8
 struct __shardcache_s {
     char *me;
 
@@ -80,7 +82,7 @@ struct __shardcache_s {
 
     const char auth[16];
 
-    pthread_t migrator_th;
+    pthread_t migrate_th;
 
     pthread_t evictor_th;
     pthread_mutex_t evictor_lock;
@@ -91,7 +93,7 @@ struct __shardcache_s {
     struct {
         const char *name;
         uint32_t value;
-    } internal_counters[SHARDCACHE_NUM_COUNTERS];
+    } cnt[SHARDCACHE_NUM_COUNTERS];
 };
 
 /* This is the object we're managing. It has a key
@@ -236,7 +238,7 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
     if (rc == 0 && fbuf_used(&value)) {
         obj->data = fbuf_data(&value);
         obj->dlen = fbuf_used(&value);
-        __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
+        __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
         return 0;
     } else {
         fbuf_destroy(&value);
@@ -255,7 +257,7 @@ static void * copy_volatile_object_cb(void *ptr, size_t len)
     return copy;
 }
 
-static int __op_fetch(void *item, void * priv)
+static size_t __op_fetch(void *item, void * priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
@@ -289,7 +291,7 @@ static int __op_fetch(void *item, void * priv)
         }
         if (done) {
             pthread_mutex_unlock(&obj->lock);
-            return ret;
+            return obj->dlen;
         }
     }
 
@@ -332,12 +334,12 @@ static int __op_fetch(void *item, void * priv)
 #ifdef SHARDCACHE_DEBUG
         fprintf(stderr, "Item not found for key %s\n", keystr);
 #endif
-        __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_NOT_FOUND].value, 1);
-        return -1;
+        __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value, 1);
+        return 0;
     }
     pthread_mutex_unlock(&obj->lock);
-    __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
-    return 0;
+    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
+    return obj->dlen;
 }
 
 static void __op_evict(void *item, void *priv)
@@ -349,7 +351,7 @@ static void __op_evict(void *item, void *priv)
         free(obj->data);
         obj->data = NULL;
         obj->dlen = 0;
-        __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_EVICTS].value, 1);
+        __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_EVICTS].value, 1);
     }
     pthread_mutex_unlock(&obj->lock);
 }
@@ -377,7 +379,9 @@ static void shardcache_do_nothing(int sig)
 typedef struct {
     void *key;
     size_t klen;
-} shardcache_evictor_job_t;
+} shardcache_key_t;
+
+typedef shardcache_key_t shardcache_evictor_job_t;
 
 static void destroy_evictor_job(shardcache_evictor_job_t *job)
 {
@@ -450,10 +454,7 @@ typedef struct {
     uint32_t next;
 } expire_volatile_arg_t;
 
-typedef struct {
-    void *key;
-    size_t klen;
-} expire_volatile_item_t;
+typedef shardcache_key_t expire_volatile_item_t;
 
 static int expire_volatile(hashtable_t *table, void *key, size_t klen, void *value, size_t vlen, void *user)
 {
@@ -471,9 +472,9 @@ static int expire_volatile(hashtable_t *table, void *key, size_t klen, void *val
         memcpy(item->key, key, klen);
         item->klen = klen;
         push_value(arg->list, item);
-    }
-    else if (!arg->next || v->expire < arg->next)
+    } else if (!arg->next || v->expire < arg->next) {
         arg->next = v->expire;
+    }
     return 1;
 }
 
@@ -508,7 +509,12 @@ void *shardcache_expire_volatile_keys(void *priv)
 
             expire_volatile_item_t *item = shift_value(arg.list);
             while (item) {
-                ht_delete(cache->volatile_storage, item->key, item->klen, NULL, NULL);
+                size_t prev_len = 0;
+                ht_delete(cache->volatile_storage, item->key, item->klen, NULL, &prev_len);
+                if (prev_len) {
+                    __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
+                                         prev_len);
+                }
                 arc_remove(cache->arc, (const void *)item->key, item->klen);
                 free(item->key);
                 free(item);
@@ -535,6 +541,7 @@ shardcache_t *shardcache_create(char *me,
                                 shardcache_storage_t *st,
                                 char *secret,
                                 int num_workers,
+                                size_t cache_size,
                                 int evict_on_delete)
 {
     int i;
@@ -579,7 +586,7 @@ shardcache_t *shardcache_create(char *me,
 
     cache->chash = chash_create((const char **)shard_names, shard_lens, cache->num_shards, 200);
 
-    cache->arc = arc_create(&cache->ops, 300);
+    cache->arc = arc_create(&cache->ops, cache_size);
 
     // check if there is already signal handler registered on SIGPIPE
     struct sigaction sa;
@@ -604,20 +611,21 @@ shardcache_t *shardcache_create(char *me,
 #endif
 
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
-        { "gets", "sets", "dels", "evicts", "cache_misses", "not_found" };
+        { "gets", "sets", "dels", "evicts", "cache_misses", "not_found", "volatile_table_size", "cache_size" };
 
     cache->counters = shardcache_init_counters();
 
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
-        cache->internal_counters[i].name = counters_names[i];
-        shardcache_counter_add(cache->counters, cache->internal_counters[i].name, &cache->internal_counters[i].value); 
+        cache->cnt[i].name = counters_names[i];
+        shardcache_counter_add(cache->counters, cache->cnt[i].name, &cache->cnt[i].value); 
     }
 
     if (cache->evict_on_delete) {
         pthread_mutex_init(&cache->evictor_lock, NULL);
         pthread_cond_init(&cache->evictor_cond, NULL);
         cache->evictor_jobs = create_list();
-        set_free_value_callback(cache->evictor_jobs, (free_value_callback_t)destroy_evictor_job);
+        set_free_value_callback(cache->evictor_jobs,
+                                (free_value_callback_t)destroy_evictor_job);
         pthread_create(&cache->evictor_th, NULL, evictor, cache);
     }
 
@@ -628,7 +636,7 @@ shardcache_t *shardcache_create(char *me,
         return NULL;
     }
 
-    cache->volatile_storage = ht_create(1024, 65536, (ht_free_item_callback_t)destroy_volatile);
+    cache->volatile_storage = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)destroy_volatile);
 
     cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
 
@@ -653,7 +661,7 @@ void shardcache_destroy(shardcache_t *cache)
     pthread_mutex_destroy(&cache->migration_lock);
 
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
-        shardcache_counter_remove(cache->counters, cache->internal_counters[i].name);
+        shardcache_counter_remove(cache->counters, cache->cnt[i].name);
     }
 
     if (cache->arc)
@@ -688,7 +696,7 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
     if (!key)
         return NULL;
 
-    __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_GETS].value, 1);
+    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_GETS].value, 1);
 
     char *value = NULL;
     cache_object_t *obj = NULL;
@@ -711,22 +719,28 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
         pthread_mutex_unlock(&obj->lock);
     }
     arc_release_resource(cache->arc, res);
+    uint32_t size = (uint32_t)arc_size(cache->arc);
+    uint32_t prev = __sync_fetch_and_add(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value, 0);
+    __sync_bool_compare_and_swap(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+                                 prev,
+                                 size);
     return value;
 }
 
-int shardcache_set_volatile(shardcache_t *cache,
-                            void *key,
-                            size_t klen,
-                            void *value,
-                            size_t vlen,
-                            time_t expire)
+static int
+_shardcache_set_internal(shardcache_t *cache,
+                         void *key,
+                         size_t klen,
+                         void *value,
+                         size_t vlen,
+                         time_t expire)
 {
     // if we are not the owner try propagating the command to the responsible peer
     
     if (!key || !value)
         return -1;
 
-    __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_SETS].value, 1);
+    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_SETS].value, 1);
 
     arc_remove(cache->arc, (const void *)key, klen);
 
@@ -751,6 +765,8 @@ int shardcache_set_volatile(shardcache_t *cache,
 
         fprintf(stderr, " (%d) for key %s\n", (int)vlen, keystr);
 #endif
+        size_t prev_len = 0;
+        uint32_t *counter = &cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value;
         if (expire) {
             // ensure removing this key from the persistent storage (if present)
             // since it's now going to be a volatile item
@@ -765,17 +781,25 @@ int shardcache_set_volatile(shardcache_t *cache,
             fprintf(stderr, "Setting volatile item %s to expire %d (now: %d)\n", 
                 keystr, obj->expire, (int)time(NULL));
 #endif
-            ht_set(cache->volatile_storage, key, klen, obj, sizeof(volatile_object_t));
+            ht_get_and_set(cache->volatile_storage, key, klen, obj, sizeof(volatile_object_t), NULL, &prev_len);
+            if (vlen > prev_len)
+                __sync_add_and_fetch(counter, vlen-prev_len);
+            else
+                __sync_sub_and_fetch(counter, prev_len-vlen);
 
             pthread_mutex_lock(&cache->next_expire_lock);
             if (obj->expire < cache->next_expire)
                 cache->next_expire = obj->expire;
+
             pthread_mutex_unlock(&cache->next_expire_lock);
 
         } else if (cache->storage.store) {
             // remove this key from the volatile storage (if present)
             // it's going to be eventually persistent now (depending on the storage type)
-            ht_delete(cache->volatile_storage, key, klen, NULL, NULL);
+            ht_delete(cache->volatile_storage, key, klen, NULL, &prev_len);
+            if (prev_len) {
+                __sync_sub_and_fetch(counter, prev_len);
+            }
             cache->storage.store(key, klen, value, vlen, cache->storage.priv);
         }
         return 0;
@@ -805,8 +829,23 @@ int shardcache_set_volatile(shardcache_t *cache,
 
 }
 
-int shardcache_set(shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen) {
-    return shardcache_set_volatile(cache, key, klen, value, vlen, 0);
+int shardcache_set_volatile(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            void *value,
+                            size_t vlen,
+                            time_t expire)
+{
+    return _shardcache_set_internal(cache, key, klen, value, vlen, expire);
+}
+
+int shardcache_set(shardcache_t *cache,
+                   void *key,
+                   size_t klen,
+                   void *value,
+                   size_t vlen)
+{
+    return _shardcache_set_internal(cache, key, klen, value, vlen, 0);
 }
 
 int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
@@ -814,7 +853,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
     if (!key)
         return -1;
 
-    __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_DELS].value, 1);
+    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_DELS].value, 1);
 
     // if we are not the owner try propagating the command to the responsible peer
     char node_name[1024];
@@ -827,10 +866,15 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
 
     if (is_mine == 1)
     {
-        int rc = ht_delete(cache->volatile_storage, key, klen, NULL, NULL);        
+        size_t prev_len = 0;
+        int rc = ht_delete(cache->volatile_storage, key, klen, NULL, &prev_len);
+
         if (rc != 0) {
             if (cache->storage.remove)
                 cache->storage.remove(key, klen, cache->storage.priv);
+        } else if (prev_len) {
+            __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
+                                 prev_len);
         }
 
         if (cache->evict_on_delete)
@@ -842,6 +886,13 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
             pthread_cond_signal(&cache->evictor_cond);
             pthread_mutex_unlock(&cache->evictor_lock);
         }
+
+        uint32_t size = (uint32_t)arc_size(cache->arc);
+        uint32_t prev = __sync_fetch_and_add(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value, 0);
+        __sync_bool_compare_and_swap(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+                                     prev,
+                                     size);
+
         return 0;
     } else {
         char *peer = shardcache_get_node_address(cache, (char *)node_name);
@@ -860,7 +911,13 @@ int shardcache_evict(shardcache_t *cache, void *key, size_t klen) {
         return -1;
 
     arc_remove(cache->arc, (const void *)key, klen);
-    __sync_add_and_fetch(&cache->internal_counters[SHARDCACHE_COUNTER_EVICTS].value, 1);
+    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_EVICTS].value, 1);
+
+    uint32_t size = (uint32_t)arc_size(cache->arc);
+    uint32_t *counter = &cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value;
+    uint32_t prev = __sync_fetch_and_add(counter, 0);
+    __sync_bool_compare_and_swap(counter, prev, size);
+
     return 0;
 }
 
@@ -886,7 +943,7 @@ void shardcache_clear_counters(shardcache_t *cache) {
     if (cache) { }
     int i;
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i++) {
-        reset_stat_figure(&cache->internal_counters[i].value);
+        reset_stat_figure(&cache->cnt[i].value);
     }
 }
 
@@ -921,7 +978,32 @@ void shardcache_free_index(shardcache_storage_index_t *index)
     free(index);
 }
 
-void *migrator(void *priv)
+static int expire_migrated(hashtable_t *table, void *key, size_t klen, void *value, size_t vlen, void *user)
+{
+    shardcache_t *cache = (shardcache_t *)user;
+    volatile_object_t *v = (volatile_object_t *)value;
+
+    char node_name[1024];
+    size_t node_len = sizeof(node_name);
+    memset(node_name, 0, node_len);
+    int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+    if (is_mine == -1) {
+        fprintf(stderr, "expire_migrated running while no migration continuum present ... aborting\n");
+        return 0;
+    } else if (!is_mine) {
+#ifdef SHARDCACHE_DEBUG
+        char keystr[1024];
+        memcpy(keystr, key, klen < 1024 ? klen : 1024);
+        keystr[klen] = 0;
+        fprintf(stderr, "Forcing Key %s to expire because not owned anymore\n", keystr);
+#endif
+        v->expire = 0;
+    }
+    return 1;
+}
+
+
+void *migrate(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
 
@@ -960,21 +1042,15 @@ void *migrator(void *priv)
         fprintf(stderr, "Migrator processign key %s\n", keystr);
 #endif
 
-        pthread_mutex_lock(&cache->migration_lock);
-        if (!cache->migration) {
-            fprintf(stderr, "Migrator running while no migration continuum present ... aborting\n");
-            __sync_add_and_fetch(&errors, 1);
-            pthread_mutex_unlock(&cache->migration_lock);
-            aborted = 1;
-            break;
-        }
-        pthread_mutex_unlock(&cache->migration_lock);
-
         int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
         
-        // if we are not the owner try asking our peer responsible for this data
-        if (!is_mine)
-        {
+        if (is_mine == -1) {
+            fprintf(stderr, "Migrator running while no migration continuum present ... aborting\n");
+            __sync_add_and_fetch(&errors, 1);
+            aborted = 1;
+            break;
+        } else if (!is_mine) {
+            // if we are not the owner try asking our peer responsible for this data
             void *value = NULL;
             size_t vlen = 0;
             if (cache->storage.fetch) {
@@ -1024,9 +1100,16 @@ void *migrator(void *priv)
 #endif
             item = shift_value(to_delete);
         }
-    }
-    destroy_list(to_delete);
 
+        // and now let's expire all the volatile keys that don't belong to us anymore
+        ht_foreach_pair(cache->volatile_storage, expire_migrated, cache);
+        pthread_mutex_lock(&cache->next_expire_lock);
+        cache->next_expire = 0;
+        pthread_mutex_unlock(&cache->next_expire_lock);
+
+    }
+
+    destroy_list(to_delete);
 
     pthread_mutex_lock(&cache->migration_lock);
     cache->migration_done = 1;
@@ -1077,7 +1160,7 @@ int shardcache_migration_begin(shardcache_t *cache,
     int ignore = 0;
 
     if (num_nodes == cache->num_shards) {
-        // let's assume the lists are the same, if note 
+        // let's assume the lists are the same, if not
         // ignore will be set again to 0
         ignore = 1;
         for (i = 0 ; i < num_nodes; i++) {
@@ -1106,7 +1189,7 @@ int shardcache_migration_begin(shardcache_t *cache,
                                         num_nodes,
                                         200);
 
-        pthread_create(&cache->migrator_th, NULL, migrator, cache);
+        pthread_create(&cache->migrate_th, NULL, migrate, cache);
     }
 
     pthread_mutex_unlock(&cache->migration_lock);
@@ -1147,7 +1230,7 @@ int shardcache_migration_abort(shardcache_t *cache)
     cache->num_migration_shards = 0;
 
     pthread_mutex_unlock(&cache->migration_lock);
-    pthread_join(cache->migrator_th, NULL);
+    pthread_join(cache->migrate_th, NULL);
     return ret;
 }
 
@@ -1171,7 +1254,7 @@ int shardcache_migration_end(shardcache_t *cache)
     }
     cache->migration_done = 0;
     pthread_mutex_unlock(&cache->migration_lock);
-    pthread_join(cache->migrator_th, NULL);
+    pthread_join(cache->migrate_th, NULL);
     return ret;
 }
 

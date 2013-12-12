@@ -303,12 +303,13 @@ MODULE = Shardcache		PACKAGE = Shardcache
 INCLUDE: const-xs.inc
 
 shardcache_t *
-shardcache_create(me, nodes, storage, secret, num_workers, evict_on_delete = 1)
+shardcache_create(me, nodes, storage, secret, num_workers, cache_size = 1<<20, evict_on_delete = 1)
         char *  me
         SV   *  nodes
         SV   *  storage
         char *  secret
         int     num_workers
+        size_t  cache_size
         int     evict_on_delete
     PREINIT:
         int i;
@@ -381,7 +382,7 @@ shardcache_create(me, nodes, storage, secret, num_workers, evict_on_delete = 1)
         };
 
         RETVAL = shardcache_create(me, shards, num_nodes, &storage_struct,
-                                   secret, num_workers, evict_on_delete);
+                                   secret, num_workers, cache_size, evict_on_delete);
         if (shards)
             Safefree(shards);
 
