@@ -8,8 +8,8 @@ use File::Slurp;
 use Getopt::Long;
 
 my $USAGE = <<__USAGE ;
-Usage: $0 --key=<key> --input=<input_file> [ --hosts=<hosts> ] [ --secret=<secret> ]
-       $0 --key=<key> --value=<value> [ --hosts=<hosts> ] [ --secret=<secret> ]
+Usage: $0 --key=<key> --input=<input_file> [ --expire=<expire> ] [ --hosts=<hosts> ] [ --secret=<secret> ]
+       $0 --key=<key> --value=<value> [ --expire=<expire> ] [ --hosts=<hosts> ] [ --secret=<secret> ]
 __USAGE
 
 my $infile;
