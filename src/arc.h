@@ -13,7 +13,7 @@ typedef struct __arc_ops {
     void *(*create) (const void *key, size_t len, void *priv);
     
     /* Fetch the data associated with the object. */
-    int (*fetch) (void *obj, void *priv);
+    size_t (*fetch) (void *obj, void *priv);
     
     /* This function is called when the cache is full and we need to evict
      * objects from the cache. Free all data associated with the object. */
@@ -28,7 +28,7 @@ typedef struct __arc_ops {
 } arc_ops_t;
 
 /* Functions to create and destroy the cache. */
-arc_t *arc_create(arc_ops_t *ops, unsigned long c);
+arc_t *arc_create(arc_ops_t *ops, size_t c);
 void arc_destroy(arc_t *cache);
 
 /* Lookup an object in the cache. The cache automatically allocates and
@@ -43,6 +43,8 @@ arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t len, void **valu
 void arc_release_resource(arc_t *cache, arc_resource_t *res);
 
 void arc_remove(arc_t *cache, const void *key, size_t len);
+
+size_t arc_size(arc_t *cache);
 
 
 #endif /* __ARC_H__ */

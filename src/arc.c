@@ -71,7 +71,7 @@ arc_list_prepend(arc_list_t *head, arc_list_t *list)
  * The arc state represents one of the m{r,f}u{g,} lists
  */
 typedef struct __arc_state {
-    unsigned long size;
+    size_t size;
     arc_list_t head;
 } arc_state_t;
 
@@ -81,7 +81,7 @@ typedef struct __arc_state {
 typedef struct __arc_object {
     arc_state_t *state;
     arc_list_t head, hash;
-    unsigned long size;
+    size_t size;
     void *ptr;
     void *key;
     size_t klen;
@@ -95,7 +95,7 @@ struct __arc {
     struct __arc_ops *ops;
     hashtable_t *hash;
     
-    unsigned long c, p;
+    size_t c, p;
     struct __arc_state mrug, mru, mfu, mfug;
 
     pthread_mutex_t lock;
@@ -111,7 +111,6 @@ static arc_object_t *arc_object_create(arc_t *cache, void *ptr, const void *key,
 {
     arc_object_t *obj = calloc(1, sizeof(arc_object_t));
     obj->state = NULL;
-    obj->size = sizeof(arc_object_t);
     obj->ptr = ptr;
     obj->cache = cache;
 
@@ -129,11 +128,13 @@ static arc_object_t *arc_object_create(arc_t *cache, void *ptr, const void *key,
     memcpy(obj->key, key, len);
     obj->klen = len;
 
+    obj->size = sizeof(arc_object_t) + len;
+
     return obj;
 }
 
 /* Forward-declaration needed in arc_move(). */
-static void arc_balance(arc_t *cache, unsigned long size);
+static void arc_balance(arc_t *cache, size_t size);
 
 /* Move the object to the given state. If the state transition requires,
 * fetch, evict or destroy the object. */
@@ -167,7 +168,8 @@ static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *stat
             // unlock the mutex while the backend is fetching the data
             pthread_mutex_lock(&obj->lock);
             pthread_mutex_unlock(&cache->lock);
-            if (cache->ops->fetch(obj->ptr, cache->ops->priv)) {
+            size_t size = cache->ops->fetch(obj->ptr, cache->ops->priv);
+            if (size == 0) {
                 pthread_mutex_unlock(&obj->lock);
                 pthread_mutex_lock(&cache->lock);
                 /* If the fetch fails, put the object back to the list
@@ -179,6 +181,7 @@ static arc_object_t *arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *stat
                 pthread_mutex_unlock(&cache->lock);
                 return NULL;
             }
+            obj->size += size;
             pthread_mutex_unlock(&obj->lock);
             pthread_mutex_lock(&cache->lock);
         }
@@ -202,7 +205,7 @@ static arc_object_t *arc_state_lru(arc_state_t *state)
 
 /* Balance the lists so that we can fit an object with the given size into
  * the cache. */
-static void arc_balance(arc_t *cache, unsigned long size)
+static void arc_balance(arc_t *cache, size_t size)
 {
     /* First move objects from MRU/MFU to their respective ghost lists. */
     while (cache->mru.size + cache->mfu.size + size > cache->c) {        
@@ -253,7 +256,7 @@ static void terminate_node_callback(refcnt_node_t *node, int concurrent) {
 }
 
 /* Create a new cache. */
-arc_t *arc_create(arc_ops_t *ops, unsigned long c)
+arc_t *arc_create(arc_ops_t *ops, size_t c)
 {
     arc_t *cache = calloc(1, sizeof(arc_t));
 
@@ -385,3 +388,10 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     return NULL;
 }
 
+size_t arc_size(arc_t *cache)
+{
+    pthread_mutex_lock(&cache->lock);
+    size_t ret = cache->mru.size + cache->mfu.size;
+    pthread_mutex_unlock(&cache->lock);
+    return ret;
+}
