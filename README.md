@@ -60,6 +60,13 @@ Differently from the [groupcache](http://github.com/golang/groupcache "groupcach
    Once the migration is completed the continua are swapped and the new
    continuum will become the actual one
 
+  * supports volatile keys, which have an expiration time and will be automatically removed when expired.
+    Note that such keys are always kept in memory, regardless of the storage backend used, and are never 
+    passed to the storage backend.
+    During a migration the volatile keys eventually not owned anymore by a node will not be forwarded to
+    the new owner but will be instead expired "prematurely" (since they won't be anyway available anymore
+    when switching to the new continuum)
+
 ## Lookup process
 
 Exactly like in [groupcache](http://github.com/golang/groupcache "groupcache") implementation, a shardcache lookup of **get("foo")** looks like:
