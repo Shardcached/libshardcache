@@ -305,10 +305,11 @@ static int __op_fetch(void *item, void * priv)
     volatile_object_t *vobj = ht_get_deep_copy(cache->volatile_storage,
                                                obj->key,
                                                obj->klen,
-                                               &obj->dlen,
+                                               NULL,
                                                copy_volatile_object_cb);
     if (vobj) {
         obj->data = vobj->data; 
+        obj->dlen = vobj->dlen;
         free(vobj);
     } else if (cache->storage.fetch) {
         obj->data = cache->storage.fetch(obj->key, obj->klen, &obj->dlen, cache->storage.priv);
@@ -459,6 +460,12 @@ static int expire_volatile(hashtable_t *table, void *key, size_t klen, void *val
     expire_volatile_arg_t *arg = (expire_volatile_arg_t *)user;
     volatile_object_t *v = (volatile_object_t *)value;
     if (v->expire < arg->now) {
+#ifdef SHARDCACHE_DEBUG
+        char keystr[1024];
+        memcpy(keystr, key, klen < 1024 ? klen : 1024);
+        keystr[klen] = 0;
+        fprintf(stderr, "Key %s expired\n", keystr);
+#endif
         expire_volatile_item_t *item = malloc(sizeof(expire_volatile_item_t));
         item->key = malloc(klen);
         memcpy(item->key, key, klen);
@@ -512,7 +519,6 @@ void *shardcache_expire_volatile_keys(void *priv)
 
             pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         } else {
-            cache->next_expire = now + 2;
             pthread_mutex_unlock(&cache->next_expire_lock);
         }
 
@@ -733,6 +739,7 @@ int shardcache_set_volatile(shardcache_t *cache,
         is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
 
     if (is_mine == 1) {
+
 #ifdef SHARDCACHE_DEBUG
         char keystr[1024];
         memcpy(keystr, key, klen < 1024 ? klen : 1024);
@@ -754,8 +761,11 @@ int shardcache_set_volatile(shardcache_t *cache,
             memcpy(obj->data, value, vlen);
             obj->dlen = vlen;
             obj->expire = time(NULL) + expire;
-
-            ht_set(cache->volatile_storage, key, klen, value, vlen);
+#ifdef SHARDCACHE_DEBUG
+            fprintf(stderr, "Setting volatile item %s to expire %d (now: %d)\n", 
+                keystr, obj->expire, (int)time(NULL));
+#endif
+            ht_set(cache->volatile_storage, key, klen, obj, sizeof(volatile_object_t));
 
             pthread_mutex_lock(&cache->next_expire_lock);
             if (obj->expire < cache->next_expire)
