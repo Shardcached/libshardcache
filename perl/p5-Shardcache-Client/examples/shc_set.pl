@@ -15,6 +15,7 @@ __USAGE
 my $infile;
 my $key;
 my $value;
+my $expire;
 my $hosts_param = $ENV{SHC_HOSTS};
 my $secret = $ENV{SHC_SECRET};
 
@@ -23,6 +24,7 @@ GetOptions ("input=s"  => \$infile,
             "key=s"    => \$key,
             "value=s"  => \$value,
             "hosts=s"  => \$hosts_param,
+            "expire=s" => \$expire,
             "secret=s" => \$secret)
             or die("Error in command line arguments\n");
 
@@ -44,7 +46,7 @@ if ($infile && !$value) {
         $value = read_file($infile);
     }
 }
-unless ($c->set($key, $value)) {
+unless ($c->set($key, $value, $expire)) {
     print "Err\n";
     exit(-1);
 }

@@ -73,7 +73,7 @@ sub _chunkize_var {
 }
 
 sub send_msg {
-    my ($self, $hdr, $key, $value) = @_;
+    my ($self, $hdr, $key, $value, $expire) = @_;
 
     my $templ = "C";
     my @vars = ($hdr);
@@ -90,6 +90,10 @@ sub send_msg {
 
         $templ .= sprintf "a%dCC", length($vbuf);
         push @vars, $vbuf, 0x00, 0x00;
+        if ($expire) {
+            $templ .= "CCCNCC";
+            push @vars, 0x80, 0x00, 0x04, $expire, 0x00, 0x00;
+        }
     }
 
     $templ .= "C";
@@ -174,9 +178,9 @@ sub get {
 }
 
 sub set {
-    my ($self, $key, $value) = @_;
+    my ($self, $key, $value, $expire) = @_;
     return unless $key && defined $value;
-    my $resp = $self->send_msg(0x02, $key, $value);
+    my $resp = $self->send_msg(0x02, $key, $value, $expire);
     return (defined $resp && $resp eq "OK")
 }
 
