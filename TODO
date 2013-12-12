@@ -5,5 +5,3 @@
    receiving instance)
 
  * parallelize migrations
-
- * support expiration of keys
