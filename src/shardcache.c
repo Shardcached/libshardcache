@@ -514,6 +514,7 @@ void *shardcache_expire_volatile_keys(void *priv)
                 if (prev) {
                     __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
                                          prev->dlen);
+                    destroy_volatile(prev);
                 }
                 arc_remove(cache->arc, (const void *)item->key, item->klen);
                 free(item->key);
@@ -785,10 +786,12 @@ _shardcache_set_internal(shardcache_t *cache,
                 obj, sizeof(volatile_object_t), (void **)&prev, NULL);
 
             if (prev) {
-                if (vlen > prev->dlen)
+                if (vlen > prev->dlen) {
                     __sync_add_and_fetch(counter, vlen - prev->dlen);
-                else
+                } else {
                     __sync_sub_and_fetch(counter, prev->dlen - vlen);
+                }
+                destroy_volatile(prev); 
             } else {
                 __sync_add_and_fetch(counter, vlen);
             }
@@ -805,6 +808,7 @@ _shardcache_set_internal(shardcache_t *cache,
             ht_delete(cache->volatile_storage, key, klen, (void **)&prev, NULL);
             if (prev) {
                 __sync_sub_and_fetch(counter, prev->dlen);
+                destroy_volatile(prev);
             }
             cache->storage.store(key, klen, value, vlen, cache->storage.priv);
         }
@@ -881,6 +885,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
         } else if (prev_item) {
             __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
                                  prev_item->dlen);
+            destroy_volatile(prev_item);
         }
 
         if (cache->evict_on_delete)
