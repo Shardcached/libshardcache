@@ -288,15 +288,13 @@ int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, s
 }
 
 
-int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner)
+int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner, int fd)
 {
-    char *brkt = NULL;
-    char *addr = strdup(peer);
-    char *host = strtok_r(addr, ":", &brkt);
-    char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
-    int fd = open_connection(host, port, 30);
-    free(addr);
+    int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
 
 #ifdef SHARDCACHE_DEBUG
     fprintf(stderr, "Sending del command to peer %s (owner: %d)\n",
@@ -318,7 +316,8 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner)
                 fprintf(stderr, "Got (del) response from peer %s : %s\n",
                         peer, fbuf_data(&resp));
 #endif
-                close(fd);
+                if (should_close)
+                    close(fd);
                 fbuf_destroy(&resp);
                 return 0;
             } else {
@@ -326,7 +325,8 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner)
             }
             fbuf_destroy(&resp);
         }
-        close(fd);
+        if (should_close)
+            close(fd);
         return 0;
     }
     return -1;
@@ -334,21 +334,20 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner)
 
 
 int send_to_peer(char *peer, char *auth, void *key,
-        size_t klen, void *value, size_t vlen, uint32_t expire)
+        size_t klen, void *value, size_t vlen, uint32_t expire, int fd)
 {
-    char *brkt = NULL;
-    char *addr = strdup(peer);
-    char *host = strtok_r(addr, ":", &brkt);
-    char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
-    int fd = open_connection(host, port, 30);
-    free(addr);
+    int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
 
     if (fd >= 0) {
         int rc = write_message(fd, auth, SHARDCACHE_HDR_SET,
                 key, klen, value, vlen, expire);
         if (rc != 0) {
-            close(fd);
+            if (should_close)
+                close(fd);
             return -1;
         }
 
@@ -362,7 +361,8 @@ int send_to_peer(char *peer, char *auth, void *key,
                 fprintf(stderr, "Got (set) response from peer %s : %s\n",
                         peer, fbuf_data(&resp));
 #endif
-                close(fd);
+                if (should_close)
+                    close(fd);
                 fbuf_destroy(&resp);
                 return 0;
             } else {
@@ -374,20 +374,19 @@ int send_to_peer(char *peer, char *auth, void *key,
             fprintf(stderr, "Error reading from socket %d (%s) : %s\n",
                     fd, peer, strerror(errno));
         }
-        close(fd);
+        if (should_close)
+            close(fd);
     }
     return -1;
 }
 
-int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out)
+int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out, int fd)
 {
-    char *brkt = NULL;
-    char *addr = strdup(peer);
-    char *host = strtok_r(addr, ":", &brkt);
-    char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
-    int fd = open_connection(host, port, 30);
-    free(addr);
+    int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
 
     if (fd >= 0) {
         int rc = write_message(fd, auth, SHARDCACHE_HDR_GET, key, len, NULL, 0, 0);
@@ -413,26 +412,26 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out)
                     fprintf(stderr, "\n");
                 }
 #endif
-                close(fd);
+                if (should_close)
+                    close(fd);
                 return fbuf_used(out) ? 0 : -1;
             } else {
                 // TODO - Error messages
             }
         }
-        close(fd);
+        if (should_close)
+            close(fd);
     }
     return -1;
 }
 
-int migrate_peer(char *peer, char *auth, void *msgdata, size_t len)
+int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd)
 {
-    char *brkt = NULL;
-    char *addr = strdup(peer);
-    char *host = strtok_r(addr, ":", &brkt);
-    char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
-    int fd = open_connection(host, port, 30);
-    free(addr);
+    int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
 
 #ifdef SHARDCACHE_DEBUG
     fprintf(stderr, "Sending migration_begin command to peer %s\n", peer);
@@ -454,15 +453,30 @@ int migrate_peer(char *peer, char *auth, void *msgdata, size_t len)
             fprintf(stderr, "Got (del) response from peer %s : %s\n",
                     peer, fbuf_data(&resp));
 #endif
-            close(fd);
+            if (should_close)
+                close(fd);
             fbuf_destroy(&resp);
             return 0;
         } else {
             // TODO - Error messages
         }
         fbuf_destroy(&resp);
-        close(fd);
+        if (should_close)
+            close(fd);
     }
     return -1;
 }
 
+int connect_to_peer(char *address_string, unsigned int timeout)
+{
+    char *brkt = NULL;
+    char *addr = strdup(address_string);
+    char *host = strtok_r(addr, ":", &brkt);
+    char *port_string = strtok_r(NULL, ":", &brkt);
+    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
+
+    int fd = open_connection(host, port, 30);
+
+    free(addr);
+    return fd;
+}

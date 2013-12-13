@@ -170,9 +170,13 @@ typedef void (*shardcache_storage_destructor)(shardcache_storage_t *storage);
 /**
  * @brief Structure representing a node taking part in the shard cache
  */
+
+#define SHARDCACHE_NODE_LABEL_MAXLEN 256
+#define SHARDCACHE_NODE_ADDRESSL_MAXLEN 256
+
 typedef struct shardcache_node_s {
-    char label[256];
-    char address[256];
+    char label[SHARDCACHE_NODE_LABEL_MAXLEN];
+    char address[SHARDCACHE_NODE_ADDRESSL_MAXLEN];
 } shardcache_node_t;
 
 /**

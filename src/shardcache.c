@@ -234,7 +234,7 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
 
     // another peer is responsible for this item, let's get the value from there
     fbuf_t value = FBUF_STATIC_INITIALIZER;
-    int rc = fetch_from_peer(peer_addr, (char *)cache->auth, obj->key, obj->klen, &value);
+    int rc = fetch_from_peer(peer_addr, (char *)cache->auth, obj->key, obj->klen, &value, -1);
     if (rc == 0 && fbuf_used(&value)) {
         obj->data = fbuf_data(&value);
         obj->dlen = fbuf_used(&value);
@@ -416,7 +416,7 @@ static void *evictor(void *priv)
             for (i = 0; i < cache->num_shards; i++) {
                 char *peer = cache->shards[i].label;
                 if (strcmp(peer, cache->me) != 0) {
-                    delete_from_peer(cache->shards[i].address, (char *)cache->auth, job->key, job->klen, 0);
+                    delete_from_peer(cache->shards[i].address, (char *)cache->auth, job->key, job->klen, 0, -1);
                 }
             }
             destroy_evictor_job(job);
@@ -832,7 +832,7 @@ _shardcache_set_internal(shardcache_t *cache,
             // TODO - Error Messages
             return -1;
         }
-        return send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, expire);
+        return send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, expire, -1);
     }
 
     return -1;
@@ -911,7 +911,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
             // TODO - Error Messages
             return -1;
         }
-        return delete_from_peer(peer, (char *)cache->auth, key, klen, 1);
+        return delete_from_peer(peer, (char *)cache->auth, key, klen, 1, -1);
     }
 
     return -1;
@@ -1073,7 +1073,7 @@ void *migrate(void *priv)
 #ifdef SHARDCACHE_DEBUG
                     fprintf(stderr, "Migrator copying %s to peer %s (%s)\n", keystr, node_name, peer);
 #endif
-                    int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, 0);
+                    int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, 0, -1);
                     if (rc == 0) {
                         __sync_add_and_fetch(&migrated_items, 1);
                         push_value(to_delete, &index->items[i]);
@@ -1211,7 +1211,7 @@ int shardcache_migration_begin(shardcache_t *cache,
                 int rc = migrate_peer(cache->shards[i].address,
                                       (char *)cache->auth,
                                       fbuf_data(&mgb_message),
-                                      fbuf_used(&mgb_message));
+                                      fbuf_used(&mgb_message), -1);
                 if (rc != 0) {
                     fprintf(stderr, "Node %s (%s) didn't aknowledge the migration\n",
                             cache->shards[i].label, cache->shards[i].address);

@@ -310,3 +310,4 @@ open_fifo(const char *filename)
 
     return fd;
 }
+

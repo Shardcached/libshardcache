@@ -53,6 +53,7 @@ typedef enum {
     SHARDCACHE_HDR_MGA  = 0x21,
     SHARDCACHE_HDR_MGB  = 0x22,
     SHARDCACHE_HDR_MGE  = 0x23,
+    SHARDCACHE_HDR_NOP  = 0x90,
     SHARDCACHE_HDR_RES  = 0x99
 } shardcache_hdr_t;
 
@@ -60,9 +61,10 @@ typedef enum {
 
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr);
 int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire);
-int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner);
-int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen, uint32_t expire);
-int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out);
-int migrate_peer(char *peer, char *auth, void *msgdata, size_t len);
+int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner, int fd);
+int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen, uint32_t expire, int fd);
+int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out, int fd);
+int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd);
+int connect_to_peer(char *address_string, unsigned int timeout);
 
 #endif
