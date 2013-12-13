@@ -1,0 +1,11 @@
+Changes
+Fast.xs
+Makefile.PL
+MANIFEST
+ppport.h
+README
+typemap
+t/Shardcache-Client-Fast.t
+fallback/const-c.inc
+fallback/const-xs.inc
+lib/Shardcache/Client/Fast.pm

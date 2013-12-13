@@ -1,0 +1,11 @@
+const shardcache_node_t *			T_PTROBJ
+int *						T_PTROBJ
+shardcache_client_t *				T_PTROBJ
+shardcache_counter_t **				T_PTROBJ
+shardcache_node_t *				T_PTROBJ
+shardcache_storage_index_t *			T_PTROBJ
+shardcache_storage_t *				T_PTROBJ
+shardcache_t *					T_PTROBJ
+size_t *					T_PTROBJ
+uint32_t					T_UV
+void **						T_PTROBJ
