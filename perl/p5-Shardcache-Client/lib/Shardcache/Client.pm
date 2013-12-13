@@ -124,47 +124,83 @@ sub send_msg {
 
     }
     
-    my $sock = IO::Socket::INET->new(PeerAddr => $addr,
-                                     PeerPort => $port,
-                                     Proto    => 'tcp');
+    if (!$self->{_sock}->{"$addr:$port"} || !$self->{_sock}->{"$addr:$port"}->connected) {
+        $self->{_sock}->{"$addr:$port"} = IO::Socket::INET->new(PeerAddr => $addr,
+                                             PeerPort => $port,
+                                             Proto    => 'tcp');
+    }
+
+    my $sock = $self->{_sock}->{"$addr:$port"};
                                      
-    print $sock $msg;
+    my $wb = $sock->write($msg);
     
     # read the response
     my $in;
     my $data;
-    while (read($sock, $data, 1024) > 0) {
+
+
+    # read the header
+    if (read($sock, $data, 1) != 1) {
+        delete $self->{_sock}->{"$addr:$port"};
+        return undef;
+    }
+
+    $in .= $data;
+
+    my $stop = 0;
+    my $out; 
+
+    # read the records
+    while (!$stop) {
+        if (read($sock, $data, 2) != 2) {
+            delete $self->{_sock}->{"$addr:$port"};
+            return undef;
+        }
+        my ($len) = unpack("n", $data);
         $in .= $data;
+        while ($len) {
+            my $rb = read($sock, $data, $len);
+            if ($rb <= 0) {
+                delete $self->{_sock}->{"$addr:$port"};
+                return undef;
+            }
+            $in .= $data;
+            $out .= $data;
+            $len -= $rb;
+            if ($len == 0) {
+                if (read($sock, $data, 2) != 2) {
+                    delete $self->{_sock}->{"$addr:$port"};
+                    return undef;
+                }
+                ($len) = unpack("n", $data);
+                $in .= $data;
+            }
+        }
+        
+        if (read($sock, $data, 1) != 1) {
+            delete $self->{_sock}->{"$addr:$port"};
+            return undef;
+        }
+        $in .= $data;
+        my ($sep) = unpack("C", $data);
+        $stop = 1 if ($sep == 0);
+        # TODO - should check if it's a correct rsep (0x80)
     }
 
     # now that we have the whole message, let's compute the signature
     # (we know it's 8 bytes long and is the trailer of the message
-    my $signature = siphash64(substr($in, 0, length($in)-8),  pack("a16", $self->{_secret}));
+    my $signature = siphash64(substr($in, 0, length($in)),  pack("a16", $self->{_secret}));
 
     my $csig = pack("Q", $signature);
 
-    my ($rhdr, $chunk) = unpack("Ca*", $in);
-
-    my $out; 
-    for (;;) {
-        my $len;
-        do {
-            ($len, $chunk) = unpack("na*", $chunk);
-            $out .= $len ? substr($chunk, 0, $len, "") : "";
-        } while ($len > 0);
-        my $char = unpack("C", substr($chunk,0, 1, ""));
-        if ($char == 0x80) {
-            next;
-        } elsif($char == 0x00) {
-            last;
-        } else {
-            # BAD FORMAT
-            return;
-        }
+    my $rb = read($sock, $data, 8);
+    if ($rb != 8) {
+        delete $self->{_sock}->{"$addr:$port"};
+        return undef;
     }
 
     # $chunk now points at the signature
-    if ($csig ne $chunk) {
+    if ($csig ne $data) {
         return undef;
     }
 
