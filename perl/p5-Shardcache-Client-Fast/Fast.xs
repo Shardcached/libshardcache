@@ -105,7 +105,7 @@ shardcache_client_evict(c, key)
         RETVAL
 
 SV *
-shardcache_client_get(c, key, klen, data)
+shardcache_client_get(c, key)
 	shardcache_client_t *	c
 	SV *	key
     CODE:
