@@ -119,7 +119,7 @@ typedef struct {
 
 static void *__op_create(const void *key, size_t len, void *priv)
 {
-    cache_object_t *obj = malloc(sizeof(cache_object_t));
+    cache_object_t *obj = calloc(1, sizeof(cache_object_t));
 
     obj->klen = len;
     obj->key = malloc(len);
