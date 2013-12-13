@@ -509,11 +509,11 @@ void *shardcache_expire_volatile_keys(void *priv)
 
             expire_volatile_item_t *item = shift_value(arg.list);
             while (item) {
-                size_t prev_len = 0;
-                ht_delete(cache->volatile_storage, item->key, item->klen, NULL, &prev_len);
-                if (prev_len) {
+                volatile_object_t *prev = NULL;
+                ht_delete(cache->volatile_storage, item->key, item->klen, (void **)&prev, NULL);
+                if (prev) {
                     __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
-                                         prev_len);
+                                         prev->dlen);
                 }
                 arc_remove(cache->arc, (const void *)item->key, item->klen);
                 free(item->key);
@@ -765,7 +765,7 @@ _shardcache_set_internal(shardcache_t *cache,
 
         fprintf(stderr, " (%d) for key %s\n", (int)vlen, keystr);
 #endif
-        size_t prev_len = 0;
+        volatile_object_t *prev = NULL;
         uint32_t *counter = &cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value;
         if (expire) {
             // ensure removing this key from the persistent storage (if present)
@@ -781,11 +781,17 @@ _shardcache_set_internal(shardcache_t *cache,
             fprintf(stderr, "Setting volatile item %s to expire %d (now: %d)\n", 
                 keystr, obj->expire, (int)time(NULL));
 #endif
-            ht_get_and_set(cache->volatile_storage, key, klen, obj, sizeof(volatile_object_t), NULL, &prev_len);
-            if (vlen > prev_len)
-                __sync_add_and_fetch(counter, vlen-prev_len);
-            else
-                __sync_sub_and_fetch(counter, prev_len-vlen);
+            ht_get_and_set(cache->volatile_storage, key, klen,
+                obj, sizeof(volatile_object_t), (void **)&prev, NULL);
+
+            if (prev) {
+                if (vlen > prev->dlen)
+                    __sync_add_and_fetch(counter, vlen - prev->dlen);
+                else
+                    __sync_sub_and_fetch(counter, prev->dlen - vlen);
+            } else {
+                __sync_add_and_fetch(counter, vlen);
+            }
 
             pthread_mutex_lock(&cache->next_expire_lock);
             if (obj->expire < cache->next_expire)
@@ -796,9 +802,9 @@ _shardcache_set_internal(shardcache_t *cache,
         } else if (cache->storage.store) {
             // remove this key from the volatile storage (if present)
             // it's going to be eventually persistent now (depending on the storage type)
-            ht_delete(cache->volatile_storage, key, klen, NULL, &prev_len);
-            if (prev_len) {
-                __sync_sub_and_fetch(counter, prev_len);
+            ht_delete(cache->volatile_storage, key, klen, (void **)&prev, NULL);
+            if (prev) {
+                __sync_sub_and_fetch(counter, prev->dlen);
             }
             cache->storage.store(key, klen, value, vlen, cache->storage.priv);
         }
@@ -866,15 +872,15 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
 
     if (is_mine == 1)
     {
-        size_t prev_len = 0;
-        int rc = ht_delete(cache->volatile_storage, key, klen, NULL, &prev_len);
+        volatile_object_t *prev_item = NULL;
+        int rc = ht_delete(cache->volatile_storage, key, klen, (void **)&prev_item, NULL);
 
         if (rc != 0) {
             if (cache->storage.remove)
                 cache->storage.remove(key, klen, cache->storage.priv);
-        } else if (prev_len) {
+        } else if (prev_item) {
             __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
-                                 prev_len);
+                                 prev_item->dlen);
         }
 
         if (cache->evict_on_delete)
