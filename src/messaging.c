@@ -198,7 +198,7 @@ int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out)
     return -1;
 }
 
-static int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire, fbuf_t *out)
+int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire, fbuf_t *out)
 {
     static char eom = 0;
     static char sep = SHARDCACHE_RSEP;

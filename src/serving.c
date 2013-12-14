@@ -87,7 +87,7 @@ shardcache_create_connection_context(shardcache_t *cache, const char *auth, int 
 {
     shardcache_connection_context_t *context = calloc(1, sizeof(shardcache_connection_context_t));
 
-    context->input = rbb_create(1<<16);
+    context->input = rbb_create(1<<17); // would fit 'almost' 2 max-sized chunks
     context->output = fbuf_create(0);
 
     context->key = fbuf_create(0);
@@ -110,31 +110,26 @@ static void shardcache_destroy_connection_context(shardcache_connection_context_
 }
 
 static void write_status(shardcache_connection_context_t *ctx, int rc) {
+    fbuf_t out = FBUF_STATIC_INITIALIZER;
     if (rc != 0) {
         fprintf(stderr, "Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
-        write_message(ctx->fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, "ERR", 3, NULL, 0, 0);
+        build_message(SHARDCACHE_HDR_RES, "ERR", 3, NULL, 0, 0, &out);
     } else {
-        write_message(ctx->fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, "OK", 2, NULL, 0, 0);
+        build_message(SHARDCACHE_HDR_RES, "OK", 2, NULL, 0, 0, &out);
     }
 
+    uint64_t digest;
+    sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
+    sip_hash_digest_integer(shash, fbuf_data(&out), fbuf_used(&out), &digest);
+    sip_hash_free(shash);
+    fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+    fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
+    fbuf_destroy(&out);
 }
 
-static void *serve_response(void *priv) {
+static void *process_request(void *priv) {
     shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
     shardcache_t *cache = ctx->cache;
-    int fd = ctx->fd;
-
-    // let's ensure setting the fd to blocking mode
-    // (if it was used in the iomux earlier, it was set to non-blocking)
-    int opts = fcntl(fd, F_GETFL);
-    if (opts >= 0) {
-        int err = fcntl(fd, F_SETFL, opts & (~O_NONBLOCK));
-        if (err != 0) {
-            fprintf(stderr, "Can't set fd %d to non blocking mode: %s\n", fd, strerror(errno));
-        }
-    } else {
-        fprintf(stderr, "Can't get flags for fd %d: %s\n", fd, strerror(errno));
-    }
 
     int rc = 0;
     void *key = fbuf_data(ctx->key);
@@ -143,9 +138,21 @@ static void *serve_response(void *priv) {
 
         case SHARDCACHE_HDR_GET:
         {
+            fbuf_t out = FBUF_STATIC_INITIALIZER;
             size_t vlen = 0;
             void *v = shardcache_get(cache, key, klen, &vlen);
-            write_message(fd, (char *)ctx->auth, SHARDCACHE_HDR_RES, v, vlen, NULL, 0, 0);
+            if (build_message(SHARDCACHE_HDR_RES, v, vlen, NULL, 0, 0, &out) == 0) {
+                uint64_t digest;
+                sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
+                sip_hash_digest_integer(shash, fbuf_data(&out), fbuf_used(&out), &digest);
+                sip_hash_free(shash);
+                fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+                fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
+            } else {
+                // TODO - Error Messages
+            }
+            fbuf_destroy(&out);
+
             if (v)
                 free(v);
             break;
@@ -220,13 +227,32 @@ static void *serve_response(void *priv) {
     return NULL;
 }
 
+static void shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
+{
+    shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
+    if (fbuf_used(ctx->output)) {
+        int wb = iomux_write(iomux, fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
+        fbuf_remove(ctx->output, wb);
+    }
+
+    if (fbuf_used(ctx->output)) {
+        struct timeval tv = { 0, 1000 };
+        iomux_set_timeout(iomux, fd, &tv);
+    }
+}
+
 static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len, void *priv)
 {
     shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
     if (!ctx)
         return;
 
-    rbb_write(ctx->input, data, len);
+    int wb = rbb_write(ctx->input, data, len);
+    if (wb != len) {
+        fprintf(stderr, "Buffer underrun!");
+        iomux_close(iomux, fd);
+        return;
+    }
 
     if (!rbb_len(ctx->input) > 0)
         return;
@@ -348,7 +374,6 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             return;
 
         uint64_t digest;
-        size_t dlen = sizeof(digest);
         if (!sip_hash_final_integer(ctx->shash, &digest)) {
             // TODO - Error Messages
             fprintf(stderr, "Bad signature\n");
@@ -357,7 +382,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         }
 
         uint64_t received_digest;
-        rbb_read(ctx->input, (u_char *)&received_digest, dlen);
+        rbb_read(ctx->input, (u_char *)&received_digest, sizeof(digest));
 
 #ifdef SHARDCACHE_DEBUG
         int i;
@@ -392,16 +417,27 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     if (ctx->state == STATE_READING_DONE) {
         shardcache_worker_context_t *wrkctx = ctx->worker_ctx;
         ATOMIC_CAS(wrkctx->busy, 0, 1);
-        //iomux_remove(iomux, fd); // this fd doesn't belong to the mux anymore
-        //shutdown(fd, SHUT_RD); // we don't want to read anymore from this socket
-        serve_response(ctx);
+
+        process_request(ctx);
+        // if we have output, let's send it
+        if (fbuf_used(ctx->output)) {
+            int wb = iomux_write(iomux, fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
+            fbuf_remove(ctx->output, wb);
+            if (fbuf_used(ctx->output)) {
+                // too much output, let's keep pushing it in a timeout handler
+                struct timeval tv = { 0, 1000 };
+                iomux_set_timeout(iomux, fd, &tv);
+            }
+        }
+
         ATOMIC_CAS(wrkctx->busy, 1, 0);
         ATOMIC_DECREMENT(wrkctx->num_fds);
         ctx->state = STATE_READING_NONE;
         fbuf_clear(ctx->key);
         fbuf_clear(ctx->value);
-        fbuf_clear(ctx->output);
+
         sip_hash_free(ctx->shash);
+        // create a new one for the next request on this same socket (if any)
         ctx->shash = sip_hash_new((uint8_t *)ctx->auth, 2, 4);
     }
 }
@@ -430,7 +466,7 @@ void *worker(void *priv) {
                 .mux_input = shardcache_input_handler,
                 .mux_eof = shardcache_eof_handler,
                 .mux_output = NULL,
-                .mux_timeout = NULL,
+                .mux_timeout = shardcache_output_handler,
                 .priv = ctx
             };
             ctx->worker_ctx = wrk_ctx;

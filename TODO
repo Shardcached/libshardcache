@@ -1,3 +1,9 @@
+ * use asynchronous i/o when sending messages to peers (all functions in messaging.c)
+
+ * make asynchronous versions of shardcache_get() and shardcache_set()
+   which provide/send data in chunks while available by calling some callback
+   passed as argument
+
  * parallelize eviction
    evict commands are very small and can be handled quickly but now it's
    only one thread making this job and it might be not enough in case of

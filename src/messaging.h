@@ -61,6 +61,7 @@ typedef enum {
 
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr);
 int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire);
+int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire, fbuf_t *out);
 int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner, int fd);
 int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen, uint32_t expire, int fd);
 int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out, int fd);
