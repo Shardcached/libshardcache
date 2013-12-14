@@ -113,8 +113,9 @@ shardcache_client_get(c, key)
 	STRLEN	klen = 0;
         char *k = SvPVbyte(key, klen);
         size_t size = shardcache_client_get(c, k, klen, &data);
-        if (size > 0) {
+        if (data && size > 0) {
             RETVAL = newSVpv(data, size);
+            free(data);
         } else {
             RETVAL = &PL_sv_undef;
         }
