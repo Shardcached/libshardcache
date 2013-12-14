@@ -27,7 +27,6 @@
 #include "serving.h"
 #include "counters.h"
 
-
 #define HEXDUMP_DATA(__d, __l) {\
     int __i;\
     char *__datap = __d;\
@@ -637,7 +636,7 @@ shardcache_t *shardcache_create(char *me,
         return NULL;
     }
 
-    cache->volatile_storage = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)destroy_volatile);
+    cache->volatile_storage = ht_create(1<<20, 10<<20, (ht_free_item_callback_t)destroy_volatile);
 
     cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
 
@@ -705,19 +704,15 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
     if (!res)
         return NULL;
 
-    if (obj) {
-        pthread_mutex_lock(&obj->lock);
-        if (obj->data) {
-            value = malloc(obj->dlen);
-            if (value) {
-                memcpy(value, obj->data, obj->dlen);
-                if (vlen)
-                    *vlen = obj->dlen;
-            } else {
-                fprintf(stderr, "malloc failed for %zu bytes: %s\n", obj->dlen, strerror(errno));
-            }
+    if (obj && obj->data) {
+        value = malloc(obj->dlen);
+        if (value) {
+            memcpy(value, obj->data, obj->dlen);
+            if (vlen)
+                *vlen = obj->dlen;
+        } else {
+            fprintf(stderr, "malloc failed for %zu bytes: %s\n", obj->dlen, strerror(errno));
         }
-        pthread_mutex_unlock(&obj->lock);
     }
     arc_release_resource(cache->arc, res);
     uint32_t size = (uint32_t)arc_size(cache->arc);
