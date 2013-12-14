@@ -31,6 +31,8 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
             if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
                 sip_hash_free(shash);
                 return -1;
+            } else if (rb == -1) {
+                continue;
             }
             if (hdr != SHARDCACHE_HDR_GET &&
                 hdr != SHARDCACHE_HDR_SET &&
@@ -78,6 +80,8 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                             fbuf_set_used(out, initial_len);
                             sip_hash_free(shash);
                             return -1;
+                        } else if (rb == -1) {
+                            continue;
                         }
                         ofx += rb;
                     } while (ofx != SHARDCACHE_MSG_SIG_LEN);
@@ -138,6 +142,7 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                         sip_hash_free(shash);
                         return -1;
                     }
+                    continue;
                 } else if (rb == 0) {
                     fbuf_set_used(out, initial_len);
                     sip_hash_free(shash);
