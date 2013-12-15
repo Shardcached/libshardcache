@@ -27,6 +27,18 @@
 #include "serving.h"
 #include "counters.h"
 
+#ifdef __MACH__
+#include <libkern/OSAtomic.h>
+#endif
+
+#ifdef __MACH__
+#define SPIN_LOCK(__mutex) OSSpinLockLock(__mutex)
+#define SPIN_UNLOCK(__mutex) OSSpinLockUnlock(__mutex)
+#else
+#define SPIN_LOCK(__mutex) pthread_spin_lock(__mutex)
+#define SPIN_UNLOCK(__mutex) pthread_spin_unlock(__mutex)
+#endif
+
 #define HEXDUMP_DATA(__d, __l) {\
     int __i;\
     char *__datap = __d;\
@@ -60,7 +72,11 @@ struct __shardcache_s {
     arc_t *arc;
     arc_ops_t ops;
 
-    pthread_mutex_t migration_lock;
+#ifdef __MACH__
+    OSSpinLock migration_lock;
+#else
+    pthread_spinlock_t migration_lock;
+#endif
     chash_t *chash;
 
     chash_t *migration;
@@ -72,7 +88,11 @@ struct __shardcache_s {
 
     hashtable_t *volatile_storage;
     uint32_t next_expire;
-    pthread_mutex_t next_expire_lock;
+#ifdef __MACH__
+    OSSpinLock next_expire_lock;
+#else
+    pthread_spinlock_t next_expire_lock;
+#endif
     pthread_t expirer_th;
 
     int evict_on_delete;
@@ -103,6 +123,8 @@ typedef struct {
     size_t klen;
     void *data;
     size_t dlen;
+    // we want a mutex here because the object might be locked
+    // for long time if involved in a fetch or store operation
     pthread_mutex_t lock;
 } cache_object_t;
 
@@ -138,7 +160,7 @@ static char *shardcache_get_node_address(shardcache_t *cache, char *label) {
             break;
         }
     }
-    pthread_mutex_lock(&cache->migration_lock);
+    SPIN_LOCK(&cache->migration_lock);
     if (cache->migration && !addr) {
         for (i = 0; i < cache->num_migration_shards; i++) {
             if (strcmp(cache->migration_shards[i].label, label) == 0) {
@@ -147,7 +169,7 @@ static char *shardcache_get_node_address(shardcache_t *cache, char *label) {
             }
         }
     }
-    pthread_mutex_unlock(&cache->migration_lock);
+    SPIN_UNLOCK(&cache->migration_lock);
     return addr;
 }
 
@@ -164,7 +186,7 @@ static int _shardcache_test_ownership(shardcache_t *cache,
     if (len && *len == 0)
         return -1;
 
-    pthread_mutex_lock(&cache->migration_lock);
+    SPIN_LOCK(&cache->migration_lock);
 
     chash_t *continuum = NULL;
     if (cache->migration && cache->migration_done) { 
@@ -175,7 +197,7 @@ static int _shardcache_test_ownership(shardcache_t *cache,
         if (cache->migration) {
             continuum = cache->migration;
         } else {
-            pthread_mutex_unlock(&cache->migration_lock);
+            SPIN_UNLOCK(&cache->migration_lock);
             return -1;
         }
     } else {
@@ -192,7 +214,7 @@ static int _shardcache_test_ownership(shardcache_t *cache,
     if (len)
         *len = name_len;
 
-    pthread_mutex_unlock(&cache->migration_lock);
+    SPIN_UNLOCK(&cache->migration_lock);
     return (strcmp(owner, cache->me) == 0);
 }
 
@@ -485,11 +507,11 @@ void *shardcache_expire_volatile_keys(void *priv)
 
         pthread_testcancel();
 
-        pthread_mutex_lock(&cache->next_expire_lock);
+        SPIN_LOCK(&cache->next_expire_lock);
 
         if (now >= cache->next_expire && ht_count(cache->volatile_storage)) {
 
-            pthread_mutex_unlock(&cache->next_expire_lock);
+            SPIN_UNLOCK(&cache->next_expire_lock);
 
             pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 
@@ -501,9 +523,9 @@ void *shardcache_expire_volatile_keys(void *priv)
 
             ht_foreach_pair(cache->volatile_storage, expire_volatile, &arg);
             if (arg.next) {
-                pthread_mutex_lock(&cache->next_expire_lock);
+                SPIN_LOCK(&cache->next_expire_lock);
                 cache->next_expire = arg.next;
-                pthread_mutex_unlock(&cache->next_expire_lock);
+                SPIN_UNLOCK(&cache->next_expire_lock);
             }
 
             expire_volatile_item_t *item = shift_value(arg.list);
@@ -525,7 +547,7 @@ void *shardcache_expire_volatile_keys(void *priv)
 
             pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         } else {
-            pthread_mutex_unlock(&cache->next_expire_lock);
+            SPIN_UNLOCK(&cache->next_expire_lock);
         }
 
         pthread_testcancel();
@@ -553,11 +575,9 @@ shardcache_t *shardcache_create(char *me,
     cache->evict_on_delete = evict_on_delete;
 
 
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutex_init(&cache->migration_lock, &attr); 
-    pthread_mutexattr_destroy(&attr);
+#ifndef __MACH__
+    pthread_spin_init(&cache->migration_lock, 0);
+#endif
 
     if (!st) {
         fprintf(stderr, "No storage defined\n");
@@ -643,7 +663,9 @@ shardcache_t *shardcache_create(char *me,
 
     cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
 
-    pthread_mutex_init(&cache->next_expire_lock, NULL);
+#ifndef __MACH__
+    pthread_spin_init(&cache->next_expire_lock, 0);
+#endif
     pthread_create(&cache->expirer_th, NULL, shardcache_expire_volatile_keys, cache);
 
     return cache;
@@ -656,12 +678,14 @@ void shardcache_destroy(shardcache_t *cache)
     if (cache->serv)
         stop_serving(cache->serv);
 
-    pthread_mutex_lock(&cache->migration_lock);
+    SPIN_LOCK(&cache->migration_lock);
     if (cache->migration) {
         shardcache_migration_abort(cache);    
     }
-    pthread_mutex_unlock(&cache->migration_lock);
-    pthread_mutex_destroy(&cache->migration_lock);
+    SPIN_UNLOCK(&cache->migration_lock);
+#ifndef __MACH__
+    pthread_spin_destroy(&cache->migration_lock);
+#endif
 
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
         shardcache_counter_remove(cache->counters, cache->cnt[i].name);
@@ -690,7 +714,9 @@ void shardcache_destroy(shardcache_t *cache)
     pthread_join(cache->expirer_th, NULL);
 
     ht_destroy(cache->volatile_storage);
-    pthread_mutex_destroy(&cache->next_expire_lock);
+#ifndef __MACH__
+    pthread_spin_destroy(&cache->next_expire_lock);
+#endif
 
     if (cache->auth)
         free((void *)cache->auth);
@@ -797,11 +823,11 @@ _shardcache_set_internal(shardcache_t *cache,
                 __sync_add_and_fetch(counter, vlen);
             }
 
-            pthread_mutex_lock(&cache->next_expire_lock);
+            SPIN_LOCK(&cache->next_expire_lock);
             if (obj->expire < cache->next_expire)
                 cache->next_expire = obj->expire;
 
-            pthread_mutex_unlock(&cache->next_expire_lock);
+            SPIN_UNLOCK(&cache->next_expire_lock);
 
         } else if (cache->storage.store) {
             // remove this key from the volatile storage (if present)
@@ -1115,17 +1141,17 @@ void *migrate(void *priv)
 
         // and now let's expire all the volatile keys that don't belong to us anymore
         ht_foreach_pair(cache->volatile_storage, expire_migrated, cache);
-        pthread_mutex_lock(&cache->next_expire_lock);
+        SPIN_LOCK(&cache->next_expire_lock);
         cache->next_expire = 0;
-        pthread_mutex_unlock(&cache->next_expire_lock);
+        SPIN_UNLOCK(&cache->next_expire_lock);
 
     }
 
     destroy_list(to_delete);
 
-    pthread_mutex_lock(&cache->migration_lock);
+    SPIN_LOCK(&cache->migration_lock);
     cache->migration_done = 1;
-    pthread_mutex_unlock(&cache->migration_lock);
+    SPIN_UNLOCK(&cache->migration_lock);
 #ifdef SHARDCACHE_DEBUG
     fprintf(stderr, "Migrator ended: processed %d items, migrated %d, errors %d\n",
             total_items, migrated_items, errors);
@@ -1144,10 +1170,10 @@ int shardcache_migration_begin(shardcache_t *cache,
 {
     int i, n;
 
-    pthread_mutex_lock(&cache->migration_lock);
+    SPIN_LOCK(&cache->migration_lock);
     if (cache->migration) {
         // already in a migration, ignore this command
-        pthread_mutex_unlock(&cache->migration_lock);
+        SPIN_UNLOCK(&cache->migration_lock);
         return -1;
     }
 
@@ -1204,7 +1230,7 @@ int shardcache_migration_begin(shardcache_t *cache,
         pthread_create(&cache->migrate_th, NULL, migrate, cache);
     }
 
-    pthread_mutex_unlock(&cache->migration_lock);
+    SPIN_UNLOCK(&cache->migration_lock);
 
     if (forward) {
         for (i = 0; i < cache->num_shards; i++) {
@@ -1228,7 +1254,7 @@ int shardcache_migration_begin(shardcache_t *cache,
 int shardcache_migration_abort(shardcache_t *cache)
 {
     int ret = -1;
-    pthread_mutex_lock(&cache->migration_lock);
+    SPIN_LOCK(&cache->migration_lock);
     if (cache->migration) {
         chash_free(cache->migration);
         free(cache->migration_shards);
@@ -1241,7 +1267,7 @@ int shardcache_migration_abort(shardcache_t *cache)
     cache->migration_shards = NULL;
     cache->num_migration_shards = 0;
 
-    pthread_mutex_unlock(&cache->migration_lock);
+    SPIN_UNLOCK(&cache->migration_lock);
     pthread_join(cache->migrate_th, NULL);
     return ret;
 }
@@ -1249,7 +1275,7 @@ int shardcache_migration_abort(shardcache_t *cache)
 int shardcache_migration_end(shardcache_t *cache)
 {
     int ret = -1;
-    pthread_mutex_lock(&cache->migration_lock);
+    SPIN_LOCK(&cache->migration_lock);
     if (cache->migration) {
         chash_free(cache->chash);
         free(cache->shards);
@@ -1265,7 +1291,7 @@ int shardcache_migration_end(shardcache_t *cache)
         ret = 0;
     }
     cache->migration_done = 0;
-    pthread_mutex_unlock(&cache->migration_lock);
+    SPIN_UNLOCK(&cache->migration_lock);
     pthread_join(cache->migrate_th, NULL);
     return ret;
 }
