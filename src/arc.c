@@ -326,14 +326,18 @@ void arc_remove(arc_t *cache, const void *key, size_t len)
     SPIN_LOCK(&cache->lock);
     ht_delete(cache->hash, (void *)key, len, (void **)&obj, NULL);
     if (obj) {
+        SPIN_LOCK(&obj->lock);
+        SPIN_UNLOCK(&cache->lock);
         if (obj->state) {
             obj->state->size -= obj->size;
             arc_list_remove(&obj->head);
         }
         obj->state = NULL;
+        SPIN_UNLOCK(&obj->lock);
         release_ref(cache->refcnt, obj->node);
+    } else {
+        SPIN_UNLOCK(&cache->lock);
     }
-    SPIN_UNLOCK(&cache->lock);
 }
 
 /* Lookup an object with the given key. */
@@ -344,10 +348,13 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res) {
 
 arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep)
 {
+    SPIN_LOCK(&cache->lock);
     arc_object_t *obj = ht_get(cache->hash, (void *)key, len, NULL);
-
     if (obj) {
         SPIN_LOCK(&obj->lock);
+        SPIN_UNLOCK(&cache->lock);
+        retain_ref(cache->refcnt, obj->node);
+        SPIN_UNLOCK(&obj->lock);
         void *ptr = NULL;
         if (obj->state == &cache->mru || obj->state == &cache->mfu) {
             /* Object is already in the cache, move it to the head of the
@@ -363,45 +370,43 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
             if (arc_move(cache, obj, &cache->mfu) == 0)
                 ptr = obj->ptr;
         } else {
-            // ignore this object since it's going to be released
-            ht_delete(cache->hash, (void *)key, len, NULL, NULL);
-            SPIN_UNLOCK(&obj->lock);
-            obj = NULL;
+            if (arc_move(cache, obj, &cache->mru) != 0) {
+                ht_delete(cache->hash, (void *)key, len, NULL, NULL);
+                release_ref(cache->refcnt, obj->node);
+                obj = NULL;
+            }
         }
 
         if (obj) {
-            retain_ref(cache->refcnt, obj->node);
             *valuep = ptr;
-            SPIN_UNLOCK(&obj->lock);
             return obj;
         }
+
+        SPIN_LOCK(&cache->lock);
     }
 
-    SPIN_UNLOCK(&cache->lock);
     // ensure again there is no obj 
     // (might have been created in the meanwhile by some other thread)
     obj = ht_get(cache->hash, (void *)key, len, NULL);
     if (!obj) { 
         void *ptr = cache->ops->create(key, len, cache->ops->priv);
         obj = arc_object_create(cache, ptr, key, len);
-        if (!obj)
+        if (!obj) {
+            SPIN_UNLOCK(&cache->lock);
             return NULL;
-        SPIN_LOCK(&obj->lock);
+        }
+        retain_ref(cache->refcnt, obj->node);
         ht_set(cache->hash, (void *)key, len, obj, sizeof(arc_object_t));
     }
+
     SPIN_UNLOCK(&cache->lock);
 
     /* New objects are always moved to the MRU list. */
     if (arc_move(cache, obj, &cache->mru) == 0) {
-        retain_ref(cache->refcnt, obj->node);
         *valuep = obj->ptr;
-        SPIN_UNLOCK(&obj->lock);
         return obj;
-    } else {
-        ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-        release_ref(cache->refcnt, obj->node);
     }
-    SPIN_UNLOCK(&obj->lock);
+
     return NULL;
 }
 
