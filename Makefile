@@ -119,4 +119,5 @@ install:
 	 cp -v libshardcache.$(SHAREDEXT) $(SHARDCACHE_INSTALL_LIBDIR)/;\
 	 echo "Installing headers in $(SHARDCACHE_INSTALL_INCDIR)"; \
 	 cp -v src/shardcache.h $(SHARDCACHE_INSTALL_INCDIR)/; \
+	 cp -v src/shardcache_client.h $(SHARDCACHE_INSTALL_INCDIR)/; \
 
