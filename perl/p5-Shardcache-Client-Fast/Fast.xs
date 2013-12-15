@@ -13,7 +13,7 @@ MODULE = Shardcache::Client::Fast		PACKAGE = Shardcache::Client::Fast
 INCLUDE: const-xs.inc
 
 shardcache_client_t *
-shardcache_client_create(nodes, auth="default")
+shardcache_client_create(nodes, auth=NULL)
 	SV *	nodes
 	char *	auth
     CODE:

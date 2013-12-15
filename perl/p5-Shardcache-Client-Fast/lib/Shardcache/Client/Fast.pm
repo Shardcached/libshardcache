@@ -71,7 +71,7 @@ sub new {
         croak("'nodes' MUST be an arrayref of string in the form 'ADDRESS:PORT'");
     }
 
-    $secret = 'default' unless defined $secret;
+    $secret = '' unless defined $secret;
 
     my $self = {
         _secret => $secret,
@@ -90,6 +90,7 @@ sub get {
 
 sub set {
     my ($self, $key, $value, $expire) = @_;
+    $expire = 0 unless defined $expire;
     return shardcache_client_set($self->{_client}, $key, $value, $expire);
 }
 
