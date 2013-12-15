@@ -63,7 +63,7 @@ int main (int argc, char **argv) {
         exit(-1);
     }
 
-    shardcache_client_t *client = shardcache_client_create(nodes, num_nodes, "default");
+    shardcache_client_t *client = shardcache_client_create(nodes, num_nodes, NULL);
 
     int rc = 0;
     char *cmd = argv[1];
