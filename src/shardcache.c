@@ -79,7 +79,7 @@ struct __shardcache_s {
 
     shardcache_serving_t *serv;
 
-    const char auth[16];
+    const char *auth;
 
     pthread_t migrate_th;
 
@@ -600,7 +600,10 @@ shardcache_t *shardcache_create(char *me,
     if (sa.sa_handler == NULL)
         signal(SIGPIPE, shardcache_do_nothing);
 
-    strncpy((char *)cache->auth, secret, sizeof(cache->auth));
+    if (secret && strlen(secret)) {
+        cache->auth = calloc(1, 16);
+        strncpy((char *)cache->auth, secret, 16);
+    } 
 
 #ifdef SHARDCACHE_DEBUG
     fprintf(stderr, "AUTH KEY (secret: %s): ", secret);
@@ -688,6 +691,9 @@ void shardcache_destroy(shardcache_t *cache)
 
     ht_destroy(cache->volatile_storage);
     pthread_mutex_destroy(&cache->next_expire_lock);
+
+    if (cache->auth)
+        free((void *)cache->auth);
 
     free(cache);
 }

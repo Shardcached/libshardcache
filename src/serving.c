@@ -4,8 +4,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <sys/socket.h>
 #include <errno.h>
 #include <pthread.h>
 #include <iomux.h>
@@ -95,7 +97,8 @@ shardcache_create_connection_context(shardcache_t *cache, const char *auth, int 
 
     context->cache = cache;
     context->auth = auth;
-    context->shash = sip_hash_new((uint8_t *)auth, 2, 4);
+    if (auth)
+        context->shash = sip_hash_new((uint8_t *)auth, 2, 4);
     context->fd = fd;
     return context;
 }
@@ -105,26 +108,38 @@ static void shardcache_destroy_connection_context(shardcache_connection_context_
     fbuf_free(ctx->output);
     fbuf_free(ctx->key);
     fbuf_free(ctx->value);
-    sip_hash_free(ctx->shash);
+    if (ctx->shash)
+        sip_hash_free(ctx->shash);
     free(ctx);
 }
 
 static void write_status(shardcache_connection_context_t *ctx, int rc) {
-    fbuf_t out = FBUF_STATIC_INITIALIZER;
+    char out[20];
+    out[0] = SHARDCACHE_HDR_RES;
+    out[1] = 0;
+
+    char *p = &out[3];
     if (rc != 0) {
         fprintf(stderr, "Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
-        build_message(SHARDCACHE_HDR_RES, "ERR", 3, NULL, 0, 0, &out);
+        out[2] = 3;
+        strncpy(p, "ERR", 3);
+        p += 3;
     } else {
-        build_message(SHARDCACHE_HDR_RES, "OK", 2, NULL, 0, 0, &out);
+        out[2] = 2;
+        strncpy(p, "OK", 2);
+        p += 2;
     }
+    memset(p, 0, 3);
+    p += 3;
+    fbuf_add_binary(ctx->output, out, p - &out[0]);
 
-    uint64_t digest;
-    sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
-    sip_hash_digest_integer(shash, fbuf_data(&out), fbuf_used(&out), &digest);
-    sip_hash_free(shash);
-    fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
-    fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
-    fbuf_destroy(&out);
+    if (ctx->auth) {
+        uint64_t digest;
+        sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
+        sip_hash_digest_integer(shash, out, p - &out[0], &digest);
+        sip_hash_free(shash);
+        fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
+    }
 }
 
 static void *process_request(void *priv) {
@@ -142,12 +157,14 @@ static void *process_request(void *priv) {
             size_t vlen = 0;
             void *v = shardcache_get(cache, key, klen, &vlen);
             if (build_message(SHARDCACHE_HDR_RES, v, vlen, NULL, 0, 0, &out) == 0) {
-                uint64_t digest;
-                sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
-                sip_hash_digest_integer(shash, fbuf_data(&out), fbuf_used(&out), &digest);
-                sip_hash_free(shash);
                 fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
-                fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
+                if (ctx->auth) {
+                    uint64_t digest;
+                    sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
+                    sip_hash_digest_integer(shash, fbuf_data(&out), fbuf_used(&out), &digest);
+                    sip_hash_free(shash);
+                    fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
+                }
             } else {
                 // TODO - Error Messages
             }
@@ -288,7 +305,8 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
 
         ctx->hdr = hdr;
         ctx->state = STATE_READING_KEY;
-        sip_hash_update(ctx->shash, &hdr, 1);
+        if (ctx->shash)
+            sip_hash_update(ctx->shash, &hdr, 1);
     }
 
     for (;;) {
@@ -320,18 +338,23 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                 iomux_close(iomux, fd);
                 return;
             }
-            sip_hash_update(ctx->shash, (char *)&nlen, 2);
-            sip_hash_update(ctx->shash, chunk, ctx->clen);
+            if (ctx->shash) {
+                sip_hash_update(ctx->shash, (char *)&nlen, 2);
+                sip_hash_update(ctx->shash, chunk, ctx->clen);
+            }
             ctx->clen = 0;
         } else {
-            if (rbb_len(ctx->input) < 3) {
+            if (rbb_len(ctx->input) < 1) {
                 // TRUNCATED - we need more data
                 break;
             }
-            sip_hash_update(ctx->shash, (char *)&nlen, 2);
+            if (ctx->shash)
+                sip_hash_update(ctx->shash, (char *)&nlen, 2);
+
             u_char bsep = 0;
             rbb_read(ctx->input, &bsep, 1);
-            sip_hash_update(ctx->shash, &bsep, 1);
+            if (ctx->shash)
+                sip_hash_update(ctx->shash, &bsep, 1);
             if (bsep == SHARDCACHE_RSEP) {
                 if (ctx->state == STATE_READING_KEY) {
                     if (ctx->hdr == SHARDCACHE_HDR_SET) {
@@ -360,7 +383,10 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                     return;
                 }
             } else if (bsep == 0) {
-                ctx->state = STATE_READING_AUTH;
+                if (ctx->auth)
+                    ctx->state = STATE_READING_AUTH;
+                else
+                    ctx->state = STATE_READING_DONE;
                 break;
             } else {
                 // BAD FORMAT
@@ -436,9 +462,12 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         fbuf_clear(ctx->key);
         fbuf_clear(ctx->value);
 
-        sip_hash_free(ctx->shash);
-        // create a new one for the next request on this same socket (if any)
-        ctx->shash = sip_hash_new((uint8_t *)ctx->auth, 2, 4);
+        if (ctx->shash) {
+            sip_hash_free(ctx->shash);
+            // create a new one for the next request on this same socket (if any)
+        }
+        if (ctx->auth)
+            ctx->shash = sip_hash_new((uint8_t *)ctx->auth, 2, 4);
     }
 }
 
@@ -470,6 +499,11 @@ void *worker(void *priv) {
                 .priv = ctx
             };
             ctx->worker_ctx = wrk_ctx;
+
+            int val = 1;
+            int r = setsockopt(ctx->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
+            r = setsockopt(ctx->fd, IPPROTO_TCP, TCP_KEEPALIVE, &val, sizeof(val));
+
             iomux_add(iomux, ctx->fd, &connection_callbacks);
             ATOMIC_INCREMENT(wrk_ctx->num_fds);
             ctx = shift_value(jobs);

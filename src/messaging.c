@@ -22,14 +22,19 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
     int initial_len = fbuf_used(out);;
     int reading_message = 0;
     unsigned char hdr;
-    sip_hash *shash = sip_hash_new(auth, 2, 4);
+    sip_hash *shash = NULL;
+
+    if (auth)
+        shash = sip_hash_new(auth, 2, 4);
+
     for(;;) {
         int rb;
 
         if (reading_message == 0) {
             rb = read_socket(fd, &hdr, 1);
             if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
-                sip_hash_free(shash);
+                if (shash)
+                    sip_hash_free(shash);
                 return -1;
             } else if (rb == -1) {
                 continue;
@@ -43,10 +48,12 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 hdr != SHARDCACHE_HDR_MGE &&
                 hdr != SHARDCACHE_HDR_RES)
             {
-                sip_hash_free(shash);
+                if (shash)
+                    sip_hash_free(shash);
                 return -1;
             }
-            sip_hash_update(shash, &hdr, 1);
+            if (shash)
+                sip_hash_update(shash, &hdr, 1);
             if (ohdr)
                 *ohdr = hdr;
             reading_message = 1;
@@ -55,7 +62,8 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
         rb = read_socket(fd, (char *)&clen, 2);
         // XXX - bug if read only one byte at this point
         if (rb == 2) {
-            sip_hash_update(shash, (char *)&clen, 2);
+            if (shash)
+                sip_hash_update(shash, (char *)&clen, 2);
             uint16_t chunk_len = ntohs(clen);
 
             if (chunk_len == 0) {
@@ -63,66 +71,73 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 rb = read_socket(fd, &rsep, 1);
                 if (rb != 1) {
                     fbuf_set_used(out, initial_len);
-                    sip_hash_free(shash);
+                    if (shash)
+                        sip_hash_free(shash);
                     return -1;
                 }
-                sip_hash_update(shash, &rsep, 1);
+
+                if (shash)
+                    sip_hash_update(shash, &rsep, 1);
+
                 if (rsep == SHARDCACHE_RSEP) {
                     // go ahead fetching the next record
                     // XXX - should we separate the records in the output buffer?
                     continue;
                 } else if (rsep == 0) {
-                    char sig[SHARDCACHE_MSG_SIG_LEN];
-                    int ofx = 0;
-                    do {
-                        rb = read_socket(fd, &sig[ofx], SHARDCACHE_MSG_SIG_LEN-ofx);
-                        if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                    if (shash) {
+                        char sig[SHARDCACHE_MSG_SIG_LEN];
+                        int ofx = 0;
+                        do {
+                            rb = read_socket(fd, &sig[ofx], SHARDCACHE_MSG_SIG_LEN-ofx);
+                            if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                                fbuf_set_used(out, initial_len);
+                                if (shash)
+                                    sip_hash_free(shash);
+                                return -1;
+                            } else if (rb == -1) {
+                                continue;
+                            }
+                            ofx += rb;
+                        } while (ofx != SHARDCACHE_MSG_SIG_LEN);
+
+                        uint64_t digest;
+                        if (!sip_hash_final_integer(shash, &digest)) {
+                            // TODO - Error Messages
                             fbuf_set_used(out, initial_len);
                             sip_hash_free(shash);
                             return -1;
-                        } else if (rb == -1) {
-                            continue;
                         }
-                        ofx += rb;
-                    } while (ofx != SHARDCACHE_MSG_SIG_LEN);
-
-                    uint64_t digest;
-                    if (!sip_hash_final_integer(shash, &digest)) {
-                        // TODO - Error Messages
-                        fbuf_set_used(out, initial_len);
-                        sip_hash_free(shash);
-                        return -1;
-                    }
 
 #ifdef SHARDCACHE_DEBUG
-                    int i;
-                    fprintf(stderr, "computed digest for received data: (%s) ", auth);
-                    for (i=0; i<8; i++) {
-                        fprintf(stderr, "%02x", (unsigned char)((char *)&digest)[i]);
-                    }
-                    fprintf(stderr, "\n");
+                        int i;
+                        fprintf(stderr, "computed digest for received data: (%s) ", auth);
+                        for (i=0; i<8; i++) {
+                            fprintf(stderr, "%02x", (unsigned char)((char *)&digest)[i]);
+                        }
+                        fprintf(stderr, "\n");
 
-                    fprintf(stderr, "digest from received data: ");
-                    uint8_t *remote = sig;
-                    for (i=0; i<8; i++) {
-                        fprintf(stderr, "%02x", remote[i]);
-                    }
-                    fprintf(stderr, "\n");
+                        fprintf(stderr, "digest from received data: ");
+                        uint8_t *remote = sig;
+                        for (i=0; i<8; i++) {
+                            fprintf(stderr, "%02x", remote[i]);
+                        }
+                        fprintf(stderr, "\n");
 #endif
 
-                    if (memcmp(&digest, &sig, SHARDCACHE_MSG_SIG_LEN) != 0) {
-                        struct sockaddr_in saddr;
-                        socklen_t addr_len = sizeof(struct sockaddr_in);
-                        getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
+                        if (memcmp(&digest, &sig, SHARDCACHE_MSG_SIG_LEN) != 0) {
+                            struct sockaddr_in saddr;
+                            socklen_t addr_len = sizeof(struct sockaddr_in);
+                            getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
 
-                        fprintf(stderr, "Unauthorized message from %s\n",
-                        inet_ntoa(saddr.sin_addr));
-                        fbuf_set_used(out, initial_len);
+                            fprintf(stderr, "Unauthorized message from %s\n",
+                            inet_ntoa(saddr.sin_addr));
+                            fbuf_set_used(out, initial_len);
+                            sip_hash_free(shash);
+                            return -1;
+                            // AUTH FAILED
+                        }
                         sip_hash_free(shash);
-                        return -1;
-                        // AUTH FAILED
                     }
-                    sip_hash_free(shash);
                     return 0;
                 } else {
                     // BOGUS RESPONSE
@@ -139,25 +154,29 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                     if (errno != EINTR && errno != EAGAIN) {
                         // ERROR 
                         fbuf_set_used(out, initial_len);
-                        sip_hash_free(shash);
+                        if (shash)
+                            sip_hash_free(shash);
                         return -1;
                     }
                     continue;
                 } else if (rb == 0) {
                     fbuf_set_used(out, initial_len);
-                    sip_hash_free(shash);
+                    if (shash)
+                        sip_hash_free(shash);
                     return -1;
                 }
                 chunk_len -= rb;
                 fbuf_add_binary(out, buf, rb);
-                sip_hash_update(shash, buf, rb);
+                if (shash)
+                    sip_hash_update(shash, buf, rb);
                 if (fbuf_used(out) > SHARDCACHE_MSG_MAX_RECORD_LEN) {
                     // we have exceeded the maximum size for a record
                     // let's abort this request
                     fprintf(stderr, "Maximum record size exceeded (%dMB)",
                             SHARDCACHE_MSG_MAX_RECORD_LEN >> 20);
                     fbuf_set_used(out, initial_len);
-                    sip_hash_free(shash);
+                    if (shash)
+                        sip_hash_free(shash);
                     return -1;
                 }
             }
@@ -166,7 +185,8 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
             break;
         }
     }
-    sip_hash_free(shash);
+    if (shash)
+        sip_hash_free(shash);
     return -1;
 }
 

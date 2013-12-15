@@ -23,7 +23,7 @@ struct shardcache_client_s {
     shardcache_node_t *shards;
     shardcache_connection_t *connections;
     int num_shards;
-    const char auth[16];
+    const char *auth;
 };
 
 #define ADDR_REGEXP "^[a-z0-9_\\.\\-]+(:[0-9]+)?$"
@@ -76,10 +76,8 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_
 
     c->chash = chash_create((const char **)shard_names, shard_lens, c->num_shards, 200);
 
-    if (!auth)
-        auth = "default";
-
-    snprintf((char *)c->auth, sizeof(c->auth), "%s", auth);
+    if (auth && strlen(auth))
+        strncpy((char *)c->auth, auth, 16);
 
     return c;
 }
@@ -183,6 +181,8 @@ void shardcache_client_destroy(shardcache_client_t *c)
 {
     chash_free(c->chash);
     free(c->shards);
+    if (c->auth)
+        free((void *)c->auth);
     free(c);
 }
 
