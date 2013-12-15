@@ -500,10 +500,6 @@ void *worker(void *priv) {
             };
             ctx->worker_ctx = wrk_ctx;
 
-            int val = 1;
-            int r = setsockopt(ctx->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
-            r = setsockopt(ctx->fd, IPPROTO_TCP, TCP_KEEPALIVE, &val, sizeof(val));
-
             iomux_add(iomux, ctx->fd, &connection_callbacks);
             ATOMIC_INCREMENT(wrk_ctx->num_fds);
             ctx = shift_value(jobs);
