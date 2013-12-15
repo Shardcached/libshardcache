@@ -1,6 +1,6 @@
 The internal communication protocol may described by the following grammar:
 
-MESSAGE      : <MSG><SIG> | <NOOP>
+MESSAGE      : <MSG>[<SIG>] | <NOOP>
 MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
 NOOP         : <MSG_NOP>
 HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_EVI> |
