@@ -83,7 +83,7 @@ sub new {
         $nodes = [ $me ];
     }
 
-    my $secret = $params{secret} || 'default';
+    my $secret = $params{secret} || '';
 
     my $num_workers = $params{num_workers} || 10;
 

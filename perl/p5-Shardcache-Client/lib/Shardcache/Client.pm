@@ -101,8 +101,10 @@ sub send_msg {
 
     my $msg = pack $templ, @vars;
 
-    my $sig = siphash64($msg,  pack("a16", $self->{_secret}));
-    $msg .= pack("Q", $sig);
+    if ($self->{_secret}) {
+        my $sig = siphash64($msg,  pack("a16", $self->{_secret}));
+        $msg .= pack("Q", $sig);
+    }
 
 
     my $addr;
@@ -187,21 +189,23 @@ sub send_msg {
         # TODO - should check if it's a correct rsep (0x80)
     }
 
-    # now that we have the whole message, let's compute the signature
-    # (we know it's 8 bytes long and is the trailer of the message
-    my $signature = siphash64(substr($in, 0, length($in)),  pack("a16", $self->{_secret}));
+    if ($self->{_secret}) {
+        # now that we have the whole message, let's compute the signature
+        # (we know it's 8 bytes long and is the trailer of the message
+        my $signature = siphash64(substr($in, 0, length($in)),  pack("a16", $self->{_secret}));
 
-    my $csig = pack("Q", $signature);
+        my $csig = pack("Q", $signature);
 
-    my $rb = read($sock, $data, 8);
-    if ($rb != 8) {
-        delete $self->{_sock}->{"$addr:$port"};
-        return undef;
-    }
+        my $rb = read($sock, $data, 8);
+        if ($rb != 8) {
+            delete $self->{_sock}->{"$addr:$port"};
+            return undef;
+        }
 
-    # $chunk now points at the signature
-    if ($csig ne $data) {
-        return undef;
+        # $chunk now points at the signature
+        if ($csig ne $data) {
+            return undef;
+        }
     }
 
     return $out;
