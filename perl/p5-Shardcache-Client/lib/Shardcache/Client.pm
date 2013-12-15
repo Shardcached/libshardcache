@@ -13,7 +13,7 @@ sub new {
     croak("The host parameter is mandatory!")
         unless($host);
 
-    $secret = 'default' unless($secret);
+    $secret = '' unless($secret);
 
     my $self = { 
                  _secret => $secret,
