@@ -263,7 +263,6 @@ static void free_node_ptr_callback(void *node) {
 
 static void terminate_node_callback(refcnt_node_t *node, int concurrent) {
     arc_object_t *obj = (arc_object_t *)get_node_ptr(node);
-    SPIN_LOCK(&obj->lock);
     /*
     if (obj->key) {
         ht_delete(obj->cache->hash, obj->key, obj->klen, NULL, NULL);
@@ -271,7 +270,6 @@ static void terminate_node_callback(refcnt_node_t *node, int concurrent) {
     */
     if (obj->ptr && obj->cache->ops->destroy)
         obj->cache->ops->destroy(obj->ptr, obj->cache->ops->priv);
-    SPIN_UNLOCK(&obj->lock);
 }
 
 /* Create a new cache. */
