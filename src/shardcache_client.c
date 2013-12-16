@@ -123,7 +123,7 @@ char *select_peer(shardcache_client_t *c, void *key, size_t klen)
     chash_lookup(c->chash, key, klen, &node_name, &name_len);
 
     for (i = 0; i < c->num_shards; i++) {
-        if (strcmp(node_name, c->shards[i].label) == 0) {
+        if (strncmp(node_name, c->shards[i].label, name_len) == 0) {
             addr = c->shards[i].label;
             break;
         }
