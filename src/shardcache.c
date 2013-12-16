@@ -286,7 +286,7 @@ static size_t __op_fetch(void *item, void * priv)
     pthread_mutex_lock(&obj->lock);
     if (obj->data) { // the value is already loaded, we don't need to fetch
         pthread_mutex_unlock(&obj->lock);
-        return 0;
+        return obj->dlen;
     }
 
     char node_name[1024];
