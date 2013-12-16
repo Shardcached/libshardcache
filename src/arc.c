@@ -254,7 +254,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state, void *l
                 release_ref(cache->refcnt, obj->node);
                 return -1;
             }
-            obj->size    = sizeof(arc_object_t) + obj->klen + size;
+            obj->size = sizeof(arc_object_t) + obj->klen + size;
         }
 
         arc_list_prepend(&obj->head, &state->head);
@@ -376,18 +376,17 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
              * MFU list. */
             if (arc_move(cache, obj, &cache->mfu, (void *)&cache->lock) == 0)
                 ptr = obj->ptr;
-        } else if (obj->state == &cache->mrug) {
-            cache->p = MIN(cache->c, cache->p + MAX(cache->mrug.size ? (cache->mfug.size / cache->mrug.size) : cache->mfug.size, 1));
-            if (arc_move(cache, obj, &cache->mfu, (void *)&cache->lock) == 0)
-                ptr = obj->ptr;
-        } else if (obj->state == &cache->mfug) {
-            cache->p = MAX(0, cache->p - MAX(cache->mfug.size ? (cache->mrug.size / cache->mfug.size) : cache->mrug.size, 1));
-            if (arc_move(cache, obj, &cache->mfu, (void *)&cache->lock) == 0)
-                ptr = obj->ptr;
         } else {
-            SPIN_UNLOCK(&cache->lock);
-            release_ref(cache->refcnt, obj->node);
-            return NULL;
+            if (obj->state == &cache->mrug) {
+                cache->p = MIN(cache->c, cache->p + MAX(cache->mrug.size ? (cache->mfug.size / cache->mrug.size) : cache->mfug.size, 1));
+            } else if (obj->state == &cache->mfug) {
+                cache->p = MAX(0, cache->p - MAX(cache->mfug.size ? (cache->mrug.size / cache->mfug.size) : cache->mrug.size, 1));
+                if (arc_move(cache, obj, &cache->mfu, (void *)&cache->lock) == 0)
+                    ptr = obj->ptr;
+            }
+            if (arc_move(cache, obj, &cache->mfu, (void *)&cache->lock) == 0) {
+                ptr = obj->ptr;
+            }
         }
 
         SPIN_UNLOCK(&cache->lock);
