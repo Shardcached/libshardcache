@@ -126,7 +126,7 @@ struct __arc {
 #define MAX(a, b) ( (a) > (b) ? (a) : (b) )
 #define MIN(a, b) ( (a) < (b) ? (a) : (b) )
 
-static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state);
+static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state, void *lock);
 
 /* Initialize a new object with this function. */
 static arc_object_t *arc_object_create(arc_t *cache, void *ptr, const void *key, size_t len)
@@ -167,10 +167,10 @@ static void arc_balance(arc_t *cache, size_t size)
     while (cache->mru.size + cache->mfu.size + size > cache->c) {
         if (cache->mru.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mru);
-            arc_move(cache, obj, &cache->mrug);
+            arc_move(cache, obj, &cache->mrug, NULL);
         } else if (cache->mfu.size > 0) {
             arc_object_t *obj = arc_state_lru(&cache->mfu);
-            arc_move(cache, obj, &cache->mfug);
+            arc_move(cache, obj, &cache->mfug, NULL);
         } else {
             break;
         }
@@ -180,10 +180,10 @@ static void arc_balance(arc_t *cache, size_t size)
     while (cache->mrug.size + cache->mfug.size > cache->c) {
         if (cache->mfug.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mfug);
-            arc_move(cache, obj, NULL);
+            arc_move(cache, obj, NULL, NULL);
         } else if (cache->mrug.size > 0) {
             arc_object_t *obj = arc_state_lru(&cache->mrug);
-            arc_move(cache, obj, NULL);
+            arc_move(cache, obj, NULL, NULL);
         } else {
             break;
         }
@@ -192,9 +192,8 @@ static void arc_balance(arc_t *cache, size_t size)
 
 /* Move the object to the given state. If the state transition requires,
 * fetch, evict or destroy the object. */
-static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
+static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state, void *lock)
 {
-    SPIN_LOCK(&cache->lock);
 
     if (obj->state) {
         obj->state->size -= obj->size;
@@ -206,7 +205,6 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         obj->state = NULL;
         ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
         release_ref(cache->refcnt, obj->node);
-        SPIN_UNLOCK(&cache->lock);
         return -1;
     } else {
         if (state == &cache->mrug || state == &cache->mfug) {
@@ -216,24 +214,28 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         } else if (obj->state != &cache->mru && obj->state != &cache->mfu) {
             /* The object is being moved from one of the ghost lists into
              * the MRU or MFU list, fetch the object into the cache. */
-            if (obj->state)
+            if (obj->state) {
                 arc_balance(cache, obj->size);
+            }
+            
+            // release the lock (if any) when fetching (since might take long)
+            // the object is anyway locked already by our caller (arc_lookup())
+            if (lock)
+                SPIN_UNLOCK(lock);
             // unlock the mutex while the backend is fetching the data
-           // SPIN_LOCK(&obj->lock);
-            SPIN_UNLOCK(&cache->lock);
             size_t size = cache->ops->fetch(obj->ptr, cache->ops->priv);
+            if (lock)
+                SPIN_LOCK(lock);
+
             if (size == 0) {
-                SPIN_LOCK(&cache->lock);
                 /* If the fetch fails, put the object back to the list
                  * it was in before. */
                 if (obj->state) {
                     obj->state->size += obj->size;
                     arc_list_prepend(&obj->head, &obj->state->head);
                 }
-                SPIN_UNLOCK(&cache->lock);
                 return -1;
             }
-            SPIN_LOCK(&cache->lock);
             obj->size = sizeof(arc_object_t) + obj->klen + size;
         }
 
@@ -243,7 +245,6 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         obj->state->size += obj->size;
     }
     
-    SPIN_UNLOCK(&cache->lock);
     return 0;
 }
 
@@ -263,6 +264,7 @@ static void free_node_ptr_callback(void *node) {
 
 static void terminate_node_callback(refcnt_node_t *node, int concurrent) {
     arc_object_t *obj = (arc_object_t *)get_node_ptr(node);
+    SPIN_LOCK(&obj->lock);
     /*
     if (obj->key) {
         ht_delete(obj->cache->hash, obj->key, obj->klen, NULL, NULL);
@@ -270,6 +272,7 @@ static void terminate_node_callback(refcnt_node_t *node, int concurrent) {
     */
     if (obj->ptr && obj->cache->ops->destroy)
         obj->cache->ops->destroy(obj->ptr, obj->cache->ops->priv);
+    SPIN_UNLOCK(&obj->lock);
 }
 
 /* Create a new cache. */
@@ -293,7 +296,7 @@ arc_t *arc_create(arc_ops_t *ops, size_t c)
     pthread_spin_init(&cache->lock, 0);
 #endif
 
-    cache->refcnt = refcnt_create(1<<8, terminate_node_callback, free_node_ptr_callback);
+    cache->refcnt = refcnt_create(1, terminate_node_callback, free_node_ptr_callback);
     return cache;
 }
 static void arc_list_destroy(arc_t *cache, arc_list_t *head) {
@@ -323,11 +326,9 @@ void arc_destroy(arc_t *cache)
 void arc_remove(arc_t *cache, const void *key, size_t len)
 {
     arc_object_t *obj = NULL;
-    SPIN_LOCK(&cache->lock);
     ht_delete(cache->hash, (void *)key, len, (void **)&obj, NULL);
     if (obj) {
         SPIN_LOCK(&obj->lock);
-        SPIN_UNLOCK(&cache->lock);
         if (obj->state) {
             obj->state->size -= obj->size;
             arc_list_remove(&obj->head);
@@ -335,8 +336,6 @@ void arc_remove(arc_t *cache, const void *key, size_t len)
         obj->state = NULL;
         SPIN_UNLOCK(&obj->lock);
         release_ref(cache->refcnt, obj->node);
-    } else {
-        SPIN_UNLOCK(&cache->lock);
     }
 }
 
@@ -348,64 +347,60 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res) {
 
 arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep)
 {
-    SPIN_LOCK(&cache->lock);
     arc_object_t *obj = ht_get(cache->hash, (void *)key, len, NULL);
     if (obj) {
         SPIN_LOCK(&obj->lock);
-        SPIN_UNLOCK(&cache->lock);
+        SPIN_LOCK(&cache->lock);
         retain_ref(cache->refcnt, obj->node);
-        SPIN_UNLOCK(&obj->lock);
         void *ptr = NULL;
         if (obj->state == &cache->mru || obj->state == &cache->mfu) {
             /* Object is already in the cache, move it to the head of the
              * MFU list. */
-            if (arc_move(cache, obj, &cache->mfu) == 0)
+            if (arc_move(cache, obj, &cache->mfu, &cache->lock) == 0)
                 ptr = obj->ptr;
         } else if (obj->state == &cache->mrug) {
             cache->p = MIN(cache->c, cache->p + MAX(cache->mfug.size / cache->mrug.size, 1));
-            if (arc_move(cache, obj, &cache->mfu) == 0)
+            if (arc_move(cache, obj, &cache->mfu, &cache->lock) == 0)
                 ptr = obj->ptr;
         } else if (obj->state == &cache->mfug) {
             cache->p = MAX(0, cache->p - MAX(cache->mrug.size / cache->mfug.size, 1));
-            if (arc_move(cache, obj, &cache->mfu) == 0)
+            if (arc_move(cache, obj, &cache->mfu, &cache->lock) == 0)
                 ptr = obj->ptr;
         } else {
-            if (arc_move(cache, obj, &cache->mru) != 0) {
-                ht_delete(cache->hash, (void *)key, len, NULL, NULL);
-                release_ref(cache->refcnt, obj->node);
-                obj = NULL;
-            }
-        }
-
-        if (obj) {
-            *valuep = ptr;
-            return obj;
-        }
-
-        SPIN_LOCK(&cache->lock);
-    }
-
-    // ensure again there is no obj 
-    // (might have been created in the meanwhile by some other thread)
-    obj = ht_get(cache->hash, (void *)key, len, NULL);
-    if (!obj) { 
-        void *ptr = cache->ops->create(key, len, cache->ops->priv);
-        obj = arc_object_create(cache, ptr, key, len);
-        if (!obj) {
+            printf("EKKOMI!!\n");
+            SPIN_UNLOCK(&obj->lock);
             SPIN_UNLOCK(&cache->lock);
             return NULL;
         }
-        retain_ref(cache->refcnt, obj->node);
-        ht_set(cache->hash, (void *)key, len, obj, sizeof(arc_object_t));
+
+        SPIN_UNLOCK(&obj->lock);
+        SPIN_UNLOCK(&cache->lock);
+        *valuep = ptr;
+        return obj;
+    } else {
+        SPIN_LOCK(&cache->lock);
+    }
+
+    void *ptr = cache->ops->create(key, len, cache->ops->priv);
+    obj = arc_object_create(cache, ptr, key, len);
+    if (!obj) {
+        SPIN_UNLOCK(&cache->lock);
+        return NULL;
+    }
+    SPIN_LOCK(&obj->lock);
+    retain_ref(cache->refcnt, obj->node);
+    ht_set(cache->hash, (void *)key, len, obj, sizeof(arc_object_t));
+
+
+    /* New objects are always moved to the MRU list. */
+    if (arc_move(cache, obj, &cache->mru, &cache->lock) == 0) {
+        *valuep = obj->ptr;
+        SPIN_UNLOCK(&obj->lock);
+        SPIN_UNLOCK(&cache->lock);
+        return obj;
     }
 
     SPIN_UNLOCK(&cache->lock);
-
-    /* New objects are always moved to the MRU list. */
-    if (arc_move(cache, obj, &cache->mru) == 0) {
-        *valuep = obj->ptr;
-        return obj;
-    }
 
     return NULL;
 }
