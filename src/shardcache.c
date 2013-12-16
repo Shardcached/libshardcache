@@ -738,6 +738,7 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
         return NULL;
 
     if (obj && obj->data) {
+        pthread_mutex_lock(&obj->lock);
         value = malloc(obj->dlen);
         if (value) {
             memcpy(value, obj->data, obj->dlen);
@@ -746,6 +747,7 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
         } else {
             fprintf(stderr, "malloc failed for %zu bytes: %s\n", obj->dlen, strerror(errno));
         }
+        pthread_mutex_unlock(&obj->lock);
     }
     arc_release_resource(cache->arc, res);
     uint32_t size = (uint32_t)arc_size(cache->arc);
