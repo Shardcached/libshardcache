@@ -380,14 +380,15 @@ static void __op_evict(void *item, void *priv)
 static void __op_destroy(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
-    //shardcache_t *cache = (shardcache_t *)priv;
 
     // no lock is necessary here ... if we are here
     // nobody is referencing us anymore
     if (obj->data) {
         free(obj->data);
     }
-    free(obj->key);
+    if (obj->key)
+        free(obj->key);
+
     pthread_mutex_destroy(&obj->lock);
     free(obj);
 }
@@ -770,8 +771,6 @@ _shardcache_set_internal(shardcache_t *cache,
 
     __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_SETS].value, 1);
 
-    arc_remove(cache->arc, (const void *)key, klen);
-
     char node_name[1024];
     size_t node_len = sizeof(node_name);
     memset(node_name, 0, node_len);
@@ -839,6 +838,7 @@ _shardcache_set_internal(shardcache_t *cache,
             }
             cache->storage.store(key, klen, value, vlen, cache->storage.priv);
         }
+        arc_remove(cache->arc, (const void *)key, klen);
         return 0;
     } else if (node_len) {
 
@@ -859,7 +859,10 @@ _shardcache_set_internal(shardcache_t *cache,
             // TODO - Error Messages
             return -1;
         }
-        return send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, expire, -1);
+        int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, expire, -1);
+        if (rc == 0)
+            arc_remove(cache->arc, (const void *)key, klen);
+        return rc;
     }
 
     return -1;
