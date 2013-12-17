@@ -84,6 +84,7 @@ struct __shardcache_s {
     int num_migration_shards;
     int migration_done;
 
+    int use_persistent_storage;
     shardcache_storage_t storage;
 
     hashtable_t *volatile_storage;
@@ -185,6 +186,9 @@ static int _shardcache_test_ownership(shardcache_t *cache,
 
     if (len && *len == 0)
         return -1;
+
+    if (cache->num_shards == 1)
+        return 1;
 
     SPIN_LOCK(&cache->migration_lock);
 
@@ -334,7 +338,7 @@ static size_t __op_fetch(void *item, void * priv)
         obj->data = vobj->data; 
         obj->dlen = vobj->dlen;
         free(vobj);
-    } else if (cache->storage.fetch) {
+    } else if (cache->use_persistent_storage && cache->storage.fetch) {
         obj->data = cache->storage.fetch(obj->key, obj->klen, &obj->dlen, cache->storage.priv);
 
 #ifdef SHARDCACHE_DEBUG
@@ -580,13 +584,15 @@ shardcache_t *shardcache_create(char *me,
     pthread_spin_init(&cache->migration_lock, 0);
 #endif
 
-    if (!st) {
-        fprintf(stderr, "No storage defined\n");
-        free(cache);
-        return NULL;
+    if (st) {
+        memcpy(&cache->storage, st, sizeof(cache->storage));
+        cache->use_persistent_storage = 1;
+    } else {
+        fprintf(stderr, "No storage callbacks provided, "
+                        "using only the internal volatile storage\n");
+        cache->use_persistent_storage = 0;
     }
 
-    memcpy(&cache->storage, st, sizeof(cache->storage));
 
     cache->me = strdup(me);
 
@@ -806,7 +812,7 @@ _shardcache_set_internal(shardcache_t *cache,
         if (expire) {
             // ensure removing this key from the persistent storage (if present)
             // since it's now going to be a volatile item
-            if (cache->storage.remove)
+            if (cache->use_persistent_storage && cache->storage.remove)
                 cache->storage.remove(key, klen, cache->storage.priv);
             volatile_object_t *obj = malloc(sizeof(volatile_object_t));
             obj->data = malloc(vlen);
@@ -837,7 +843,7 @@ _shardcache_set_internal(shardcache_t *cache,
 
             SPIN_UNLOCK(&cache->next_expire_lock);
 
-        } else if (cache->storage.store) {
+        } else if (cache->use_persistent_storage && cache->storage.store) {
             // remove this key from the volatile storage (if present)
             // it's going to be eventually persistent now (depending on the storage type)
             ht_delete(cache->volatile_storage, key, klen, (void **)&prev, NULL);
@@ -919,7 +925,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
         int rc = ht_delete(cache->volatile_storage, key, klen, (void **)&prev_item, NULL);
 
         if (rc != 0) {
-            if (cache->storage.remove)
+            if (cache->use_persistent_storage && cache->storage.remove)
                 cache->storage.remove(key, klen, cache->storage.priv);
         } else if (prev_item) {
             __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
@@ -999,19 +1005,23 @@ void shardcache_clear_counters(shardcache_t *cache) {
 
 shardcache_storage_index_t *shardcache_get_index(shardcache_t *cache)
 {
-    size_t isize = 65535;
-    if (cache->storage.count)
-        isize = cache->storage.count(cache->storage.priv);
+    shardcache_storage_index_t *index = NULL;
 
-    ssize_t count = 0;
-    shardcache_storage_index_item_t *items = NULL;
-    if (cache->storage.index) {
-        items = calloc(sizeof(shardcache_storage_index_item_t), isize);
-        count = cache->storage.index(items, isize, cache->storage.priv);
+    if (cache->use_persistent_storage) {
+        size_t isize = 65535;
+        if (cache->storage.count)
+            isize = cache->storage.count(cache->storage.priv);
+
+        ssize_t count = 0;
+        shardcache_storage_index_item_t *items = NULL;
+        if (cache->storage.index) {
+            items = calloc(sizeof(shardcache_storage_index_item_t), isize);
+            count = cache->storage.index(items, isize, cache->storage.priv);
+        }
+        index = calloc(1, sizeof(shardcache_storage_index_t));
+        index->items = items;
+        index->size = count; 
     }
-    shardcache_storage_index_t *index = calloc(1, sizeof(shardcache_storage_index_t));
-    index->items = items;
-    index->size = count; 
     return index;
 }
 
@@ -1058,81 +1068,83 @@ void *migrate(void *priv)
     shardcache_t *cache = (shardcache_t *)priv;
 
     shardcache_storage_index_t *index = shardcache_get_index(cache);
-
-    uint32_t migrated_items = 0;
-    uint32_t scanned_items = 0;
-    uint32_t errors = 0;
-    uint32_t total_items = index->size;
-
-    shardcache_counter_add(cache->counters, "migrated_items", &migrated_items);
-    shardcache_counter_add(cache->counters, "scanned_items", &scanned_items);
-    shardcache_counter_add(cache->counters, "total_items", &total_items);
-    shardcache_counter_add(cache->counters, "migration_errors", &errors);
-
-#ifdef SHARDCACHE_DEBUG
-    fprintf(stderr, "Migrator starting (%d items to precess)\n", total_items);
-#endif
-
     int aborted = 0;
     linked_list_t *to_delete = create_list();
-    int i;
-    for (i = 0; i < index->size; i++) {
-        size_t klen = index->items[i].klen;
-        void *key = index->items[i].key;
 
-        char node_name[1024];
-        size_t node_len = sizeof(node_name);
-        memset(node_name, 0, node_len);
+    if (index) {
+        uint32_t migrated_items = 0;
+        uint32_t scanned_items = 0;
+        uint32_t errors = 0;
+        uint32_t total_items = index->size;
 
-        char keystr[1024];
-        memcpy(keystr, key, klen < 1024 ? klen : 1024);
-        keystr[klen] = 0;
+        shardcache_counter_add(cache->counters, "migrated_items", &migrated_items);
+        shardcache_counter_add(cache->counters, "scanned_items", &scanned_items);
+        shardcache_counter_add(cache->counters, "total_items", &total_items);
+        shardcache_counter_add(cache->counters, "migration_errors", &errors);
 
 #ifdef SHARDCACHE_DEBUG
-        fprintf(stderr, "Migrator processign key %s\n", keystr);
+        fprintf(stderr, "Migrator starting (%d items to precess)\n", total_items);
 #endif
 
-        int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
-        
-        if (is_mine == -1) {
-            fprintf(stderr, "Migrator running while no migration continuum present ... aborting\n");
-            __sync_add_and_fetch(&errors, 1);
-            aborted = 1;
-            break;
-        } else if (!is_mine) {
-            // if we are not the owner try asking our peer responsible for this data
-            void *value = NULL;
-            size_t vlen = 0;
-            if (cache->storage.fetch) {
-                value = cache->storage.fetch(key, klen, &vlen, cache->storage.priv);
-            }
-            if (value) {
-                char *peer = shardcache_get_node_address(cache, (char *)node_name);
-                if (peer) {
+        int i;
+        for (i = 0; i < index->size; i++) {
+            size_t klen = index->items[i].klen;
+            void *key = index->items[i].key;
+
+            char node_name[1024];
+            size_t node_len = sizeof(node_name);
+            memset(node_name, 0, node_len);
+
+            char keystr[1024];
+            memcpy(keystr, key, klen < 1024 ? klen : 1024);
+            keystr[klen] = 0;
+
 #ifdef SHARDCACHE_DEBUG
-                    fprintf(stderr, "Migrator copying %s to peer %s (%s)\n", keystr, node_name, peer);
+            fprintf(stderr, "Migrator processign key %s\n", keystr);
 #endif
-                    int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, 0, -1);
-                    if (rc == 0) {
-                        __sync_add_and_fetch(&migrated_items, 1);
-                        push_value(to_delete, &index->items[i]);
+
+            int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+            
+            if (is_mine == -1) {
+                fprintf(stderr, "Migrator running while no migration continuum present ... aborting\n");
+                __sync_add_and_fetch(&errors, 1);
+                aborted = 1;
+                break;
+            } else if (!is_mine) {
+                // if we are not the owner try asking our peer responsible for this data
+                void *value = NULL;
+                size_t vlen = 0;
+                if (cache->storage.fetch) {
+                    value = cache->storage.fetch(key, klen, &vlen, cache->storage.priv);
+                }
+                if (value) {
+                    char *peer = shardcache_get_node_address(cache, (char *)node_name);
+                    if (peer) {
+#ifdef SHARDCACHE_DEBUG
+                        fprintf(stderr, "Migrator copying %s to peer %s (%s)\n", keystr, node_name, peer);
+#endif
+                        int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, 0, -1);
+                        if (rc == 0) {
+                            __sync_add_and_fetch(&migrated_items, 1);
+                            push_value(to_delete, &index->items[i]);
+                        } else {
+                            fprintf(stderr, "Errors copying %s to peer %s (%s)\n", keystr, node_name, peer);
+                            __sync_add_and_fetch(&errors, 1);
+                        }
                     } else {
-                        fprintf(stderr, "Errors copying %s to peer %s (%s)\n", keystr, node_name, peer);
+                        fprintf(stderr, "Can't find address for peer %s (me : %s)\n", node_name, cache->me);
                         __sync_add_and_fetch(&errors, 1);
                     }
-                } else {
-                    fprintf(stderr, "Can't find address for peer %s (me : %s)\n", node_name, cache->me);
-                    __sync_add_and_fetch(&errors, 1);
                 }
             }
+            __sync_add_and_fetch(&scanned_items, 1);
         }
-        __sync_add_and_fetch(&scanned_items, 1);
-    }
 
-    shardcache_counter_remove(cache->counters, "migrated_items");
-    shardcache_counter_remove(cache->counters, "scanned_items");
-    shardcache_counter_remove(cache->counters, "total_items");
-    shardcache_counter_remove(cache->counters, "migration_errors");
+        shardcache_counter_remove(cache->counters, "migrated_items");
+        shardcache_counter_remove(cache->counters, "scanned_items");
+        shardcache_counter_remove(cache->counters, "total_items");
+        shardcache_counter_remove(cache->counters, "migration_errors");
+    }
 
     if (!aborted) {
 #ifdef SHARDCACHE_DEBUG
