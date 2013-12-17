@@ -1,32 +1,32 @@
 
-
-             =======================       ============= get(key) / set(key, value) / del(key)
-             | shardcache_craete() | ----->|  Storage  |<---------------------------------
-             -----------------------       -------------                                 |
-                        |                                                                |
-                        |            pthread_create()                                    |
-      ------------------|---------------------------------------------                   |
-      |                 |                  |                         |                   |
-      |                 |                  |                         |                   |
-      |                 |                  |                         |                   |
-      v                 v                  v                         v                   |
-==============    ==============    ================          ================           |
-|  evictor   |    |  listener  |    | worker/iomux |  ......  | worker/iomux |------------
---------------    --------------    ----------------          ----------------   |
-      |                 |                  |                         |           |
-      |          push_value(conn)   shift_value(conn)                |      push_value(key)
-      |                 |                  |                         |           |
-      |                 |                  v                         v           v
-      |                 |               ========                  ========    ========
-      |                 |               | jobs |                  | jobs |    | jobs |
-      |                 |               --------                  --------    --------
-      |                 |                  ^                         ^           ^
-      |                 |                  |                         |           |
-      |                 ----------------------------------------------           |
-      |                                                                          |
-      |                                                                          |
-      |                               shift_value(key)                           |
-      ----------------------------------------------------------------------------
+             =======================                 =============           =============
+             | shardcache_craete() | --------------->|    ARC    |---------> |  Storage  |
+             -----------------------                 -------------           -------------
+                        |                                  ^                                      
+                        |                                  | get(key) / set(key, value) / del(key)
+                        |            pthread_create()      --------------------------
+      ------------------|--------------------------------------------              |
+      |                 |                  |                        |              |
+      |                 |                  |                        |              |
+      |                 |                  |                        |              |
+      v                 v                  v                        v              |
+**************    **************    ****************         ****************      |
+|  evictor   |    |  listener  |    | worker/iomux |  .....  | worker/iomux |-------
+**************    **************    ****************         ****************   |
+      |                 |                  |                        |           |
+      |          push_value(conn)   shift_value(conn)               |      push_value(key)
+      |                 |                  |                        |           |
+      |                 |                  v                        v           v
+      |                 |               ========                 ========    ========
+      |                 |               | conn |                 | conn |    | key  |
+      |                 |               --------                 --------    --------
+      |                 |                  ^                        ^           ^
+      |                 |                  |                        |           |
+      |                 ---------------------------------------------           |
+      |                                                                         |
+      |                                                                         |
+      |                               shift_value(key)                          |
+      ---------------------------------------------------------------------------
 
 
 When the library creates a new shardcache context one single listener thread is created together
@@ -48,7 +48,8 @@ it computes the response,  writes it back to the same connection it received the
 goes back collecting data from its connections (until a new full request is received again ... and so on)
 New connections might be assigned to the worker while doing its job
 
-Any worker can access the storage anytime to fetch/store/remove keys (note: the storage MUST be thread safe)
+Any worker can access the ARC subsystem (and hence the storage) anytime to fetch/store/remove keys
+(note: the storage MUST be thread safe)
 
 If a delete request is received by the owner of the key to be deleted, an eviction comand needs to be sent
 to all the peers. Instead of waiting for all the messages to be sent and aknowledged will provide the key
