@@ -663,6 +663,11 @@ shardcache_t *shardcache_create(char *me,
     cache->volatile_storage = ht_create(1<<20, 10<<20, (ht_free_item_callback_t)destroy_volatile);
 
     cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
+    if (!cache->serv) {
+        fprintf(stderr, "Can't start the communication engine\n");
+        shardcache_destroy(cache);
+        return NULL;
+    }
 
 #ifndef __MACH__
     pthread_spin_init(&cache->next_expire_lock, 0);
@@ -737,15 +742,17 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
     if (!res)
         return NULL;
 
-    if (obj && obj->data) {
+    if (obj) {
         pthread_mutex_lock(&obj->lock);
-        value = malloc(obj->dlen);
-        if (value) {
-            memcpy(value, obj->data, obj->dlen);
-            if (vlen)
-                *vlen = obj->dlen;
-        } else {
-            fprintf(stderr, "malloc failed for %zu bytes: %s\n", obj->dlen, strerror(errno));
+        if (obj->data) {
+            value = malloc(obj->dlen);
+            if (value) {
+                memcpy(value, obj->data, obj->dlen);
+                if (vlen)
+                    *vlen = obj->dlen;
+            } else {
+                fprintf(stderr, "malloc failed for %zu bytes: %s\n", obj->dlen, strerror(errno));
+            }
         }
         pthread_mutex_unlock(&obj->lock);
     }
