@@ -11,7 +11,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <iomux.h>
-#include <linklist.h>
+#include <queue.h>
 
 #include "messaging.h"
 #include "connections.h"
@@ -43,7 +43,7 @@
 
 typedef struct {
     pthread_t thread;
-    linked_list_t *jobs;
+    queue_t *jobs;
     uint32_t busy;
     uint32_t num_fds;
     int leave;
@@ -253,7 +253,7 @@ static void shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
     }
 
     if (fbuf_used(ctx->output)) {
-        struct timeval tv = { 0, 1000 };
+        struct timeval tv = { 0, 1000 }; // 1ms
         iomux_set_timeout(iomux, fd, &tv);
     }
 }
@@ -484,11 +484,11 @@ static void shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
 
 void *worker(void *priv) {
     shardcache_worker_context_t *wrk_ctx = (shardcache_worker_context_t *)priv;
-    linked_list_t *jobs = wrk_ctx->jobs;
+    queue_t *jobs = wrk_ctx->jobs;
 
     iomux_t *iomux = iomux_create();
     while (ATOMIC_READ(wrk_ctx->leave) == 0) {
-        shardcache_connection_context_t *ctx = shift_value(jobs);
+        shardcache_connection_context_t *ctx = queue_pop_left(jobs);
         while(ctx) {
             iomux_callbacks_t connection_callbacks = {
                 .mux_connection = NULL,
@@ -502,7 +502,7 @@ void *worker(void *priv) {
 
             iomux_add(iomux, ctx->fd, &connection_callbacks);
             ATOMIC_INCREMENT(wrk_ctx->num_fds);
-            ctx = shift_value(jobs);
+            ctx = queue_pop_left(jobs);
         }
         pthread_testcancel();
         if (!iomux_isempty(iomux)) {
@@ -585,7 +585,7 @@ void *serve_cache(void *priv) {
 
             // create and initialize the context for the new connection
             shardcache_connection_context_t *ctx = shardcache_create_connection_context(serv->cache, serv->auth, fd);
-            push_value(wrkctx->jobs, ctx);
+            queue_push_right(wrkctx->jobs, ctx);
             pthread_mutex_lock(&wrkctx->wakeup_lock);
             pthread_cond_signal(&wrkctx->wakeup_cond);
             pthread_mutex_unlock(&wrkctx->wakeup_lock);
@@ -629,8 +629,9 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
     
     int i;
     for (i = 0; i < num_workers; i++) {
-        s->workers[i].jobs = create_list();
-        set_free_value_callback(s->workers[i].jobs, (free_value_callback_t)shardcache_destroy_connection_context);
+        s->workers[i].jobs = queue_create();
+        queue_set_free_value_callback(s->workers[i].jobs,
+                (queue_free_value_callback_t)shardcache_destroy_connection_context);
 
         if (s->counters) {
             char varname[256];
@@ -683,7 +684,7 @@ void stop_serving(shardcache_serving_t *s) {
 
         pthread_join(s->workers[i].thread, NULL);
 
-        destroy_list(s->workers[i].jobs);
+        queue_destroy(s->workers[i].jobs);
 
         pthread_mutex_destroy(&s->workers[i].wakeup_lock);
         pthread_cond_destroy(&s->workers[i].wakeup_cond);
