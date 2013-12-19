@@ -81,7 +81,7 @@ shared: objects
 
 $(DEPS): build_deps
 
-objects: CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
+objects: CFLAGS += -DHAVE_UINT64_T -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 objects: $(DEPS) $(TARGETS)
 
 clean:

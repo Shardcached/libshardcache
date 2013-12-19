@@ -1,3 +1,14 @@
+UNAME := $(shell uname)
+
+CFLAGS += -DHAVE_UINT64_T
+ifeq ($(UNAME), Linux)
+CFLAGS += -DHAVE_EPOLL
+else
+ifeq ($(UNAME), Darwin)
+CFLAGS += -DHAVE_KQUEUE
+endif
+endif
+
 DEPS=https://github.com/dgryski/libchash \
      https://github.com/xant/libhl \
      https://github.com/xant/libiomux \
@@ -15,7 +26,7 @@ all:
 	    fi; \
 	    export LIBDIR="$(shell pwd)/.libs"; \
 	    export INCDIR="$(shell pwd)/.incs"; \
-	    export CFLAGS="$(CFLAGS) -DHAVE_UINT64_T"; \
+	    export CFLAGS="$(CFLAGS)"; \
 	    make -eC $$name; \
 	    if [ $$? -ne 0 ] ; then exit $$?; fi; \
 	    make -eC $$name install; \
