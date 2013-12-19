@@ -457,7 +457,6 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         }
 
         ATOMIC_CAS(wrkctx->busy, 1, 0);
-        ATOMIC_DECREMENT(wrkctx->num_fds);
         ctx->state = STATE_READING_NONE;
         fbuf_clear(ctx->key);
         fbuf_clear(ctx->value);
