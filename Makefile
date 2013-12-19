@@ -42,7 +42,7 @@ TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
 TEST_EXEC_ORDER = 
 
-allu: objects static shared
+all: objects static shared
 
 tsan:
 	@export CC=gcc-4.8; \
@@ -81,8 +81,9 @@ shared: objects
 
 $(DEPS): build_deps
 
-objects: CFLAGS += -DHAVE_UINT64_T -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 objects: $(DEPS) $(TARGETS)
+
+$(TARGETS): CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 
 clean:
 	rm -f src/*.o

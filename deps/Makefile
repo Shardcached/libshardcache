@@ -1,11 +1,11 @@
 UNAME := $(shell uname)
 
-CFLAGS += -DHAVE_UINT64_T
+EXTRA_CFLAGS += -DHAVE_UINT64_T
 ifeq ($(UNAME), Linux)
-CFLAGS += -DHAVE_EPOLL
+EXTRA_CFLAGS += -DHAVE_EPOLL
 else
 ifeq ($(UNAME), Darwin)
-CFLAGS += -DHAVE_KQUEUE
+EXTRA_CFLAGS += -DHAVE_KQUEUE
 endif
 endif
 
@@ -26,7 +26,7 @@ all:
 	    fi; \
 	    export LIBDIR="$(shell pwd)/.libs"; \
 	    export INCDIR="$(shell pwd)/.incs"; \
-	    export CFLAGS="$(CFLAGS)"; \
+	    export CFLAGS="$(CFLAGS) $(EXTRA_CFLAGS)"; \
 	    make -eC $$name; \
 	    if [ $$? -ne 0 ] ; then exit $$?; fi; \
 	    make -eC $$name install; \
