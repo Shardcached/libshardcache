@@ -633,11 +633,13 @@ shardcache_t *shardcache_create(char *me,
     } 
 
 #ifdef SHARDCACHE_DEBUG
-    fprintf(stderr, "AUTH KEY (secret: %s): ", secret);
-    for (i = 0; i < SHARDCACHE_MSG_SIG_LEN; i++) {
-        fprintf(stderr, "%02x", (unsigned char)cache->auth[i]); 
+    if (secret && strlen(secret)) {
+        fprintf(stderr, "AUTH KEY (secret: %s): ", secret);
+        for (i = 0; i < SHARDCACHE_MSG_SIG_LEN; i++) {
+            fprintf(stderr, "%02x", (unsigned char)cache->auth[i]); 
+        }
+        fprintf(stderr, "\n");
     }
-    fprintf(stderr, "\n");
 #endif
 
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
@@ -1177,8 +1179,10 @@ void *migrate(void *priv)
     cache->migration_done = 1;
     SPIN_UNLOCK(&cache->migration_lock);
 #ifdef SHARDCACHE_DEBUG
-    fprintf(stderr, "Migrator ended: processed %d items, migrated %d, errors %d\n",
-            total_items, migrated_items, errors);
+    if (index) {
+        fprintf(stderr, "Migrator ended: processed %d items, migrated %d, errors %d\n",
+                total_items, migrated_items, errors);
+    }
 #endif
 
     if (index)
