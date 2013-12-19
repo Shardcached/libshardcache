@@ -9,8 +9,8 @@ all:
 	@mkdir -p .libs; \
 	mkdir -p .incs; \
 	for i in $(DEPS); do \
-	    name=`echo $$i | cut -d/ -f5 `; \
-	    if [ ! -d $$name ]; then \
+	    name=`echo $$i | sed 's,.*/,,;s/.git$$//' `; \
+	    if [ ! -d "$$name" ]; then \
 		git clone $$i; \
 	    fi; \
 	    export LIBDIR="$(shell pwd)/.libs"; \
@@ -23,8 +23,8 @@ all:
 
 update:
 	@for i in $(DEPS); do \
-	    name=`echo $$i | cut -d/ -f5 `; \
-	    if [ -d $$name ]; then \
+	    name=`echo $$i | sed 's,.*/,,;s/.git$$//' `; \
+	    if [ -d "$$name" ]; then \
 	        cd $$name;\
 		git pull;\
 		cd -;\
@@ -33,16 +33,16 @@ update:
 
 purge: clean
 	@for i in $(DEPS); do \
-	    name=`echo $$i | cut -d/ -f5 `; \
-	    if [ -d $$name ]; then \
+	    name=`echo $$i | sed 's,.*/,,;s/.git$$//' `; \
+	    if [ -d "$$name" ]; then \
 		rm -rf $$name; \
 	    fi;\
 	done
 
 clean:
 	@for i in $(DEPS); do \
-	    name=`echo $$i | cut -d/ -f5 `; \
-	    if [ -d $$name ]; then \
+	    name=`echo $$i | sed 's,.*/,,;s/.git$$//' `; \
+	    if [ -d "$$name" ]; then \
 		make -C $$name clean; \
 	    fi; \
 	done;
