@@ -7,10 +7,10 @@
 #include <shardcache_client.h>
 
 void usage(char *prgname) {
-    printf("Usage: %s <Command <Key>\n"
+    printf("Usage: %s <Command> <Key>\n"
            "   Commands: \n"
            "        get   <Key>\n"
-           "        set   <Key> [ <Expire> ]\n"
+           "        set   <Key> [ <Expire> ] (gets value on stdin)\n"
            "        del   <Key>\n"
            "        evict <Key>\n\n", prgname);
     exit(-1);
