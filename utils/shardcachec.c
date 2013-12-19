@@ -29,13 +29,10 @@ static int parse_nodes_string(char *str)
         if(tok) {
             char *label = strsep(&tok, ":");
             char *addr = tok;
-            /*
-            if (!addr || check_address_string(addr) != 0) {
-                ERROR("Bad address format for peer: '%s'", addr);
+            if (!addr) {
                 free(copy);
                 return -1;
             }
-            */
             num_nodes++;
             nodes = realloc(nodes, num_nodes * sizeof(shardcache_node_t));
             shardcache_node_t *node = &nodes[num_nodes-1];
