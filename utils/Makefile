@@ -18,7 +18,7 @@ endif
 all: shardcachec
 
 shardcachec: CFLAGS += -fPIC -I../src -I../deps/.incs -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
-shardcachec:
+shardcachec: shardcachec.c
 	gcc shardcachec.c $(CFLAGS) $(LDFLAGS) $(DEPS) -o shardcachec
 
 clean:
