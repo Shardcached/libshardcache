@@ -513,7 +513,7 @@ void *shardcache_expire_volatile_keys(void *priv)
         SPIN_LOCK(&cache->next_expire_lock);
 
         if (cache->next_expire && now >= cache->next_expire && ht_count(cache->volatile_storage)) {
-
+            int prev_expire = cache->next_expire;
             SPIN_UNLOCK(&cache->next_expire_lock);
 
             pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
@@ -525,11 +525,13 @@ void *shardcache_expire_volatile_keys(void *priv)
             };
 
             ht_foreach_pair(cache->volatile_storage, expire_volatile, &arg);
-            if (arg.next) {
-                SPIN_LOCK(&cache->next_expire_lock);
+
+            SPIN_LOCK(&cache->next_expire_lock);
+            if (cache->next_expire == prev_expire) // nobody advanced the next_expire yet
                 cache->next_expire = arg.next;
-                SPIN_UNLOCK(&cache->next_expire_lock);
-            }
+            else if (cache->next_expire && arg.next)
+                cache->next_expire = cache->next_expire < arg.next ? cache->next_expire : arg.next;
+            SPIN_UNLOCK(&cache->next_expire_lock);
 
             expire_volatile_item_t *item = shift_value(arg.list);
             while (item) {

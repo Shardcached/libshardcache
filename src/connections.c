@@ -124,6 +124,7 @@ open_socket(const char *host, int port)
     int val = 1;
     struct sockaddr_in sockaddr;
     int sock;
+    struct linger ling = {0, 0};
 
     errno = EINVAL;
     if (host == NULL || strlen(host) == 0 || port == 0)
@@ -135,6 +136,7 @@ open_socket(const char *host, int port)
 
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &val,  sizeof(val));
+    setsockopt(sock, SOL_SOCKET, SO_LINGER, (void *)&ling, sizeof(ling));
 
     if (string2sockaddr(host, port, &sockaddr) == -1
     || bind(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1) {

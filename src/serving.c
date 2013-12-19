@@ -506,7 +506,7 @@ void *worker(void *priv) {
         }
         pthread_testcancel();
         if (!iomux_isempty(iomux)) {
-            struct timeval timeout = { 0, 500 };
+            struct timeval timeout = { 0, 2000 };
             iomux_run(iomux, &timeout);
         } else {
             // we don't have any filedescriptor to handle in the mux,
