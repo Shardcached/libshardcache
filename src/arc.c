@@ -422,9 +422,12 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
         return obj;
     }
 
-    fprintf(stderr, "Can't add the newly created object to the cache?!\n");
-
+    // failed to add the object to the cache, probably the key doesn't
+    // exist in the storage
+    ht_delete(cache->hash, (void *)key, len, NULL, NULL);
     MUTEX_UNLOCK(&obj->lock);
+    release_ref(cache->refcnt, obj->node);
+    release_ref(cache->refcnt, obj->node);
     MUTEX_UNLOCK(&cache->lock);
 
     return NULL;
