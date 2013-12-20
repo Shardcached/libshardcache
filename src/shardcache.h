@@ -129,8 +129,29 @@ typedef size_t (*shardcache_get_index_callback_t)
 typedef size_t (*shardcache_count_items_callback_t)(void *priv);
 
 /**
+ * @struct shardcache_storage_t
  * @brief Structure holding all the callback pointers required
  *        by shardcache to interact with underlying storage
+ * @var shardcache_storage_t::fetch
+ * The fecth callback
+ * @var shardcache_storage_t::store
+ * The store callback (optional if the storage is indended to be read-only)
+ * @var shardcache_storage_t::remove
+ * The remove callback (optional if the storage is intended to be read-only)
+ * @var shardcache_storage_t::exist
+ * Optional callback which can be used to 'quickly' check if a key exists in the storage
+ * (note that how 'quickly' strictly depends on the storage implementation)
+ * @var shardcache_storage_t::index
+ * Optional callback which returns the index of keys accessible through the storage
+ * (check shardcache_get_index() documentation for more details)
+ * @var shardcache_storage_t::shared
+ * If set to a non zero value, shardcache will assume that all the peers
+ * can access the same keys on the storage (for example a shared database,
+ * or a shared filesystem))
+ * @var shardcache_storage_t::priv
+ * Pointer to private data which will passed to all the callbacks. The storage
+ * implementation can use this pointer to keep its internal data/status/handlers/whatever
+ *
  */
 typedef struct __shardcache_storage_s {
     shardcache_fetch_item_callback_t       fetch;
@@ -139,6 +160,7 @@ typedef struct __shardcache_storage_s {
     shardcache_exist_item_callback_t       exist;
     shardcache_get_index_callback_t        index;
     shardcache_count_items_callback_t      count;
+    int                                    shared;
     void                                   *priv;
 } shardcache_storage_t;
 

@@ -308,11 +308,10 @@ static size_t __op_fetch(void *item, void * priv)
                                                             obj->klen,
                                                             node_name,
                                                             &node_len);
-            if (check == 1) {
-                done = 0;
-            } else if (check == 0) {
+            if (check == 0)
                 ret = __op_fetch_from_peer(cache, obj, node_name);
-            }
+            else if (check == 1 || cache->storage.shared)
+                done = 0;
         }
         if (done) {
             pthread_mutex_unlock(&obj->lock);
