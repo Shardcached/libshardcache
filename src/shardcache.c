@@ -1076,11 +1076,13 @@ void *migrate(void *priv)
     int aborted = 0;
     linked_list_t *to_delete = create_list();
 
+    uint32_t migrated_items = 0;
+    uint32_t scanned_items = 0;
+    uint32_t errors = 0;
+    uint32_t total_items = 0;
+
     if (index) {
-        uint32_t migrated_items = 0;
-        uint32_t scanned_items = 0;
-        uint32_t errors = 0;
-        uint32_t total_items = index->size;
+        total_items = index->size;
 
         shardcache_counter_add(cache->counters, "migrated_items", &migrated_items);
         shardcache_counter_add(cache->counters, "scanned_items", &scanned_items);

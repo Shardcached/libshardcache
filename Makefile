@@ -83,7 +83,7 @@ $(DEPS): build_deps
 
 objects: $(DEPS) $(TARGETS)
 
-$(TARGETS): CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
+$(TARGETS): CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -g
 
 clean:
 	rm -f src/*.o
@@ -96,7 +96,7 @@ clean:
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
 
-tests: CFLAGS += -Isrc -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
+tests: CFLAGS += -Isrc -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -g
 
 tests: support/testing.o static
 	@for i in $(TESTS); do\
