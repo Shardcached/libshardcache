@@ -322,7 +322,7 @@ arc_t *arc_create(arc_ops_t *ops, size_t c)
     pthread_mutex_init(&cache->lock, &attr);
     pthread_mutexattr_destroy(&attr);
 
-    cache->refcnt = refcnt_create(c/2, terminate_node_callback, free_node_ptr_callback);
+    cache->refcnt = refcnt_create(MIN(c/2, 1<<16), terminate_node_callback, free_node_ptr_callback);
     return cache;
 }
 static void arc_list_destroy(arc_t *cache, arc_list_t *head) {
