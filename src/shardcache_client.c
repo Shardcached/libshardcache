@@ -76,8 +76,10 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_
 
     c->chash = chash_create((const char **)shard_names, shard_lens, c->num_shards, 200);
 
-    if (auth && strlen(auth))
+    if (auth && strlen(auth)) {
+        c->auth = calloc(1, 16);
         strncpy((char *)c->auth, auth, 16);
+    }
 
     return c;
 }
