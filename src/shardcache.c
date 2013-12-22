@@ -95,6 +95,7 @@ struct __shardcache_s {
     pthread_spinlock_t next_expire_lock;
 #endif
     pthread_t expirer_th;
+    int expirer_started;
 
     int evict_on_delete;
 
@@ -680,6 +681,7 @@ shardcache_t *shardcache_create(char *me,
     pthread_spin_init(&cache->next_expire_lock, 0);
 #endif
     pthread_create(&cache->expirer_th, NULL, shardcache_expire_volatile_keys, cache);
+    cache->expirer_started = 1;
 
     return cache;
 }
@@ -723,8 +725,10 @@ void shardcache_destroy(shardcache_t *cache)
 
     shardcache_release_counters(cache->counters);
 
-    pthread_cancel(cache->expirer_th);
-    pthread_join(cache->expirer_th, NULL);
+    if (cache->expirer_started) {
+        pthread_cancel(cache->expirer_th);
+        pthread_join(cache->expirer_th, NULL);
+    }
 
     ht_destroy(cache->volatile_storage);
 #ifndef __MACH__
