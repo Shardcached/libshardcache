@@ -448,11 +448,12 @@ shardcache_get_nodes(cache, num_nodes)
         AV *nodes;
     CODE:
         nodes = newAV();
-        const shardcache_node_t *list = shardcache_get_nodes(cache, num_nodes);
+        shardcache_node_t *list = shardcache_get_nodes(cache, num_nodes);
         for (i = 0; i < *num_nodes; i++) {
             SV *node = newSVpv(list[i].label, strlen(list[i].label));
             av_push(nodes, sv_2mortal(node));
         }
+        free(list);
         RETVAL = nodes;
     OUTPUT:
         RETVAL
