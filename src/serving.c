@@ -120,7 +120,8 @@ static void write_status(shardcache_connection_context_t *ctx, int rc) {
 
     char *p = &out[3];
     if (rc != 0) {
-        fprintf(stderr, "Error running command %d (key %s)\n", ctx->hdr, fbuf_data(ctx->key));
+        //fprintf(stderr, "Error running command %d (key %s)\n",
+        //	  ctx->hdr, fbuf_data(ctx->key));
         out[2] = 3;
         strncpy(p, "ERR", 3);
         p += 3;
