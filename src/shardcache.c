@@ -982,10 +982,19 @@ int shardcache_evict(shardcache_t *cache, void *key, size_t klen) {
     return 0;
 }
 
-const shardcache_node_t *shardcache_get_nodes(shardcache_t *cache, int *num_nodes) {
+shardcache_node_t *shardcache_get_nodes(shardcache_t *cache, int *num_nodes) {
+    int i;
+    int num = 0;
+    SPIN_LOCK(&cache->migration_lock);
+    num = cache->num_shards;
     if (num_nodes)
-        *num_nodes = cache->num_shards;
-    return cache->shards;
+        *num_nodes = num;
+    shardcache_node_t *list = malloc(sizeof(shardcache_node_t) * num);
+    for (i = 0; i < num; i++) {
+        memcpy(&list[i], &cache->shards[i], sizeof(shardcache_node_t));
+    }
+    SPIN_UNLOCK(&cache->migration_lock);
+    return list;
 }
 
 int shardcache_get_counters(shardcache_t *cache, shardcache_counter_t **counters) {
@@ -1328,5 +1337,4 @@ int shardcache_migration_end(shardcache_t *cache)
     pthread_join(cache->migrate_th, NULL);
     return ret;
 }
-
 

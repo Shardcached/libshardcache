@@ -309,8 +309,9 @@ int shardcache_evict(shardcache_t *cache, void *key, size_t klen);
  * @arg num_nodes : If provided the number of nodes in the returned array
  *                  will be will be stored at the location pointed by num_nodes
  * @return A list containing all the nodes <address:port> strings
+ *         NOTE: the caller MUST release the returned pointer once done with it
  */
-const shardcache_node_t *
+shardcache_node_t *
 shardcache_get_nodes(shardcache_t *cache, int *num_nodes);
 
 /**
