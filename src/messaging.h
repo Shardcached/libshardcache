@@ -5,18 +5,20 @@
 
 /* protocol specification
  *
- * MESSAGE      : <MSG><SIG>
+ * MESSAGE      : <MSG>[<SIG>] | <NOOP>
  * MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
- * HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_EVI> | <MSG_RES>
- *                <MSG_MGB> | <MSG_MGA> | <MSG_MGE>
+ * NOOP         : <MSG_NOP>
+ * HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_EVI> |
+ *                <MSG_MGB> | <MSG_MGA> | <MSG_MGE> | <MSG_RES>
  * MSG_GET      : 0x01
  * MSG_SET      : 0x02
  * MSG_DEL      : 0x03
  * MSG_EVI      : 0x04
- * MSG_RES      : 0x11
  * MSG_MGA      : 0x21
  * MSG_MGB      : 0x22
  * MSG_MGE      : 0x23
+ * MSG_NOP      : 0x90
+ * MSG_RES      : 0x99
  * RSEP         : 0x80
  * RECORD       : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
  * SIZE         : <HIGH_BYTE><LOW_BYTE>
@@ -30,15 +32,24 @@
  * SIG          : <BYTE>[8]
  * KEY          : <RECORD>
  * VALUE        : <RECORD>
-
+ * TTL          : <RECORD>
+ * NODES_LIST   : <RECORD>
+ * 
  * The only supported messages are :
+ * 
+ * GET_MESSAGE  : <MSG_GET><KEY><EOM>[<SIG>]
+ * SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>[<SIG>]
+ * DEL_MESSAGE  : <MSG_DEL><KEY><EOM>[<SIG>]
+ * EVI_MESSAGE  : <MSG_EVI><KEY><EOM>[<SIG>]
+ * RES_MESSAGE  : <MSG_RES><RECORD><EOM>[<SIG>]
 
- * GET_MESSAGE  : <MSG_GET><KEY><EOM><SIG>
- * SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE><EOM><SIG>
- * DEL_MESSAGE  : <MSG_DEL><KEY><EOM><SIG>
- * EVI_MESSAGE  : <MSG_EVI><KEY><EOM><SIG>
- * RES_MESSAGE  : <MSG_RES><RECORD><EOM><SIG>
- *
+ * MGB_MESSAGE  : <MSG_MGB><NODES_LIST><EOM>[<SIG>]
+ * MGA_MESSAGE  : <MSG_MGA><EOM>[<SIG>]
+ * MGE_MESSAGE  : <MSG_MGE><EOM>[<SIG>]
+ * 
+ * STS_MESSAGE  : <MSG_STS><EOM>[<SIG>]
+ * CHK_MESSAGE  : <MSG_PNG><EOM>[<SIG>]
+ * 
  */
 
 // in byte
