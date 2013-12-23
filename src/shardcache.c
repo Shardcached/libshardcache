@@ -1200,7 +1200,7 @@ void *migrate(void *priv)
 #endif
 
     if (index)
-        free(index);
+        shardcache_free_index(index);
 
     return NULL;
 }
