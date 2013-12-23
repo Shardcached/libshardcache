@@ -53,6 +53,10 @@ static int check_address_string(char *str)
 shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_nodes, char *auth)
 {
     int i;
+    if (!num_nodes) {
+        fprintf(stderr, "Can't create a shardcache client with no nodes\n");
+        return NULL;
+    }
     shardcache_client_t *c = calloc(1, sizeof(shardcache_client_t));
 
     size_t shard_lens[num_nodes];
