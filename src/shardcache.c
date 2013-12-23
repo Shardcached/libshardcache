@@ -785,8 +785,7 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen, s
 }
 
 size_t shardcache_head(shardcache_t *cache, void *key, size_t len, void *head, size_t hlen, struct timeval *timestamp) {
-    size_t copied = 0;
-
+    size_t vlen = 0;
     if (!key)
         return 0;
 
@@ -801,13 +800,14 @@ size_t shardcache_head(shardcache_t *cache, void *key, size_t len, void *head, s
         pthread_mutex_lock(&obj->lock);
         if (obj->data) {
             if (hlen && head) {
-                copied = obj->dlen < hlen ? obj->dlen : hlen;
-                memcpy(head, obj->data, copied);
+                int to_copy = obj->dlen < hlen ? obj->dlen : hlen;
+                memcpy(head, obj->data, to_copy);
             }
             if (timestamp) {
                 memcpy(timestamp, &obj->ts, sizeof(struct timeval));
             }
         }
+        vlen = obj->dlen;
         pthread_mutex_unlock(&obj->lock);
     }
     arc_release_resource(cache->arc, res);
@@ -816,7 +816,7 @@ size_t shardcache_head(shardcache_t *cache, void *key, size_t len, void *head, s
     __sync_bool_compare_and_swap(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
                                  prev,
                                  size);
-    return copied;
+    return vlen;
 }
 
 static int
