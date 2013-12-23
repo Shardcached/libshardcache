@@ -80,13 +80,11 @@ static size_t __st_index(shardcache_storage_index_item_t *index, size_t isize, v
     while (val) {
         if (icnt >= isize)
             break;
-        STRLEN vlen;
         shardcache_storage_index_item_t *index = &index[icnt];
         index->key = malloc(klen);
         memcpy(index->key, key, klen);
         index->klen = klen;
-        SvPVbyte(val, vlen);
-        index->vlen = vlen;
+        index->vlen = SvCUR(val);
         icnt++;
         val = hv_iternextsv(index_hash, &key, &klen);
     }
@@ -414,10 +412,45 @@ shardcache_destroy(cache)
 	shardcache_t *	cache
 
 SV *
-shardcache_get(cache, key, klen)
+shardcache_head(cache, key, klen, vlen, timestamp=&PL_sv_undef)
 	shardcache_t *	cache
 	char *	key
 	size_t	klen
+        size_t  vlen
+        SV   *  timestamp
+    PREINIT:
+    CODE:
+
+        RETVAL = &PL_sv_undef;
+        int should_lock = 0;
+        if (pthread_mutex_trylock(&lock) == EDEADLK)
+            should_lock = 1;
+        pthread_mutex_unlock(&lock);
+        struct timeval ts;
+        SV *sv = newSV(vlen);
+        void *val = NULL;
+        STRLEN len;
+        val = SvPVbyte(sv, len);
+        vlen = shardcache_head(cache, key, klen, val, len, &ts);
+        if (val) {
+            SvCUR_set(sv, vlen);
+            RETVAL = sv_2mortal(sv);;
+            if (SvROK(timestamp)) {
+                sv_setnv(SvRV(timestamp), (ts.tv_sec * 1000) + (ts.tv_usec / 1000));
+            }
+        }
+        if (should_lock)
+            pthread_mutex_lock(&lock);
+    OUTPUT:
+        RETVAL
+
+
+SV *
+shardcache_get(cache, key, klen, timestamp=&PL_sv_undef)
+	shardcache_t *	cache
+	char *	key
+	size_t	klen
+        SV   *  timestamp
     PREINIT:
         size_t vlen = 0;
         void *v = NULL;
@@ -427,12 +460,17 @@ shardcache_get(cache, key, klen)
         if (pthread_mutex_trylock(&lock) == EDEADLK)
             should_lock = 1;
         pthread_mutex_unlock(&lock);
-        v = shardcache_get(cache, key, klen, &vlen);
+        struct timeval ts;
+        v = shardcache_get(cache, key, klen, &vlen, &ts);
         if (v) {
             char *out = malloc(vlen);
             memcpy(out, v, vlen);
             RETVAL = newSVpv(out, vlen);
             free(v);
+
+            if (SvROK(timestamp)) {
+                sv_setnv(SvRV(timestamp), (ts.tv_sec * 1000) + (ts.tv_usec / 1000));
+            }
         }
         if (should_lock)
             pthread_mutex_lock(&lock);

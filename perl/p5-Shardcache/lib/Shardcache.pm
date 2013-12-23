@@ -104,9 +104,15 @@ sub set {
 }
 
 sub get {
-    my ($self, $key) = @_;
+    my ($self, $key, $timestamp) = @_;
     return unless $key;
-    return shardcache_get($self->{_gc}, $key, length($key));
+    return shardcache_get($self->{_gc}, $key, length($key), $timestamp);
+}
+
+sub head {
+    my ($self, $key, $size, $timestamp) = @_;
+    return unless $key;
+    return shardcache_head($self->{_gc}, $key, length($key), $size, $timestamp);
 }
 
 sub del {

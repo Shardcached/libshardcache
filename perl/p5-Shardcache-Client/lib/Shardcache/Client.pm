@@ -231,6 +231,13 @@ sub del {
     return ($resp eq "OK")
 }
 
+sub evi {
+    my ($self, $key) = @_;
+    return unless $key;
+    my $resp = $self->send_msg(0x04, $key);
+    return ($resp eq "OK")
+}
+
 1;
 __END__
 

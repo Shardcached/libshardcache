@@ -86,15 +86,16 @@ foreach my $i (0..20) {
 
 # check their existance/value
 foreach my $i (0..20) {
-    is($gc2->get("test_key$i"), "test_value$i");
-    is($gc->get("test_key$i"), "test_value$i");
+    my $timestamp;
+    is($gc2->get("test_key$i", \$timestamp), "test_value$i");
+    is($gc->get("test_key$i", \$timestamp), "test_value$i");
 }
 
 
 
 
 check_deletion($gc, $gc2, 0, 0..20);
-check_deletion($gc, $gc2, 1, 0..20);
+#check_deletion($gc, $gc2, 1, 0..20);
 foreach my $i (10..20) {
     my $test_key = "test_key$i";
 }
