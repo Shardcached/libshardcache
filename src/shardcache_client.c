@@ -237,6 +237,22 @@ int shardcache_client_stats(shardcache_client_t *c, char *peer, char **buf, size
     return rc;
 }
 
+int shardcache_client_check(shardcache_client_t *c, char *peer) {
+    int fd = get_connection_for_peer(c, peer);
+    if (fd < 0)
+        return -1;
+
+    int rc = check_peer(peer, (char *)c->auth, fd);
+    if (rc != 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_PEER;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't check peer: %s", peer);
+    } else {
+        c->errno = SHARDCACHE_CLIENT_OK;
+        c->errstr[0] = 0;
+    }
+    return rc;
+}
+
 void shardcache_client_destroy(shardcache_client_t *c)
 {
     chash_free(c->chash);

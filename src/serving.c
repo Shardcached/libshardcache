@@ -239,6 +239,8 @@ static void *process_request(void *priv) {
         }
         case SHARDCACHE_HDR_CHK:
         {
+            // TODO - HEALTH CHECK
+            write_status(ctx, 0);
             break;
         }
         case SHARDCACHE_HDR_STS:

@@ -477,6 +477,29 @@ int stats_from_peer(char *peer, char *auth, char **out, size_t *len, int fd)
     return -1;
 }
 
+int check_peer(char *peer, char *auth, int fd)
+{
+    int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
+
+    if (fd >= 0) {
+        int rc = write_message(fd, auth, SHARDCACHE_HDR_CHK, NULL, 0, NULL, 0, 0);
+        if (rc == 0) {
+            fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            shardcache_hdr_t hdr = 0;
+            rc = read_message(fd, auth, &resp, &hdr);
+            if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
+                if (fbuf_used(&resp) == 2 && memcmp(fbuf_data(&resp), "OK", 2) == 0)
+                    return 0;
+            }
+        }
+    }
+    return -1;
+}
+
 int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd)
 {
     int should_close = 0;

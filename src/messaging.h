@@ -68,6 +68,7 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner, 
 int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen, uint32_t expire, int fd);
 int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out, int fd);
 int stats_from_peer(char *peer, char *auth, char **out, size_t *len, int fd);
+int check_peer(char *peer, char *auth, int fd);
 int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd);
 int connect_to_peer(char *address_string, unsigned int timeout);
 
