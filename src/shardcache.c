@@ -54,15 +54,6 @@
 
 typedef struct chash_t chash_t;
 
-#define SHARDCACHE_COUNTER_GETS         0
-#define SHARDCACHE_COUNTER_SETS         1
-#define SHARDCACHE_COUNTER_DELS         2
-#define SHARDCACHE_COUNTER_EVICTS       3
-#define SHARDCACHE_COUNTER_CACHE_MISSES 4
-#define SHARDCACHE_COUNTER_NOT_FOUND    5
-#define SHARDCACHE_COUNTER_TABLE_SIZE   6
-#define SHARDCACHE_COUNTER_CACHE_SIZE   7
-#define SHARDCACHE_NUM_COUNTERS 8
 struct __shardcache_s {
     char *me;
 
@@ -111,6 +102,15 @@ struct __shardcache_s {
     linked_list_t *evictor_jobs;
 
     shardcache_counters_t *counters;
+#define SHARDCACHE_COUNTER_GETS         0
+#define SHARDCACHE_COUNTER_SETS         1
+#define SHARDCACHE_COUNTER_DELS         2
+#define SHARDCACHE_COUNTER_EVICTS       3
+#define SHARDCACHE_COUNTER_CACHE_MISSES 4
+#define SHARDCACHE_COUNTER_NOT_FOUND    5
+#define SHARDCACHE_COUNTER_TABLE_SIZE   6
+#define SHARDCACHE_COUNTER_CACHE_SIZE   7
+#define SHARDCACHE_NUM_COUNTERS 8
     struct {
         const char *name;
         uint32_t value;

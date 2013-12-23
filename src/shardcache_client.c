@@ -24,6 +24,8 @@ struct shardcache_client_s {
     shardcache_connection_t *connections;
     int num_shards;
     const char *auth;
+    int errno;
+    char errstr[1024];
 };
 
 #define ADDR_REGEXP "^[a-z0-9_\\.\\-]+(:[0-9]+)?$"
@@ -110,9 +112,13 @@ int get_connection_for_peer(shardcache_client_t *c, char *peer)
             int fd = connect_to_peer(c->shards[i].address, 30);
             if (conn)
                 conn->fd = fd;
+            c->errno = SHARDCACHE_CLIENT_OK;
+            c->errstr[0] = 0;
             return fd;
         }
     }
+    c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+    snprintf(c->errstr, sizeof(c->errstr), "Can't connect to peer: %s", peer);
     return -1; 
 }
 
@@ -140,12 +146,21 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
     int fd = get_connection_for_peer(c, peer);
     if (fd < 0)
         return 0;
+
     fbuf_t value = FBUF_STATIC_INITIALIZER;
     int rc = fetch_from_peer(peer, (char *)c->auth, key, klen, &value, fd);
     if (rc == 0) {
         if (data)
             *data = fbuf_data(&value);
+
+        c->errno = SHARDCACHE_CLIENT_OK;
+        c->errstr[0] = 0;
+
         return fbuf_used(&value);
+    } else {
+        c->errno = SHARDCACHE_CLIENT_ERROR_PEER;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't fetch data from peer: %s", peer);
+        return 0;
     }
     return 0;
 }
@@ -157,7 +172,15 @@ int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *
     if (fd < 0)
         return -1;
 
-    return send_to_peer(peer, (char *)c->auth, key, klen, data, dlen, expire, fd);
+    int rc = send_to_peer(peer, (char *)c->auth, key, klen, data, dlen, expire, fd);
+    if (rc != 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_PEER;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't set new data on peer: %s", peer);
+    } else {
+        c->errno = SHARDCACHE_CLIENT_OK;
+        c->errstr[0] = 0;
+    }
+    return rc;
 }
 
 int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
@@ -166,7 +189,15 @@ int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
     int fd = get_connection_for_peer(c, peer);
     if (fd < 0)
         return -1;
-    return delete_from_peer(peer, (char *)c->auth, key, klen, 1, fd);
+    int rc = delete_from_peer(peer, (char *)c->auth, key, klen, 1, fd);
+    if (rc != 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_PEER;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't delete data from peer: %s", peer);
+    } else {
+        c->errno = SHARDCACHE_CLIENT_OK;
+        c->errstr[0] = 0;
+    }
+    return rc;
 }
 
 int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
@@ -176,7 +207,16 @@ int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
     if (fd < 0)
         return -1;
 
-    return delete_from_peer(peer, (char *)c->auth, key, klen, 0, fd);
+    int rc = delete_from_peer(peer, (char *)c->auth, key, klen, 0, fd);
+    if (rc != 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_PEER;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't evict data from peer: %s", peer);
+    } else {
+        c->errno = SHARDCACHE_CLIENT_OK;
+        c->errstr[0] = 0;
+    }
+
+    return rc;
 }
 
 void shardcache_client_destroy(shardcache_client_t *c)
@@ -188,4 +228,13 @@ void shardcache_client_destroy(shardcache_client_t *c)
     free(c);
 }
 
+int shardcache_client_errno(shardcache_client_t *c)
+{
+    return c->errno;
+}
+
+char *shardcache_client_errstr(shardcache_client_t *c)
+{
+    return c->errstr;
+}
 

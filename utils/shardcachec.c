@@ -90,6 +90,10 @@ int main (int argc, char **argv) {
         usage(argv[0]);
     }
 
+    if (rc != 0 || shardcache_client_errno(client) != SHARDCACHE_CLIENT_OK) {
+        fprintf(stderr, "%s\n", shardcache_client_errstr(client));
+    }
+
     shardcache_client_destroy(client);
     exit(rc);
 }
