@@ -247,7 +247,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                     arc_list_prepend(&obj->head, &obj_state->head);
                     obj->state = obj_state;
                 }
-                MUTEX_UNLOCK(&cache->lock);
+                MUTEX_UNLOCK(&obj->lock);
                 return -1;
             }
 
