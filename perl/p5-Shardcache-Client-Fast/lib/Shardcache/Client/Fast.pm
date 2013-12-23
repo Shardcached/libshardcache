@@ -138,6 +138,27 @@ sub evict {
     return $ret;
 }
 
+sub stats {
+    my ($self, $peer) = @_;
+    
+    if ($peer) {
+        return shardcache_client_stats($self->{_client}, $peer);
+    } else {
+        my $out;
+        foreach my $node (@{$self->{_nodes}}) {
+            $out .= shardcache_client_stats($self->{_client}, $node->[0]);
+            $out .= "\n";
+        }
+        return $out;
+    }
+}
+
+sub check {
+    my ($self, $peer) = @_;
+    return unless $peer;
+    return shardcache_client_check($self->{_client}, $peer);
+}
+
 sub errno {
     my $self = shift;
     return $self->{_errno};

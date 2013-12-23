@@ -137,6 +137,27 @@ shardcache_client_set(c, key, data, expire)
     OUTPUT:
         RETVAL
 
+int
+shardcache_client_check(c, peer)
+	shardcache_client_t *	c
+	char *	peer
+
+SV *
+shardcache_client_stats(c, peer)
+	shardcache_client_t *	c
+	char *	peer
+    CODE:
+        char *data = NULL;
+        size_t size = 0;
+        if (shardcache_client_stats(c, peer, &data, &size) == 0) {
+            RETVAL = newSVpv(data, size);
+            free(data);
+        } else {
+            RETVAL = &PL_sv_undef;
+        }
+    OUTPUT:
+        RETVAL
+
 char *
 shardcache_client_errstr(c)
 	shardcache_client_t *	c
