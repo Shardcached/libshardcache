@@ -281,17 +281,18 @@ static void *process_request(void *priv) {
             if (index) {
                 int i;
                 for (i = 0; i < index->size; i++) {
-                    size_t klen = index->items[i].klen;
-                    size_t vlen = index->items[i].vlen;
+                    uint32_t klen = (uint32_t)index->items[i].klen;
+                    uint32_t vlen = (uint32_t)index->items[i].vlen;
                     void *key = index->items[i].key;
-                    size_t nklen = htonl(klen);
-                    size_t nvlen = htonl(vlen);
+                    uint32_t nklen = htonl(klen);
+                    uint32_t nvlen = htonl(vlen);
                     fbuf_add_binary(&buf, (char *)&nklen, sizeof(nklen));
                     fbuf_add_binary(&buf, key, klen);
                     fbuf_add_binary(&buf, (char *)&nvlen, sizeof(nvlen));
                 }
                 size_t zero = 0;
-                fbuf_add_binary(&buf, (char *)&zero, sizeof(zero)); // no klen
+                // no klen terminates the list
+                fbuf_add_binary(&buf, (char *)&zero, sizeof(zero));
 
                 shardcache_free_index(index); 
             }
@@ -315,7 +316,7 @@ static void *process_request(void *priv) {
             break;
         }
         default:
-            fprintf(stderr, "Unknown command: 0x%02x\n", (char)ctx->hdr);
+            fprintf(stderr, "Unsupported command: 0x%02x\n", (char)ctx->hdr);
             break;
     }
 

@@ -18,6 +18,10 @@ int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen);
 int shardcache_client_stats(shardcache_client_t *c, char *peer, char **buf, size_t *len);
 int shardcache_client_check(shardcache_client_t *c, char *peer);
 
+// NOTE: caller must use shardcache_free_index() to release memory used
+//       by the returned shardcache_storage_index_t pointer
+shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *peer);
+
 int shardcache_client_errno(shardcache_client_t *c);
 char *shardcache_client_errstr(shardcache_client_t *c);
 

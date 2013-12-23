@@ -505,6 +505,55 @@ int check_peer(char *peer, char *auth, int fd)
     return -1;
 }
 
+shardcache_storage_index_t *index_from_peer(char *peer, char *auth, int fd)
+{
+     int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
+
+    shardcache_storage_index_t *index = calloc(1, sizeof(shardcache_storage_index_t));
+    if (fd >= 0) {
+        int rc = write_message(fd, auth, SHARDCACHE_HDR_IDG, NULL, 0, NULL, 0, 0);
+        if (rc == 0) {
+            fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            shardcache_hdr_t hdr = 0;
+            rc = read_message(fd, auth, &resp, &hdr);
+            if (hdr == SHARDCACHE_HDR_IDR && rc == 0) {
+                char *data = fbuf_data(&resp);
+                int len = fbuf_used(&resp);
+                int ofx = 0;
+                while (ofx < len) {
+                    uint32_t *nklen = (uint32_t *)(data+ofx);
+                    uint32_t klen = ntohl(*nklen);
+                    if (klen == 0) {
+                        // the index has ended
+                        break;
+                    } else if (ofx + klen + 8 > len) {
+                        // TODO - Error messages (truncated?)
+                        break;
+                    }
+                    ofx += 4;
+                    void *key = malloc(klen);
+                    memcpy(key, data+ofx, klen);
+                    ofx += klen;
+                    uint32_t *nvlen = (uint32_t *)(data+ofx);
+                    uint32_t vlen = ntohl(*nvlen);
+                    ofx += 4;
+                    index->items = realloc(index->items, (index->size + 1) * sizeof(shardcache_storage_index_item_t));
+                    index->items[index->size].key = key;
+                    index->items[index->size].klen = klen;
+                    index->items[index->size].vlen = vlen;
+                    index->size++;
+                }
+            }
+            fbuf_destroy(&resp);
+        }
+    }
+    return index;
+}
+
 int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd)
 {
     int should_close = 0;

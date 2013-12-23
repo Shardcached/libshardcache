@@ -21,7 +21,8 @@ MSG_NOP      : 0x90
 MSG_RES      : 0x99
 RSEP         : 0x80
 RECORD       : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
-SIZE         : <HIGH_BYTE><LOW_BYTE>
+SIZE         : <WORD>
+WORD         : <HIGH_BYTE><LOW_BYTE>
 EOR          : <NULL_BYTE><NULL_BYTE>
 HIGH_BYTE    : <BYTE>
 LOW_BYTE     : <BYTE>
@@ -81,9 +82,12 @@ The IDR_MESSAGE response returns the INDEX in the form
 defined by the following grammar:
 
 INDEX        : <KSIZE><KEY><VSIZE>[<KSIZE><KEY><VSIZE>...]<EOR>
-KSIZE        : <SIZE>
+KSIZE        : <LONGSIZE>
 KEY          : <DATA>
-VSIZE        : <SIZE>
+VSIZE        : <LONGSIZE>
+LONGSIZE     : <HIGH_WORD><LOW_WORD>
+HIGH_WORD    : <WORD>
+LOW_WORD     : <WORD>
 
 
 -------------------------------------------------------------------------------

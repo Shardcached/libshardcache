@@ -13,6 +13,7 @@ void usage(char *prgname) {
            "        set   <Key> [ <Expire> ] (gets value on stdin)\n"
            "        del   <Key>\n"
            "        evict <Key>\n"
+           "        index\n"
            "        stats\n"
            "        check\n\n", prgname);
     exit(-1);
@@ -47,7 +48,9 @@ static int parse_nodes_string(char *str)
 }
 
 int main (int argc, char **argv) {
-    if ((argc < 3) && (argc != 2 || (strcmp(argv[1], "stats") != 0) && strcmp(argv[1], "check") != 0))
+    if ((argc < 3) && (argc != 2 ||
+        (strcmp(argv[1], "stats") != 0) && strcmp(argv[1], "check") != 0 &&
+        strcmp(argv[1], "index") != 0))
     {
         usage(argv[0]);
     }
@@ -109,8 +112,23 @@ int main (int argc, char **argv) {
             else
                 printf("%s NOT OK\n", nodes[i].label);
         }
-    } else if (strcasecmp(cmd, "check") == 0) {
-
+    } else if (strcasecmp(cmd, "index") == 0) {
+        int i;
+        for (i = 0; i < num_nodes; i++) {
+            shardcache_storage_index_t *index = shardcache_client_index(client, nodes[i].label);
+            if (index) {
+                int n;
+                for (n = 0; n < index->size; n ++) {
+                    shardcache_storage_index_item_t *item = &index->items[n];
+                    char keystr[item->klen+1];
+                    snprintf(keystr, sizeof(keystr), "%s", item->key);
+                    printf("%s => %u\n", (char *)item->key, (uint32_t)item->vlen);
+                }
+            } else {
+                printf("%s NOT OK\n", nodes[i].label);
+            }
+            shardcache_free_index(index);
+        }
     } else {
         usage(argv[0]);
     }

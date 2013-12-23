@@ -272,3 +272,20 @@ char *shardcache_client_errstr(shardcache_client_t *c)
     return c->errstr;
 }
 
+shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *peer)
+{
+    int fd = get_connection_for_peer(c, peer);
+    if (fd < 0)
+        return NULL;
+
+    shardcache_storage_index_t *index = index_from_peer(peer, (char *)c->auth, fd);
+    if (!index) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_PEER;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't get index from peer: %s", peer);
+    } else {
+        c->errno = SHARDCACHE_CLIENT_OK;
+        c->errstr[0] = 0;
+    }
+
+    return index;
+}

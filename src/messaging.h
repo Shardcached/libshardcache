@@ -2,6 +2,7 @@
 #define __MESSAGING_H__
 
 #include <sys/types.h>
+#include "shardcache.h"
 
 /* protocol specification
  *
@@ -85,5 +86,8 @@ int stats_from_peer(char *peer, char *auth, char **out, size_t *len, int fd);
 int check_peer(char *peer, char *auth, int fd);
 int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd);
 int connect_to_peer(char *address_string, unsigned int timeout);
+// NOTE: caller must use shardcache_free_index() to release memory used
+//       by the returned shardcache_storage_index_t pointer
+shardcache_storage_index_t *index_from_peer(char *peer, char *auth, int fd);
 
 #endif
