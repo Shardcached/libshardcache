@@ -237,6 +237,40 @@ static void *process_request(void *priv) {
             write_status(ctx, rc);
             break;
         }
+        case SHARDCACHE_HDR_CHK:
+        {
+            break;
+        }
+        case SHARDCACHE_HDR_STS:
+        {
+            fbuf_t buf = FBUF_STATIC_INITIALIZER;
+            shardcache_counter_t *counters = NULL;
+            int ncounters = shardcache_get_counters(cache, &counters);
+            if (counters) {
+                int i;
+                for (i = 0; i < ncounters; i++) {
+                    fbuf_printf(&buf, "%s;%u\r\n", counters[i].name, counters[i].value);
+                }
+
+                fbuf_t out = FBUF_STATIC_INITIALIZER;
+                if (build_message(SHARDCACHE_HDR_RES, fbuf_data(&buf), fbuf_used(&buf), NULL, 0, 0, &out) == 0) {
+                    fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+                    if (ctx->auth) {
+                        uint64_t digest;
+                        sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
+                        sip_hash_digest_integer(shash, fbuf_data(&out), fbuf_used(&out), &digest);
+                        sip_hash_free(shash);
+                        fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
+                    }
+                } else {
+                    // TODO - Error Messages
+                }
+                fbuf_destroy(&out);
+                free(counters);
+            }
+            fbuf_destroy(&buf);
+            break;
+        }
         default:
             fprintf(stderr, "Unknown command: 0x%02x\n", (char)ctx->hdr);
             break;
@@ -291,6 +325,8 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             hdr != SHARDCACHE_HDR_MGA &&
             hdr != SHARDCACHE_HDR_MGB &&
             hdr != SHARDCACHE_HDR_MGE &&
+            hdr != SHARDCACHE_HDR_CHK &&
+            hdr != SHARDCACHE_HDR_STS &&
             hdr != SHARDCACHE_HDR_RES)
         {
             // BAD REQUEST
@@ -311,14 +347,14 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     }
 
     for (;;) {
-        if (rbb_len(ctx->input) < 2)
-            break;
-
         if (ctx->clen == 0) {
+            if (rbb_len(ctx->input) < 2)
+                break;
             uint16_t nlen = 0;
             rbb_read(ctx->input, (u_char *)&nlen, 2);
             ctx->clen = ntohs(nlen);
-            sip_hash_update(ctx->shash, (char *)&nlen, 2);
+            if (ctx->shash)
+                sip_hash_update(ctx->shash, (char *)&nlen, 2);
         }
         if (ctx->clen > 0) {
             char chunk[ctx->clen];

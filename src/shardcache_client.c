@@ -219,6 +219,24 @@ int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
     return rc;
 }
 
+int shardcache_client_stats(shardcache_client_t *c, char *peer, char **buf, size_t *len)
+{
+    int fd = get_connection_for_peer(c, peer);
+    if (fd < 0)
+        return -1;
+
+    int rc = stats_from_peer(peer, (char *)c->auth, buf, len, fd);
+    if (rc != 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_PEER;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't get stats from peer: %s", peer);
+    } else {
+        c->errno = SHARDCACHE_CLIENT_OK;
+        c->errstr[0] = 0;
+    }
+
+    return rc;
+}
+
 void shardcache_client_destroy(shardcache_client_t *c)
 {
     chash_free(c->chash);

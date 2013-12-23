@@ -42,6 +42,9 @@ MGB_MESSAGE  : <MSG_MGB><NODES_LIST><EOM><SIG>
 MGA_MESSAGE  : <MSG_MGA><EOM><SIG>
 MGE_MESSAGE  : <MSG_MGE><EOM><SIG>
 
+STS_MESSAGE  : <MSG_STS><EOM><SIG>
+CHK_MESSAGE  : <MSG_PNG><EOM><SIG>
+
 The layout for an empty (but still valid) message would be :
 
 ===============================================================================

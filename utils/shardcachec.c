@@ -45,7 +45,7 @@ static int parse_nodes_string(char *str)
 }
 
 int main (int argc, char **argv) {
-    if (argc < 3) {
+    if (argc < 3 && !(argc == 2 && strcmp(argv[1], "stats") == 0)) {
         usage(argv[0]);
     }
 
@@ -86,6 +86,17 @@ int main (int argc, char **argv) {
         rc = shardcache_client_del(client, argv[2], strlen(argv[2]));
     } else if (strcasecmp(cmd, "evict") == 0) {
         rc = shardcache_client_evict(client, argv[2], strlen(argv[2]));
+    } else if (strcasecmp(cmd, "stats") == 0) {
+        char *stats = NULL;
+        size_t len;
+        int i;
+        for (i = 0; i < num_nodes; i++) {
+            int rc = shardcache_client_stats(client, nodes[i].label, &stats, &len); 
+            if (rc == 0)
+                printf("%s\n", stats);
+            if (stats)
+                free(stats);
+        }
     } else {
         usage(argv[0]);
     }

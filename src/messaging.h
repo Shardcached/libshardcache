@@ -53,6 +53,8 @@ typedef enum {
     SHARDCACHE_HDR_MGA  = 0x21,
     SHARDCACHE_HDR_MGB  = 0x22,
     SHARDCACHE_HDR_MGE  = 0x23,
+    SHARDCACHE_HDR_CHK  = 0x31,
+    SHARDCACHE_HDR_STS  = 0x32,
     SHARDCACHE_HDR_NOP  = 0x90,
     SHARDCACHE_HDR_RES  = 0x99
 } shardcache_hdr_t;
@@ -65,6 +67,7 @@ int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t
 int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner, int fd);
 int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen, uint32_t expire, int fd);
 int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out, int fd);
+int stats_from_peer(char *peer, char *auth, char **out, size_t *len, int fd);
 int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd);
 int connect_to_peer(char *address_string, unsigned int timeout);
 
