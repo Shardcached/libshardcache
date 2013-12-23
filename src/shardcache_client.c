@@ -91,7 +91,6 @@ int get_connection_for_peer(shardcache_client_t *c, char *peer)
 {
     int i;
     shardcache_connection_t *conn = NULL;
-
     for (i = 0; i < c->num_shards; i++) {
         if (strcmp(peer, c->connections[i].label) == 0) {
             if (c->connections[i].fd >= 0) {
@@ -110,11 +109,13 @@ int get_connection_for_peer(shardcache_client_t *c, char *peer)
     for (i = 0; i < c->num_shards; i++) {
         if (strcmp(peer, c->shards[i].label) == 0) {
             int fd = connect_to_peer(c->shards[i].address, 30);
-            if (conn)
-                conn->fd = fd;
-            c->errno = SHARDCACHE_CLIENT_OK;
-            c->errstr[0] = 0;
-            return fd;
+            if (fd >= 0) {
+                if (conn)
+                    conn->fd = fd;
+                c->errno = SHARDCACHE_CLIENT_OK;
+                c->errstr[0] = 0;
+                return fd;
+            }
         }
     }
     c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
