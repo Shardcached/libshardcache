@@ -124,10 +124,10 @@ int main (int argc, char **argv) {
                     snprintf(keystr, sizeof(keystr), "%s", item->key);
                     printf("%s => %u\n", (char *)item->key, (uint32_t)item->vlen);
                 }
+                shardcache_free_index(index);
             } else {
                 printf("%s NOT OK\n", nodes[i].label);
             }
-            shardcache_free_index(index);
         }
     } else {
         usage(argv[0]);
