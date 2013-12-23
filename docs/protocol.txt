@@ -4,7 +4,8 @@ MESSAGE      : <MSG>[<SIG>] | <NOOP>
 MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
 NOOP         : <MSG_NOP>
 HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_EVI> |
-               <MSG_MGB> | <MSG_MGA> | <MSG_MGE> | <MSG_RES>
+               <MSG_MGB> | <MSG_MGA> | <MSG_MGE> | <MSG_STS> |
+               <MSG_CHK> | <MSG_IDG> | <MSG_IDR> | <MSG_RES>
 MSG_GET      : 0x01
 MSG_SET      : 0x02
 MSG_DEL      : 0x03
@@ -12,6 +13,10 @@ MSG_EVI      : 0x04
 MSG_MGA      : 0x21
 MSG_MGB      : 0x22
 MSG_MGE      : 0x23
+MSG_CHK      : 0x31
+MSG_STS      : 0x32
+MSG_IXG      : 0x41
+MSG_IXR      : 0x42
 MSG_NOP      : 0x90
 MSG_RES      : 0x99
 RSEP         : 0x80
@@ -29,8 +34,13 @@ KEY          : <RECORD>
 VALUE        : <RECORD>
 TTL          : <RECORD>
 NODES_LIST   : <RECORD>
+INDEX        : <RECORD>
 
-The only supported messages are :
+
+-------------------------------------------------------------------------------
+
+The only supported messages are the following:
+
 
 GET_MESSAGE  : <MSG_GET><KEY><EOM>[<SIG>]
 SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>[<SIG>]
@@ -43,7 +53,42 @@ MGA_MESSAGE  : <MSG_MGA><EOM>[<SIG>]
 MGE_MESSAGE  : <MSG_MGE><EOM>[<SIG>]
 
 STS_MESSAGE  : <MSG_STS><EOM>[<SIG>]
-CHK_MESSAGE  : <MSG_PNG><EOM>[<SIG>]
+CHK_MESSAGE  : <MSG_CHK><EOM>[<SIG>]
+
+IDG_MESSAGE  : <MSG_IDG><EOM>[<SIG>]
+IDR_MESSAGE  : <MSG_IDR><INDEX><EOM>[<SIG>]
+
+
+-------------------------------------------------------------------------------
+
+NOTE: Some commands/responses require the transmitter record to contain
+      data formatted in a specific way.
+
+
+The MGB_MESSAGE command expects the NODE_LIST to be conform
+to the following grammar :
+
+NODES_LIST   : <NODES_STRING>
+NODES_STRING : <LABEL><:><ADDRESS><:><PORT>[<,><LABEL><:><ADDRESS><:><PORT>...]
+LABEL        : <STRING>
+ADDRESS      : <STRING>
+PORT         : <STRING>
+,            : 0x2C
+:            : 0x3A
+STRING       : <DATA>
+
+The IDR_MESSAGE response returns the INDEX in the form
+defined by the following grammar:
+
+INDEX        : <KSIZE><KEY><VSIZE>[<KSIZE><KEY><VSIZE>...]<EOR>
+KSIZE        : <SIZE>
+KEY          : <DATA>
+VSIZE        : <SIZE>
+
+
+-------------------------------------------------------------------------------
+
+
 
 The layout for an empty (but still valid) message would be :
 
