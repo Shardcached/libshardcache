@@ -12,7 +12,9 @@ void usage(char *prgname) {
            "        get   <Key>\n"
            "        set   <Key> [ <Expire> ] (gets value on stdin)\n"
            "        del   <Key>\n"
-           "        evict <Key>\n\n", prgname);
+           "        evict <Key>\n"
+           "        stats\n"
+           "        check\n\n", prgname);
     exit(-1);
 }
 
@@ -45,7 +47,7 @@ static int parse_nodes_string(char *str)
 }
 
 int main (int argc, char **argv) {
-    if (argc < 3 && !(argc == 2 && (strcmp(argv[1], "stats") == 0) || strcmp(argv[1], "check") == 0))
+    if ((argc < 3) && (argc != 2 || (strcmp(argv[1], "stats") != 0) && strcmp(argv[1], "check") != 0))
     {
         usage(argv[0]);
     }
