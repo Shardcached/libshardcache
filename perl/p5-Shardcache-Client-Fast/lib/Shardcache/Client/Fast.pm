@@ -159,6 +159,12 @@ sub check {
     return shardcache_client_check($self->{_client}, $peer);
 }
 
+sub index {
+    my ($self, $peer) = @_;
+    return unless $peer;
+    return shardcache_client_index($self->{_client}, $peer);
+}
+
 sub errno {
     my $self = shift;
     return $self->{_errno};

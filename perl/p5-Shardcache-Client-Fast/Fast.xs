@@ -158,6 +158,27 @@ shardcache_client_stats(c, peer)
     OUTPUT:
         RETVAL
 
+SV *
+shardcache_client_index(c, peer)
+        shardcache_client_t *   c
+        char * peer
+    CODE:
+        shardcache_storage_index_t *index = shardcache_client_index(c, peer);
+        if (index) {
+            HV *ret = newHV();
+            int i;
+            for (i = 0; i < index->size; i++) {
+                SV *len = newSViv(index->items[i].vlen);
+                hv_store(ret, index->items[i].key, index->items[i].klen, len, 0);
+            }
+            shardcache_free_index(index);
+            RETVAL = newRV_noinc((SV *)ret);
+        } else {
+            RETVAL = &PL_sv_undef;
+        }
+    OUTPUT:
+        RETVAL
+
 char *
 shardcache_client_errstr(c)
 	shardcache_client_t *	c
