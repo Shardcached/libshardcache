@@ -444,7 +444,7 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out, 
 #endif
                 if (should_close)
                     close(fd);
-                return fbuf_used(out) ? 0 : -1;
+                return 0;
             } else {
                 // TODO - Error messages
             }
