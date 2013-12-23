@@ -273,6 +273,47 @@ static void *process_request(void *priv) {
             fbuf_destroy(&buf);
             break;
         }
+        case SHARDCACHE_HDR_IDG:
+        {
+            fbuf_t buf = FBUF_STATIC_INITIALIZER;
+            fbuf_t out = FBUF_STATIC_INITIALIZER;
+            shardcache_storage_index_t *index = shardcache_get_index(cache);
+            if (index) {
+                int i;
+                for (i = 0; i < index->size; i++) {
+                    size_t klen = index->items[i].klen;
+                    size_t vlen = index->items[i].vlen;
+                    void *key = index->items[i].key;
+                    size_t nklen = htonl(klen);
+                    size_t nvlen = htonl(vlen);
+                    fbuf_add_binary(&buf, (char *)&nklen, sizeof(nklen));
+                    fbuf_add_binary(&buf, key, klen);
+                    fbuf_add_binary(&buf, (char *)&nvlen, sizeof(nvlen));
+                }
+                size_t zero = 0;
+                fbuf_add_binary(&buf, (char *)&zero, sizeof(zero)); // no klen
+
+                shardcache_free_index(index); 
+            }
+
+            // chunkize the data and build an actual message
+            if (build_message(SHARDCACHE_HDR_IDR, fbuf_data(&buf), fbuf_used(&buf), NULL, 0, 0, &out) == 0) {
+                fbuf_destroy(&buf); // destroy it early ... since we still need one more copy
+                fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+                if (ctx->auth) {
+                    uint64_t digest;
+                    sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
+                    sip_hash_digest_integer(shash, fbuf_data(&out), fbuf_used(&out), &digest);
+                    sip_hash_free(shash);
+                    fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
+                }
+            } else {
+                fbuf_destroy(&buf);
+                // TODO - Error Messages
+            }
+            fbuf_destroy(&out);
+            break;
+        }
         default:
             fprintf(stderr, "Unknown command: 0x%02x\n", (char)ctx->hdr);
             break;
@@ -329,6 +370,8 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             hdr != SHARDCACHE_HDR_MGE &&
             hdr != SHARDCACHE_HDR_CHK &&
             hdr != SHARDCACHE_HDR_STS &&
+            hdr != SHARDCACHE_HDR_IDG &&
+            hdr != SHARDCACHE_HDR_IDR &&
             hdr != SHARDCACHE_HDR_RES)
         {
             // BAD REQUEST

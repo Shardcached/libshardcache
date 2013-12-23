@@ -50,6 +50,7 @@
  * STS_MESSAGE  : <MSG_STS><EOM>[<SIG>]
  * CHK_MESSAGE  : <MSG_PNG><EOM>[<SIG>]
  * 
+ * IDX_MESSAGE  : <MSG_IDX><EOM>[<SIG>]
  */
 
 // in byte
@@ -66,6 +67,8 @@ typedef enum {
     SHARDCACHE_HDR_MGE  = 0x23,
     SHARDCACHE_HDR_CHK  = 0x31,
     SHARDCACHE_HDR_STS  = 0x32,
+    SHARDCACHE_HDR_IDG  = 0x41,
+    SHARDCACHE_HDR_IDR  = 0x42,
     SHARDCACHE_HDR_NOP  = 0x90,
     SHARDCACHE_HDR_RES  = 0x99
 } shardcache_hdr_t;

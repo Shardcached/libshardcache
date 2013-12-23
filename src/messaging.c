@@ -46,10 +46,15 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 hdr != SHARDCACHE_HDR_MGB &&
                 hdr != SHARDCACHE_HDR_MGA &&
                 hdr != SHARDCACHE_HDR_MGE &&
+                hdr != SHARDCACHE_HDR_CHK &&
+                hdr != SHARDCACHE_HDR_STS &&
+                hdr != SHARDCACHE_HDR_IDG &&
+                hdr != SHARDCACHE_HDR_IDR &&
                 hdr != SHARDCACHE_HDR_RES)
             {
                 if (shash)
                     sip_hash_free(shash);
+                fprintf(stderr, "Uknown message type %02x in read_message()\n", hdr);
                 return -1;
             }
             if (shash)
