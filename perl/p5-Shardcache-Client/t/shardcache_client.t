@@ -74,6 +74,11 @@ if ($pid) {
         die "Child process can't get a valid value for key: test_key1";
     }
 
+    #warn $c->sts("localhost:4443");
+    is($c->chk("localhost:4443"), 1, "check peer1");
+    #warn $c->sts("localhost:4444");
+    is($c->chk("localhost:4444"), 1, "check peer2");
+
     exit(0);
 }
 

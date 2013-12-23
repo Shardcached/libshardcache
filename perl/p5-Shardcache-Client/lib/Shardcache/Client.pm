@@ -73,16 +73,21 @@ sub _chunkize_var {
 }
 
 sub send_msg {
-    my ($self, $hdr, $key, $value, $expire) = @_;
+    my ($self, $hdr, $key, $value, $expire, $sock) = @_;
 
     my $templ = "C";
     my @vars = ($hdr);
 
-    my $kbuf = _chunkize_var($key);
-    $templ .= sprintf "a%dCC", length($kbuf);
-    push @vars, $kbuf, 0x00, 0x00;
+    if ($key) {
+        my $kbuf = _chunkize_var($key);
+        $templ .= sprintf "a%dCC", length($kbuf);
+        push @vars, $kbuf, 0x00, 0x00;
+    } else {
+        $templ .= "CC";
+        push @vars, 0x00, 0x00;
+    }
 
-    if ($hdr == 0x02 && $value) {
+    if ($value) {
         $templ .= "C";
         push @vars, 0x80;
 
@@ -106,33 +111,36 @@ sub send_msg {
         $msg .= pack("Q", $sig);
     }
 
-
     my $addr;
     my $port;
 
-    if (@{$self->{_nodes}} == 1) {
-        $addr = $self->{_nodes}->[0]->{addr};
-        $port = $self->{_nodes}->[0]->{port};
-    } else {
-        my ($node) = grep { $_->{label} eq $self->{_chash}->lookup($key) } @{$self->{_nodes}};
-        if ($node) {
-            $addr = $node->{addr};
-            $port = $node->{port};
+    if (!$sock) {
+        if (@{$self->{_nodes}} == 1) {
+            $addr = $self->{_nodes}->[0]->{addr};
+            $port = $self->{_nodes}->[0]->{port};
         } else {
-            my $index = rand() % @{$self->{_nodes}};
-            $addr = $self->{_nodes}->[$index]->{addr};
-            $port = $self->{_nodes}->[$index]->{port};
+            my ($node) = grep { $_->{label} eq $self->{_chash}->lookup($key) } @{$self->{_nodes}};
+            if ($node) {
+                $addr = $node->{addr};
+                $port = $node->{port};
+            } else {
+                my $index = rand() % @{$self->{_nodes}};
+                $addr = $self->{_nodes}->[$index]->{addr};
+                $port = $self->{_nodes}->[$index]->{port};
+            }
+
+        }
+        
+        if (!$self->{_sock}->{"$addr:$port"} || !$self->{_sock}->{"$addr:$port"}->connected ||
+            $self->{_sock}->{"$addr:$port"}->write(pack("C4", 0x90, 0x00, 0x00, 0x00)) != 4)
+        {
+            $self->{_sock}->{"$addr:$port"} = IO::Socket::INET->new(PeerAddr => $addr,
+                                                 PeerPort => $port,
+                                                 Proto    => 'tcp');
         }
 
+        $sock = $self->{_sock}->{"$addr:$port"};
     }
-    
-    if (!$self->{_sock}->{"$addr:$port"} || !$self->{_sock}->{"$addr:$port"}->connected) {
-        $self->{_sock}->{"$addr:$port"} = IO::Socket::INET->new(PeerAddr => $addr,
-                                             PeerPort => $port,
-                                             Proto    => 'tcp');
-    }
-
-    my $sock = $self->{_sock}->{"$addr:$port"};
                                      
     my $wb = $sock->write($msg);
     
@@ -155,7 +163,6 @@ sub send_msg {
     # read the records
     while (!$stop) {
         if (read($sock, $data, 2) != 2) {
-            delete $self->{_sock}->{"$addr:$port"};
             return undef;
         }
         my ($len) = unpack("n", $data);
@@ -163,7 +170,6 @@ sub send_msg {
         while ($len) {
             my $rb = read($sock, $data, $len);
             if ($rb <= 0) {
-                delete $self->{_sock}->{"$addr:$port"};
                 return undef;
             }
             $in .= $data;
@@ -171,7 +177,6 @@ sub send_msg {
             $len -= $rb;
             if ($len == 0) {
                 if (read($sock, $data, 2) != 2) {
-                    delete $self->{_sock}->{"$addr:$port"};
                     return undef;
                 }
                 ($len) = unpack("n", $data);
@@ -180,7 +185,6 @@ sub send_msg {
         }
         
         if (read($sock, $data, 1) != 1) {
-            delete $self->{_sock}->{"$addr:$port"};
             return undef;
         }
         $in .= $data;
@@ -198,7 +202,6 @@ sub send_msg {
 
         my $rb = read($sock, $data, 8);
         if ($rb != 8) {
-            delete $self->{_sock}->{"$addr:$port"};
             return undef;
         }
 
@@ -236,6 +239,52 @@ sub evi {
     return unless $key;
     my $resp = $self->send_msg(0x04, $key);
     return ($resp eq "OK")
+}
+
+sub _get_sock_for_peer {
+    my ($self, $peer) = @_;
+    my $addr;
+    my $port;
+
+    if (@{$self->{_nodes}} == 1) {
+            $addr = $self->{_nodes}->[0]->{addr};
+            $port = $self->{_nodes}->[0]->{port};
+    } else {
+        my ($node) = grep { $_->{label} eq $peer } @{$self->{_nodes}};
+        if ($node) {
+            $addr = $node->{addr};
+            $port = $node->{port};
+        } else {
+            return undef;
+        }
+    }
+    if (!$self->{_sock}->{"$addr:$port"} || !$self->{_sock}->{"$addr:$port"}->connected) {
+        $self->{_sock}->{"$addr:$port"} = IO::Socket::INET->new(PeerAddr => $addr,
+                                             PeerPort => $port,
+                                             Proto    => 'tcp');
+    }
+    return $self->{_sock}->{"$addr:$port"};
+}
+
+sub chk {
+    my ($self, $peer) = @_;
+    my $sock = $self->_get_sock_for_peer($peer);
+
+    return unless $sock;
+
+    my $resp = $self->send_msg(0x31, undef, undef, undef, $sock);
+    return ($resp eq "OK");
+}
+
+sub sts {
+    my ($self, $peer) = @_;
+
+    my $sock = $self->_get_sock_for_peer($peer);
+
+    return unless $sock;
+
+    my $resp = $self->send_msg(0x32, undef, undef, undef, $sock);
+    return $resp;
 }
 
 1;
