@@ -156,7 +156,7 @@ static void *process_request(void *priv) {
         {
             fbuf_t out = FBUF_STATIC_INITIALIZER;
             size_t vlen = 0;
-            void *v = shardcache_get(cache, key, klen, &vlen);
+            void *v = shardcache_get(cache, key, klen, &vlen, NULL);
             if (build_message(SHARDCACHE_HDR_RES, v, vlen, NULL, 0, 0, &out) == 0) {
                 fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
                 if (ctx->auth) {

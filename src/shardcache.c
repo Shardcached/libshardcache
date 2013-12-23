@@ -105,12 +105,13 @@ struct __shardcache_s {
 #define SHARDCACHE_COUNTER_GETS         0
 #define SHARDCACHE_COUNTER_SETS         1
 #define SHARDCACHE_COUNTER_DELS         2
-#define SHARDCACHE_COUNTER_EVICTS       3
-#define SHARDCACHE_COUNTER_CACHE_MISSES 4
-#define SHARDCACHE_COUNTER_NOT_FOUND    5
-#define SHARDCACHE_COUNTER_TABLE_SIZE   6
-#define SHARDCACHE_COUNTER_CACHE_SIZE   7
-#define SHARDCACHE_NUM_COUNTERS 8
+#define SHARDCACHE_COUNTER_HEADS        3
+#define SHARDCACHE_COUNTER_EVICTS       4
+#define SHARDCACHE_COUNTER_CACHE_MISSES 5
+#define SHARDCACHE_COUNTER_NOT_FOUND    6
+#define SHARDCACHE_COUNTER_TABLE_SIZE   7
+#define SHARDCACHE_COUNTER_CACHE_SIZE   8
+#define SHARDCACHE_NUM_COUNTERS 9
     struct {
         const char *name;
         uint32_t value;
@@ -125,6 +126,7 @@ typedef struct {
     size_t klen;
     void *data;
     size_t dlen;
+    struct timeval ts;
     // we want a mutex here because the object might be locked
     // for long time if involved in a fetch or store operation
     pthread_mutex_t lock;
@@ -315,6 +317,7 @@ static size_t __op_fetch(void *item, void * priv)
                 done = 0;
         }
         if (done) {
+            gettimeofday(&obj->ts, NULL);
             pthread_mutex_unlock(&obj->lock);
             return obj->dlen;
         }
@@ -362,6 +365,7 @@ static size_t __op_fetch(void *item, void * priv)
         __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value, 1);
         return 0;
     }
+    gettimeofday(&obj->ts, NULL);
     pthread_mutex_unlock(&obj->lock);
     __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
     return obj->dlen;
@@ -643,7 +647,8 @@ shardcache_t *shardcache_create(char *me,
 #endif
 
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
-        { "gets", "sets", "dels", "evicts", "cache_misses", "not_found", "volatile_table_size", "cache_size" };
+        { "gets", "sets", "dels", "heads", "evicts", "cache_misses",
+          "not_found", "volatile_table_size", "cache_size" };
 
     cache->counters = shardcache_init_counters();
 
@@ -741,7 +746,7 @@ void shardcache_destroy(shardcache_t *cache)
     free(cache);
 }
 
-void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
+void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen, struct timeval *timestamp) {
     if (!key)
         return NULL;
 
@@ -764,6 +769,9 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
             } else {
                 fprintf(stderr, "malloc failed for %zu bytes: %s\n", obj->dlen, strerror(errno));
             }
+            if (timestamp) {
+                memcpy(timestamp, &obj->ts, sizeof(struct timeval));
+            }
         }
         pthread_mutex_unlock(&obj->lock);
     }
@@ -774,6 +782,41 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen) {
                                  prev,
                                  size);
     return value;
+}
+
+size_t shardcache_head(shardcache_t *cache, void *key, size_t len, void *head, size_t hlen, struct timeval *timestamp) {
+    size_t copied = 0;
+
+    if (!key)
+        return 0;
+
+    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_HEADS].value, 1);
+
+    cache_object_t *obj = NULL;
+    arc_resource_t res = arc_lookup(cache->arc, (const void *)key, len, (void **)&obj);
+    if (!res)
+        return 0;
+
+    if (obj) {
+        pthread_mutex_lock(&obj->lock);
+        if (obj->data) {
+            if (hlen && head) {
+                copied = obj->dlen < hlen ? obj->dlen : hlen;
+                memcpy(head, obj->data, copied);
+            }
+            if (timestamp) {
+                memcpy(timestamp, &obj->ts, sizeof(struct timeval));
+            }
+        }
+        pthread_mutex_unlock(&obj->lock);
+    }
+    arc_release_resource(cache->arc, res);
+    uint32_t size = (uint32_t)arc_size(cache->arc);
+    uint32_t prev = __sync_fetch_and_add(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value, 0);
+    __sync_bool_compare_and_swap(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+                                 prev,
+                                 size);
+    return copied;
 }
 
 static int

@@ -7,6 +7,7 @@
  * @brief shardcache C implementation
  */
 #include <sys/types.h>
+#include <sys/time.h>
 #include <stdint.h>
 
 #define SHARDCACHE_PORT_DEFAULT 9874
@@ -242,12 +243,29 @@ void shardcache_destroy(shardcache_t *cache);
  * @arg klen  : The length of the key
  * @arg vlen  : If provided the length of the returned value will be stored
  *              at the location pointed by vlen
+ * @arg timestamp : If provided the timestamp of when the object was loaded into the cache
+ *                  will be stored at the specified address
  *
  * @return A pointer to the stored value if any, NULL otherwise
  *         NOTE: the caller is responsible of releasing the memory of the
  *               returned value
  */
-void *shardcache_get(shardcache_t *cache, void *key, size_t klen, size_t *vlen);
+void *shardcache_get(shardcache_t *cache, void *key, size_t klen, size_t *vlen, struct timeval *timestamp);
+
+/**
+ * @brief Get partial value data value for a key
+ * @arg cache : A valid pointer to a shardcache_t structure
+ * @arg key   : A valid pointer to the key
+ * @arg klen  : The length of the key
+ * @arg head  : A pointer to the memory where to store the partial data
+ * @arg vlen  : The size of the memory pointed by 'head'
+ * @arg timestamp : If provided the timestamp of when the object was loaded into the cache
+ *                  will be stored at the specified address
+ *
+ * @return The size copied in the 'head' pointer (might be less than what specified in 'hlen'
+ *         if the data is smaller than hlen
+ */
+size_t shardcache_head(shardcache_t *cache, void *key, size_t klen, void *head, size_t hlen, struct timeval *timestamp);
 
 /**
  * @brief Set the value for a key
