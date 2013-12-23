@@ -288,7 +288,7 @@ int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, s
 #ifdef SHARDCACHE_DEBUG
         int i;
         fprintf(stderr, "sending message: ");
-	size_t mlen = fbuf_used(&msg);
+        size_t mlen = fbuf_used(&msg);
         if (mlen > 256)
            mlen = 256;
         for (i = 0; i < mlen - dlen; i++) {
@@ -474,10 +474,14 @@ int stats_from_peer(char *peer, char *auth, char **out, size_t *len, int fd)
                 *out = malloc(*len);
                 memcpy(*out, fbuf_data(&resp), *len-1);
                 (*out)[*len-1] = 0;
+                if (should_close)
+                    close(fd);
                 return 0;
             }
             fbuf_destroy(&resp);
         }
+        if (should_close)
+            close(fd);
     }
     return -1;
 }
@@ -497,17 +501,22 @@ int check_peer(char *peer, char *auth, int fd)
             shardcache_hdr_t hdr = 0;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
-                if (fbuf_used(&resp) == 2 && memcmp(fbuf_data(&resp), "OK", 2) == 0)
+                if (fbuf_used(&resp) == 2 && memcmp(fbuf_data(&resp), "OK", 2) == 0) {
+                    if (should_close)
+                        close(fd);
                     return 0;
+                }
             }
         }
+        if (should_close)
+            close(fd);
     }
     return -1;
 }
 
 shardcache_storage_index_t *index_from_peer(char *peer, char *auth, int fd)
 {
-     int should_close = 0;
+    int should_close = 0;
     if (fd < 0) {
         fd = connect_to_peer(peer, 30);
         should_close = 1;
@@ -550,6 +559,8 @@ shardcache_storage_index_t *index_from_peer(char *peer, char *auth, int fd)
             }
             fbuf_destroy(&resp);
         }
+        if (should_close)
+            close(fd);
     }
     return index;
 }
