@@ -314,9 +314,12 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         if (rbb_len(ctx->input) < 2)
             break;
 
-        uint16_t nlen = 0;
-        rbb_read(ctx->input, (u_char *)&nlen, 2);
-        ctx->clen = ntohs(nlen);
+        if (ctx->clen == 0) {
+            uint16_t nlen = 0;
+            rbb_read(ctx->input, (u_char *)&nlen, 2);
+            ctx->clen = ntohs(nlen);
+            sip_hash_update(ctx->shash, (char *)&nlen, 2);
+        }
         if (ctx->clen > 0) {
             char chunk[ctx->clen];
             if (rbb_len(ctx->input) < ctx->clen) {
@@ -340,7 +343,6 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                 return;
             }
             if (ctx->shash) {
-                sip_hash_update(ctx->shash, (char *)&nlen, 2);
                 sip_hash_update(ctx->shash, chunk, ctx->clen);
             }
             ctx->clen = 0;
@@ -349,8 +351,6 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                 // TRUNCATED - we need more data
                 break;
             }
-            if (ctx->shash)
-                sip_hash_update(ctx->shash, (char *)&nlen, 2);
 
             u_char bsep = 0;
             rbb_read(ctx->input, &bsep, 1);
