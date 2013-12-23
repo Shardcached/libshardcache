@@ -60,13 +60,14 @@ int main (int argc, char **argv) {
         fprintf(stderr, "SHC_HOSTS environment variable not found!\n");
         exit(-1);
     }
+    char *secret = getenv("SHC_SECRET");
 
     if (parse_nodes_string(shc_hosts) != 0) {
         fprintf(stderr, "Can't parse the nodes string : %s!\n", shc_hosts);
         exit(-1);
     }
 
-    shardcache_client_t *client = shardcache_client_create(nodes, num_nodes, NULL);
+    shardcache_client_t *client = shardcache_client_create(nodes, num_nodes, secret);
 
     int rc = 0;
     char *cmd = argv[1];
@@ -122,7 +123,7 @@ int main (int argc, char **argv) {
                     shardcache_storage_index_item_t *item = &index->items[n];
                     char keystr[item->klen+1];
                     snprintf(keystr, sizeof(keystr), "%s", item->key);
-                    printf("%s => %u\n", (char *)item->key, (uint32_t)item->vlen);
+                    printf("%s => %u\n", keystr, (uint32_t)item->vlen);
                 }
                 shardcache_free_index(index);
             } else {
