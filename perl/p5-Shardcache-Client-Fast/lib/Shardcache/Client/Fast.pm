@@ -24,6 +24,8 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 	shardcache_client_evict
 	shardcache_client_get
 	shardcache_client_set
+        shardcache_client_errno
+        shardcache_client_errstr
 ) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
@@ -85,19 +87,65 @@ sub new {
 
 sub get {
     my ($self, $key) = @_;
-    return shardcache_client_get($self->{_client}, $key);
+    my $val =  shardcache_client_get($self->{_client}, $key);
+    if ($val) {
+        undef($self->{_errstr});
+        $self->{_errno} = 0;
+    } else {
+        $self->{_errstr} = shardcache_client_errstr($self->{_client});
+        $self->{_errno} = shardcache_client_errno($self->{_client});
+    }
+    return $val;
 }
 
 sub set {
     my ($self, $key, $value, $expire) = @_;
     $expire = 0 unless defined $expire;
-    return shardcache_client_set($self->{_client}, $key, $value, $expire);
+    my $ret = shardcache_client_set($self->{_client}, $key, $value, $expire);
+    if ($ret == 0) {
+        undef($self->{_errstr});
+        $self->{_errno} = 0;
+    } else {
+        $self->{_errstr} = shardcache_client_errstr($self->{_client});
+        $self->{_errno} = shardcache_client_errno($self->{_client});
+    }
+    return $ret;
 }
 
 sub del {
+    my ($self, $key) = @_;
+    my $ret = shardcache_client_del($self->{_client}, $key);
+    if ($ret == 0) {
+        undef($self->{_errstr});
+        $self->{_errno} = 0;
+    } else {
+        $self->{_errstr} = shardcache_client_errstr($self->{_client});
+        $self->{_errno} = shardcache_client_errno($self->{_client});
+    }
+    return $ret;
 }
 
 sub evict {
+    my ($self, $key) = @_;
+    my $ret = shardcache_client_evict($self->{_client}, $key);
+    if ($ret == 0) {
+        undef($self->{_errstr});
+        $self->{_errno} = 0;
+    } else {
+        $self->{_errstr} = shardcache_client_errstr($self->{_client});
+        $self->{_errno} = shardcache_client_errno($self->{_client});
+    }
+    return $ret;
+}
+
+sub errno {
+    my $self = shift;
+    return $self->{_errno};
+}
+
+sub errstr {
+    my $self = shift;
+    return $self->{_errstr};
 }
 
 sub DESTROY {
@@ -139,6 +187,8 @@ None by default.
   int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
   size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data)
   int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
+  int shardcache_client_errno(shardcache_client_t *c)
+  char *shardcache_client_errstr(shardcache_client_t *c)
 
 =head1 SEE ALSO
 

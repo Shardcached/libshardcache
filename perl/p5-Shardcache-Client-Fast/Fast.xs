@@ -136,3 +136,12 @@ shardcache_client_set(c, key, data, expire)
         RETVAL = (shardcache_client_set(c, k, klen, d, dlen, expire) == 0);
     OUTPUT:
         RETVAL
+
+char *
+shardcache_client_errstr(c)
+	shardcache_client_t *	c
+
+int
+shardcache_client_errno(c)
+	shardcache_client_t *	c
+
