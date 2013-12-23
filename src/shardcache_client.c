@@ -96,6 +96,8 @@ int get_connection_for_peer(shardcache_client_t *c, char *peer)
             if (c->connections[i].fd >= 0) {
                 char noop = SHARDCACHE_HDR_NOP;
                 if (write(c->connections[i].fd, &noop, 1) == 1) {
+                    c->errno = SHARDCACHE_CLIENT_OK;
+                    c->errstr[0] = 0;
                     return c->connections[i].fd;
                 } else {
                     close(c->connections[i].fd);
