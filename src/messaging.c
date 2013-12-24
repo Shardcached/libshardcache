@@ -607,6 +607,34 @@ int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd)
     return -1;
 }
 
+int abort_migrate_peer(char *peer, char *auth, int fd)
+{
+    int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
+
+    if (fd >= 0) {
+        int rc = write_message(fd, auth, SHARDCACHE_HDR_MGA, NULL, 0, NULL, 0, 0);
+        if (rc == 0) {
+            fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            shardcache_hdr_t hdr = 0;
+            rc = read_message(fd, auth, &resp, &hdr);
+            if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
+                if (fbuf_used(&resp) == 2 && memcmp(fbuf_data(&resp), "OK", 2) == 0) {
+                    if (should_close)
+                        close(fd);
+                    return 0;
+                }
+            }
+        }
+        if (should_close)
+            close(fd);
+    }
+    return -1;
+}
+
 int connect_to_peer(char *address_string, unsigned int timeout)
 {
     char *brkt = NULL;

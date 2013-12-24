@@ -122,6 +122,7 @@ int get_connection_for_peer(shardcache_client_t *c, char *peer)
                 c->errstr[0] = 0;
                 return fd;
             }
+            break;
         }
     }
     c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
@@ -295,4 +296,74 @@ shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char
     }
 
     return index;
+}
+
+int shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t *nodes, int num_nodes)
+{
+    fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
+
+    int i;
+    for (i = 0; i < num_nodes; i++) {
+        if (check_address_string(nodes[i].address) != 0) {
+            c->errno = SHARDCACHE_CLIENT_ERROR_ARGS;
+            snprintf(c->errstr, sizeof(c->errstr), "Bad address format %s\n", nodes[i].address);
+            fbuf_destroy(&mgb_message);
+            return -1;
+        }
+        if (i > 0) 
+            fbuf_add(&mgb_message, ",");
+        fbuf_printf(&mgb_message, "%s:%s", nodes[i].label, nodes[i].address);
+    }
+
+    for (i = 0; i < c->num_shards; i++) {
+        int fd = get_connection_for_peer(c, c->shards[i].label);
+        if (fd < 0) {
+            fbuf_destroy(&mgb_message);
+            return -1;
+        }
+
+        int rc = migrate_peer(c->shards[i].address,
+                              (char *)c->auth,
+                              fbuf_data(&mgb_message),
+                              fbuf_used(&mgb_message), fd);
+        if (rc != 0) {
+            c->errno = SHARDCACHE_CLIENT_ERROR_PEER;
+            snprintf(c->errstr, sizeof(c->errstr), "Node %s (%s) didn't aknowledge the migration\n",
+                    c->shards[i].label, c->shards[i].address);
+            fbuf_destroy(&mgb_message);
+            // XXX - should we abort migration on peers that have been notified (if any)? 
+            return -1;
+        }
+    }
+    fbuf_destroy(&mgb_message);
+
+    c->errno = SHARDCACHE_CLIENT_OK;
+    c->errstr[0] = 0;
+
+    return 0;
+}
+
+int shardcache_client_migration_abort(shardcache_client_t *c)
+{
+    int i;
+    for (i = 0; i < c->num_shards; i++) {
+        int fd = get_connection_for_peer(c, c->shards[i].label);
+        if (fd < 0) {
+            return -1;
+        }
+
+        int rc =  abort_migrate_peer(c->shards[i].label, (char *)c->auth, fd);
+
+        if (rc != 0) {
+            c->errno = SHARDCACHE_CLIENT_ERROR_PEER;
+            snprintf(c->errstr, sizeof(c->errstr),
+                     "Can't abort migration from peer: %s", c->shards[i].label);
+            return -1;
+        }
+    }
+ 
+    c->errno = SHARDCACHE_CLIENT_OK;
+    c->errstr[0] = 0;
+
+    return 0;
 }
