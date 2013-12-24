@@ -241,6 +241,20 @@ sub evi {
     return ($resp eq "OK")
 }
 
+sub mgb {
+    my ($self, $key) = @_;
+    return unless $key;
+    my $resp = $self->send_msg(0x04, $key);
+    return ($resp eq "OK")
+}
+
+sub mga {
+    my ($self, $key) = @_;
+    return unless $key;
+    my $resp = $self->send_msg(0x04, $key);
+    return ($resp eq "OK")
+}
+
 sub _get_sock_for_peer {
     my ($self, $peer) = @_;
     my $addr;
