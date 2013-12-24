@@ -38,11 +38,18 @@ Unlike [groupcache](http://github.com/golang/groupcache "groupcache") :
  * Supports DEL operations. If the node which receives the DEL operation
    is responsible for the specified KEY, the key will be removed from the
    underlying storage and from the cache.
+   If evict-on-delete is turned on (it is by default) an evict command will
+   be sent to all other peers to force eviction from their cache.
    If the receiving node is not responsible for the key, it will still
    be removed from the local cache (if present) and the request will be
    forwarded (through the internal communication channel) to the
    responsible peer which will eventualy remove the key from its storage
-   and from the cache
+   and from the cache.
+
+ * Supports EVICT operations. Evicts differ from deletes in the sense that the 
+   key is only unloaded from the cache but not removed from the storage.
+   Forcing evictions might be very useful to force new values to be visible
+   as soon as possible after being set.
 
  * Supports migrations via the MGB (migration-begin), MGA (migration-abort)
    and MGE (migration-end) commands. The nodes automatically redistribute
