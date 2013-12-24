@@ -2,28 +2,28 @@ libshardcache
 ======
 
 C implementation of a sharded key/value storage + caching 
-initially inspired to [groupcache](http://github.com/golang/groupcache "groupcache") (golang/groupcache)
+initially inspired by [groupcache](http://github.com/golang/groupcache "groupcache") (golang/groupcache).
 
 Note that this is a fresh implementation of the logic/strategy
 implemented in [groupcache](http://github.com/golang/groupcache "groupcache").
 It's not a porting but an implementation from scratch.
 It uses its own custom protocol for internal communication that differs from the one
 used by the [groupcache](http://github.com/golang/groupcache "groupcache") Go implementation
-(which is instead based on protobuf + httpd)
+(which is instead based on protobuf + httpd).
 
 Like [groupcache](http://github.com/golang/groupcache "groupcache"),
-this library, together with the [shardcached](http://github.com/xant/shardcached "shardcached") daemon implementation)
+this library (together with the [shardcached](http://github.com/xant/shardcached "shardcached") daemon implementation)
 is intended as a replacement for memcached with some additions:
 
  * libshardcache is a client library as well as a server library.
-   It can be used either to run an shardcache node or to query already running nodes (or both).
+   It can be used either to run a shardcache node or to query already running nodes (or both).
    When using the library to run a new node, the library will connect to its own peers and handle
    the internal communication.
 
  * It has a cache filling mechanism based on ARC (Adaptive Replacement Cache)
 
  * It ensures fetching the items from the peers or from the storage only once
-   even when multiple concurrent request are looking for the same uncached item.
+   even when multiple concurrent requests are looking for the same uncached item.
 
 Unlike [groupcache](http://github.com/golang/groupcache "groupcache") :
 
@@ -33,7 +33,7 @@ Unlike [groupcache](http://github.com/golang/groupcache "groupcache") :
    If the receiving node is not the responsible for the key, the request
    will be forwarded (through the internal communication channel)
    to the responsible peer which will eventualy store the new value and make it
-   available to all the [groupcache](http://github.com/golang/groupcache "groupcache") nodes
+   available to all the [groupcache](http://github.com/golang/groupcache "groupcache") nodes.
  
  * Supports DEL operations. If the node which receives the DEL operation
    is responsible for the specified KEY, the key will be removed from the
@@ -43,7 +43,7 @@ Unlike [groupcache](http://github.com/golang/groupcache "groupcache") :
    If the receiving node is not responsible for the key, it will still
    be removed from the local cache (if present) and the request will be
    forwarded (through the internal communication channel) to the
-   responsible peer which will eventualy remove the key from its storage
+   responsible peer which will eventually remove the key from its storage
    and from the cache.
 
  * Supports EVICT operations. Evicts differ from deletes in the sense that the 
@@ -62,10 +62,10 @@ Unlike [groupcache](http://github.com/golang/groupcache "groupcache") :
      if not found the new continuum is checked.
      
    - If a set/delete operation arrives the new continuum is used
-     to determine the owner of the key
+     to determine the owner of the key.
 
    Once the migration is completed the continua are swapped and the new
-   continuum will become the main one
+   continuum becomes the main one.
 
   * Supports volatile keys, which have an expiration time and will be automatically removed when expired.
     Note that such keys are always kept in memory, regardless of the storage type, and are never 
