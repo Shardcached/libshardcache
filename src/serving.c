@@ -700,6 +700,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
     s->sock = open_socket(host, port);
     if (s->sock == -1) {
         fprintf(stderr, "Can't open listening socket %s:%d : %s\n", host, port, strerror(errno));
+        free(addr);
         free(s);
         return NULL;
     }
