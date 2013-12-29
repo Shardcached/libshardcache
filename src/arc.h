@@ -42,8 +42,10 @@ arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t len, void **valu
  * */
 void arc_release_resource(arc_t *cache, arc_resource_t *res);
 
+/* Force eviction of an item */
 void arc_remove(arc_t *cache, const void *key, size_t len);
 
+/* Returns the actual cache size (in bytes) */
 size_t arc_size(arc_t *cache);
 
 
