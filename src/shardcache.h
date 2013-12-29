@@ -22,38 +22,68 @@
  * @brief Callback to provide the value for a given key.
  *        The shardcache instance will call this callback
  *        if the value has not been found in the cache.
+ * @arg key   : A valid pointer to the key
+ * @arg klen  : The length of the key
+ * @arg vlen  : If provided the length of the returned value will be stored
+ *              at the location pointed by vlen
+ * @arg priv  : the 'priv' pointer previously stored in the shardcache_storage_t
+ *              structure at initialization time
  * @return A pointer to initialized memory containing the stored value.
+ *         A NULL pointer if not found.
  *         NOTE: The returned value MUST be a volatile copy and the caller
  *               WILL release its resources
  */
 typedef void *(*shardcache_fetch_item_callback_t)
-    (void *key, size_t len, size_t *vlen, void *priv);
+    (void *key, size_t klen, size_t *vlen, void *priv);
 
 /**
  * @brief Callback to store a new value for a given key.
  *        The shardcache instance will call this callback
  *        if a new value needs to be set in the underlying storage
+ * @arg key    : A valid pointer to the key
+ * @arg klen   : The length of the key
+ * @arg value  : A valid pointer to the value to store
+ * @arg vlen   : The length of the value
+ * @arg priv  : the 'priv' pointer previously stored in the shardcache_storage_t
+ *              structure at initialization time
+ * @return 0 if success, -1 otherwise
  */
 typedef int (*shardcache_store_item_callback_t)
-    (void *key, size_t len, void *value, size_t vlen, void *priv);
+    (void *key, size_t klen, void *value, size_t vlen, void *priv);
 
 /**
  * @brief Callback to remove an existing value for a given key.
  *        The shardcache instance will call this callback
  *        if the value for a given key needs to be removed
  *        from the underlying storage
+ * @arg key    : A valid pointer to the key
+ * @arg klen   : The length of the key
+ * @arg priv  : the 'priv' pointer previously stored in the shardcache_storage_t
+ *              structure at initialization time
+ * @return 0 if success, -1 otherwise
  */
 typedef int
-(*shardcache_remove_item_callback_t)(void *key, size_t len, void *priv);
+(*shardcache_remove_item_callback_t)(void *key, size_t klen, void *priv);
 
 /**
  * @brief Callback to check if a specific key exists on the storage
+ * @arg key    : A valid pointer to the key
+ * @arg klen   : The length of the key
+ * @arg priv  : the 'priv' pointer previously stored in the shardcache_storage_t
+ *              structure at initialization time
+ * #return 1 if exists, 0 otherwise
  */
 typedef int
-(*shardcache_exist_item_callback_t)(void *key, size_t len, void *priv);
+(*shardcache_exist_item_callback_t)(void *key, size_t klen, void *priv);
 
 /**
+ * @struct shardcache_storage_index_item_t
+ *
  * @brief structure representing an item in the storage index
+ *
+ * @var key    : A valid pointer to the key
+ * @var klen   : The length of the key
+ * @var vlen   : The length of the value
  */
 typedef struct __shardcache_storage_index_item_s {
     void *key;
@@ -62,13 +92,25 @@ typedef struct __shardcache_storage_index_item_s {
 } shardcache_storage_index_item_t;
 
 /**
+ * @struct shardcache_storage_index_t
+ *
  * @brief structure representing the storage index, holding an array
  *        of pointers to shardcache_storage_index_item_t structures
+ *
+ * @var items  : Array of pointers to shardcache_storage_index_item_t structures
+ * @var size   : number of elements in the 'items' array
  */
 typedef struct __shardcache_storage_index_s {
     shardcache_storage_index_item_t *items;
     size_t size;
 } shardcache_storage_index_t;
+
+/**
+ * @brief Callback returning the number of items in the index
+ * @arg priv  :   The priv pointer owned by the storage
+ * @return    :   The total number of items in the storage
+ */
+typedef size_t (*shardcache_count_items_callback_t)(void *priv);
 
 /**
  * @brief Callback to fetch the index of stored keys
@@ -91,11 +133,6 @@ typedef struct __shardcache_storage_index_s {
  */
 typedef size_t (*shardcache_get_index_callback_t)
     (shardcache_storage_index_item_t *index, size_t isize, void *priv);
-
-/**
- * @brief Callback returning the number of items in the index
- */
-typedef size_t (*shardcache_count_items_callback_t)(void *priv);
 
 /**
  * @struct shardcache_storage_t
