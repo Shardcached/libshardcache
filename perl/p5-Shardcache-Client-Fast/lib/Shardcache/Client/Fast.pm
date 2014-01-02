@@ -24,6 +24,9 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 	shardcache_client_evict
 	shardcache_client_get
 	shardcache_client_set
+        shardcache_client_check
+        shardcache_client_index
+        shardcache_client_stats
         shardcache_client_errno
         shardcache_client_errstr
 ) ] );
@@ -143,14 +146,14 @@ sub stats {
     
     if ($peer) {
         return shardcache_client_stats($self->{_client}, $peer);
-    } else {
-        my $out;
-        foreach my $node (@{$self->{_nodes}}) {
-            $out .= shardcache_client_stats($self->{_client}, $node->[0]);
-            $out .= "\n";
-        }
-        return $out;
     }
+
+    my $out;
+    foreach my $node (@{$self->{_nodes}}) {
+        $out .= shardcache_client_stats($self->{_client}, $node->[0]);
+        $out .= "\n";
+    }
+    return $out;
 }
 
 sub check {
@@ -161,8 +164,20 @@ sub check {
 
 sub index {
     my ($self, $peer) = @_;
-    return unless $peer;
-    return shardcache_client_index($self->{_client}, $peer);
+    if ($peer) {
+        return shardcache_client_index($self->{_client}, $peer);
+    }
+
+    my $out;
+    foreach my $node (@{$self->{_nodes}}) {
+         my $index = shardcache_client_index($self->{_client}, $node->[0]);
+         if ($index) {
+             push(%$out, %$index);
+         } else {
+             # TODO - Error messages
+         }
+    }
+    return $out;
 }
 
 sub errno {
@@ -187,24 +202,113 @@ __END__
 
 =head1 NAME
 
-Shardcache::Client::Fast - Perl extension for blah blah blah
+Shardcache::Client::Fast - Perl extension for the client part of libshardcache
 
 =head1 SYNOPSIS
 
   use Shardcache::Client::Fast;
-  blah blah blah
+  @hosts = [ [ "peer1", "localhost:4444" ], [ "peer2", "localhost:4445" ], [ "peer3", "localhost:4446" ] ];
+  $secret = "some_secret";
+  $c = Shardcache::Client::Fast->new(\@hosts, $secret);
+
+  # Set a new value for key "key"
+  $rc = $c->set("key", "value");
+  if ($rc != 0) {
+    die "Error setting key 'key' : " . $c->errstr;
+  }
+
+  # Read the value back
+  $v = $c->get("key");
+  if (!$v && $c->errno) {
+    die "Error getting value for key 'key' : " . $c->errstr;
+  }
+
+  # set the key "key2" and make it expire in 60 seconds
+  $c->set("key2", "value2", 60);
+
+  # evict "key"
+  $c->evict("key");
+
+  # remove "key2" prematurely
+  $c->del("key2");
+
+  
+  # check if "peer3" is alive
+  if ($c->check("peer3") != 0) {
+    warn "peer3 is not responding";
+  }
+
+  # get the index of keys existing on "peer2"
+  $index = $c->index("peer2");
 
 =head1 DESCRIPTION
 
-Stub documentation for Shardcache::Client::Fast, created by h2xs. It looks like the
-author of the extension was negligent enough to leave the stub
-unedited.
-
-Blah blah blah.
+Perl bindings to libshardcache-client. This library is a replacement for the pure-perl
+Sharcache::Client allowing faster access to shardcache nodes by using libshardcache directly
+instead of reimplementing the protocol and handling connections on the perl side.
 
 =head2 EXPORT
 
 None by default.
+
+=head1 METHODS
+
+=over 4
+
+=item * new (%params)
+
+=head3 REQUIRED PARAMS
+    
+=over 4
+
+L<me>
+
+    A 'address:port' string describing the current node
+
+L<storage>
+
+    A valid Shardcache::Storage subclass, implementing the underlying storage
+
+=back
+
+=head3 OPTIONAL PARAMS
+
+=over
+
+L<nodes>
+
+    An arrayref containing the nodes in our shardcache 'cloud'
+
+L<secret>
+
+    A secret used to compute the signature used for internal communication.
+    If not specified the string 'default' will be used 
+
+
+=back
+
+=item * get ($key)
+
+    Get the value for $key. 
+    If found in the cache it will be returned immediately, 
+    if this node is responsible for $key, the underlying storage will be queried for the value,
+    otherwise a request to the responsible node in the shardcache 'cloud' will be done to obtain the value
+    (and the local cache will be populated)
+
+=item * set ($key, $value, [ $expire ])
+
+    Set a new value for $key in the underlying storage
+
+=item * del ($key)
+
+    Remove the value associated to $key from the underlying storage (note the cache of all nodes will be evicted as well)
+
+=item * evict ($key)
+
+    Evict the value associated to $key from the cache (note this will not remove the value from the underlying storage)
+
+
+=back
 
 =head2 Exportable functions
 
@@ -214,6 +318,9 @@ None by default.
   int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
   size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data)
   int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
+  int shardcache_client_stats(shardcache_client_t *c, char *peer, char **buf, size_t *len);
+  int shardcache_client_check(shardcache_client_t *c, char *peer);
+  shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *peer);
   int shardcache_client_errno(shardcache_client_t *c)
   char *shardcache_client_errstr(shardcache_client_t *c)
 
@@ -230,7 +337,7 @@ If you have a web site set up for your module, mention it here.
 
 =head1 AUTHOR
 
-xant, E<lt>xant@macports.orgE<gt>
+xant, E<lt>xant@xant.netE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
