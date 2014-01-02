@@ -42,7 +42,7 @@ TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
 TEST_EXEC_ORDER = 
 
-all: objects static shared
+all: $(DEPS) objects static shared
 
 tsan:
 	@export CC=gcc-4.8; \
@@ -79,9 +79,13 @@ standalone: objects
 shared: objects
 	$(CC) src/*.o $(LDFLAGS) $(DEPS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
 
+dynamic: LDFLAGS += -lhl -lchash -liomux -lsiphash
+dynamic: objects
+	 $(CC) src/*.o $(LDFLAGS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
+
 $(DEPS): build_deps
 
-objects: $(DEPS) $(TARGETS)
+objects: $(TARGETS)
 
 $(TARGETS): CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 
