@@ -247,9 +247,22 @@ static void *process_request(void *priv) {
         {
             fbuf_t buf = FBUF_STATIC_INITIALIZER;
             shardcache_counter_t *counters = NULL;
+            int i, num_nodes;
+
+            shardcache_node_t *nodes = shardcache_get_nodes(cache, &num_nodes);
+            if (nodes) {
+                fbuf_printf(&buf, "num_nodes;%d\r\nnodes;", num_nodes);
+                for (i = 0; i < num_nodes; i++) {
+                    if (i > 0)
+                        fbuf_add(&buf, ",");
+                    fbuf_printf(&buf, "%s:%s", nodes[i].label, nodes[i].address);
+                }
+                fbuf_add(&buf, "\r\n");
+                free(nodes);
+            }
+
             int ncounters = shardcache_get_counters(cache, &counters);
             if (counters) {
-                int i;
                 for (i = 0; i < ncounters; i++) {
                     fbuf_printf(&buf, "%s;%u\r\n", counters[i].name, counters[i].value);
                 }
