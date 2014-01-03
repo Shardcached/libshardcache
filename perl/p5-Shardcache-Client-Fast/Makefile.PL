@@ -1,4 +1,4 @@
-use 5.010000;
+use v5.10;
 use ExtUtils::MakeMaker;
 
 my $INC = "-I. ";

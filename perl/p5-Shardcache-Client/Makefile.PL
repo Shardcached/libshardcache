@@ -1,4 +1,4 @@
-use 5.008005;
+use v5.8;
 use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME           => 'Shardcache::Client',

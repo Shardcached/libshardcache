@@ -1,5 +1,8 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.02  Fri Jan  3 15:20:28 CET 2014
+        - fixes to Makefile.PL + LICENSE
+
 0.01  Fri Dec 13 14:13:48 2013
 	- original version; created by h2xs 1.23 with options
 		-x -b 5.10.0 -n Shardcache::Client::Fast ../src/shardcache_client.h

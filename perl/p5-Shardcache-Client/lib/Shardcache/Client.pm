@@ -5,7 +5,7 @@ use IO::Socket::INET;
 use Digest::SipHash qw/siphash64/;
 use Algorithm::ConsistentHash::CHash;
 
-our $VERSION = "0.01";
+our $VERSION = "0.02";
 
 sub new {
     my ($class, $host, $secret) = @_;
