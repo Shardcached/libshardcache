@@ -1,5 +1,10 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.03  Fri Jan  3 15:41:33 CET 2014
+        - $VERSION defined using a different format
+          to avoid issues with rpmtools when creating packages
+        - fixed POD documentation
+
 0.02  Fri Jan  3 15:20:28 CET 2014
         - fixes to Makefile.PL + LICENSE
 
