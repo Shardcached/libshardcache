@@ -157,7 +157,7 @@ __END__
 
 =head1 NAME
 
-Shardcache - Perl extension for libshardcache
+Shardcache - Perl extension for libshardcache which allows to run Shardcache nodes from perl
 
 =head1 SYNOPSIS
 
