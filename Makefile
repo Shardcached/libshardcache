@@ -52,7 +52,7 @@ tsan:
 
 .PHONY: build_deps
 build_deps:
-	@make -eC deps all;
+	@make -eC deps all
 
 update_deps:
 	@make -C deps update
@@ -88,6 +88,14 @@ $(DEPS): build_deps
 objects: $(TARGETS)
 
 $(TARGETS): CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
+
+.PHONY: utils
+utils: 
+	@make -eC utils all
+
+.PHONY: utils-dynamic
+utils-dynamic: 
+	@make -eC utils dynamic
 
 clean:
 	rm -f src/*.o
