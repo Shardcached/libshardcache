@@ -49,8 +49,9 @@ static int parse_nodes_string(char *str)
 
 int main (int argc, char **argv) {
     if ((argc < 3) && (argc != 2 ||
-        (strcmp(argv[1], "stats") != 0) && strcmp(argv[1], "check") != 0 &&
-        strcmp(argv[1], "index") != 0))
+        (strcmp(argv[1], "stats") != 0 && 
+         strcmp(argv[1], "check") != 0 &&
+         strcmp(argv[1], "index") != 0)))
     {
         usage(argv[0]);
     }
