@@ -123,7 +123,7 @@ int main (int argc, char **argv) {
                 for (n = 0; n < index->size; n ++) {
                     shardcache_storage_index_item_t *item = &index->items[n];
                     char keystr[item->klen+1];
-                    snprintf(keystr, sizeof(keystr), "%s", item->key);
+                    snprintf(keystr, sizeof(keystr), "%s", (char *)item->key);
                     printf("%s => %u\n", keystr, (uint32_t)item->vlen);
                 }
                 shardcache_free_index(index);
