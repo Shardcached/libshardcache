@@ -1,6 +1,6 @@
 package Shardcache::Client::Fast;
 
-use 5.010000;
+use v5.10;
 use strict;
 use warnings;
 use Carp;

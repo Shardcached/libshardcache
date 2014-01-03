@@ -1,6 +1,6 @@
 package Shardcache;
 
-use 5.008005;
+use v5.8;
 use strict;
 use warnings;
 use Carp;
