@@ -1,4 +1,4 @@
-MODULES=p5-Shardcache p5-Shardcache-Client
+MODULES=p5-Shardcache p5-Shardcache-Client p5-Shardcache-Client-Fast
 
 PWD=$(shell pwd)
 
