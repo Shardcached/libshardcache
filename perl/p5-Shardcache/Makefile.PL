@@ -5,10 +5,39 @@ my $SHARDCACHE_INCDIR=$ENV{SHARDCACHE_INCDIR};
 my $SHARDCACHE_LIBDIR=$ENV{SHARDCACHE_LIBDIR};
 
 my $INC = "-I.";
-$INC .= " -I$SHARDCACHE_INCDIR" if ($SHARDCACHE_LIBDIR);
+$INC .= " -I$SHARDCACHE_INCDIR" if ($SHARDCACHE_INCDIR);
 
 my $LIB = "-lshardcache";
 $LIB .= " -L$SHARDCACHE_LIBDIR" if ($SHARDCACHE_LIBDIR);
+
+my $SHC_INCDIR;
+my $SHC_LIBDIR;
+
+if (!$SHARDCACHE_INCDIR || !$SHARDCACHE_LIBDIR) {
+    if (-f "/usr/include/shardcache.h") {
+	$SHC_INCDIR = "/usr/include"
+	    unless($SHARDCACHE_INCDIR);
+	$SHC_LIBDIR = "/usr/lib"
+	    unless($SHARDCACHE_LIBDIR);
+    } elsif (-f "/usr/local/include/shardcache.h") {
+	$SHC_INCDIR = "/usr/local/include"
+	    unless($SHARDCACHE_INCDIR);
+	$SHC_LIBDIR = "/usr/local/lib"
+	    unless($SHARDCACHE_LIBDIR);
+    } elsif (-f "/opt/local/include/shardcache.h") {
+	$SHC_INCDIR = "/opt/local/include"
+	    unless($SHARDCACHE_INCDIR);
+	$SHC_LIBDIR = "/opt/local/lib"
+	    unless($SHARDCACHE_LIBDIR);
+    } else {
+	die "No libshardcache installed"
+    }
+}
+
+$INC .= "-I$SHC_INCDIR"
+    if ($SHC_INCDIR);
+$LIBS .= "-L$SHC_LIBDIR"
+    if ($SHC_LIBDIR);
 
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
