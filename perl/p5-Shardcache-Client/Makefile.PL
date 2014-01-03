@@ -3,6 +3,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME           => 'Shardcache::Client',
     VERSION_FROM   => 'lib/Shardcache/Client.pm',
+    LICENSE	   => 'perl',
     PREREQ_PM      => {
       'Test::More'       => 0,
       'IO::Socket::INET' => 0,

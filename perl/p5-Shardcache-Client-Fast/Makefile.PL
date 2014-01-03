@@ -30,6 +30,7 @@ $LIBS .= "-L$SHC_LIBDIR"
 WriteMakefile(
     NAME              => 'Shardcache::Client::Fast',
     VERSION_FROM      => 'lib/Shardcache/Client/Fast.pm', # finds $VERSION
+    LICENSE	      => 'perl',
     PREREQ_PM         => {}, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Shardcache/Client/Fast.pm', # retrieve abstract from module
