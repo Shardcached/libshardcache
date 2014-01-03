@@ -1,5 +1,30 @@
 use 5.010000;
 use ExtUtils::MakeMaker;
+
+my $INC = "-I. ";
+my $LIBS = "-lshardcache ";
+my $DEFINE = ""; 
+
+my $SHC_INCDIR;
+my $SHC_LIBDIR;
+if (-f "/usr/include/shardcache.h") {
+    $SHC_INCDIR = "/usr/include";
+    $SHC_LIBDIR = "/usr/lib";
+} elsif (-f "/usr/local/include/shardcache.h") {
+    $SHC_INCDIR = "/usr/local/include";
+    $SHC_LIBDIR = "/usr/local/lib";
+} elsif (-f "/opt/local/include/shardcache.h") {
+    $SHC_INCDIR = "/opt/local/include";
+    $SHC_LIBDIR = "/opt/local/lib";
+} else {
+    die "No libshardcache installed"
+}
+
+$INC .= "-I$SHC_INCDIR"
+    if ($SHC_INCDIR);
+$LIBS .= "-L$SHC_LIBDIR"
+    if ($SHC_LIBDIR);
+
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile(
@@ -9,9 +34,9 @@ WriteMakefile(
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Shardcache/Client/Fast.pm', # retrieve abstract from module
        AUTHOR         => 'xant <xant@macports.org>') : ()),
-    LIBS              => ['-lshardcache'], # e.g., '-lm'
+    LIBS              => [$LIBS], # e.g., '-lm'
     DEFINE            => '', # e.g., '-DHAVE_SOMETHING'
-    INC               => '-I. -I../../src', # e.g., '-I. -I/usr/include/other'
+    INC               => $INC, # e.g., '-I. -I/usr/include/other'
 	# Un-comment this if you add C files to link with later:
     # OBJECT            => '$(O_FILES)', # link all the C files too
 );

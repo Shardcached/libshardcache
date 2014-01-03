@@ -198,7 +198,6 @@ sub DESTROY {
 
 1;
 __END__
-# Below is stub documentation for your module. You'd better edit it!
 
 =head1 NAME
 
@@ -255,7 +254,7 @@ None by default.
 
 =over 4
 
-=item * new (%params)
+=item * new ( %params )
 
 =head3 REQUIRED PARAMS
     
@@ -287,7 +286,7 @@ L<secret>
 
 =back
 
-=item * get ($key)
+=item * get ( $key )
 
     Get the value for $key. 
     If found in the cache it will be returned immediately, 
@@ -295,18 +294,23 @@ L<secret>
     otherwise a request to the responsible node in the shardcache 'cloud' will be done to obtain the value
     (and the local cache will be populated)
 
-=item * set ($key, $value, [ $expire ])
+=item * set ( $key, $value, [ $expire ] )
 
     Set a new value for $key in the underlying storage
 
-=item * del ($key)
+=item * del ( $key )
 
     Remove the value associated to $key from the underlying storage (note the cache of all nodes will be evicted as well)
 
-=item * evict ($key)
+=item * evict ( $key )
 
     Evict the value associated to $key from the cache (note this will not remove the value from the underlying storage)
 
+=item * stats ( [ $peer ] )
+
+=item * index ( [ $peer ] )
+
+=item * check ( $peer )
 
 =back
 

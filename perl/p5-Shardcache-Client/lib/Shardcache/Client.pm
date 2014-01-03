@@ -336,6 +336,7 @@ communicating with any of the nodes over their internal channel
 
 =for :list
  * L<Shardcache>
+ * L<Shardcache::Client::Fast>
  * L<Shardcache::Storage>
  * L<Shardcache::Storage::Mem>
 
