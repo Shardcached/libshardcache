@@ -314,7 +314,7 @@ shardcache_create(me, nodes, storage, secret, num_workers, cache_size = 1<<20, e
 	int	num_nodes = 0;
         shardcache_node_t *shards = NULL;
     CODE:
-        orig_perl = my_perl;
+        orig_perl = PERL_GET_CONTEXT;
         if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
             croak("missing storage or not of class 'Shardcache::Storage'");
         }
@@ -555,10 +555,6 @@ shardcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
         tv.tv_sec = secs;
         tv.tv_nsec = nsecs;
 
-        /*
-        PerlInterpreter *slave_perl = perl_clone(my_perl, CLONEf_KEEP_PTR_TABLE|CLONEf_COPY_STACKS);
-        PERL_SET_CONTEXT(slave_perl);
-        */
         for(;;) {
             struct timespec remainder = { 0, 0 };
             struct timespec tosleep = { tv.tv_sec, tv.tv_nsec };
