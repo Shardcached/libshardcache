@@ -42,6 +42,7 @@ TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
 TEST_EXEC_ORDER = 
 
+all: CFLAGS += -Ideps/.incs
 all: $(DEPS) objects static shared
 
 tsan:
@@ -87,7 +88,7 @@ $(DEPS): build_deps
 
 objects: $(TARGETS)
 
-$(TARGETS): CFLAGS += -fPIC -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
+$(TARGETS): CFLAGS += -fPIC -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 
 .PHONY: utils
 utils: 
@@ -104,6 +105,7 @@ clean:
 	rm -f libshardcache.$(SHAREDEXT)
 	rm -f support/testing.o
 	make -C deps clean
+	make -C utils clean
 
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
