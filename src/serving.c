@@ -17,7 +17,7 @@
 #include "connections.h"
 #include "shardcache.h"
 #include "counters.h"
-#include "rbb.h"
+#include "rbuf.h"
 
 #include "serving.h"
 
@@ -63,7 +63,7 @@ struct __shardcache_serving_s {
 };
 
 typedef struct {
-    rbb_t *input;
+    rbuf_t *input;
     fbuf_t *output;
     int fd;
     shardcache_t *cache;
@@ -89,7 +89,7 @@ shardcache_create_connection_context(shardcache_t *cache, const char *auth, int 
 {
     shardcache_connection_context_t *context = calloc(1, sizeof(shardcache_connection_context_t));
 
-    context->input = rbb_create(1<<17); // would fit 'almost' 2 max-sized chunks
+    context->input = rbuf_create(1<<17); // would fit 'almost' 2 max-sized chunks
     context->output = fbuf_create(0);
 
     context->key = fbuf_create(0);
@@ -104,7 +104,7 @@ shardcache_create_connection_context(shardcache_t *cache, const char *auth, int 
 }
 
 static void shardcache_destroy_connection_context(shardcache_connection_context_t *ctx) {
-    rbb_destroy(ctx->input);
+    rbuf_destroy(ctx->input);
     fbuf_free(ctx->output);
     fbuf_free(ctx->key);
     fbuf_free(ctx->value);
@@ -356,21 +356,21 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     if (!ctx)
         return;
 
-    int wb = rbb_write(ctx->input, data, len);
+    int wb = rbuf_write(ctx->input, data, len);
     if (wb != len) {
         fprintf(stderr, "Buffer underrun!");
         iomux_close(iomux, fd);
         return;
     }
 
-    if (!rbb_len(ctx->input) > 0)
+    if (!rbuf_len(ctx->input) > 0)
         return;
     
     if (ctx->state == STATE_READING_NONE) {
         unsigned char hdr;
-        rbb_read(ctx->input, &hdr, 1);
-        while (hdr == SHARDCACHE_HDR_NOP && rbb_len(ctx->input) > 0)
-            rbb_read(ctx->input, &hdr, 1); // skip
+        rbuf_read(ctx->input, &hdr, 1);
+        while (hdr == SHARDCACHE_HDR_NOP && rbuf_len(ctx->input) > 0)
+            rbuf_read(ctx->input, &hdr, 1); // skip
 
         if (hdr == SHARDCACHE_HDR_NOP)
             return;
@@ -407,22 +407,22 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
 
     for (;;) {
         if (ctx->clen == 0) {
-            if (rbb_len(ctx->input) < 2)
+            if (rbuf_len(ctx->input) < 2)
                 break;
             uint16_t nlen = 0;
-            rbb_read(ctx->input, (u_char *)&nlen, 2);
+            rbuf_read(ctx->input, (u_char *)&nlen, 2);
             ctx->clen = ntohs(nlen);
             if (ctx->shash)
                 sip_hash_update(ctx->shash, (char *)&nlen, 2);
         }
         if (ctx->clen > 0) {
             char chunk[ctx->clen];
-            if (rbb_len(ctx->input) < ctx->clen) {
+            if (rbuf_len(ctx->input) < ctx->clen) {
                 // TRUNCATED - we need more data
                 // XXX
                 break;
             }
-            rbb_read(ctx->input, chunk, ctx->clen);
+            rbuf_read(ctx->input, chunk, ctx->clen);
             if (ctx->state == STATE_READING_KEY) {
                 fbuf_add_binary(ctx->key, chunk, ctx->clen);
             } else if (ctx->state == STATE_READING_VALUE) {
@@ -442,13 +442,13 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             }
             ctx->clen = 0;
         } else {
-            if (rbb_len(ctx->input) < 1) {
+            if (rbuf_len(ctx->input) < 1) {
                 // TRUNCATED - we need more data
                 break;
             }
 
             u_char bsep = 0;
-            rbb_read(ctx->input, &bsep, 1);
+            rbuf_read(ctx->input, &bsep, 1);
             if (ctx->shash)
                 sip_hash_update(ctx->shash, &bsep, 1);
             if (bsep == SHARDCACHE_RSEP) {
@@ -492,7 +492,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     }
 
     if (ctx->state == STATE_READING_AUTH) {
-        if (rbb_len(ctx->input) < SHARDCACHE_MSG_SIG_LEN)
+        if (rbuf_len(ctx->input) < SHARDCACHE_MSG_SIG_LEN)
             return;
 
         uint64_t digest;
@@ -504,7 +504,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         }
 
         uint64_t received_digest;
-        rbb_read(ctx->input, (u_char *)&received_digest, sizeof(digest));
+        rbuf_read(ctx->input, (u_char *)&received_digest, sizeof(digest));
 
 #ifdef SHARDCACHE_DEBUG
         int i;
