@@ -341,6 +341,15 @@ static size_t __op_fetch(void *item, void * priv)
         obj->data = vobj->data; 
         obj->dlen = vobj->dlen;
         free(vobj);
+#ifdef SHARDCACHE_DEBUG
+        if (obj->data && obj->dlen) {
+            fprintf(stderr, "found volatile value ");
+
+            HEXDUMP_DATA(obj->data, obj->dlen);
+
+            fprintf(stderr, " (%lu) for key %s\n", (unsigned long)obj->dlen, keystr); 
+        }
+#endif
     } else if (cache->use_persistent_storage && cache->storage.fetch) {
         obj->data = cache->storage.fetch(obj->key, obj->klen, &obj->dlen, cache->storage.priv);
 
