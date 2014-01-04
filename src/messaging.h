@@ -18,11 +18,16 @@
  * MSG_MGA      : 0x21
  * MSG_MGB      : 0x22
  * MSG_MGE      : 0x23
+ * MSG_CHK      : 0x31
+ * MSG_STS      : 0x32
+ * MSG_IXG      : 0x41
+ * MSG_IXR      : 0x42
  * MSG_NOP      : 0x90
  * MSG_RES      : 0x99
  * RSEP         : 0x80
  * RECORD       : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
- * SIZE         : <HIGH_BYTE><LOW_BYTE>
+ * SIZE         : <WORD>
+ * WORD         : <HIGH_BYTE><LOW_BYTE>
  * EOR          : <NULL_BYTE><NULL_BYTE>
  * HIGH_BYTE    : <BYTE>
  * LOW_BYTE     : <BYTE>
@@ -35,8 +40,9 @@
  * VALUE        : <RECORD>
  * TTL          : <RECORD>
  * NODES_LIST   : <RECORD>
+ * INDEX        : <RECORD>
  * 
- * The only supported messages are :
+ * The only valid/supported messages are :
  * 
  * GET_MESSAGE  : <MSG_GET><KEY><EOM>[<SIG>]
  * SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>[<SIG>]
@@ -51,10 +57,11 @@
  * STS_MESSAGE  : <MSG_STS><EOM>[<SIG>]
  * CHK_MESSAGE  : <MSG_PNG><EOM>[<SIG>]
  * 
- * IDX_MESSAGE  : <MSG_IDX><EOM>[<SIG>]
+ * IDG_MESSAGE  : <MSG_IDG><EOM>[<SIG>]
+ * IDR_MESSAGE  : <MSG_IDR><INDEX><EOM>[<SIG>]
  */
 
-// in byte
+// in bytes
 #define SHARDCACHE_MSG_SIG_LEN 8
 #define SHARDCACHE_MSG_MAX_RECORD_LEN (1<<28) // 256MB
 
