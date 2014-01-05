@@ -271,7 +271,7 @@ void shardcache_clear_counters(shardcache_t *cache);
  */
 
 #define SHARDCACHE_NODE_LABEL_MAXLEN 256
-#define SHARDCACHE_NODE_ADDRESSL_MAXLEN 256
+#define SHARDCACHE_NODE_ADDRESS_MAXLEN 256
 
 /**
  * @brief Structure representing a node taking part in the shard cache
@@ -280,7 +280,7 @@ void shardcache_clear_counters(shardcache_t *cache);
  */
 typedef struct shardcache_node_s {
     char label[SHARDCACHE_NODE_LABEL_MAXLEN];
-    char address[SHARDCACHE_NODE_ADDRESSL_MAXLEN];
+    char address[SHARDCACHE_NODE_ADDRESS_MAXLEN];
 } shardcache_node_t;
 
 /**
