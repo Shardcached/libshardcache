@@ -470,12 +470,16 @@ int stats_from_peer(char *peer, char *auth, char **out, size_t *len, int fd)
             shardcache_hdr_t hdr = 0;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
-                *len = fbuf_used(&resp)+1;
-                *out = malloc(*len);
-                memcpy(*out, fbuf_data(&resp), *len-1);
-                (*out)[*len-1] = 0;
-                if (should_close)
-                    close(fd);
+                size_t l = fbuf_used(&resp)+1;
+                if (len)
+                    *len = l;
+                if (out) {
+                    *out = malloc(l);
+                    memcpy(*out, fbuf_data(&resp), l-1);
+                    (*out)[l-1] = 0;
+                    if (should_close)
+                        close(fd);
+                }
                 return 0;
             }
             fbuf_destroy(&resp);
