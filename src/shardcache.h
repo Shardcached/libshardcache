@@ -20,8 +20,10 @@
 
 /**
  * @brief Callback to provide the value for a given key.
+ *
  *        The shardcache instance will call this callback
  *        if the value has not been found in the cache.
+ *
  * @param key     A valid pointer to the key
  * @param klen    The length of the key
  * @param vlen    If provided the length of the returned value will be stored
@@ -38,8 +40,10 @@ typedef void *(*shardcache_fetch_item_callback_t)
 
 /**
  * @brief Callback to store a new value for a given key.
+ *
  *        The shardcache instance will call this callback
  *        if a new value needs to be set in the underlying storage
+ *
  * @param key      A valid pointer to the key
  * @param klen     The length of the key
  * @param value    A valid pointer to the value to store
@@ -53,9 +57,11 @@ typedef int (*shardcache_store_item_callback_t)
 
 /**
  * @brief Callback to remove an existing value for a given key.
+ *
  *        The shardcache instance will call this callback
  *        if the value for a given key needs to be removed
  *        from the underlying storage
+ *
  * @param key      A valid pointer to the key
  * @param klen     The length of the key
  * @param priv     The 'priv' pointer previously stored in the shardcache_storage_t
@@ -116,7 +122,8 @@ typedef struct __shardcache_storage_index_s {
 typedef size_t (*shardcache_count_items_callback_t)(void *priv);
 
 /**
- * @brief Callback to fetch the index of stored keys
+ * @brief Callback to fetch the index of stored keys.
+ *
  *        The shardcache instance will call this callback
  *        when it will need to retrieve the full index of the keys
  *        owned (and stored) by the instance
@@ -135,12 +142,13 @@ typedef size_t (*shardcache_count_items_callback_t)(void *priv);
  *       which are expected to exist
  *
  * @note The count might change between the time the count callback returns
- *       and the this callback is called.
- *       If this happens the cases are 2 : 
+ *       and the this callback is called.\n
+ *       If this happens the cases are 2 :\n
  *          1 - More items have been added in the meanwhile.
  *              Which means that the caller will get exactly the expected number
- *              of items but there will be more new items in the storage which are not returned.
- *          2 - The caller will get less items than expecting but this is not a problem because
+ *              of items but there will be more new items in the storage which are not returned.\n
+ *          2 - Some items have been removed in the meanwhile.
+ *              The caller will get less items than expecting but this is not a problem because
  *              the alloc'd memory is enough and the caller will also know how many items 
  *              have been actually returned by the index callback.
  *
@@ -193,6 +201,7 @@ typedef struct __shardcache_storage_s {
 
 /**
  * @brief Callback used to create a new instance of a storage module
+ *
  *        All storage modules need to expose this callback which will be 
  *        called by the shardcache instance at initialization time 
  *        to let the storage initialize and create the shardcache_storage_t
