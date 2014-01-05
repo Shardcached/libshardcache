@@ -30,8 +30,8 @@
  *              structure at initialization time
  * @return A pointer to initialized memory containing the stored value.
  *         A NULL pointer if not found.
- *         NOTE: The returned value MUST be a volatile copy and the caller
- *               WILL release its resources
+ * @note The returned value MUST be a volatile copy and the caller
+ *       WILL release its resources
  */
 typedef void *(*shardcache_fetch_item_callback_t)
     (void *key, size_t klen, size_t *vlen, void *priv);
@@ -70,8 +70,8 @@ typedef int
  * @param key      A valid pointer to the key
  * @param klen     The length of the key
  * @param priv     The 'priv' pointer previously stored in the shardcache_storage_t
- *               structure at initialization time
- * #return 1 if exists, 0 otherwise
+ *                 structure at initialization time
+ * @return 1 if exists, 0 otherwise
  */
 typedef int
 (*shardcache_exist_item_callback_t)(void *key, size_t klen, void *priv);
@@ -81,27 +81,25 @@ typedef int
  *
  * @brief structure representing an item in the storage index
  *
- * @var key      A valid pointer to the key
- * @var klen     The length of the key
- * @var vlen     The length of the value
  */
 typedef struct __shardcache_storage_index_item_s {
-    void *key;
-    size_t klen;
-    size_t vlen;
+    void *key;   //!<A valid pointer to the key
+    size_t klen; //!<The length of the key
+    size_t vlen; //!<The length of the value
 } shardcache_storage_index_item_t;
 
 /**
  * @struct shardcache_storage_index_t
  *
  * @brief structure representing the storage index, holding an array
- *        of pointers to shardcache_storage_index_item_t structures
- *
- * @var items    Array of pointers to shardcache_storage_index_item_t structures
- * @var size     The number of elements in the 'items' array
+ *        of shardcache_storage_index_item_t structures. 
+ * @note  Can be obtained calling shardcache_get_index()
+ *        and MUST be disposed using shardcache_free_index()
  */
 typedef struct __shardcache_storage_index_s {
+    //! Array of shardcache_storage_index_item_t structures
     shardcache_storage_index_item_t *items;
+    //! The number of elements in the 'items' array
     size_t size;
 } shardcache_storage_index_t;
 
@@ -111,6 +109,9 @@ typedef struct __shardcache_storage_index_s {
  * @param priv     The priv pointer owned by the storage
  *
  * @return The total number of items in the storage
+ * @note This callback is mandatory if the index callback is set, otherwise it's optional
+ * @see shardcache_get_index_callback_t
+ * @see shardcache_get_index()
  */
 typedef size_t (*shardcache_count_items_callback_t)(void *priv);
 
@@ -126,12 +127,23 @@ typedef size_t (*shardcache_count_items_callback_t)(void *priv);
  * @param priv     The priv pointer owned by the storage
  *
  * @return The number of items in the index, 0 if none or errors
- *         NOTE: If the caller didn't previously check the number of items
- *               via the count() callback, it MUST check if the returned value
- *               matches the passed isize and in case try again with a bigger
- *               index size to ensure there are no more items.
- *               Using the count() method ensure to get all the items
- *               which are expected to exist
+ * @note If the caller didn't previously check the number of items
+ *       via the count() callback, it MUST check if the returned value
+ *       matches the passed isize and in case try again with a bigger
+ *       index size to ensure there are no more items.
+ *       Using the count() method ensure to get all the items
+ *       which are expected to exist
+ *
+ * @note The count might change between the time the count callback returns
+ *       and the this callback is called.
+ *       If this happens the cases are 2 : 
+ *          1 - More items have been added in the meanwhile.
+ *              Which means that the caller will get exactly the expected number
+ *              of items but there will be more new items in the storage which are not returned.
+ *          2 - The caller will get less items than expecting but this is not a problem because
+ *              the alloc'd memory is enough and the caller will also know how many items 
+ *              have been actually returned by the index callback.
+ *
  */
 typedef size_t (*shardcache_get_index_callback_t)
     (shardcache_storage_index_item_t *index, size_t isize, void *priv);
@@ -141,34 +153,41 @@ typedef size_t (*shardcache_get_index_callback_t)
  *
  * @brief      Structure holding all the callback pointers required
  *             by shardcache to interact with underlying storage
- *
- * @var fetch  The fecth callback
- *
- * @var store  The store callback (optional if the storage is indended to be read-only)
- *
- * @var remove The remove callback (optional if the storage is intended to be read-only)
- *
- * @var exist  Optional callback which can be used to 'quickly' check if a key exists in the storage
- *             (note that how 'quickly' strictly depends on the storage implementation)
- *
- * @var index  Optional callback which returns the index of keys accessible through the storage
- *             (check shardcache_get_index() documentation for more details)
- *
- * @var shared If set to a non zero value, shardcache will assume that all the peers
- *             can access the same keys on the storage (for example a shared database,
- *             or a shared filesystem))
- *
- * @var priv   Pointer to private data which will passed to all the callbacks. The storage
- *             implementation can use this pointer to keep its internal data/status/handlers/whatever
  */
 typedef struct __shardcache_storage_s {
+    //! The fecth callback
     shardcache_fetch_item_callback_t       fetch;
+    //! The store callback (optional if the storage is indended to be read-only)
     shardcache_store_item_callback_t       store;
+    //! The remove callback (optional if the storage is intended to be read-only)
     shardcache_remove_item_callback_t      remove;
+    /**
+     * @brief Optional callback which can be used to 'quickly' check if a key exists in the storage
+     * @note The speed of this callback strictly depends on the storage implementation
+     */
     shardcache_exist_item_callback_t       exist;
+    /**
+     * @brief Optional callback which returns the index of keys accessible through the storage
+     * @note check shardcache_get_index() documentation for more details
+     */
     shardcache_get_index_callback_t        index;
+    /**
+     * @brief If the index callback is set, this callback will be used to determine how many
+     *        items are going to be returned in the index.
+     * @note This callback is mandatory if the index callback is set, otherwise it's optional
+     * @note check shardcache_get_index() documentation for more details
+     */
     shardcache_count_items_callback_t      count;
+    /**
+     * @brief If set to a non zero value, shardcache will assume that all the peers
+     *        can access the same keys on the storage (for example a shared database,
+     *        or a shared filesystem))
+     */
     int                                    shared;
+    /**
+     * @brief Pointer to private data which will passed to all the callbacks
+     * @note The implementation can use this pointer to keep its internal data/status/handlers/whatever
+     */
     void                                   *priv;
 } shardcache_storage_t;
 
@@ -205,13 +224,16 @@ typedef void (*shardcache_storage_destructor)(shardcache_storage_t *storage);
 
 /**
  * @brief Structure representing an exposed counter.
- *        Anywhere in the shardcache code it is possible to export counters
- *        (uin32_t integers)for stats purposes.
+ *
+ *        Anywhere in the internal shardcache code it is possible to export
+ *        counters (uin32_t integers) for stats purposes.
  *        Any module can add new counters which will be included in the array
  *        returned by shardcache_get_counters().
  *        The value member of the structure will be always accessed via
  *        the atomic builtins and the same is expected from the module 
  *        exporting it.
+ *
+ * @note  Can be obtained using shardcache_get_counters()
  */
 typedef struct {
     char name[256];
@@ -224,18 +246,19 @@ typedef struct {
 typedef struct __shardcache_s shardcache_t;
 
 /**
- * @brief returns the list of registered counters with their actual value
+ * @brief Returns the list of registered counters with their actual value
  * @param cache     A valid pointer to a shardcache_t structure
- * @param counters  An array of shardcache_counter_t structures to fill in
- *                Note the counters array needs to be released using
- *                free() once not necessary anymore.
+ * @param counters  A reference to a pointer which will be set to the initialized
+ *                  memory holding the array of counters
+ * @note            The counters array needs to be released using
+ *                  free() once not necessary anymore.
  * @return The number of counters contained in the counters array
  */
 int shardcache_get_counters(shardcache_t *cache,
                             shardcache_counter_t **counters);
 
 /**
- * @brief clear all the counters
+ * @brief Resets all the counters to 0
  * @param cache   A valid pointer to a shardcache_t structure
  */
 void shardcache_clear_counters(shardcache_t *cache);
@@ -252,6 +275,8 @@ void shardcache_clear_counters(shardcache_t *cache);
 
 /**
  * @brief Structure representing a node taking part in the shard cache
+ * @see shardcache_create()
+ * @see shardcache_get_nodes()
  */
 typedef struct shardcache_node_s {
     char label[SHARDCACHE_NODE_LABEL_MAXLEN];
@@ -260,22 +285,24 @@ typedef struct shardcache_node_s {
 
 /**
  * @brief Create a new shardcache instance
- * @param me                a valid <address:port> null-terminated string
+ * @param me              a valid <address:port> null-terminated string
  *                        representing the new node to be created
- * @param nodes             a list of <address:port> strings representing the nodes
+ * @param nodes           a list of <address:port> strings representing the nodes
  *                        taking part to the shardcache 'cloud'
- * @param num_nodes         the number of nodes present in the nodes list
- * @param storage           a shardcache_storage_t structure holding pointers to the
+ * @param num_nodes       the number of nodes present in the nodes list
+ * @param storage         a shardcache_storage_t structure holding pointers to the
  *                        storage callbacks.
- *                        NOTE: The newly created instance will copy the pointers to
- *                              its internal descriptor so the resources allocated
- *                              for the storage structure can be safely released after
- *                              calling shardcache_create()
- * @param secret            a null-terminated string containing the shared secret used to
- *                         authenticate incoming messages
- * @param num_workers       number of worker threads taking care of serving input connections
- * @param cache_size        the maximum size of the ARC cache
- * @param evict_on_delete   controls if an evict command is sent to all nodes when an item is removed
+ * @param secret          a null-terminated string containing the shared secret used to
+ *                        authenticate incoming messages
+ * @param num_workers     number of worker threads taking care of serving input connections
+ * @param cache_size      the maximum size of the ARC cache
+ * @param evict_on_delete controls if an evict command is sent to all nodes when an item is removed
+ * 
+ * @note The returned shardcache_t structure MUST be disposed using shardcache_destroy()
+ *
+ * @note The newly created instance will copy all the pointers contained in the storage structure 
+ *       to its internal descriptor so the resources eventually allocated for the storage structure
+ *       passed as argument can be safely released after calling shardcache_create()
  */
 shardcache_t *shardcache_create(char *me, 
                         shardcache_node_t *nodes,
@@ -284,7 +311,7 @@ shardcache_t *shardcache_create(char *me,
                         char *secret,
                         int num_workers,
                         size_t cache_size,
-                        int evitct_on_delete);
+                        int evict_on_delete);
 
 /**
  * @brief Release all the resources used by the shardcache instance
@@ -303,8 +330,8 @@ void shardcache_destroy(shardcache_t *cache);
  *                  will be stored at the specified address
  *
  * @return A pointer to the stored value if any, NULL otherwise
- *         NOTE: the caller is responsible of releasing the memory of the
- *               returned value
+ * @note the caller is responsible of releasing the memory of the
+ *       returned value
  */
 void *shardcache_get(shardcache_t *cache, void *key, size_t klen, size_t *vlen, struct timeval *timestamp);
 
@@ -314,12 +341,13 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t klen, size_t *vlen, 
  * @param key     A valid pointer to the key
  * @param klen    The length of the key
  * @param head    A pointer to the memory where to store the partial data
- * @param vlen    The size of the memory pointed by 'head'
+ * @param hlen    The size of the memory pointed by 'head'
  * @param timestamp   If provided the timestamp of when the object was loaded into the cache
  *                  will be stored at the specified address
  *
- * @return The size copied in the 'head' pointer (might be less than what specified in 'hlen'
- *         if the data is smaller than hlen
+ * @return The size copied in the 'head' pointer
+ * @note The returned size might be less than what specified in 'hlen'
+ *       if the complete data is smaller than hlen
  */
 size_t shardcache_head(shardcache_t *cache, void *key, size_t klen, void *head, size_t hlen, struct timeval *timestamp);
 
@@ -331,6 +359,7 @@ size_t shardcache_head(shardcache_t *cache, void *key, size_t klen, void *head, 
  * @param value   A valid pointer to the value
  * @param vlen   The length of the value
  * @return 0 on success, -1 otherwise
+ * @see shardcache_set_volatile()
  */
 int shardcache_set(shardcache_t *cache,
                    void *key,
@@ -349,6 +378,7 @@ int shardcache_set(shardcache_t *cache,
  *               actual storage module (which might evntually be a presistent
  *               storage backend as the filesystem or database ones)
  * @return 0 on success, -1 otherwise
+ * @see shardcache_set()
  */
 int shardcache_set_volatile(shardcache_t *cache,
                             void *key,
@@ -368,7 +398,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen);
 
 /**
  * @brief Remove the value from the cache for a key
- *        NOTE: the value will not be removed from the underlying storage
+ * @note the value will not be removed from the underlying storage
  * @param cache   A valid pointer to a shardcache_t structure
  * @param key   A valid pointer to the key
  * @param klen   The length of the key
@@ -383,7 +413,7 @@ int shardcache_evict(shardcache_t *cache, void *key, size_t klen);
  * @param num_nodes   If provided the number of nodes in the returned array
  *                  will be will be stored at the location pointed by num_nodes
  * @return A list containing all the nodes <address:port> strings
- *         NOTE: the caller MUST release the returned pointer once done with it
+ * @note the caller MUST release the returned pointer once done with it
  */
 shardcache_node_t *
 shardcache_get_nodes(shardcache_t *cache, int *num_nodes);
@@ -392,9 +422,11 @@ shardcache_get_nodes(shardcache_t *cache, int *num_nodes);
  * @brief Get the node owning a specific key
  * @param cache   A valid pointer to a shardcache_t structure
  * @param key   A valid pointer to the key
- * @param klen   The length of the key
- * @param owner   If provided the pointed pointer will be set to the name
+ * @param klen The length of the key
+ * @param owner If provided the pointed pointer will be set to the name
  *              (<address:port>) of the node owning the key
+ * @param len If not NULL, the size of the owner string will be stored
+ *            in the memory pointed by 'len'
  * @return 1 if the current node (represented by cache) is the owner
  *           of the key, 0 otherwise
  */
@@ -409,8 +441,8 @@ int shardcache_test_ownership(shardcache_t *cache,
  *        by querying the storage module
  * @return A pointer to a shardcache_storage_index_t structure holding 
  *         the index.
- *         NOTE: The caller MUST release the returned pointer once done with it
- *               by using the shardcache_free_index() function
+ * @note The caller MUST release the returned pointer once done with it
+ *       by using the shardcache_free_index() function
  */
 shardcache_storage_index_t *shardcache_get_index(shardcache_t *cache);
 
