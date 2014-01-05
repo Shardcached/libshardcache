@@ -235,7 +235,7 @@ typedef void (*shardcache_storage_destructor)(shardcache_storage_t *storage);
  * @brief Structure representing an exposed counter.
  *
  *        Any of the internal shardcache modules can export counters
- *        (as uin32_t integers) for stats purposes.
+ *        (as uint32_t integers) for stats purposes.
  *        Any module can add new counters which will be included in the array
  *        returned by shardcache_get_counters().
  *        The value member of the structure will be always accessed via
