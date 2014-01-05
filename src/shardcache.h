@@ -234,15 +234,15 @@ typedef void (*shardcache_storage_destructor)(shardcache_storage_t *storage);
 /**
  * @brief Structure representing an exposed counter.
  *
- *        Anywhere in the internal shardcache code it is possible to export
- *        counters (uin32_t integers) for stats purposes.
+ *        Any of the internal shardcache modules can export counters
+ *        (as uin32_t integers) for stats purposes.
  *        Any module can add new counters which will be included in the array
  *        returned by shardcache_get_counters().
  *        The value member of the structure will be always accessed via
  *        the atomic builtins and the same is expected from the module 
  *        exporting it.
  *
- * @note  Can be obtained using shardcache_get_counters()
+ * @note  A list of exported counters can be obtained using shardcache_get_counters()
  */
 typedef struct {
     char name[256];
@@ -306,6 +306,7 @@ typedef struct shardcache_node_s {
  * @param num_workers     number of worker threads taking care of serving input connections
  * @param cache_size      the maximum size of the ARC cache
  * @param evict_on_delete controls if an evict command is sent to all nodes when an item is removed
+ * @return a newly initialized shardcache descriptor
  * 
  * @note The returned shardcache_t structure MUST be disposed using shardcache_destroy()
  *
