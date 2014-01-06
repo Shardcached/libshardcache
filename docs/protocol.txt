@@ -15,8 +15,8 @@ MSG_MGB      : 0x22
 MSG_MGE      : 0x23
 MSG_CHK      : 0x31
 MSG_STS      : 0x32
-MSG_IXG      : 0x41
-MSG_IXR      : 0x42
+MSG_IDG      : 0x41
+MSG_IDR      : 0x42
 MSG_NOP      : 0x90
 MSG_RES      : 0x99
 RSEP         : 0x80
