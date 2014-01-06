@@ -344,9 +344,9 @@ static void shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
         fbuf_remove(ctx->output, wb);
     }
 
-    if (fbuf_used(ctx->output)) {
-        struct timeval tv = { 0, 1000 }; // 1ms
-        iomux_set_timeout(iomux, fd, &tv);
+    if (!fbuf_used(ctx->output)) {
+        iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
+        cbs->mux_output = NULL;
     }
 }
 
@@ -547,8 +547,8 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             fbuf_remove(ctx->output, wb);
             if (fbuf_used(ctx->output)) {
                 // too much output, let's keep pushing it in a timeout handler
-                struct timeval tv = { 0, 1000 };
-                iomux_set_timeout(iomux, fd, &tv);
+                iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
+                cbs->mux_output = shardcache_output_handler;
             }
         }
 
@@ -590,7 +590,7 @@ void *worker(void *priv) {
                 .mux_input = shardcache_input_handler,
                 .mux_eof = shardcache_eof_handler,
                 .mux_output = NULL,
-                .mux_timeout = shardcache_output_handler,
+                .mux_timeout = NULL,
                 .priv = ctx
             };
             ctx->worker_ctx = wrk_ctx;
@@ -601,7 +601,7 @@ void *worker(void *priv) {
         }
         pthread_testcancel();
         if (!iomux_isempty(iomux)) {
-            struct timeval timeout = { 0, 2000 };
+            struct timeval timeout = { 0, 200000 }; // 200ms
             iomux_run(iomux, &timeout);
         } else {
             // we don't have any filedescriptor to handle in the mux,
