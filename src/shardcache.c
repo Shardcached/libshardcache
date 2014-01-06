@@ -90,6 +90,8 @@ struct __shardcache_s {
 
     int evict_on_delete;
 
+    int use_persistent_connections;
+
     shardcache_serving_t *serv;
 
     const char *auth;
@@ -116,6 +118,8 @@ struct __shardcache_s {
         const char *name;
         uint32_t value;
     } cnt[SHARDCACHE_NUM_COUNTERS];
+
+    pthread_key_t thkey;
 };
 
 /* This is the object we're managing. It has a key
@@ -244,6 +248,34 @@ int shardcache_test_ownership(shardcache_t *cache,
     return _shardcache_test_ownership(cache, key, klen, owner, len, 0);
 }
 
+int shardcache_get_connection_for_peer(shardcache_t *cache, char *peer)
+{
+    if (!cache->use_persistent_connections)
+        return connect_to_peer(peer, 30);
+
+    hashtable_t *connection_cache = pthread_getspecific(cache->thkey);
+    if (!connection_cache) {
+        connection_cache = ht_create(128, 65535, free);
+        pthread_setspecific(cache->thkey, connection_cache);
+    }
+    int *fd = ht_get(connection_cache, peer, strlen(peer), NULL);
+    if (fd) {
+        char noop = SHARDCACHE_HDR_NOP;
+        if (write(*fd, &noop, 1) == 1) {
+            return *fd;
+        } else {
+            close(*fd);
+            ht_delete(connection_cache, peer, strlen(peer), NULL, NULL);
+        }
+    }
+
+    int new_fd = connect_to_peer(peer, 30);
+    if (new_fd)
+        ht_set_copy(connection_cache, peer, strlen(peer), (void *)&new_fd, sizeof(new_fd), NULL, NULL);
+
+    return new_fd; 
+}
+
 static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
 {
 
@@ -262,7 +294,8 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
 
     // another peer is responsible for this item, let's get the value from there
     fbuf_t value = FBUF_STATIC_INITIALIZER;
-    int rc = fetch_from_peer(peer_addr, (char *)cache->auth, obj->key, obj->klen, &value, -1);
+    int fd = shardcache_get_connection_for_peer(cache, peer_addr);
+    int rc = fetch_from_peer(peer_addr, (char *)cache->auth, obj->key, obj->klen, &value, fd);
     if (rc == 0 && fbuf_used(&value)) {
         obj->data = fbuf_data(&value);
         obj->dlen = fbuf_used(&value);
@@ -455,7 +488,8 @@ static void *evictor(void *priv)
             for (i = 0; i < cache->num_shards; i++) {
                 char *peer = cache->shards[i].label;
                 if (strcmp(peer, cache->me) != 0) {
-                    delete_from_peer(cache->shards[i].address, (char *)cache->auth, job->key, job->klen, 0, -1);
+                    int fd = shardcache_get_connection_for_peer(cache, cache->shards[i].address);
+                    delete_from_peer(cache->shards[i].address, (char *)cache->auth, job->key, job->klen, 0, fd);
                 }
             }
             destroy_evictor_job(job);
@@ -581,8 +615,7 @@ shardcache_t *shardcache_create(char *me,
                                 shardcache_storage_t *st,
                                 char *secret,
                                 int num_workers,
-                                size_t cache_size,
-                                int evict_on_delete)
+                                size_t cache_size)
 {
     int i;
     size_t shard_lens[nnodes];
@@ -590,8 +623,8 @@ shardcache_t *shardcache_create(char *me,
 
     shardcache_t *cache = calloc(1, sizeof(shardcache_t));
 
-    cache->evict_on_delete = evict_on_delete;
-
+    cache->evict_on_delete = 1;
+    cache->use_persistent_connections = 1;
 
 #ifndef __MACH__
     pthread_spin_init(&cache->migration_lock, 0);
@@ -684,6 +717,8 @@ shardcache_t *shardcache_create(char *me,
 
     cache->volatile_storage = ht_create(1<<20, 10<<20, (ht_free_item_callback_t)destroy_volatile);
 
+    pthread_key_create(&cache->thkey, (void (*)(void *))ht_destroy);
+
     cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
     if (!cache->serv) {
         fprintf(stderr, "Can't start the communication engine\n");
@@ -751,6 +786,8 @@ void shardcache_destroy(shardcache_t *cache)
 
     if (cache->auth)
         free((void *)cache->auth);
+
+    pthread_key_delete(cache->thkey);
 
     free(cache);
 }
@@ -931,7 +968,8 @@ _shardcache_set_internal(shardcache_t *cache,
             // TODO - Error Messages
             return -1;
         }
-        int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, expire, -1);
+        int fd = shardcache_get_connection_for_peer(cache, peer);
+        int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, expire, fd);
         if (rc == 0)
             arc_remove(cache->arc, (const void *)key, klen);
         return rc;
@@ -1013,7 +1051,8 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
             // TODO - Error Messages
             return -1;
         }
-        return delete_from_peer(peer, (char *)cache->auth, key, klen, 1, -1);
+        int fd = shardcache_get_connection_for_peer(cache, peer);
+        return delete_from_peer(peer, (char *)cache->auth, key, klen, 1, fd);
     }
 
     return -1;
@@ -1191,7 +1230,8 @@ void *migrate(void *priv)
 #ifdef SHARDCACHE_DEBUG
                         fprintf(stderr, "Migrator copying %s to peer %s (%s)\n", keystr, node_name, peer);
 #endif
-                        int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, 0, -1);
+                        int fd = shardcache_get_connection_for_peer(cache, peer);
+                        int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, 0, fd);
                         if (rc == 0) {
                             __sync_add_and_fetch(&migrated_items, 1);
                             push_value(to_delete, &index->items[i]);
@@ -1329,10 +1369,11 @@ int shardcache_migration_begin(shardcache_t *cache,
     if (forward) {
         for (i = 0; i < cache->num_shards; i++) {
             if (strcmp(cache->shards[i].label, cache->me) != 0) {
+                int fd = shardcache_get_connection_for_peer(cache, cache->shards[i].address);
                 int rc = migrate_peer(cache->shards[i].address,
                                       (char *)cache->auth,
                                       fbuf_data(&mgb_message),
-                                      fbuf_used(&mgb_message), -1);
+                                      fbuf_used(&mgb_message), fd);
                 if (rc != 0) {
                     fprintf(stderr, "Node %s (%s) didn't aknowledge the migration\n",
                             cache->shards[i].label, cache->shards[i].address);
@@ -1388,5 +1429,13 @@ int shardcache_migration_end(shardcache_t *cache)
     SPIN_UNLOCK(&cache->migration_lock);
     pthread_join(cache->migrate_th, NULL);
     return ret;
+}
+
+void shardcache_use_persistent_connections(shardcache_t *cache, int new_value) {
+    cache->use_persistent_connections = new_value;
+}
+
+void shardcache_evict_on_delete(shardcache_t *cache, int new_value) {
+    cache->evict_on_delete = new_value;
 }
 
