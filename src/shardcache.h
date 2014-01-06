@@ -305,7 +305,6 @@ typedef struct shardcache_node_s {
  *                        authenticate incoming messages
  * @param num_workers     number of worker threads taking care of serving input connections
  * @param cache_size      the maximum size of the ARC cache
- * @param evict_on_delete controls if an evict command is sent to all nodes when an item is removed
  * @return a newly initialized shardcache descriptor
  * 
  * @note The returned shardcache_t structure MUST be disposed using shardcache_destroy()
@@ -320,8 +319,26 @@ shardcache_t *shardcache_create(char *me,
                         shardcache_storage_t *storage,
                         char *secret,
                         int num_workers,
-                        size_t cache_size,
-                        int evict_on_delete);
+                        size_t cache_size);
+
+/*
+ * @brief Allows to switch between using persistent connections, or making a new connection for
+ *        each message sent to a peer
+ * @param cache       A valid pointer to a shardcache_t structure
+ * @param new_value   1 if persistent connections should be used, 0 otherwise
+ * @note when evict-on-delete is true, an evict command is sent to all nodes if an item
+ *       is removed from the storage
+ * @note defaults to 1
+ */
+void shardcache_use_persistent_connections(shardcache_t *cache, int new_value);
+
+/*
+ * @brief Allows to change the evict_on_delete behaviour at runtime
+ * @param cache       A valid pointer to a shardcache_t structure
+ * @param new_value   1 if evict_on_delete is desired, 0 otherwise
+ * @note defaults to 1
+ */
+void shardcache_evict_on_delete(shardcache_t *cache, int new_value);
 
 /**
  * @brief Release all the resources used by the shardcache instance
