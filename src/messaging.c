@@ -647,7 +647,7 @@ int connect_to_peer(char *address_string, unsigned int timeout)
     char *port_string = strtok_r(NULL, ":", &brkt);
     int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
 
-    int fd = open_connection(host, port, 30);
+    int fd = open_connection(host, port, timeout);
 
     free(addr);
     return fd;
