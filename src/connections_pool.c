@@ -29,6 +29,14 @@ connections_pool_destroy(connections_pool_t *cc)
     free(cc);
 }
 
+static void
+free_connection(void *conn)
+{
+    int *fdp = (int *)conn;
+    close(*fdp);
+    free(fdp);
+}
+
 queue_t *
 get_connection_queue(connections_pool_t *cc, char *addr)
 {
@@ -39,7 +47,7 @@ get_connection_queue(connections_pool_t *cc, char *addr)
     if (!connection_queue) {
         // there is no queue, so we are the first one opening a connection to 'addr'
         connection_queue = queue_create();
-        queue_set_free_value_callback(connection_queue, free);
+        queue_set_free_value_callback(connection_queue, free_connection);
         if (ht_set(cc->table, addr, strlen(addr), connection_queue, 0) != 0) {
             // ERRORS
             queue_destroy(connection_queue);
