@@ -11,6 +11,8 @@
 #include <stdint.h>
 
 #define SHARDCACHE_PORT_DEFAULT 9874
+#define SHARDCACHE_TCP_TIMEOUT_DEFAULT 30
+
 
 /*
  *******************************************************************************
@@ -326,19 +328,30 @@ shardcache_t *shardcache_create(char *me,
  *        each message sent to a peer
  * @param cache       A valid pointer to a shardcache_t structure
  * @param new_value   1 if persistent connections should be used, 0 otherwise
+ * @return the previous value for the use_persistent_connections setting
  * @note when evict-on-delete is true, an evict command is sent to all nodes if an item
  *       is removed from the storage
  * @note defaults to 1
  */
-void shardcache_use_persistent_connections(shardcache_t *cache, int new_value);
+int shardcache_use_persistent_connections(shardcache_t *cache, int new_value);
 
 /*
  * @brief Allows to change the evict_on_delete behaviour at runtime
  * @param cache       A valid pointer to a shardcache_t structure
  * @param new_value   1 if evict_on_delete is desired, 0 otherwise
+ * @return the previous value for the evict_on_delete setting
  * @note defaults to 1
  */
-void shardcache_evict_on_delete(shardcache_t *cache, int new_value);
+int shardcache_evict_on_delete(shardcache_t *cache, int new_value);
+
+/*
+ * @brief Allows to change the timeout used when creating tcp connections
+ * @param cache       A valid pointer to a shardcache_t structure
+ * @param new_value   the amount of seconds to use as timeout
+ * @return the previous value for the tcp_timeout setting
+ * @note defaults to SHARDCACHE_TCP_TIMEOUT_DEFAULT
+ */
+int shardcache_tcp_timeout(shardcache_t *cache, int new_value);
 
 /**
  * @brief Release all the resources used by the shardcache instance
