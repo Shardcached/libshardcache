@@ -5,32 +5,32 @@
 #include <hashtable.h>
 #include <queue.h>
 
-#include "connection_cache.h"
+#include "connections_pool.h"
 #include "messaging.h"
 
-struct __connection_cache_s {
+struct __connections_pool_s {
     hashtable_t *table;
     int tcp_timeout;
 };
 
-connection_cache_t *
-connection_cache_create(int tcp_timeout)
+connections_pool_t *
+connections_pool_create(int tcp_timeout)
 {
-    connection_cache_t *cc = calloc(1, sizeof(connection_cache_t));
+    connections_pool_t *cc = calloc(1, sizeof(connections_pool_t));
     cc->table = ht_create(128, 65535, (ht_free_item_callback_t)queue_destroy);
     cc->tcp_timeout = tcp_timeout;
     return cc;
 }
 
 void
-connection_cache_destroy(connection_cache_t *cc)
+connections_pool_destroy(connections_pool_t *cc)
 {
     ht_destroy(cc->table);
     free(cc);
 }
 
 queue_t *
-get_connection_queue(connection_cache_t *cc, char *addr)
+get_connection_queue(connections_pool_t *cc, char *addr)
 {
     static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -51,7 +51,7 @@ get_connection_queue(connection_cache_t *cc, char *addr)
     return connection_queue;
 }
 
-int connection_cache_get(connection_cache_t *cc, char *addr)
+int connections_pool_get(connections_pool_t *cc, char *addr)
 {
     queue_t *connection_queue = get_connection_queue(cc, addr);
     if (!connection_queue)
@@ -82,7 +82,7 @@ int connection_cache_get(connection_cache_t *cc, char *addr)
 }
 
 
-void connection_cache_add(connection_cache_t *cc, char *addr, int fd)
+void connections_pool_add(connections_pool_t *cc, char *addr, int fd)
 {
     queue_t *connection_queue = get_connection_queue(cc, addr);
     if (!connection_queue)
@@ -92,7 +92,7 @@ void connection_cache_add(connection_cache_t *cc, char *addr, int fd)
     queue_push_right(connection_queue, fdp);
 }
 
-int connection_cache_tcp_timeout(connection_cache_t *cc, int new_value)
+int connections_pool_tcp_timeout(connections_pool_t *cc, int new_value)
 {
     int old_value = 0;
     do {

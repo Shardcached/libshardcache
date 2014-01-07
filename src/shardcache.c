@@ -23,7 +23,7 @@
 #include "shardcache.h"
 #include "arc.h"
 #include "connections.h"
-#include "connection_cache.h"
+#include "connections_pool.h"
 #include "messaging.h"
 #include "serving.h"
 #include "counters.h"
@@ -120,7 +120,7 @@ struct __shardcache_s {
         uint32_t value;
     } cnt[SHARDCACHE_NUM_COUNTERS];
 
-    connection_cache_t *connection_cache;
+    connections_pool_t *connections_pool;
     int tcp_timeout;
 };
 
@@ -257,7 +257,7 @@ int shardcache_get_connection_for_peer(shardcache_t *cache, char *peer)
 
     // this will reuse an available filedescriptor already connected to peer
     // or create a new connection if there isn't any available
-    return connection_cache_get(cache->connection_cache, peer);
+    return connections_pool_get(cache->connections_pool, peer);
 }
 
 void shardcache_release_connection_for_peer(shardcache_t *cache, char *peer, int fd)
@@ -270,7 +270,7 @@ void shardcache_release_connection_for_peer(shardcache_t *cache, char *peer, int
         return;
     }
     // put back the fildescriptor into the connection cache
-    connection_cache_add(cache->connection_cache, peer, fd);
+    connections_pool_add(cache->connections_pool, peer, fd);
 }
 
 static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
@@ -718,7 +718,7 @@ shardcache_t *shardcache_create(char *me,
 
     cache->volatile_storage = ht_create(1<<20, 10<<20, (ht_free_item_callback_t)destroy_volatile);
 
-    cache->connection_cache = connection_cache_create(cache->tcp_timeout);
+    cache->connections_pool = connections_pool_create(cache->tcp_timeout);
 
     cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
     if (!cache->serv) {
@@ -788,7 +788,7 @@ void shardcache_destroy(shardcache_t *cache)
     if (cache->auth)
         free((void *)cache->auth);
 
-    connection_cache_destroy(cache->connection_cache);
+    connections_pool_destroy(cache->connections_pool);
 
     free(cache);
 }
@@ -1454,6 +1454,6 @@ int shardcache_evict_on_delete(shardcache_t *cache, int new_value) {
 }
 
 int shardcache_tcp_timeout(shardcache_t *cache, int new_value) {
-    return connection_cache_tcp_timeout(cache->connection_cache, new_value);
+    return connections_pool_tcp_timeout(cache->connections_pool, new_value);
 }
 
