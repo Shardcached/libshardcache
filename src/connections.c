@@ -22,6 +22,7 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <sys/select.h>
 
 #include "connections.h"
 
@@ -58,7 +59,7 @@ string2sockaddr(const char *host, int port, struct sockaddr_in *sockaddr)
             port = strtol(p, &pe, 10);        // convert string to number
             if (*pe != '\0') {            // did not match complete string? try as string
 #if (defined(__APPLE__) && defined(__MACH__))
-		        struct servent *e = getservbyname(p, "tcp");
+                struct servent *e = getservbyname(p, "tcp");
 #else
                 struct servent *e = NULL, ebuf;
                 char buf[1024];
@@ -213,33 +214,71 @@ open_connection(const char *host, int port, unsigned int timeout)
     int val = 1;
     struct sockaddr_in sockaddr;
     int sock;
+    struct timeval tv = { timeout, 0 };
 
     errno = EINVAL;
     if (host == NULL || strlen(host) == 0 || port == 0)
-    return -1;
+        return -1;
 
     sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == -1)
-    return -1;
+        return -1;
 
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &val,  sizeof(val));
     if (timeout > 0) {
-    struct timeval tv = { timeout, 0 };
-    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == -1
-        || setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1)
-        fprintf(stderr, "%s:%d: Failed to set timeout to %d\n", host, port, timeout);
+        if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == -1
+            || setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1)
+            fprintf(stderr, "%s:%d: Failed to set timeout to %d\n", host, port, timeout);
     }
 
-    if (string2sockaddr(host, port, &sockaddr) == -1 ||
-        connect(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1)
+    int flags = fcntl(sock, F_GETFL, 0);
+    if (flags == -1) {
+        close(sock);
+        return -1;
+    }
+
+    if (timeout > 0) {
+        flags |= O_NONBLOCK;
+        fcntl(sock, F_SETFL, flags);
+    }
+
+    if (string2sockaddr(host, port, &sockaddr) == -1)
     {
         shutdown(sock, SHUT_RDWR);
         close(sock);
         return -1;
     }
 
-    fcntl(sock, F_SETFD, FD_CLOEXEC);
+    if (timeout > 0) {
+        connect(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
+        fd_set fdset;
+        FD_ZERO(&fdset);
+        FD_SET(sock, &fdset);
 
+        if (select(sock + 1, NULL, &fdset, NULL, &tv) == 1)
+        {
+            int err;
+            socklen_t len = sizeof err;
+            getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &len);
+
+            if (err == 0) {
+                flags &= ~O_NONBLOCK;
+                fcntl(sock, F_SETFL, flags);
+                fcntl(sock, F_SETFD, FD_CLOEXEC);
+                return sock;
+            }
+        }
+
+        close(sock);
+        return -1;
+    }
+
+    if (connect(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1) {
+        shutdown(sock, SHUT_RDWR);
+        close(sock);
+        return -1;
+    }
+    fcntl(sock, F_SETFD, FD_CLOEXEC);
     return sock;
 }
 
@@ -256,11 +295,11 @@ open_lsocket(const char *filename)
 
     errno = EINVAL;
     if (filename == NULL || strlen(filename) == 0)
-    return -1;
+        return -1;
 
     sock = socket(PF_UNIX, SOCK_STREAM, 0);
     if (sock == -1)
-    return -1;
+        return -1;
 
     unlink(filename);
 
