@@ -9,19 +9,15 @@
 
 #include "connections.h"
 #include "messaging.h"
+#include "connections_pool.h"
 #include "shardcache_client.h"
 
 typedef struct chash_t chash_t;
 
-typedef struct {
-    char *label;
-    int fd;
-} shardcache_connection_t;
-
 struct shardcache_client_s {
     chash_t *chash;
     shardcache_node_t *shards;
-    shardcache_connection_t *connections;
+    connections_pool_t *connections;
     int num_shards;
     const char *auth;
     int errno;
@@ -63,7 +59,7 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_
     char *shard_names[num_nodes];
 
     c->shards = malloc(sizeof(shardcache_node_t) * num_nodes);
-    c->connections = malloc(sizeof(shardcache_connection_t) * num_nodes);
+    c->connections = connections_pool_create(30);
     memcpy(c->shards, nodes, sizeof(shardcache_node_t) * num_nodes);
     for (i = 0; i < num_nodes; i++) {
         if (check_address_string(c->shards[i].address) != 0) {
@@ -74,8 +70,6 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_
         }
         shard_names[i] = c->shards[i].label;
         shard_lens[i] = strlen(shard_names[i]);
-        c->connections[i].label = c->shards[i].label;
-        c->connections[i].fd = -1;
     }
 
     c->num_shards = num_nodes;
@@ -90,46 +84,6 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_
     return c;
 }
 
-
-int get_connection_for_node(shardcache_client_t *c, char *node)
-{
-    int i;
-    shardcache_connection_t *conn = NULL;
-    for (i = 0; i < c->num_shards; i++) {
-        if (strcmp(node, c->connections[i].label) == 0) {
-            if (c->connections[i].fd >= 0) {
-                char noop = SHARDCACHE_HDR_NOP;
-                if (write(c->connections[i].fd, &noop, 1) == 1) {
-                    c->errno = SHARDCACHE_CLIENT_OK;
-                    c->errstr[0] = 0;
-                    return c->connections[i].fd;
-                } else {
-                    close(c->connections[i].fd);
-                    c->connections[i].fd = -1;
-                }
-            }
-            conn = &c->connections[i];
-            break;
-        }
-    }
-    for (i = 0; i < c->num_shards; i++) {
-        if (strcmp(node, c->shards[i].label) == 0) {
-            int fd = connect_to_peer(c->shards[i].address, 30);
-            if (fd >= 0) {
-                if (conn)
-                    conn->fd = fd;
-                c->errno = SHARDCACHE_CLIENT_OK;
-                c->errstr[0] = 0;
-                return fd;
-            }
-            break;
-        }
-    }
-    c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
-    snprintf(c->errstr, sizeof(c->errstr), "Can't connect to node: %s", node);
-    return -1; 
-}
-
 char *select_node(shardcache_client_t *c, void *key, size_t klen)
 {
     const char *node_name;
@@ -140,7 +94,7 @@ char *select_node(shardcache_client_t *c, void *key, size_t klen)
 
     for (i = 0; i < c->num_shards; i++) {
         if (strncmp(node_name, c->shards[i].label, name_len) == 0) {
-            addr = c->shards[i].label;
+            addr = c->shards[i].address;
             break;
         }
     }
@@ -151,7 +105,7 @@ char *select_node(shardcache_client_t *c, void *key, size_t klen)
 size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data)
 {
     char *node = select_node(c, key, klen);
-    int fd = get_connection_for_node(c, node);
+    int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return 0;
 
@@ -164,8 +118,10 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
         c->errno = SHARDCACHE_CLIENT_OK;
         c->errstr[0] = 0;
 
+        connections_pool_add(c->connections, node, fd);
         return fbuf_used(&value);
     } else {
+        close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
         snprintf(c->errstr, sizeof(c->errstr), "Can't fetch data from node: %s", node);
         return 0;
@@ -176,15 +132,17 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
 int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
 {
     char *node = select_node(c, key, klen);
-    int fd = get_connection_for_node(c, node);
+    int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return -1;
 
     int rc = send_to_peer(node, (char *)c->auth, key, klen, data, dlen, expire, fd);
     if (rc != 0) {
+        close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
         snprintf(c->errstr, sizeof(c->errstr), "Can't set new data on node: %s", node);
     } else {
+        connections_pool_add(c->connections, node, fd);
         c->errno = SHARDCACHE_CLIENT_OK;
         c->errstr[0] = 0;
     }
@@ -194,14 +152,16 @@ int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *
 int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
-    int fd = get_connection_for_node(c, node);
+    int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return -1;
     int rc = delete_from_peer(node, (char *)c->auth, key, klen, 1, fd);
     if (rc != 0) {
+        close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
         snprintf(c->errstr, sizeof(c->errstr), "Can't delete data from node: %s", node);
     } else {
+        connections_pool_add(c->connections, node, fd);
         c->errno = SHARDCACHE_CLIENT_OK;
         c->errstr[0] = 0;
     }
@@ -211,15 +171,17 @@ int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
 int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
-    int fd = get_connection_for_node(c, node);
+    int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return -1;
 
     int rc = delete_from_peer(node, (char *)c->auth, key, klen, 0, fd);
     if (rc != 0) {
+        close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
         snprintf(c->errstr, sizeof(c->errstr), "Can't evict data from node: %s", node);
     } else {
+        connections_pool_add(c->connections, node, fd);
         c->errno = SHARDCACHE_CLIENT_OK;
         c->errstr[0] = 0;
     }
@@ -229,15 +191,17 @@ int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
 
 int shardcache_client_stats(shardcache_client_t *c, char *node, char **buf, size_t *len)
 {
-    int fd = get_connection_for_node(c, node);
+    int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return -1;
 
     int rc = stats_from_peer(node, (char *)c->auth, buf, len, fd);
     if (rc != 0) {
+        close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
         snprintf(c->errstr, sizeof(c->errstr), "Can't get stats from node: %s", node);
     } else {
+        connections_pool_add(c->connections, node, fd);
         c->errno = SHARDCACHE_CLIENT_OK;
         c->errstr[0] = 0;
     }
@@ -246,15 +210,17 @@ int shardcache_client_stats(shardcache_client_t *c, char *node, char **buf, size
 }
 
 int shardcache_client_check(shardcache_client_t *c, char *node) {
-    int fd = get_connection_for_node(c, node);
+    int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return -1;
 
     int rc = check_peer(node, (char *)c->auth, fd);
     if (rc != 0) {
+        close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
         snprintf(c->errstr, sizeof(c->errstr), "Can't check node: %s", node);
     } else {
+        connections_pool_add(c->connections, node, fd);
         c->errno = SHARDCACHE_CLIENT_OK;
         c->errstr[0] = 0;
     }
@@ -267,6 +233,7 @@ void shardcache_client_destroy(shardcache_client_t *c)
     free(c->shards);
     if (c->auth)
         free((void *)c->auth);
+    connections_pool_destroy(c->connections);
     free(c);
 }
 
@@ -282,15 +249,17 @@ char *shardcache_client_errstr(shardcache_client_t *c)
 
 shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *node)
 {
-    int fd = get_connection_for_node(c, node);
+    int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return NULL;
 
     shardcache_storage_index_t *index = index_from_peer(node, (char *)c->auth, fd);
     if (!index) {
+        close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
         snprintf(c->errstr, sizeof(c->errstr), "Can't get index from node: %s", node);
     } else {
+        connections_pool_add(c->connections, node, fd);
         c->errno = SHARDCACHE_CLIENT_OK;
         c->errstr[0] = 0;
     }
@@ -316,7 +285,7 @@ int shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t 
     }
 
     for (i = 0; i < c->num_shards; i++) {
-        int fd = get_connection_for_node(c, c->shards[i].label);
+        int fd = connections_pool_get(c->connections, c->shards[i].address);
         if (fd < 0) {
             fbuf_destroy(&mgb_message);
             return -1;
@@ -327,6 +296,7 @@ int shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t 
                               fbuf_data(&mgb_message),
                               fbuf_used(&mgb_message), fd);
         if (rc != 0) {
+            close(fd);
             c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
             snprintf(c->errstr, sizeof(c->errstr), "Node %s (%s) didn't aknowledge the migration\n",
                     c->shards[i].label, c->shards[i].address);
@@ -334,6 +304,7 @@ int shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t 
             // XXX - should we abort migration on peers that have been notified (if any)? 
             return -1;
         }
+        connections_pool_add(c->connections, c->shards[i].address, fd);
     }
     fbuf_destroy(&mgb_message);
 
@@ -347,7 +318,7 @@ int shardcache_client_migration_abort(shardcache_client_t *c)
 {
     int i;
     for (i = 0; i < c->num_shards; i++) {
-        int fd = get_connection_for_node(c, c->shards[i].label);
+        int fd = connections_pool_get(c->connections, c->shards[i].address);
         if (fd < 0) {
             return -1;
         }
@@ -355,11 +326,13 @@ int shardcache_client_migration_abort(shardcache_client_t *c)
         int rc =  abort_migrate_peer(c->shards[i].label, (char *)c->auth, fd);
 
         if (rc != 0) {
+            close(fd);
             c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
             snprintf(c->errstr, sizeof(c->errstr),
                      "Can't abort migration from node: %s", c->shards[i].label);
             return -1;
         }
+        connections_pool_add(c->connections, c->shards[i].address, fd);
     }
  
     c->errno = SHARDCACHE_CLIENT_OK;
