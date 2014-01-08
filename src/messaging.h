@@ -6,7 +6,8 @@
 
 /* protocol specification
  *
- * MESSAGE      : <MSG>[<SIG>] | <NOOP>
+ * MESSAGE      : [<SIG_HDR>]<MSG>[<SIG>] | <NOOP>
+ * SIG_HDR      : 0xF0
  * MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
  * NOOP         : <MSG_NOP>
  * HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_EVI> |
@@ -45,21 +46,21 @@
  * 
  * The only valid/supported messages are :
  * 
- * GET_MESSAGE  : <MSG_GET><KEY><EOM>[<SIG>]
- * SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>[<SIG>]
- * DEL_MESSAGE  : <MSG_DEL><KEY><EOM>[<SIG>]
- * EVI_MESSAGE  : <MSG_EVI><KEY><EOM>[<SIG>]
- * RES_MESSAGE  : <MSG_RES><RECORD><EOM>[<SIG>]
+ * GET_MESSAGE  : [<SIG_HDR>]<MSG_GET><KEY><EOM>[<SIG>]
+ * SET_MESSAGE  : [<SIG_HDR>]<MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>[<SIG>]
+ * DEL_MESSAGE  : [<SIG_HDR>]<MSG_DEL><KEY><EOM>[<SIG>]
+ * EVI_MESSAGE  : [<SIG_HDR>]<MSG_EVI><KEY><EOM>[<SIG>]
+ * RES_MESSAGE  : [<SIG_HDR>]<MSG_RES><RECORD><EOM>[<SIG>]
 
- * MGB_MESSAGE  : <MSG_MGB><NODES_LIST><EOM>[<SIG>]
- * MGA_MESSAGE  : <MSG_MGA><NULL_RECORD><EOM>[<SIG>]
- * MGE_MESSAGE  : <MSG_MGE><NULL_RECORD><EOM>[<SIG>]
+ * MGB_MESSAGE  : [<SIG_HDR>]<MSG_MGB><NODES_LIST><EOM>[<SIG>]
+ * MGA_MESSAGE  : [<SIG_HDR>]<MSG_MGA><NULL_RECORD><EOM>[<SIG>]
+ * MGE_MESSAGE  : [<SIG_HDR>]<MSG_MGE><NULL_RECORD><EOM>[<SIG>]
  * 
- * STS_MESSAGE  : <MSG_STS><NULL_RECORD><EOM>[<SIG>]
- * CHK_MESSAGE  : <MSG_PNG><NULL_RECORD><EOM>[<SIG>]
+ * STS_MESSAGE  : [<SIG_HDR>]<MSG_STS><NULL_RECORD><EOM>[<SIG>]
+ * CHK_MESSAGE  : [<SIG_HDR>]<MSG_PNG><NULL_RECORD><EOM>[<SIG>]
  * 
- * IDG_MESSAGE  : <MSG_IDG><NULL_RECORD><EOM>[<SIG>]
- * IDR_MESSAGE  : <MSG_IDR><INDEX><EOM>[<SIG>]
+ * IDG_MESSAGE  : [<SIG_HDR>]<MSG_IDG><NULL_RECORD><EOM>[<SIG>]
+ * IDR_MESSAGE  : [<SIG_HDR>]<MSG_IDR><INDEX><EOM>[<SIG>]
  */
 
 // in bytes
@@ -79,14 +80,15 @@ typedef enum {
     SHARDCACHE_HDR_IDG  = 0x41,
     SHARDCACHE_HDR_IDR  = 0x42,
     SHARDCACHE_HDR_NOP  = 0x90,
-    SHARDCACHE_HDR_RES  = 0x99
+    SHARDCACHE_HDR_RES  = 0x99,
+    SHARDCACHE_HDR_SIG  = 0xF0
 } shardcache_hdr_t;
 
 #define SHARDCACHE_RSEP 0x80
 
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr);
 int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire);
-int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire, fbuf_t *out);
+int build_message(char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire, fbuf_t *out);
 int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner, int fd);
 int send_to_peer(char *peer, char *auth, void *key, size_t klen, void *value, size_t vlen, uint32_t expire, int fd);
 int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out, int fd);

@@ -77,6 +77,7 @@ typedef struct {
 #define STATE_READING_EXPIRE 0x03
 #define STATE_READING_AUTH   0x04
 #define STATE_READING_DONE   0x05
+#define STATE_READING_ERR    0x0F
     char    state;
     char    rsep_expected;
     const char    *auth;
@@ -116,6 +117,7 @@ static void shardcache_destroy_connection_context(shardcache_connection_context_
 
 static void write_status(shardcache_connection_context_t *ctx, int rc) {
     char out[20];
+
     out[0] = SHARDCACHE_HDR_RES;
     out[1] = 0;
 
@@ -133,6 +135,13 @@ static void write_status(shardcache_connection_context_t *ctx, int rc) {
     }
     memset(p, 0, 3);
     p += 3;
+
+
+    if (ctx->auth) {
+        char hdr_sig = SHARDCACHE_HDR_SIG;
+        fbuf_add_binary(ctx->output, &hdr_sig, 1);
+    }
+
     fbuf_add_binary(ctx->output, out, p - &out[0]);
 
     if (ctx->auth) {
@@ -158,15 +167,13 @@ static void *process_request(void *priv) {
             fbuf_t out = FBUF_STATIC_INITIALIZER;
             size_t vlen = 0;
             void *v = shardcache_get(cache, key, klen, &vlen, NULL);
-            if (build_message(SHARDCACHE_HDR_RES, v, vlen, NULL, 0, 0, &out) == 0) {
+            if (build_message((char *)ctx->auth,
+                              SHARDCACHE_HDR_RES,
+                              v, vlen,
+                              NULL, 0,
+                              0, &out) == 0)
+            {
                 fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
-                if (ctx->auth) {
-                    uint64_t digest;
-                    sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
-                    sip_hash_digest_integer(shash, fbuf_data(&out), fbuf_used(&out), &digest);
-                    sip_hash_free(shash);
-                    fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
-                }
             } else {
                 // TODO - Error Messages
             }
@@ -269,15 +276,13 @@ static void *process_request(void *priv) {
                 }
 
                 fbuf_t out = FBUF_STATIC_INITIALIZER;
-                if (build_message(SHARDCACHE_HDR_RES, fbuf_data(&buf), fbuf_used(&buf), NULL, 0, 0, &out) == 0) {
+                if (build_message((char *)ctx->auth,
+                                  SHARDCACHE_HDR_RES,
+                                  fbuf_data(&buf), fbuf_used(&buf),
+                                  NULL, 0,
+                                  0, &out) == 0)
+                {
                     fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
-                    if (ctx->auth) {
-                        uint64_t digest;
-                        sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
-                        sip_hash_digest_integer(shash, fbuf_data(&out), fbuf_used(&out), &digest);
-                        sip_hash_free(shash);
-                        fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
-                    }
                 } else {
                     // TODO - Error Messages
                 }
@@ -312,16 +317,14 @@ static void *process_request(void *priv) {
             }
 
             // chunkize the data and build an actual message
-            if (build_message(SHARDCACHE_HDR_IDR, fbuf_data(&buf), fbuf_used(&buf), NULL, 0, 0, &out) == 0) {
+            if (build_message((char *)ctx->auth,
+                              SHARDCACHE_HDR_IDR,
+                              fbuf_data(&buf), fbuf_used(&buf),
+                              NULL, 0,
+                              0, &out) == 0)
+            {
                 fbuf_destroy(&buf); // destroy it early ... since we still need one more copy
                 fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
-                if (ctx->auth) {
-                    uint64_t digest;
-                    sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
-                    sip_hash_digest_integer(shash, fbuf_data(&out), fbuf_used(&out), &digest);
-                    sip_hash_free(shash);
-                    fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
-                }
             } else {
                 fbuf_destroy(&buf);
                 // TODO - Error Messages
@@ -351,22 +354,8 @@ static void shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
     }
 }
 
-static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len, void *priv)
+static void shardcache_read_asynchronous(shardcache_connection_context_t *ctx, int fd)
 {
-    shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
-    if (!ctx)
-        return;
-
-    int wb = rbuf_write(ctx->input, data, len);
-    if (wb != len) {
-        fprintf(stderr, "Buffer underrun!");
-        iomux_close(iomux, fd);
-        return;
-    }
-
-    if (!rbuf_len(ctx->input) > 0)
-        return;
-    
     if (ctx->state == STATE_READING_NONE) {
         unsigned char hdr;
         rbuf_read(ctx->input, &hdr, 1);
@@ -375,6 +364,21 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
 
         if (hdr == SHARDCACHE_HDR_NOP)
             return;
+
+        if (hdr == SHARDCACHE_HDR_SIG) {
+            if (!ctx->auth) {
+                ctx->state = STATE_READING_ERR;
+                return;
+            }
+            if (rbuf_len(ctx->input) < 1)
+                return;
+
+            rbuf_read(ctx->input, &hdr, 1);
+        } else if (ctx->auth) {
+            // we are expecting the signature header
+            ctx->state = STATE_READING_ERR;
+            return;
+        }
 
         if (hdr != SHARDCACHE_HDR_GET &&
             hdr != SHARDCACHE_HDR_SET &&
@@ -396,7 +400,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
             fprintf(stderr, "BAD REQUEST %02x from %s\n", hdr, inet_ntoa(saddr.sin_addr));
 #endif
-            iomux_close(iomux, fd);
+            ctx->state = STATE_READING_ERR;
             return;
         }
 
@@ -438,7 +442,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             } else {
                 // BAD FORMAT
                 fprintf(stderr, "Bad formatted requested\n");
-                iomux_close(iomux, fd);
+                ctx->state = STATE_READING_ERR;
                 return;
             }
             if (ctx->shash) {
@@ -465,7 +469,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                         // BAD FORMAT - Ignore
                         // we don't support multiple records if the message is not SET
                         fprintf(stderr, "Bad formatted requested\n");
-                        iomux_close(iomux, fd);
+                        ctx->state = STATE_READING_ERR;
                         return;
                     }
 
@@ -476,12 +480,12 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
                         ctx->state = STATE_READING_EXPIRE;
                     } else {
                         fprintf(stderr, "Bad formatted requested\n");
-                        iomux_close(iomux, fd);
+                        ctx->state = STATE_READING_ERR;
                         return;
                     }
                 } else {
                     fprintf(stderr, "Bad formatted requested\n");
-                    iomux_close(iomux, fd);
+                    ctx->state = STATE_READING_ERR;
                     return;
                 }
             } else if (bsep == 0) {
@@ -505,7 +509,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         if (!sip_hash_final_integer(ctx->shash, &digest)) {
             // TODO - Error Messages
             fprintf(stderr, "Bad signature\n");
-            iomux_close(iomux, fd);
+            ctx->state = STATE_READING_ERR;
             return;
         }
 
@@ -536,13 +540,37 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             fprintf(stderr, "Unauthorized request from %s\n",
                     inet_ntoa(saddr.sin_addr));
 
-            iomux_close(iomux, fd);
+            ctx->state = STATE_READING_ERR;
             return;
         }
         ctx->state = STATE_READING_DONE;
     }
+}
 
-    if (ctx->state == STATE_READING_DONE) {
+static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len, void *priv)
+{
+    shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
+    if (!ctx)
+        return;
+
+    int wb = rbuf_write(ctx->input, data, len);
+    if (wb != len) {
+        fprintf(stderr, "Buffer underrun!");
+        iomux_close(iomux, fd);
+        return;
+    }
+
+    if (!rbuf_len(ctx->input) > 0)
+        return;
+    
+    // new data arrived so we want to run the asyncrhonous reader to update the context
+    shardcache_read_asynchronous(ctx, fd);
+
+    // if a complete message has been handled (so we are back to STATE_READING_NONE)
+    // but we still have data in the read buffer, it means that multiple commands 
+    // were concatenated, so we need to run the asynchronous reader again to consume
+    // the buffer until we can.
+    while (ctx->state == STATE_READING_DONE) {
         shardcache_worker_context_t *wrkctx = ctx->worker_ctx;
         ATOMIC_CAS(wrkctx->busy, 0, 1);
 
@@ -569,7 +597,13 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         }
         if (ctx->auth)
             ctx->shash = sip_hash_new((uint8_t *)ctx->auth, 2, 4);
+
+        if (ctx->state == STATE_READING_NONE && rbuf_len(ctx->input) > 0)
+            shardcache_read_asynchronous(ctx, fd);
     }
+
+    if (ctx->state == STATE_READING_ERR)
+        iomux_close(iomux, fd);
 }
 
 static void shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)

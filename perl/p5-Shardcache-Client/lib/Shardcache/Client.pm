@@ -142,6 +142,9 @@ sub send_msg {
         $sock = $self->{_sock}->{"$addr:$port"};
     }
                                      
+    return undef
+        if $self->{_secret} && $sock->write(0xF0) != 1;
+
     my $wb = $sock->write($msg);
     
     # read the response
@@ -149,12 +152,23 @@ sub send_msg {
     my $data;
 
 
+    if ($self->{_secret}) {
+        if (read($sock, $data, 1) != 1) {
+            delete $self->{_sock}->{"$addr:$port"};
+            return undef;
+        }
+
+        return undef 
+            if (unpack("C", $data) != 0xF0); 
+    }
     # read the header
     if (read($sock, $data, 1) != 1) {
         delete $self->{_sock}->{"$addr:$port"};
         return undef;
     }
 
+    return undef
+        if (unpack("C", $data) == 0xF0);
     $in .= $data;
 
     my $stop = 0;

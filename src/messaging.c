@@ -31,7 +31,23 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
         int rb;
 
         if (reading_message == 0) {
-            rb = read_socket(fd, &hdr, 1);
+
+            do {
+                rb = read_socket(fd, &hdr, 1);
+            } while (rb == 1 && hdr == SHARDCACHE_HDR_NOP);
+
+            if (rb == 1) {
+                if (hdr == SHARDCACHE_HDR_SIG) {
+                    if (!shash) // no secred is configured but the message is signed
+                        return -1;
+                    rb = read_socket(fd, &hdr, 1);
+                } else if (shash) {
+                    // we are expecting a signature header
+                    sip_hash_free(shash);
+                    return -1;
+                }
+            }
+
             if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
                 if (shash)
                     sip_hash_free(shash);
@@ -39,6 +55,7 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
             } else if (rb == -1) {
                 continue;
             }
+
             if (hdr != SHARDCACHE_HDR_GET &&
                 hdr != SHARDCACHE_HDR_SET &&
                 hdr != SHARDCACHE_HDR_DEL &&
@@ -228,22 +245,28 @@ int _chunkize_buffer(void *buf, size_t blen, fbuf_t *out)
     return -1;
 }
 
-int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire, fbuf_t *out)
+int build_message(char *auth, char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t expire, fbuf_t *out)
 {
     static char eom = 0;
     static char sep = SHARDCACHE_RSEP;
     uint16_t    eor = 0;
 
-    fbuf_clear(out);
+    uint16_t out_initial_offset = fbuf_used(out);
+
+    if (auth) {
+        char hdr_sig = SHARDCACHE_HDR_SIG;
+        fbuf_add_binary(out, &hdr_sig, 1);
+    }
+
     fbuf_add_binary(out, &hdr, 1);
     if (k && klen) {
         if (_chunkize_buffer(k, klen, out) != 0)
             return -1;
-    } else {
-        fbuf_add_binary(out, (char *)&eor, sizeof(eor));
-        fbuf_add_binary(out, &eom, 1);
-        return 0;
     }
+    else {
+        fbuf_add_binary(out, (char *)&eor, sizeof(eor));
+    }
+
     if (hdr == SHARDCACHE_HDR_SET) {
         if (v && vlen) {
             fbuf_add_binary(out, &sep, 1);
@@ -264,6 +287,17 @@ int build_message(char hdr, void *k, size_t klen, void *v, size_t vlen, uint32_t
         }
     }
     fbuf_add_binary(out, &eom, 1);
+
+    if (auth) {
+        uint64_t digest;
+        size_t dlen = sizeof(digest);
+        sip_hash *shash = sip_hash_new(auth, 2, 4);
+        sip_hash_digest_integer(shash, fbuf_data(out) + out_initial_offset + 1, fbuf_used(out) - (out_initial_offset + 1), &digest);
+        sip_hash_free(shash);
+        fbuf_add_binary(out, (char *)&digest, dlen);
+
+    }
+
     return 0;
 }
 
@@ -271,40 +305,37 @@ int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, s
 {
 
     fbuf_t msg = FBUF_STATIC_INITIALIZER;
-    if (build_message(hdr, k, klen, v, vlen, expire, &msg) != 0) {
+
+    if (build_message(auth, hdr, k, klen, v, vlen, expire, &msg) != 0)
+    {
         // TODO - Error Messages
         fbuf_destroy(&msg);
         return -1;
     }
 
-    if (auth) {
-        uint64_t digest;
-        size_t dlen = sizeof(digest);
-        sip_hash *shash = sip_hash_new(auth, 2, 4);
-        sip_hash_digest_integer(shash, fbuf_data(&msg), fbuf_used(&msg), &digest);
-        sip_hash_free(shash);
-        fbuf_add_binary(&msg, (char *)&digest, dlen);
-
 #ifdef SHARDCACHE_DEBUG
-        int i;
-        fprintf(stderr, "sending message: ");
-        size_t mlen = fbuf_used(&msg);
-        if (mlen > 256)
-           mlen = 256;
-        for (i = 0; i < mlen - dlen; i++) {
-            fprintf(stderr, "%02x", (unsigned char)(fbuf_data(&msg))[i]);
-        }
-        if (mlen < fbuf_used(&msg))
-            fprintf(stderr, "...");
-        fprintf(stderr, "\n");
+    int i;
+    fprintf(stderr, "sending message: ");
+    size_t mlen = fbuf_used(&msg);
+    size_t dlen = auth ? sizeof(uint64_t) : 0;
 
+    if (mlen > 256)
+       mlen = 256;
+    for (i = 0; i < mlen - dlen; i++) {
+        fprintf(stderr, "%02x", (unsigned char)(fbuf_data(&msg))[i]);
+    }
+    if (mlen < fbuf_used(&msg))
+        fprintf(stderr, "...");
+    fprintf(stderr, "\n");
+
+    if (dlen && fbuf_used(&msg) >= dlen) {
         fprintf(stderr, "computed digest: ");
         for (i=0; i < dlen; i++) {
-            fprintf(stderr, "%02x", (unsigned char)((char *)&digest)[i]);
+            fprintf(stderr, "%02x", (unsigned char)(fbuf_end(&msg)-dlen)[i]);
         }
         fprintf(stderr, "\n");
-#endif
     }
+#endif
 
     while(fbuf_used(&msg) > 0) {
         int wb = fbuf_write(&msg, fd, 0);

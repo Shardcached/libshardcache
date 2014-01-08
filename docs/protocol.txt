@@ -1,6 +1,7 @@
 The internal communication protocol may described by the following grammar:
 
-MESSAGE      : <MSG>[<SIG>] | <NOOP>
+MESSAGE      : [<SIG_HDR>]<MSG>[<SIG>] | <NOOP>
+SIG_HDR      : 0xF0
 MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
 NOOP         : <MSG_NOP>
 HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_EVI> |
@@ -44,21 +45,21 @@ INDEX        : <RECORD>
 The only supported messages are the following:
 
 
-GET_MESSAGE  : <MSG_GET><KEY><EOM>[<SIG>]
-SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>[<SIG>]
-DEL_MESSAGE  : <MSG_DEL><KEY><EOM>[<SIG>]
-EVI_MESSAGE  : <MSG_EVI><KEY><EOM>[<SIG>]
-RES_MESSAGE  : <MSG_RES><RECORD><EOM>[<SIG>]
+GET_MESSAGE  : [<SIG_HDR>]<MSG_GET><KEY><EOM>[<SIG>]
+SET_MESSAGE  : [<SIG_HDR>]<MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>[<SIG>]
+DEL_MESSAGE  : [<SIG_HDR>]<MSG_DEL><KEY><EOM>[<SIG>]
+EVI_MESSAGE  : [<SIG_HDR>]<MSG_EVI><KEY><EOM>[<SIG>]
+RES_MESSAGE  : [<SIG_HDR>]<MSG_RES><RECORD><EOM>[<SIG>]
 
-MGB_MESSAGE  : <MSG_MGB><NODES_LIST><EOM>[<SIG>]
-MGA_MESSAGE  : <MSG_MGA><NULL_RECORD><EOM>[<SIG>]
-MGE_MESSAGE  : <MSG_MGE><NULL_RECORD><EOM>[<SIG>]
+MGB_MESSAGE  : [<SIG_HDR>]<MSG_MGB><NODES_LIST><EOM>[<SIG>]
+MGA_MESSAGE  : [<SIG_HDR>]<MSG_MGA><NULL_RECORD><EOM>[<SIG>]
+MGE_MESSAGE  : [<SIG_HDR>]<MSG_MGE><NULL_RECORD><EOM>[<SIG>]
 
-STS_MESSAGE  : <MSG_STS><NULL_RECORD><EOM>[<SIG>]
-CHK_MESSAGE  : <MSG_CHK><NULL_RECORD><EOM>[<SIG>]
+STS_MESSAGE  : [<SIG_HDR>]<MSG_STS><NULL_RECORD><EOM>[<SIG>]
+CHK_MESSAGE  : [<SIG_HDR>]<MSG_CHK><NULL_RECORD><EOM>[<SIG>]
 
-IDG_MESSAGE  : <MSG_IDG><NULL_RECORD><EOM>[<SIG>]
-IDR_MESSAGE  : <MSG_IDR><INDEX><EOM>[<SIG>]
+IDG_MESSAGE  : [<SIG_HDR>]<MSG_IDG><NULL_RECORD><EOM>[<SIG>]
+IDR_MESSAGE  : [<SIG_HDR>]<MSG_IDR><INDEX><EOM>[<SIG>]
 
 
 -------------------------------------------------------------------------------
@@ -100,6 +101,8 @@ The layout for an empty (but still valid) message would be :
 ===============================================================================
 |  FIELD   |  SIZE   |  DESC                                                  |
 |----------|---------|--------------------------------------------------------|
+| SIG_HDR  | 1 Byte  |  The signature header (0xF0)                           |
+|----------|---------|--------------------------------------------------------|
 |   HDR    | 1 Byte  |  The message type                                      |
 |----------|---------|--------------------------------------------------------|
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
@@ -114,6 +117,8 @@ A message containing one record (fitting a single chunk) would look like :
 
 ===============================================================================
 |  FIELD   |  SIZE   |  DESC                                                  |
+|----------|---------|--------------------------------------------------------|
+| SIG_HDR  | 1 Byte  |  The signature header (0xF0)                           |
 |----------|---------|--------------------------------------------------------|
 |   HDR    | 1 Byte  |  The message type                                      |
 |----------|---------|--------------------------------------------------------|
@@ -136,6 +141,8 @@ key, value and ttl need to be provided (still fitting in one chunk) :
 
 ===============================================================================
 |  FIELD   |  SIZE   |  DESC                                                  |
+|----------|---------|--------------------------------------------------------|
+| SIG_HDR  | 1 Byte  |  The signature header (0xF0)                           |
 |----------|---------|--------------------------------------------------------|
 |   HDR    | 1 Byte  |  The message type                                      |
 |----------|---------|--------------------------------------------------------|
@@ -173,6 +180,8 @@ look like (this time without the ttl record):
 
 ===============================================================================
 |  FIELD   |  SIZE   |  DESC                                                  |
+|----------|---------|--------------------------------------------------------|
+| SIG_HDR  | 1 Byte  |  The signature header (0xF0)                           |
 |----------|---------|--------------------------------------------------------|
 |   HDR    | 1 Byte  |  The message type                                      |
 |----------|---------|--------------------------------------------------------|
@@ -223,25 +232,25 @@ NOTE: The protocol allows for an unlimited amount of records, even though
       all other request types require only one record to be provided)
 
 
-More Examples
+More Examples (The signature header and postfix are omitted for simplicity)
 
 A GET message for the key FOO (hex sequence: 0x46 0x4f 0x4f) would look like:
 
-<01><00><03><46><4f><4f><00><00><00><SIG>
+<01><00><03><46><4f><4f><00><00><00>
 
 -------------------------------------------------------------------------------
 
 A SET message for the key FOO (hex sequence: 0x46 0x4f 0x4f)
 assigning the value TEST (hex sequence: 0x54 0x45 0x53 0x54) would look like:
 
-<02><00><03><46><4f><4f><00><00><80><00><04><54><45><53><54><00><00><00><SIG>
+<02><00><03><46><4f><4f><00><00><80><00><04><54><45><53><54><00><00><00>
 
 -------------------------------------------------------------------------------
 
 A DEL message for the FOO would look exactly like a GET message but with a
 different HDR value :
 
-<03><00><03><46><4f><4f><00><00><00><SIG>
+<03><00><03><46><4f><4f><00><00><00>
 
 An EVI message would look exactly like a DEL message but with an HDR byte equal
 to 0x04
@@ -250,20 +259,24 @@ to 0x04
 
 A RES message containing a value "OK" (0x4f 0x4b) would look like:
 
-<99><00><02><4f><4b><00><00><00><SIG>
+<99><00><02><4f><4b><00><00><00>
 
 -------------------------------------------------------------------------------
 
 A RES with an empty value (for instance if querying a not-existing key):
 
-<99><00><00><00><SIG>
+<99><00><00><00>
 
 -------------------------------------------------------------------------------
 
 NOTES:
 
+
+A signed message MUST be wrapped with a SIG_HDR prefix and a SIG postfix.
 The SIG postfix is a siphash digest computed using a shared secret and the
 complete message (obviously excluding the signature itself)
+
+The signature is optional and can be omitted.
 
 Responses to 'GET' requests will return the value for the requested key
 if found, an empty value otherwise
