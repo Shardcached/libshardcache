@@ -86,7 +86,7 @@ int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen);
 /**
  * @brief Get the stats from a shardcache node
  * @param c     A valid pointer to a shardcache_client_t structure
- * @param node  The name of the node we want to get stats from
+ * @param node_name  The name of the node we want to get stats from
  * @param buf   A reference to the pointer which will be set to point to the memory
  *              holding the retrieved stats
  * @param len If not NULL, the size of memory pointed by *buf is stored in *len
@@ -97,18 +97,18 @@ int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen);
  * @see shardcache_client_errno()
  * @see shardcache_client_errstr()
  */
-int shardcache_client_stats(shardcache_client_t *c, char *node, char **buf, size_t *len);
+int shardcache_client_stats(shardcache_client_t *c, char *node_name, char **buf, size_t *len);
 
 /**
  * @brief Check the status of a shardcache node
  * @param c     A valid pointer to a shardcache_client_t structure
- * @param node  The name of the node we want to get stats from
+ * @param node_name  The name of the node we want to get stats from
  * @return 0 success, -1 otherwise and the internal errno is set
  * @note On success the internal errno will be set to SHARDCACHE_CLIENT_OK
  * @see shardcache_client_errno()
  * @see shardcache_client_errstr()
  */
-int shardcache_client_check(shardcache_client_t *c, char *node);
+int shardcache_client_check(shardcache_client_t *c, char *node_name);
 
 /**
  * @brief Start a migration
@@ -137,7 +137,7 @@ int shardcache_client_migration_abort(shardcache_client_t *c);
 /**
  * @brief Get the index from a shardcache node
  * @param c     A valid pointer to a shardcache_client_t structure
- * @param node  The name of the node we want to get stats from
+ * @param node_name  The name of the node we want to get stats from
  * @return 0 success, -1 otherwise
  * @note The caller must use shardcache_free_index() to release memory used
  *       by the returned shardcache_storage_index_t pointer
@@ -145,7 +145,7 @@ int shardcache_client_migration_abort(shardcache_client_t *c);
  * @see shardcache_client_errno()
  * @see shardcache_client_errstr()
  */
-shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *node);
+shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *node_name);
 
 /**
  * @brief Return the error code for the last operation performed by the shardcache client
