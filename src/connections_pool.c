@@ -80,11 +80,6 @@ int connections_pool_get(connections_pool_t *cc, char *addr)
     }
 
     int new_fd = connect_to_peer(addr, __sync_fetch_and_add(&cc->tcp_timeout, 0));
-    if (new_fd) {
-        fd = malloc(sizeof(int));
-        *fd = new_fd;
-        queue_push_right(connection_queue, (void *)fd);
-    }
 
     return new_fd; 
 }
