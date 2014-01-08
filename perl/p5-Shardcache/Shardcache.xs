@@ -43,6 +43,7 @@ static size_t __st_index(shardcache_storage_index_item_t *index, size_t isize, v
         fprintf(stderr, "__st_fetch can't acquire lock\n");
         return 0;
     }
+
     PERL_SET_CONTEXT(orig_perl);
     dTHX;
     dSP;
@@ -50,7 +51,7 @@ static size_t __st_index(shardcache_storage_index_item_t *index, size_t isize, v
     ENTER;
     SAVETMPS;
 
-    SV *storage = (SV *)priv;
+    SV *storage = SvRV((SV *)priv);
     if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
         croak("missing storage or not of class 'Shardcache::Storage'");
     }
@@ -111,7 +112,7 @@ static size_t __st_count(void *priv) {
     ENTER;
     SAVETMPS;
 
-    SV *storage = (SV *)priv;
+    SV *storage = SvRV((SV *)priv);
     if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
         croak("missing storage or not of class 'Shardcache::Storage'");
     }
@@ -151,7 +152,7 @@ static void *__st_fetch(void *key, size_t len, size_t *vlen, void *priv) {
     ENTER;
     SAVETMPS;
 
-    SV *storage = (SV *)priv;
+    SV *storage = SvRV((SV *)priv);
     SV *k = newSVpv(key, len);
 
     if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
@@ -211,7 +212,7 @@ static int __st_store(void *key, size_t len, void *value, size_t vlen, void *pri
     PERL_SET_CONTEXT(orig_perl);
     dTHX;
     dSP;
-    SV *storage = (SV *)priv;
+    SV *storage = SvRV((SV *)priv);
     SV *k = newSVpv(key, len);
     SV *v = newSVpv(value, vlen);
 
@@ -226,6 +227,10 @@ static int __st_store(void *key, size_t len, void *value, size_t vlen, void *pri
     PUTBACK;
 
     call_method("store", G_DISCARD);
+
+    FREETMPS;
+    LEAVE;
+
     pthread_mutex_unlock(&lock);
     return 0;
 }
@@ -236,9 +241,8 @@ static int __st_remove(void *key, size_t len, void *priv) {
         return -1;
     }
     PERL_SET_CONTEXT(orig_perl);
-    dTHX;
     dSP;
-    SV *storage = (SV *)priv;
+    SV *storage = SvRV((SV *)priv);
     SV *k = newSVpv(key, len);
 
     if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
@@ -251,6 +255,8 @@ static int __st_remove(void *key, size_t len, void *priv) {
     PUTBACK;
 
     call_method("remove", G_DISCARD);
+    FREETMPS;
+    LEAVE;
     pthread_mutex_unlock(&lock);
     return 0;
 }
@@ -263,7 +269,7 @@ static int __st_exist(void *key, size_t len, void *priv) {
     PERL_SET_CONTEXT(orig_perl);
     dTHX;
     dSP;
-    SV *storage = (SV *)priv;
+    SV *storage = SvRV((SV *)priv);
     SV *k = newSVpv(key, len);
 
     if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
@@ -314,7 +320,6 @@ shardcache_create(me, nodes, storage, secret, num_workers, cache_size = 1<<20, e
 	int	num_nodes = 0;
         shardcache_node_t *shards = NULL;
     CODE:
-        orig_perl = PERL_GET_CONTEXT;
         if (!sv_isobject(storage) || !sv_derived_from(storage, "Shardcache::Storage")) {
             croak("missing storage or not of class 'Shardcache::Storage'");
         }
@@ -334,12 +339,12 @@ shardcache_create(me, nodes, storage, secret, num_workers, cache_size = 1<<20, e
 
                     SV **svp = av_fetch(nodes_array, i, 0);
                     if (svp) {
-                        if (SvROK(*svp) && SvTYPE(SvRV(*svp)) != SVt_PVAV) {
+                        if (SvROK(*svp) && SvTYPE(SvRV(*svp)) == SVt_PVAV) {
                             AV *pa = (AV *)SvRV(*svp);
-                            SV **nodep = av_fetch(pa, i, 0);
+                            SV **nodep = av_fetch(pa, 0, 0);
                             node = SvPVbyte(*nodep, len);
                             if (av_len(pa)) {
-                                SV **addrp = av_fetch(pa, i, 1);
+                                SV **addrp = av_fetch(pa, 1, 0);
                                 addr = SvPVbyte(*addrp, alen);
                             } else {
                                 addr = node;
@@ -376,17 +381,21 @@ shardcache_create(me, nodes, storage, secret, num_workers, cache_size = 1<<20, e
             .exist   = __st_exist,
             .index   = __st_index,
             .count   = __st_count,
-            .priv    = SvREFCNT_inc(storage)
+            .priv    = newRV_inc(storage)
         };
 
         RETVAL = shardcache_create(me, shards, num_nodes, &storage_struct,
-                                   secret, num_workers, cache_size, evict_on_delete);
+                                   secret, num_workers, cache_size);
         if (shards)
             Safefree(shards);
+
+        shardcache_evict_on_delete(RETVAL, evict_on_delete);
+        shardcache_use_persistent_connections(RETVAL, 0);
 
         if (RETVAL == NULL)
             croak("Unknown error");
 
+        orig_perl = PERL_GET_CONTEXT;
     OUTPUT:
         RETVAL
 
@@ -602,8 +611,4 @@ shardcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
                 }
             } while (rc != 0);
         }
-        /*
-        perl_free(slave_perl);
-        PERL_SET_CONTEXT(orig_perl);        
-        */
 
