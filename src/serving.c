@@ -78,6 +78,7 @@ typedef struct {
 #define STATE_READING_AUTH   0x04
 #define STATE_READING_DONE   0x05
     char    state;
+    char    rsep_expected;
     const char    *auth;
     sip_hash *shash;
     shardcache_worker_context_t *worker_ctx;
@@ -406,7 +407,10 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
     }
 
     for (;;) {
-        if (ctx->clen == 0) {
+        if (ctx->state == STATE_READING_AUTH)
+            break;
+        
+        if (ctx->clen == 0 && !ctx->rsep_expected) {
             if (rbuf_len(ctx->input) < 2)
                 break;
             uint16_t nlen = 0;
@@ -444,6 +448,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         } else {
             if (rbuf_len(ctx->input) < 1) {
                 // TRUNCATED - we need more data
+                ctx->rsep_expected = 1;
                 break;
             }
 
@@ -451,6 +456,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
             rbuf_read(ctx->input, &bsep, 1);
             if (ctx->shash)
                 sip_hash_update(ctx->shash, &bsep, 1);
+            ctx->rsep_expected = 0;
             if (bsep == SHARDCACHE_RSEP) {
                 if (ctx->state == STATE_READING_KEY) {
                     if (ctx->hdr == SHARDCACHE_HDR_SET) {
