@@ -132,7 +132,7 @@ sub send_msg {
         }
         
         if (!$self->{_sock}->{"$addr:$port"} || !$self->{_sock}->{"$addr:$port"}->connected ||
-            $self->{_sock}->{"$addr:$port"}->write(pack("C4", 0x90, 0x00, 0x00, 0x00)) != 4)
+            $self->{_sock}->{"$addr:$port"}->write(pack("C1", 0x90)) != 1)
         {
             $self->{_sock}->{"$addr:$port"} = IO::Socket::INET->new(PeerAddr => $addr,
                                                  PeerPort => $port,
@@ -142,8 +142,9 @@ sub send_msg {
         $sock = $self->{_sock}->{"$addr:$port"};
     }
                                      
-    return undef
-        if $self->{_secret} && $sock->write(0xF0) != 1;
+    if ($self->{_secret}) {
+        return undef unless $sock->write(pack("C", 0xF0)) == 1;
+     }
 
     my $wb = $sock->write($msg);
     
@@ -151,9 +152,9 @@ sub send_msg {
     my $in;
     my $data;
 
-
     if ($self->{_secret}) {
-        if (read($sock, $data, 1) != 1) {
+        my $rb = read($sock, $data, 1);
+        if ($rb != 1) {
             delete $self->{_sock}->{"$addr:$port"};
             return undef;
         }
@@ -167,8 +168,10 @@ sub send_msg {
         return undef;
     }
 
+
     return undef
         if (unpack("C", $data) == 0xF0);
+
     $in .= $data;
 
     my $stop = 0;
