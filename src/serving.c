@@ -72,12 +72,13 @@ typedef struct {
     fbuf_t *value;
     uint32_t expire;
 #define STATE_READING_NONE   0x00
-#define STATE_READING_KEY    0x01
-#define STATE_READING_VALUE  0x02
-#define STATE_READING_EXPIRE 0x03
-#define STATE_READING_AUTH   0x04
-#define STATE_READING_DONE   0x05
-#define STATE_READING_ERR    0x0F
+#define STATE_READING_HDR    0x01
+#define STATE_READING_KEY    0x02
+#define STATE_READING_VALUE  0x03
+#define STATE_READING_EXPIRE 0x04
+#define STATE_READING_AUTH   0x05
+#define STATE_READING_DONE   0x06
+#define STATE_READING_ERR    0x07
     char    state;
     char    rsep_expected;
     const char    *auth;
@@ -356,7 +357,8 @@ static void shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
 
 static void shardcache_read_asynchronous(shardcache_connection_context_t *ctx, int fd)
 {
-    if (ctx->state == STATE_READING_NONE) {
+    if (ctx->state == STATE_READING_NONE || ctx->state == STATE_READING_HDR)
+    {
         unsigned char hdr;
         rbuf_read(ctx->input, &hdr, 1);
         while (hdr == SHARDCACHE_HDR_NOP && rbuf_len(ctx->input) > 0)
@@ -365,19 +367,26 @@ static void shardcache_read_asynchronous(shardcache_connection_context_t *ctx, i
         if (hdr == SHARDCACHE_HDR_NOP)
             return;
 
-        if (hdr == SHARDCACHE_HDR_SIG) {
-            if (!ctx->auth) {
+        if (ctx->state == STATE_READING_NONE) {
+            if (hdr == SHARDCACHE_HDR_SIG)
+            {
+                if (!ctx->auth) {
+                    ctx->state = STATE_READING_ERR;
+                    return;
+                }
+
+                ctx->state = STATE_READING_HDR;
+
+                if (rbuf_len(ctx->input) < 1) {
+                    return;
+                }
+
+                rbuf_read(ctx->input, &hdr, 1);
+            } else if (ctx->auth) {
+                // we are expecting the signature header
                 ctx->state = STATE_READING_ERR;
                 return;
             }
-            if (rbuf_len(ctx->input) < 1)
-                return;
-
-            rbuf_read(ctx->input, &hdr, 1);
-        } else if (ctx->auth) {
-            // we are expecting the signature header
-            ctx->state = STATE_READING_ERR;
-            return;
         }
 
         if (hdr != SHARDCACHE_HDR_GET &&
