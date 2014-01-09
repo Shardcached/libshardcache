@@ -172,7 +172,7 @@ sub index {
     foreach my $node (@{$self->{_nodes}}) {
          my $index = shardcache_client_index($self->{_client}, $node->[0]);
          if ($index) {
-             push(%$out, %$index);
+             %$out =  { %$out, %$index };
          } else {
              # TODO - Error messages
          }
