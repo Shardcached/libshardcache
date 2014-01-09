@@ -22,7 +22,6 @@ sub new {
 
 
     if (ref($host) && ref($host) eq "ARRAY") {
-        $self->{_port} = [];
         foreach my $h (@$host) {
             if ($h !~ /[a-zA-Z0-9_\.]+:[a-zA-Z0-9_\.]+(:[0-9]+)?/) {
                 die "Invalid host string $h";
