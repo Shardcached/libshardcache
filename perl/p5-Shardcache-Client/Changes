@@ -1,3 +1,6 @@
+0.03  Thu Jan  9 16:24:50 CET 2014
+        - Updated to the last shardcache protocol spec (changed in libshardcache 0.9.3)
+        - Various fixes and cleanings
 0.02  Fri Jan  3 15:20:28 CET 2014
         - fixes to Makefile.PL + LICENSE
 
