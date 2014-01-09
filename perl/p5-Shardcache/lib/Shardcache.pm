@@ -138,8 +138,8 @@ sub me {
 }
 
 sub run {
-    my ($self, $coderef, $timeout, $priv) = @_;
-    return shardcache_run($coderef, $timeout, $priv);
+    my ($self, $timeout) = @_;
+    return shardcache_run($timeout);
 }
 
 sub DESTROY {

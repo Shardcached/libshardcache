@@ -549,57 +549,22 @@ shardcache_evict(cache, key, klen)
         size_t klen
 
 void
-shardcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
-        SV *coderef
+shardcache_run(timeout=1000, priv=&PL_sv_undef)
         IV timeout
         SV *priv
     CODE:
+        PERL_SET_CONTEXT(orig_perl);
+
         struct timespec tv = { 1, 0 };
-        if (!SvTRUE(coderef) || ! SvROK(coderef) || SvTYPE(SvRV(coderef)) != SVt_PVCV) {
-            croak("missing coderef or not a CODE reference");
-        }
 
         int secs = timeout/1000;
         int nsecs = (timeout%1000)*1000000;
         tv.tv_sec = secs;
         tv.tv_nsec = nsecs;
 
-        for(;;) {
+        if (timeout) {
             struct timespec remainder = { 0, 0 };
             struct timespec tosleep = { tv.tv_sec, tv.tv_nsec };
-
-            pthread_mutex_lock(&lock);
-
-            dTHX;
-            dSP;
-
-            ENTER;
-            SAVETMPS;
-
-            PUSHMARK(SP);
-            XPUSHs(priv);
-            PUTBACK;
-
-            int count = call_sv(coderef, G_SCALAR|G_EVAL);
-
-            if (count != 1) {
-                croak("Unexpected errors calling the registered runloop callback");
-            }
-
-            SPAGAIN;
-
-            IV ret = POPi;
-
-            PUTBACK;
-            FREETMPS;
-            LEAVE;
-
-            pthread_mutex_unlock(&lock);
-
-            if (ret == -1)  {
-                // TODO - WARN
-                break;
-            }
 
             int rc;
             do {
@@ -611,4 +576,3 @@ shardcache_run(coderef, timeout=1000, priv=&PL_sv_undef)
                 }
             } while (rc != 0);
         }
-
