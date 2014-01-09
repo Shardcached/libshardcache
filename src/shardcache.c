@@ -349,9 +349,12 @@ static size_t __op_fetch(void *item, void * priv)
                 done = 0;
         }
         if (done) {
-            gettimeofday(&obj->ts, NULL);
-            pthread_mutex_unlock(&obj->lock);
-            return obj->dlen;
+            if (ret == 0) {
+                gettimeofday(&obj->ts, NULL);
+                pthread_mutex_unlock(&obj->lock);
+                return obj->dlen;
+            }
+            return 0;
         }
     }
 

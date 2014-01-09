@@ -619,6 +619,11 @@ int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd)
                                len,
                                NULL,
                                0, 0);
+        if (rc != 0) {
+            if (should_close)
+                close(fd);
+            return -1;
+        }
 
         shardcache_hdr_t hdr = 0;
         fbuf_t resp = FBUF_STATIC_INITIALIZER;
