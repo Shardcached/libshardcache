@@ -246,16 +246,18 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             MUTEX_UNLOCK(&cache->lock);
             size_t size = cache->ops->fetch(obj->ptr, cache->ops->priv);
             if (size == 0) {
-                /* If the fetch fails, let's drop the object without
-                 * calling arc_balanc(). We don't want a not-existing key
-                 * to affect the cache. Note though that the ^ (p) marker
-                 * has been updated if this item was in a ghost list,
-                 * so at next arc_balance() call will take that into account.
+                /* If the fetch fails we can drop the object without
+                 * calling arc_balance() since we don't want a not-existing key
+                 * to affect the cache.
+                 * Note though that the ^ (p) marker has been updated since this
+                 * item was in a ghost list, so at next arc_balance() call it 
+                 * will be taken into account.
                  * This is a desired behaviour because it's still an indication
                  * of 'frequency'/'recency' in terms of cache usage
                  * (regardless of the actual presence of the key, if it
                  * was in a ghost list it surely existed at some point in time)
-                 * and we want to balance the cache accordingly
+                 * and we want to balance the cache accordingly, it's just easier
+                 * (and still safe) to postpone it until next cache-related operation
                  */
                 if (obj_state && obj->state != obj_state) {
                     /* The object is being removed from the cache, destroy it. */
