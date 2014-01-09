@@ -1,7 +1,7 @@
 /**
- * @file shardcache.h
+ * @file arc.h.h
  * @author Andrea Guzzo
- * @brief shardcache C implementation
+ * @brief ARC cache implementation
  *
  * @note Iniitially based on https://github.com/wereHamster/adaptive-replacement-cache.git
  */
