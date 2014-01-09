@@ -72,17 +72,47 @@ XSLoader::load('Shardcache::Client::Fast', $VERSION);
 sub new {
     my ($class, $nodes, $secret) = @_;
 
-    unless($nodes && ref($nodes) && ref($nodes) eq 'ARRAY') {
-        croak("'nodes' MUST be an arrayref of string in the form 'ADDRESS:PORT'");
+    my $self = {
+        _nodes  => [],
+        _secret => $secret,
+    };
+
+    if (ref($nodes) && ref($nodes) eq "ARRAY") {
+        foreach my $h (@$nodes) {
+            my $label;
+            my $addr;
+            if (ref($h) && ref($h) eq "ARRAY") {
+                $label = $h->[0];
+                $addr = $h->[1];
+            } else {
+                if ($h !~ /[a-zA-Z0-9_\.]+:[a-zA-Z0-9_\.]+(:[0-9]+)?/) {
+                    die "Invalid host string $h";
+                }
+                ($label, $addr, my $port) = split(':', $h);
+                $addr = join(':', $addr, $port);
+            }
+            push(@{$self->{_nodes}}, [ $label, $addr ]);
+        }
+    } else {
+        if ($nodes !~ /[a-zA-Z0-9_\.]+:[a-zA-Z0-9_\.]+(:[0-9]+)?/) {
+            die "Invalid host string $nodes";
+        }
+        my ($label, $addr, $port) = split(':', $nodes);
+        if ($port) {
+            $addr = join(':', $addr, $port);
+        } else {
+            $label = join(':', $addr,$port);
+            $addr = $label;
+        }
+        push(@{$self->{_nodes}}, [ $label, $addr ]);
     }
 
     $secret = '' unless defined $secret;
 
-    my $self = {
-        _secret => $secret,
-        _nodes => $nodes,
-        _client => shardcache_client_create($nodes, $secret)
-    };
+    $self->{_client} = shardcache_client_create($self->{_nodes}, $secret);
+
+    return undef unless ($self->{_client});
+
     bless $self, $class;
 
     return $self;
@@ -112,7 +142,7 @@ sub set {
         $self->{_errstr} = shardcache_client_errstr($self->{_client});
         $self->{_errno} = shardcache_client_errno($self->{_client});
     }
-    return $ret;
+    return ($ret == 0);
 }
 
 sub del {
@@ -125,10 +155,10 @@ sub del {
         $self->{_errstr} = shardcache_client_errstr($self->{_client});
         $self->{_errno} = shardcache_client_errno($self->{_client});
     }
-    return $ret;
+    return ($ret == 0);
 }
 
-sub evict {
+sub evi {
     my ($self, $key) = @_;
     my $ret = shardcache_client_evict($self->{_client}, $key);
     if ($ret == 0) {
@@ -138,10 +168,10 @@ sub evict {
         $self->{_errstr} = shardcache_client_errstr($self->{_client});
         $self->{_errno} = shardcache_client_errno($self->{_client});
     }
-    return $ret;
+    return ($ret == 0);
 }
 
-sub stats {
+sub sts {
     my ($self, $peer) = @_;
     
     if ($peer) {
@@ -156,13 +186,13 @@ sub stats {
     return $out;
 }
 
-sub check {
+sub chk {
     my ($self, $peer) = @_;
     return unless $peer;
-    return shardcache_client_check($self->{_client}, $peer);
+    return (shardcache_client_check($self->{_client}, $peer) == 0);
 }
 
-sub index {
+sub idx {
     my ($self, $peer) = @_;
     if ($peer) {
         return shardcache_client_index($self->{_client}, $peer);
