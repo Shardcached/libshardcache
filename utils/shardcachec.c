@@ -47,6 +47,15 @@ static int parse_nodes_string(char *str)
     return 0;
 }
 
+void print_chunk(void *key,
+                 size_t klen,
+                 void *data,
+                 size_t len,
+                 void *priv)
+{
+            fwrite(data, 1, len, stdout);
+}
+
 int main (int argc, char **argv) {
     if ((argc < 3) && (argc != 2 ||
         (strcmp(argv[1], "stats") != 0 && 
@@ -73,11 +82,7 @@ int main (int argc, char **argv) {
     int rc = 0;
     char *cmd = argv[1];
     if (strcasecmp(cmd, "get") == 0) {
-        void *v = NULL;
-        size_t s = shardcache_client_get(client, argv[2], strlen(argv[2]), &v); 
-        if (s) {
-            fwrite(v, 1, s, stdout);
-        }
+        rc = shardcache_client_get_async(client, argv[2], strlen(argv[2]), print_chunk, NULL); 
     } else if (strcasecmp(cmd, "set") == 0) {
         char *in = NULL;
         size_t s = 0;
@@ -99,11 +104,13 @@ int main (int argc, char **argv) {
         size_t len;
         int i;
         for (i = 0; i < num_nodes; i++) {
+            printf("* Stats for node: %s (%s)\n\n", nodes[i].label, nodes[i].address);
             int rc = shardcache_client_stats(client, nodes[i].label, &stats, &len); 
             if (rc == 0)
                 printf("%s\n", stats);
             if (stats)
                 free(stats);
+            printf("\n");
         }
     } else if (strcasecmp(cmd, "check") == 0) {
         int i;
@@ -117,6 +124,7 @@ int main (int argc, char **argv) {
     } else if (strcasecmp(cmd, "index") == 0) {
         int i;
         for (i = 0; i < num_nodes; i++) {
+            printf("* Index for node: %s (%s)\n\n", nodes[i].label, nodes[i].address);
             shardcache_storage_index_t *index = shardcache_client_index(client, nodes[i].label);
             if (index) {
                 int n;
@@ -130,6 +138,7 @@ int main (int argc, char **argv) {
             } else {
                 printf("%s NOT OK\n", nodes[i].label);
             }
+            printf("\n");
         }
     } else {
         usage(argv[0]);

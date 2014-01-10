@@ -44,6 +44,18 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_
  */
 size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data);
 
+typedef void (*shardcache_client_get_aync_data_cb)(void *key,
+                                             size_t klen,
+                                             void *data,
+                                             size_t len,
+                                             void *priv);
+
+int shardcache_client_get_async(shardcache_client_t *c,
+                                void *key,
+                                size_t klen,
+                                shardcache_client_get_aync_data_cb data_cb,
+                                void *priv);
+
 /**
  * @brief Set the value for a key
  * @param c      A valid pointer to a shardcache_client_t structure

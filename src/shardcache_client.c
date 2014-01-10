@@ -1,3 +1,4 @@
+#include <sys/types.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -5,7 +6,9 @@
 #include <regex.h>
 #include <chash.h>
 #include <fbuf.h>
+#include <rbuf.h>
 #include <linklist.h>
+#include <iomux.h>
 
 #include "connections.h"
 #include "messaging.h"
@@ -373,3 +376,216 @@ int shardcache_client_migration_abort(shardcache_client_t *c)
 
     return 0;
 }
+
+typedef struct {
+    shardcache_client_get_aync_data_cb cb;
+    void *key;
+    size_t klen;
+    void *cb_priv;
+    char *auth;
+    rbuf_t *buf;
+#define STATE_READING_NONE   0x00
+#define STATE_READING_HDR    0x01
+#define STATE_READING_RECORD 0x02
+#define STATE_READING_AUTH   0x05
+#define STATE_READING_DONE   0x06
+#define STATE_READING_ERR    0x07
+    char    state;
+    uint16_t clen;
+    char    eom_expected;
+ 
+} read_message_async_ctx;
+
+static void input_data(iomux_t *iomux, int fd, void *data, int len, void *priv)
+{
+    read_message_async_ctx *ctx = (read_message_async_ctx *)priv;
+
+    int wb = rbuf_write(ctx->buf, data, len);
+    if (wb != len) {
+        fprintf(stderr, "read_message_async buffer underrun!\n");
+        iomux_close(iomux, fd);
+        return;
+    }
+
+    if (!rbuf_len(ctx->buf))
+        return;
+
+    if (ctx->state == STATE_READING_NONE || ctx->state == STATE_READING_HDR)
+    {
+        unsigned char hdr;
+        rbuf_read(ctx->buf, &hdr, 1);
+        while (hdr == SHARDCACHE_HDR_NOP && rbuf_len(ctx->buf) > 0)
+            rbuf_read(ctx->buf, &hdr, 1); // skip
+
+        if (hdr == SHARDCACHE_HDR_NOP)
+            return;
+
+        if (ctx->state == STATE_READING_NONE) {
+            if (hdr == SHARDCACHE_HDR_SIG)
+            {
+                if (!ctx->auth) {
+                    ctx->state = STATE_READING_ERR;
+                    iomux_close(iomux, fd);
+                    return;
+                }
+
+                ctx->state = STATE_READING_HDR;
+
+                if (rbuf_len(ctx->buf) < 1) {
+                    return;
+                }
+
+                rbuf_read(ctx->buf, &hdr, 1);
+            } else if (ctx->auth) {
+                // we are expecting the signature header
+                ctx->state = STATE_READING_ERR;
+                iomux_close(iomux, fd);
+                return;
+            }
+        }
+
+        if (hdr != SHARDCACHE_HDR_RES)
+        {
+            // BAD RESPONSE
+#ifdef SHARDCACHE_DEBUG
+            struct sockaddr_in saddr;
+            socklen_t addr_len = sizeof(struct sockaddr_in);
+            getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
+            fprintf(stderr, "BAD RESPONSE %02x from %s\n", hdr, inet_ntoa(saddr.sin_addr));
+#endif
+            ctx->state = STATE_READING_ERR;
+            iomux_close(iomux, fd);
+            return;
+        }
+
+        ctx->state = STATE_READING_RECORD;
+    }
+
+    for (;;) {
+        if (ctx->state == STATE_READING_AUTH)
+            break;
+        
+        if (ctx->clen == 0) {
+            if (rbuf_len(ctx->buf) < 2)
+                break;
+            uint16_t nlen = 0;
+            rbuf_read(ctx->buf, (u_char *)&nlen, 2);
+            ctx->clen = ntohs(nlen);
+        }
+        if (ctx->clen > 0) {
+            char chunk[ctx->clen];
+            int rb = rbuf_read(ctx->buf, chunk, ctx->clen);
+            ctx->cb(ctx->key, ctx->klen, chunk, rb, ctx->cb_priv);
+            ctx->clen -= rb;
+            if (!rbuf_len(ctx->buf))
+                break; // TRUNCATED - we need more data
+        } else {
+            if (rbuf_len(ctx->buf) < 1) {
+                // TRUNCATED - we need more data
+                ctx->eom_expected = 1;
+                break;
+            }
+
+            u_char bsep = 0;
+            rbuf_read(ctx->buf, &bsep, 1);
+            ctx->eom_expected = 0;
+            if (bsep == 0) {
+                if (ctx->auth)
+                    ctx->state = STATE_READING_AUTH;
+                else
+                    ctx->state = STATE_READING_DONE;
+                break;
+            } else {
+                // unexpected response (contains more than 1 record?)
+                iomux_close(iomux, fd);
+                ctx->state = STATE_READING_ERR;
+                return;
+            }
+        }
+    }
+
+    if (ctx->state == STATE_READING_AUTH) {
+        if (rbuf_len(ctx->buf) < SHARDCACHE_MSG_SIG_LEN)
+            return;
+
+        uint64_t received_digest;
+        rbuf_read(ctx->buf, (u_char *)&received_digest, sizeof(received_digest));
+        // XXX - we are ignoring (and not checking) the signature
+        ctx->state = STATE_READING_DONE;
+    }
+
+    if (ctx->state == STATE_READING_DONE)
+        iomux_close(iomux, fd);
+}
+
+static void input_eof(iomux_t *iomux, int fd, void *priv)
+{
+    iomux_end_loop(iomux);
+}
+
+int read_message_async(int fd, char *auth, void *key, size_t len, shardcache_client_get_aync_data_cb cb, void *priv)
+{
+    struct timeval iomux_timeout = { 0, 20000 };
+    read_message_async_ctx ctx = {
+        .buf = rbuf_create(1<<16),
+        .cb = cb,
+        .cb_priv = priv,
+        .auth = auth,
+        .key = key,
+        .klen = len
+    };
+
+    iomux_callbacks_t cbs = {
+        .mux_input = input_data,
+        .mux_eof = input_eof,
+        .priv = &ctx
+    };
+    iomux_t *iomux= iomux_create();
+    if (!iomux)
+        return -1;
+
+    iomux_add(iomux, fd, &cbs);
+    iomux_loop(iomux, &iomux_timeout);
+    iomux_destroy(iomux);
+
+    rbuf_destroy(ctx.buf);
+    if (ctx.state = STATE_READING_ERR)
+        return -1;
+
+    return 0;
+}
+
+int fetch_from_peer_async(char *peer, char *auth, void *key, size_t len, shardcache_client_get_aync_data_cb cb, void *priv, int fd)
+{
+    int rc = -1;
+    int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
+
+    if (fd >= 0) {
+        rc = write_message(fd, auth, SHARDCACHE_HDR_GET, key, len, NULL, 0, 0);
+        if (rc == 0) {
+            rc = read_message_async(fd, auth, key, len, cb, priv);
+        }
+        if (should_close)
+            close(fd);
+    }
+    return rc;
+}
+
+int shardcache_client_get_async(shardcache_client_t *c,
+                                   void *key,
+                                   size_t klen,
+                                   shardcache_client_get_aync_data_cb data_cb,
+                                   void *priv)
+{
+    char *node = select_node(c, key, klen);
+    int fd = connections_pool_get(c->connections, node);
+    if (fd < 0)
+        return -1;
+
+    return fetch_from_peer_async(node, (char *)c->auth, key, klen, data_cb, priv, fd);
+}
+
