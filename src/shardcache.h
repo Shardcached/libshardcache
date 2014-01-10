@@ -6,9 +6,15 @@
  * @author Andrea Guzzo
  * @brief shardcache C implementation
  */
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include <stdint.h>
+#include <syslog.h>
+
 
 #define SHARDCACHE_PORT_DEFAULT 9874
 #define SHARDCACHE_TCP_TIMEOUT_DEFAULT 30
@@ -526,5 +532,34 @@ int shardcache_migration_abort(shardcache_t *cache);
  */
 int shardcache_migration_end(shardcache_t *cache);
 
+
+/*
+ *******************************************************************************
+ * LOG API 
+ *******************************************************************************
+ */
+
+void shardcache_log_init(char *ident, int loglevel);
+unsigned int shardcache_log_level();
+void shardcache_log_message(int prio, int dbglevel, const char *fmt, ...);
+char *shardcache_hex_escape(const char *buf, int len, int limit);
+unsigned long shardcache_byte_escape(char ch, char esc, char *buffer, unsigned long len, char **dest, unsigned long *newlen);
+
+#define SHC_ERROR(__fmt, __args...)      do { shardcache_log_message(LOG_ERR,     0, __fmt, ## __args); } while (0)
+#define SHC_WARNING(__fmt, __args...)    do { shardcache_log_message(LOG_WARNING, 0, __fmt, ## __args); } while (0)
+#define SHC_WARN(__fmt, __args...) WARNING(__fmt, ## __args)
+#define SHC_NOTICE(__fmt, __args...)     do { shardcache_log_message(LOG_NOTICE,  0, __fmt, ## __args); } while (0)
+#define SHC_INFO(__fmt, __args...)       do { shardcache_log_message(LOG_INFO,    0, __fmt, ## __args); } while (0)
+#define SHC_DIE(__fmt, __args...)        do { SHC_ERROR(__fmt, ## __args); exit(-1); } while (0)
+
+#define __SHC_DEBUG(__n, __fmt, __args...)  do { if (shardcache_log_level() >= LOG_DEBUG + __n) \
+    shardcache_log_message(LOG_DEBUG,   __n + 1, __fmt, ## __args); } while (0)
+
+#define SHC_DEBUG(__fmt, __args...)  __SHC_DEBUG(0, __fmt, ## __args)
+#define SHC_DEBUG1(__fmt, __args...) SHC_DEBUG(__fmt, ## __args)
+#define SHC_DEBUG2(__fmt, __args...) __SHC_DEBUG(1, __fmt, ## __args)
+#define SHC_DEBUG3(__fmt, __args...) __SHC_DEBUG(2, __fmt, ## __args)
+#define SHC_DEBUG4(__fmt, __args...) __SHC_DEBUG(3, __fmt, ## __args)
+#define SHC_DEBUG5(__fmt, __args...) __SHC_DEBUG(4, __fmt, ## __args)
 
 #endif

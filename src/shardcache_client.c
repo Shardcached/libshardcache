@@ -1,4 +1,6 @@
 #include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -447,12 +449,10 @@ static void input_data(iomux_t *iomux, int fd, void *data, int len, void *priv)
         if (hdr != SHARDCACHE_HDR_RES)
         {
             // BAD RESPONSE
-#ifdef SHARDCACHE_DEBUG
             struct sockaddr_in saddr;
             socklen_t addr_len = sizeof(struct sockaddr_in);
             getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
             fprintf(stderr, "BAD RESPONSE %02x from %s\n", hdr, inet_ntoa(saddr.sin_addr));
-#endif
             ctx->state = STATE_READING_ERR;
             iomux_close(iomux, fd);
             return;

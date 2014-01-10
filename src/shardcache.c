@@ -40,20 +40,11 @@
 #define SPIN_UNLOCK(__mutex) pthread_spin_unlock(__mutex)
 #endif
 
-#define HEXDUMP_DATA(__d, __l) {\
-    int __i;\
-    char *__datap = __d;\
-    size_t __datalen = __l;\
-    if (__datalen > 256)\
-        __datalen = 256;\
-    for (__i = 0; __i < __datalen; __i++) {\
-        fprintf(stderr, "%02x", __datap[__i]);\
-    }\
-    if (__datalen < __l)\
-        fprintf(stderr, "...");\
-}
+#define DEBUG_DUMP_MAXSIZE 128
 
 typedef struct chash_t chash_t;
+
+extern int shardcache_log_initialized;
 
 struct __shardcache_s {
     char *me;
@@ -276,12 +267,12 @@ void shardcache_release_connection_for_peer(shardcache_t *cache, char *peer, int
 static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
 {
 
-#ifdef SHARDCACHE_DEBUG
-    char keystr[1024];
-    memcpy(keystr, obj->key, obj->klen < 1024 ? obj->klen : 1024);
-    keystr[obj->klen] = 0;
-    fprintf(stderr, "Fetching data for key %s from peer %s\n", keystr, peer); 
-#endif
+    if (shardcache_log_level() >= LOG_DEBUG) {
+        char keystr[1024];
+        memcpy(keystr, obj->key, obj->klen < 1024 ? obj->klen : 1024);
+        keystr[obj->klen] = 0;
+        SHC_DEBUG("Fetching data for key %s from peer %s", keystr, peer); 
+    }
 
     char *peer_addr = shardcache_get_node_address(cache, peer);
     if (!peer_addr) {
@@ -358,11 +349,11 @@ static size_t __op_fetch(void *item, void * priv)
         }
     }
 
-#ifdef SHARDCACHE_DEBUG
     char keystr[1024];
-    memcpy(keystr, obj->key, obj->klen < 1024 ? obj->klen : 1024);
-    keystr[obj->klen] = 0;
-#endif
+    if (shardcache_log_level() >= LOG_DEBUG) {
+        memcpy(keystr, obj->key, obj->klen < 1024 ? obj->klen : 1024);
+        keystr[obj->klen] = 0;
+    }
 
     // we are responsible for this item ... 
     // let's first check if it's among the volatile keys otherwise
@@ -376,36 +367,31 @@ static size_t __op_fetch(void *item, void * priv)
         obj->data = vobj->data; 
         obj->dlen = vobj->dlen;
         free(vobj);
-#ifdef SHARDCACHE_DEBUG
-        if (obj->data && obj->dlen) {
-            fprintf(stderr, "found volatile value ");
-
-            HEXDUMP_DATA(obj->data, obj->dlen);
-
-            fprintf(stderr, " (%lu) for key %s\n", (unsigned long)obj->dlen, keystr); 
+        if (shardcache_log_level() >= LOG_DEBUG) {
+            if (obj->data && obj->dlen) {
+                SHC_DEBUG2("Found volatile value %s (%lu) for key %s",
+                       shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
+                       (unsigned long)obj->dlen, keystr);
+            }
         }
-#endif
     } else if (cache->use_persistent_storage && cache->storage.fetch) {
         obj->data = cache->storage.fetch(obj->key, obj->klen, &obj->dlen, cache->storage.priv);
 
-#ifdef SHARDCACHE_DEBUG
-        if (obj->data && obj->dlen) {
-            fprintf(stderr, "Fetch storage callback returned value ");
-            
-            HEXDUMP_DATA(obj->data, obj->dlen);
-
-            fprintf(stderr, " (%lu) for key %s\n", (unsigned long)obj->dlen, keystr); 
-        } else {
-            fprintf(stderr, "Fetch storage callback returned an empty value for key %s\n", keystr);
+        if (shardcache_log_level() >= LOG_DEBUG) {
+            if (obj->data && obj->dlen) {
+                SHC_DEBUG2("Fetch storage callback returned value %s (%lu) for key %s",
+                       shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
+                       (unsigned long)obj->dlen, keystr);
+            } else {
+                SHC_DEBUG2("Fetch storage callback returned an empty value for key %s", keystr);
+            }
         }
-#endif
     }
 
     if (!obj->data) {
         pthread_mutex_unlock(&obj->lock);
-#ifdef SHARDCACHE_DEBUG
-        fprintf(stderr, "Item not found for key %s\n", keystr);
-#endif
+        if (shardcache_log_level() >= LOG_DEBUG)
+            SHC_DEBUG("Item not found for key %s", keystr);
         __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value, 1);
         return 0;
     }
@@ -480,12 +466,12 @@ static void *evictor(void *priv)
         pthread_testcancel();
         shardcache_evictor_job_t *job = (shardcache_evictor_job_t *)shift_value(jobs);
         while (job) {
-#ifdef SHARDCACHE_DEBUG
-            char keystr[1024];
-            memcpy(keystr, job->key, job->klen < 1024 ? job->klen : 1024);
-            keystr[job->klen] = 0;
-            fprintf(stderr, "Eviction job for key '%s' started\n", keystr);
-#endif
+            char keystr[1024] = { 0 };
+            if (shardcache_log_level() >= LOG_DEBUG) {
+                memcpy(keystr, job->key, job->klen < 1024 ? job->klen : 1024);
+                keystr[job->klen] = 0;
+                SHC_DEBUG("Eviction job for key '%s' started\n", keystr);
+            }
             int i;
             for (i = 0; i < cache->num_shards; i++) {
                 char *peer = cache->shards[i].label;
@@ -496,9 +482,7 @@ static void *evictor(void *priv)
                 }
             }
             destroy_evictor_job(job);
-#ifdef SHARDCACHE_DEBUG
-            fprintf(stderr, "Eviction job for key '%s' completed\n", keystr);
-#endif
+            SHC_DEBUG("Eviction job for key '%s' completed", keystr);
             job = (shardcache_evictor_job_t *)shift_value(jobs);
         }
         pthread_testcancel();
@@ -682,15 +666,12 @@ shardcache_t *shardcache_create(char *me,
         strncpy((char *)cache->auth, secret, 16);
     } 
 
-#ifdef SHARDCACHE_DEBUG
-    if (secret && strlen(secret)) {
-        fprintf(stderr, "AUTH KEY (secret: %s): ", secret);
-        for (i = 0; i < SHARDCACHE_MSG_SIG_LEN; i++) {
-            fprintf(stderr, "%02x", (unsigned char)cache->auth[i]); 
+    if (shardcache_log_level() >= LOG_DEBUG) {
+        if (secret && strlen(secret)) {
+            SHC_DEBUG("AUTH KEY (secret: %s) : %s\n", secret,
+                        shardcache_hex_escape(cache->auth, SHARDCACHE_MSG_SIG_LEN, DEBUG_DUMP_MAXSIZE));
         }
-        fprintf(stderr, "\n");
     }
-#endif
 
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
         { "gets", "sets", "dels", "heads", "evicts", "cache_misses",
@@ -735,6 +716,9 @@ shardcache_t *shardcache_create(char *me,
 #endif
     pthread_create(&cache->expirer_th, NULL, shardcache_expire_volatile_keys, cache);
     cache->expirer_started = 1;
+
+    if (!shardcache_log_initialized)
+        shardcache_log_init("libshardcache", LOG_WARNING);
 
     return cache;
 }
@@ -894,17 +878,15 @@ _shardcache_set_internal(shardcache_t *cache,
 
     if (is_mine == 1) {
 
-#ifdef SHARDCACHE_DEBUG
         char keystr[1024];
-        memcpy(keystr, key, klen < 1024 ? klen : 1024);
-        keystr[klen] = 0;
+        if (shardcache_log_level() >= LOG_DEBUG) {
+            memcpy(keystr, key, klen < 1024 ? klen : 1024);
+            keystr[klen] = 0;
 
-        fprintf(stderr, "Storing value ");
-
-        HEXDUMP_DATA(value, vlen);
-
-        fprintf(stderr, " (%d) for key %s\n", (int)vlen, keystr);
-#endif
+            SHC_DEBUG("Storing value %s (%d) for key %s",
+                      shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
+                      (int)vlen, keystr);
+        }
         volatile_object_t *prev = NULL;
         uint32_t *counter = &cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value;
         if (!cache->use_persistent_storage || expire) {
@@ -917,10 +899,10 @@ _shardcache_set_internal(shardcache_t *cache,
             memcpy(obj->data, value, vlen);
             obj->dlen = vlen;
             obj->expire = expire ? time(NULL) + expire : 0;
-#ifdef SHARDCACHE_DEBUG
-            fprintf(stderr, "Setting volatile item %s to expire %d (now: %d)\n", 
+
+            SHC_DEBUG("Setting volatile item %s to expire %d (now: %d)", 
                 keystr, obj->expire, (int)time(NULL));
-#endif
+
             ht_get_and_set(cache->volatile_storage, key, klen,
                 obj, sizeof(volatile_object_t), (void **)&prev, NULL);
 
@@ -955,17 +937,15 @@ _shardcache_set_internal(shardcache_t *cache,
         return 0;
     } else if (node_len) {
 
-#ifdef SHARDCACHE_DEBUG
-        char keystr[1024];
-        memcpy(keystr, key, klen < 1024 ? klen : 1024);
-        keystr[klen] = 0;
+        if (shardcache_log_level() >= LOG_DEBUG) {
+            char keystr[1024];
+            memcpy(keystr, key, klen < 1024 ? klen : 1024);
+            keystr[klen] = 0;
 
-        fprintf(stderr, "Forwarding set command %s => ", keystr);
-        
-        HEXDUMP_DATA(value, vlen);
-
-        fprintf(stderr, " (%d) to %s\n", (int)vlen, node_name);
-#endif
+            SHC_DEBUG("Forwarding set command %s => %s (%d) to %s",
+                    keystr, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
+                    (int)vlen, node_name);
+        }
 
         char *peer = shardcache_get_node_address(cache, (char *)node_name);
         if (!peer) {
@@ -1163,12 +1143,12 @@ static int expire_migrated(hashtable_t *table, void *key, size_t klen, void *val
         fprintf(stderr, "expire_migrated running while no migration continuum present ... aborting\n");
         return 0;
     } else if (!is_mine) {
-#ifdef SHARDCACHE_DEBUG
-        char keystr[1024];
-        memcpy(keystr, key, klen < 1024 ? klen : 1024);
-        keystr[klen] = 0;
-        fprintf(stderr, "Forcing Key %s to expire because not owned anymore\n", keystr);
-#endif
+        if (shardcache_log_level() >= LOG_DEBUG) {
+            char keystr[1024];
+            memcpy(keystr, key, klen < 1024 ? klen : 1024);
+            keystr[klen] = 0;
+            SHC_DEBUG("Forcing Key %s to expire because not owned anymore", keystr);
+        }
         v->expire = 0;
     }
     return 1;
@@ -1196,9 +1176,7 @@ void *migrate(void *priv)
         shardcache_counter_add(cache->counters, "total_items", &total_items);
         shardcache_counter_add(cache->counters, "migration_errors", &errors);
 
-#ifdef SHARDCACHE_DEBUG
-        fprintf(stderr, "Migrator starting (%d items to precess)\n", total_items);
-#endif
+        SHC_NOTICE("Migrator starting (%d items to precess)", total_items);
 
         int i;
         for (i = 0; i < index->size; i++) {
@@ -1213,9 +1191,7 @@ void *migrate(void *priv)
             memcpy(keystr, key, klen < 1024 ? klen : 1024);
             keystr[klen] = 0;
 
-#ifdef SHARDCACHE_DEBUG
-            fprintf(stderr, "Migrator processign key %s\n", keystr);
-#endif
+            SHC_DEBUG("Migrator processign key %s", keystr);
 
             int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
             
@@ -1234,9 +1210,7 @@ void *migrate(void *priv)
                 if (value) {
                     char *peer = shardcache_get_node_address(cache, (char *)node_name);
                     if (peer) {
-#ifdef SHARDCACHE_DEBUG
-                        fprintf(stderr, "Migrator copying %s to peer %s (%s)\n", keystr, node_name, peer);
-#endif
+                        SHC_DEBUG("Migrator copying %s to peer %s (%s)", keystr, node_name, peer);
                         int fd = shardcache_get_connection_for_peer(cache, peer);
                         int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, 0, fd);
                         shardcache_release_connection_for_peer(cache, peer, fd);
@@ -1263,19 +1237,17 @@ void *migrate(void *priv)
     }
 
     if (!aborted) {
-#ifdef SHARDCACHE_DEBUG
-            fprintf(stderr, "Migration completed, now removing not-owned  items\n");
-#endif
+            SHC_NOTICE("Migration completed, now removing not-owned  items");
         shardcache_storage_index_item_t *item = shift_value(to_delete);
         while (item) {
             if (cache->storage.remove)
                 cache->storage.remove(item->key, item->klen, cache->storage.priv);
-#ifdef SHARDCACHE_DEBUG
-            char ikeystr[1024];
-            memcpy(ikeystr, item->key, item->klen < 1024 ? item->klen : 1024);
-            ikeystr[item->klen] = 0;
-            fprintf(stderr, "removed item %s\n", ikeystr);
-#endif
+            if (shardcache_log_level() >= LOG_DEBUG) {
+                char ikeystr[1024];
+                memcpy(ikeystr, item->key, item->klen < 1024 ? item->klen : 1024);
+                ikeystr[item->klen] = 0;
+                SHC_DEBUG("removed item %s", ikeystr);
+            }
             item = shift_value(to_delete);
         }
 
@@ -1292,12 +1264,10 @@ void *migrate(void *priv)
     SPIN_LOCK(&cache->migration_lock);
     cache->migration_done = 1;
     SPIN_UNLOCK(&cache->migration_lock);
-#ifdef SHARDCACHE_DEBUG
     if (index) {
-        fprintf(stderr, "Migrator ended: processed %d items, migrated %d, errors %d\n",
+        SHC_NOTICE("Migrator ended: processed %d items, migrated %d, errors %d",
                 total_items, migrated_items, errors);
     }
-#endif
 
     if (index)
         shardcache_free_index(index);
@@ -1319,9 +1289,7 @@ int shardcache_migration_begin(shardcache_t *cache,
         return -1;
     }
 
-#ifdef SHARDCACHE_DEBUG
-    fprintf(stderr, "Starting migration\n");
-#endif
+    SHC_NOTICE("Starting migration");
 
     size_t shard_lens[num_nodes];
     char *shard_names[num_nodes];
@@ -1402,9 +1370,7 @@ int shardcache_migration_abort(shardcache_t *cache)
     if (cache->migration) {
         chash_free(cache->migration);
         free(cache->migration_shards);
-#ifdef SHARDCACHE_DEBUG
-        fprintf(stderr, "Migration aborted\n");
-#endif
+        SHC_NOTICE("Migration aborted");
         ret = 0;
     }
     cache->migration = NULL;
@@ -1429,9 +1395,7 @@ int shardcache_migration_end(shardcache_t *cache)
         cache->migration = NULL;
         cache->migration_shards = NULL;
         cache->num_migration_shards = 0;
-#ifdef SHARDCACHE_DEBUG
-        fprintf(stderr, "Migration ended\n");
-#endif
+        SHC_NOTICE("Migration ended");
         ret = 0;
     }
     cache->migration_done = 0;

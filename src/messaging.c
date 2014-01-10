@@ -15,6 +15,8 @@
 #include "connections.h"
 #include "shardcache.h"
 
+#define DEBUG_DUMP_MAXSIZE 128
+
 // synchronous (blocking)  message reading
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
 {
@@ -130,21 +132,13 @@ int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                             return -1;
                         }
 
-#ifdef SHARDCACHE_DEBUG
-                        int i;
-                        fprintf(stderr, "computed digest for received data: (%s) ", auth);
-                        for (i=0; i<8; i++) {
-                            fprintf(stderr, "%02x", (unsigned char)((char *)&digest)[i]);
-                        }
-                        fprintf(stderr, "\n");
+                        SHC_DEBUG("computed digest for received data: (%s) %s", auth,
+                                shardcache_hex_escape((char *)&digest, sizeof(digest), 0));
 
-                        fprintf(stderr, "digest from received data: ");
                         uint8_t *remote = sig;
-                        for (i=0; i<8; i++) {
-                            fprintf(stderr, "%02x", remote[i]);
-                        }
-                        fprintf(stderr, "\n");
-#endif
+                        SHC_DEBUG("digest from received data: %s",
+                                  shardcache_hex_escape(remote, sizeof(digest), 0));
+
 
                         if (memcmp(&digest, &sig, SHARDCACHE_MSG_SIG_LEN) != 0) {
                             struct sockaddr_in saddr;
@@ -313,29 +307,16 @@ int write_message(int fd, char *auth, char hdr, void *k, size_t klen, void *v, s
         return -1;
     }
 
-#ifdef SHARDCACHE_DEBUG
-    int i;
-    fprintf(stderr, "sending message: ");
     size_t mlen = fbuf_used(&msg);
     size_t dlen = auth ? sizeof(uint64_t) : 0;
+    SHC_DEBUG("sending message: %s", 
+           shardcache_hex_escape(fbuf_data(&msg), mlen-dlen, DEBUG_DUMP_MAXSIZE));
 
-    if (mlen > 256)
-       mlen = 256;
-    for (i = 0; i < mlen - dlen; i++) {
-        fprintf(stderr, "%02x", (unsigned char)(fbuf_data(&msg))[i]);
-    }
-    if (mlen < fbuf_used(&msg))
-        fprintf(stderr, "...");
-    fprintf(stderr, "\n");
-
+    if (dlen)
     if (dlen && fbuf_used(&msg) >= dlen) {
-        fprintf(stderr, "computed digest: ");
-        for (i=0; i < dlen; i++) {
-            fprintf(stderr, "%02x", (unsigned char)(fbuf_end(&msg)-dlen)[i]);
-        }
-        fprintf(stderr, "\n");
+        SHC_DEBUG("computed digest: %s",
+                  shardcache_hex_escape(fbuf_end(&msg)-dlen, dlen, 0));
     }
-#endif
 
     while(fbuf_used(&msg) > 0) {
         int wb = fbuf_write(&msg, fd, 0);
@@ -357,10 +338,7 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner, 
         should_close = 1;
     }
 
-#ifdef SHARDCACHE_DEBUG
-    fprintf(stderr, "Sending del command to peer %s (owner: %d)\n",
-            peer, owner);
-#endif
+    SHC_DEBUG("Sending del command to peer %s (owner: %d)", peer, owner);
     if (fd >= 0) {
         char hdr = owner ? SHARDCACHE_HDR_DEL : SHARDCACHE_HDR_EVI;
         int rc = write_message(fd, auth, hdr, key, klen, NULL, 0, 0);
@@ -373,10 +351,8 @@ int delete_from_peer(char *peer, char *auth, void *key, size_t klen, int owner, 
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
-#ifdef SHARDCACHE_DEBUG
-                fprintf(stderr, "Got (del) response from peer %s : %s\n",
-                        peer, fbuf_data(&resp));
-#endif
+                SHC_DEBUG("Got (del) response from peer %s : %s\n",
+                          peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
                 fbuf_destroy(&resp);
@@ -418,10 +394,8 @@ int send_to_peer(char *peer, char *auth, void *key,
             errno = 0;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
-#ifdef SHARDCACHE_DEBUG
-                fprintf(stderr, "Got (set) response from peer %s : %s\n",
-                        peer, fbuf_data(&resp));
-#endif
+                SHC_DEBUG("Got (set) response from peer %s : %s\n",
+                          peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
                 fbuf_destroy(&resp);
@@ -455,24 +429,13 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out, 
             shardcache_hdr_t hdr = 0;
             rc = read_message(fd, auth, out, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
-#ifdef SHARDCACHE_DEBUG
-                if (fbuf_used(out)) {
+                if (shardcache_log_level() >= LOG_DEBUG && fbuf_used(out)) {
                     char keystr[1024];
                     memcpy(keystr, key, len < 1024 ? len : 1024);
                     keystr[len] = 0;
-                    fprintf(stderr, "Got new data from peer %s : %s => ", peer, keystr);
-                    int i;
-                    char *datap = fbuf_data(out);
-                    size_t datalen = fbuf_used(out);
-                    if (datalen > 256)
-                        datalen = 256;
-                    for (i = 0; i < datalen; i++)
-                        fprintf(stderr, "%02x", datap[i]); 
-                    if (datalen < fbuf_used(out))
-                        fprintf(stderr, "...");
-                    fprintf(stderr, "\n");
+                    SHC_DEBUG("Got new data from peer %s : %s => %s", peer, keystr,
+                              shardcache_hex_escape(fbuf_data(out), fbuf_used(out), DEBUG_DUMP_MAXSIZE));
                 }
-#endif
                 if (should_close)
                     close(fd);
                 return 0;
@@ -608,9 +571,8 @@ int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd)
         should_close = 1;
     }
 
-#ifdef SHARDCACHE_DEBUG
-    fprintf(stderr, "Sending migration_begin command to peer %s\n", peer);
-#endif
+    SHC_NOTICE("Sending migration_begin command to peer %s", peer);
+
     if (fd >= 0) {
         int rc = write_message(fd,
                                auth,
@@ -629,10 +591,8 @@ int migrate_peer(char *peer, char *auth, void *msgdata, size_t len, int fd)
         fbuf_t resp = FBUF_STATIC_INITIALIZER;
         rc = read_message(fd, auth, &resp, &hdr);
         if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
-#ifdef SHARDCACHE_DEBUG
-            fprintf(stderr, "Got (del) response from peer %s : %s\n",
+            SHC_DEBUG("Got (del) response from peer %s : %s",
                     peer, fbuf_data(&resp));
-#endif
             if (should_close)
                 close(fd);
             fbuf_destroy(&resp);

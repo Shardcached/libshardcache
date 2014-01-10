@@ -403,12 +403,10 @@ static void shardcache_read_asynchronous(shardcache_connection_context_t *ctx, i
             hdr != SHARDCACHE_HDR_RES)
         {
             // BAD REQUEST
-#ifdef SHARDCACHE_DEBUG
             struct sockaddr_in saddr;
             socklen_t addr_len = sizeof(struct sockaddr_in);
             getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
-            fprintf(stderr, "BAD REQUEST %02x from %s\n", hdr, inet_ntoa(saddr.sin_addr));
-#endif
+            SHC_WARNING("BAD REQUEST %02x from %s", hdr, inet_ntoa(saddr.sin_addr));
             ctx->state = STATE_READING_ERR;
             return;
         }
@@ -525,21 +523,15 @@ static void shardcache_read_asynchronous(shardcache_connection_context_t *ctx, i
         uint64_t received_digest;
         rbuf_read(ctx->input, (u_char *)&received_digest, sizeof(digest));
 
-#ifdef SHARDCACHE_DEBUG
-        int i;
-        fprintf(stderr, "computed digest for received data: ");
-        for (i=0; i<8; i++) {
-            fprintf(stderr, "%02x", (unsigned char)((char *)&digest)[i]);
-        }
-        fprintf(stderr, "\n");
+        if (shardcache_log_level() >= LOG_DEBUG) {
+            SHC_DEBUG("computed digest for received data: %s",
+                      shardcache_hex_escape((char *)&digest, sizeof(digest), 0));
 
-        fprintf(stderr, "digest from received data: ");
-        uint8_t *remote = (uint8_t *)&received_digest;
-        for (i=0; i<8; i++) {
-            fprintf(stderr, "%02x", remote[i]);
+            uint8_t *remote = (uint8_t *)&received_digest;
+            SHC_DEBUG("digest from received data: %s",
+                      shardcache_hex_escape(remote, sizeof(digest), 0));
         }
-        fprintf(stderr, "\n");
-#endif
+
         if (memcmp(&digest, &received_digest, sizeof(digest)) != 0) {
             // AUTH FAILED
             struct sockaddr_in saddr;
@@ -682,12 +674,10 @@ void *worker(void *priv) {
 void *serve_cache(void *priv) {
     shardcache_serving_t *serv = (shardcache_serving_t *)priv;
 
-#ifdef SHARDCACHE_DEBUG
-    fprintf(stderr, "Listening on %s (num_workers: %d)\n", serv->me, serv->num_workers);
-#endif
+    SHC_NOTICE("Listening on %s (num_workers: %d)", serv->me, serv->num_workers);
 
     if (listen(serv->sock, -1) != 0) {
-        fprintf(stderr, "%s: Error listening on fd %d: %s", __FUNCTION__, serv->sock, strerror(errno));
+        SHC_ERROR("Error listening on fd %d: %s", serv->sock, strerror(errno));
         return NULL;
     }
 
@@ -807,9 +797,7 @@ void stop_serving(shardcache_serving_t *s) {
 
     pthread_cancel(s->listener);
     pthread_join(s->listener, NULL);
-#ifdef SHARDCACHE_DEBUG
-    fprintf(stderr, "Collecting worker threads (might have to wait until i/o is finished)\n");
-#endif
+    SHC_NOTICE("Collecting worker threads (might have to wait until i/o is finished)");
     for (i = 0; i < s->num_workers; i++) {
 
         if (s->counters) {
