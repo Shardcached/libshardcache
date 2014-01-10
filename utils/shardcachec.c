@@ -13,9 +13,9 @@ void usage(char *prgname) {
            "        set   <Key> [ <Expire> ] (gets value on stdin)\n"
            "        del   <Key>\n"
            "        evict <Key>\n"
-           "        index [ <peer> ]\n"
-           "        stats [ <peer> ]\n"
-           "        check [ <peer> ]\n\n", prgname);
+           "        index [ <node> ]\n"
+           "        stats [ <node> ]\n"
+           "        check [ <node> ]\n\n", prgname);
     exit(-1);
 }
 
@@ -101,15 +101,15 @@ int main (int argc, char **argv) {
         rc = shardcache_client_evict(client, argv[2], strlen(argv[2]));
     } else if (strcasecmp(cmd, "stats") == 0) {
         int found = 0;
-        char *selected_peer = NULL;
+        char *selected_node = NULL;
         if (argc > 2)
-            selected_peer = argv[2];
+            selected_node = argv[2];
 
         char *stats = NULL;
         size_t len;
         int i;
         for (i = 0; i < num_nodes; i++) {
-            if (selected_peer && strcmp(nodes[i].label, selected_peer) != 0)
+            if (selected_node && strcmp(nodes[i].label, selected_node) != 0)
                 continue;
             found++;
             printf("* Stats for node: %s (%s)\n\n", nodes[i].label, nodes[i].address);
@@ -120,17 +120,17 @@ int main (int argc, char **argv) {
                 free(stats);
             printf("\n");
         }
-        if (found == 0 && selected_peer)
-            fprintf(stderr, "Error: Unknown peer %s\n", selected_peer);
+        if (found == 0 && selected_node)
+            fprintf(stderr, "Error: Unknown node %s\n", selected_node);
     } else if (strcasecmp(cmd, "check") == 0) {
         int found = 0;
-        char *selected_peer = NULL;
+        char *selected_node = NULL;
         if (argc > 2)
-            selected_peer = argv[2];
+            selected_node = argv[2];
 
         int i;
         for (i = 0; i < num_nodes; i++) {
-            if (selected_peer && strcmp(nodes[i].label, selected_peer) != 0)
+            if (selected_node && strcmp(nodes[i].label, selected_node) != 0)
                 continue;
             found++;
             int rc = shardcache_client_check(client, nodes[i].label);
@@ -139,17 +139,17 @@ int main (int argc, char **argv) {
             else
                 printf("%s NOT OK\n", nodes[i].label);
         }
-        if (found == 0 && selected_peer)
-            fprintf(stderr, "Error: Unknown peer %s\n", selected_peer);
+        if (found == 0 && selected_node)
+            fprintf(stderr, "Error: Unknown node %s\n", selected_node);
     } else if (strcasecmp(cmd, "index") == 0) {
         int found = 0;
-        char *selected_peer = NULL;
+        char *selected_node = NULL;
         if (argc > 2)
-            selected_peer = argv[2];
+            selected_node = argv[2];
 
         int i;
         for (i = 0; i < num_nodes; i++) {
-            if (selected_peer && strcmp(nodes[i].label, selected_peer) != 0)
+            if (selected_node && strcmp(nodes[i].label, selected_node) != 0)
                 continue;
             found++;
             printf("* Index for node: %s (%s)\n\n", nodes[i].label, nodes[i].address);
@@ -168,8 +168,8 @@ int main (int argc, char **argv) {
             }
             printf("\n");
         }
-        if (found == 0 && selected_peer)
-            fprintf(stderr, "Error: Unknown peer %s\n", selected_peer);
+        if (found == 0 && selected_node)
+            fprintf(stderr, "Error: Unknown node %s\n", selected_node);
     } else {
         usage(argv[0]);
     }
