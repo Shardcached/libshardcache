@@ -569,7 +569,7 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         return;
     }
 
-    if (!rbuf_len(ctx->input) > 0)
+    if (!rbuf_len(ctx->input))
         return;
     
     // new data arrived so we want to run the asyncrhonous reader to update the context
