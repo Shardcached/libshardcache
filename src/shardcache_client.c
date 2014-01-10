@@ -549,8 +549,9 @@ int read_message_async(int fd, char *auth, void *key, size_t len, shardcache_cli
     iomux_destroy(iomux);
 
     rbuf_destroy(ctx.buf);
-    if (ctx.state = STATE_READING_ERR)
+    if (ctx.state == STATE_READING_ERR) {
         return -1;
+    }
 
     return 0;
 }
