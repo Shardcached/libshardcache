@@ -429,7 +429,7 @@ int fetch_from_peer(char *peer, char *auth, void *key, size_t len, fbuf_t *out, 
             shardcache_hdr_t hdr = 0;
             rc = read_message(fd, auth, out, &hdr);
             if (hdr == SHARDCACHE_HDR_RES && rc == 0) {
-                if (shardcache_log_level() >= LOG_DEBUG && fbuf_used(out)) {
+                if (fbuf_used(out)) {
                     char keystr[1024];
                     memcpy(keystr, key, len < 1024 ? len : 1024);
                     keystr[len] = 0;

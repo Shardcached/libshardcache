@@ -42,6 +42,13 @@
 
 #define DEBUG_DUMP_MAXSIZE 128
 
+#define KEY2STR(__k, __l, __o, __ol) \
+{ \
+    size_t __s = (__l < __ol) ? __l : __ol; \
+    memcpy(__o, __k, __s); \
+    __o[__s] = 0; \
+}
+
 typedef struct chash_t chash_t;
 
 extern int shardcache_log_initialized;
@@ -269,8 +276,7 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
 
     if (shardcache_log_level() >= LOG_DEBUG) {
         char keystr[1024];
-        memcpy(keystr, obj->key, obj->klen < 1024 ? obj->klen : 1024);
-        keystr[obj->klen] = 0;
+        KEY2STR(obj->key, obj->klen, keystr, sizeof(keystr));
         SHC_DEBUG("Fetching data for key %s from peer %s", keystr, peer); 
     }
 
@@ -350,10 +356,8 @@ static size_t __op_fetch(void *item, void * priv)
     }
 
     char keystr[1024];
-    if (shardcache_log_level() >= LOG_DEBUG) {
-        memcpy(keystr, obj->key, obj->klen < 1024 ? obj->klen : 1024);
-        keystr[obj->klen] = 0;
-    }
+    if (shardcache_log_level() >= LOG_DEBUG)
+        KEY2STR(obj->key, obj->klen, keystr, sizeof(keystr));
 
     // we are responsible for this item ... 
     // let's first check if it's among the volatile keys otherwise
@@ -466,12 +470,10 @@ static void *evictor(void *priv)
         pthread_testcancel();
         shardcache_evictor_job_t *job = (shardcache_evictor_job_t *)shift_value(jobs);
         while (job) {
-            char keystr[1024] = { 0 };
-            if (shardcache_log_level() >= LOG_DEBUG) {
-                memcpy(keystr, job->key, job->klen < 1024 ? job->klen : 1024);
-                keystr[job->klen] = 0;
-                SHC_DEBUG("Eviction job for key '%s' started\n", keystr);
-            }
+            char keystr[1024];
+            KEY2STR(job->key, job->klen, keystr, sizeof(keystr));
+            SHC_DEBUG2("Eviction job for key '%s' started\n", keystr);
+
             int i;
             for (i = 0; i < cache->num_shards; i++) {
                 char *peer = cache->shards[i].label;
@@ -482,7 +484,9 @@ static void *evictor(void *priv)
                 }
             }
             destroy_evictor_job(job);
-            SHC_DEBUG("Eviction job for key '%s' completed", keystr);
+
+            SHC_DEBUG2("Eviction job for key '%s' completed", keystr);
+
             job = (shardcache_evictor_job_t *)shift_value(jobs);
         }
         pthread_testcancel();
@@ -522,9 +526,8 @@ static int expire_volatile(hashtable_t *table, void *key, size_t klen, void *val
     volatile_object_t *v = (volatile_object_t *)value;
     if (v->expire && v->expire < arg->now) {
         char keystr[1024];
-        memcpy(keystr, key, klen < 1024 ? klen : 1024);
-        keystr[klen] = 0;
-        fprintf(stderr, "Key %s expired\n", keystr);
+        KEY2STR(key, klen, keystr, sizeof(keystr));
+        SHC_DEBUG("Key %s expired", keystr);
         expire_volatile_item_t *item = malloc(sizeof(expire_volatile_item_t));
         item->key = malloc(klen);
         memcpy(item->key, key, klen);
@@ -872,21 +875,19 @@ _shardcache_set_internal(shardcache_t *cache,
     size_t node_len = sizeof(node_name);
     memset(node_name, 0, node_len);
     
+    char keystr[1024];
+    KEY2STR(key, klen, keystr, sizeof(keystr));
+
     int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
     if (is_mine == -1)
         is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
 
     if (is_mine == 1) {
 
-        char keystr[1024];
-        if (shardcache_log_level() >= LOG_DEBUG) {
-            memcpy(keystr, key, klen < 1024 ? klen : 1024);
-            keystr[klen] = 0;
+        SHC_DEBUG("Storing value %s (%d) for key %s",
+                  shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
+                  (int)vlen, keystr);
 
-            SHC_DEBUG("Storing value %s (%d) for key %s",
-                      shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
-                      (int)vlen, keystr);
-        }
         volatile_object_t *prev = NULL;
         uint32_t *counter = &cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value;
         if (!cache->use_persistent_storage || expire) {
@@ -937,15 +938,9 @@ _shardcache_set_internal(shardcache_t *cache,
         return 0;
     } else if (node_len) {
 
-        if (shardcache_log_level() >= LOG_DEBUG) {
-            char keystr[1024];
-            memcpy(keystr, key, klen < 1024 ? klen : 1024);
-            keystr[klen] = 0;
-
-            SHC_DEBUG("Forwarding set command %s => %s (%d) to %s",
-                    keystr, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
-                    (int)vlen, node_name);
-        }
+        SHC_DEBUG("Forwarding set command %s => %s (%d) to %s",
+                keystr, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
+                (int)vlen, node_name);
 
         char *peer = shardcache_get_node_address(cache, (char *)node_name);
         if (!peer) {
@@ -1017,6 +1012,11 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
         {
             arc_remove(cache->arc, (const void *)key, klen);
             shardcache_evictor_job_t *job = create_evictor_job(key, klen);
+
+            char keystr[1024];
+            KEY2STR(key, klen, keystr, sizeof(keystr));
+            SHC_INFO("Adding evictor job for key %s", keystr);
+
             push_value(cache->evictor_jobs, job);
             pthread_mutex_lock(&cache->evictor_lock);
             pthread_cond_signal(&cache->evictor_cond);
@@ -1143,12 +1143,10 @@ static int expire_migrated(hashtable_t *table, void *key, size_t klen, void *val
         fprintf(stderr, "expire_migrated running while no migration continuum present ... aborting\n");
         return 0;
     } else if (!is_mine) {
-        if (shardcache_log_level() >= LOG_DEBUG) {
-            char keystr[1024];
-            memcpy(keystr, key, klen < 1024 ? klen : 1024);
-            keystr[klen] = 0;
-            SHC_DEBUG("Forcing Key %s to expire because not owned anymore", keystr);
-        }
+        char keystr[1024];
+        KEY2STR(key, klen, keystr, sizeof(keystr));
+        SHC_DEBUG("Forcing Key %s to expire because not owned anymore", keystr);
+
         v->expire = 0;
     }
     return 1;
@@ -1176,7 +1174,7 @@ void *migrate(void *priv)
         shardcache_counter_add(cache->counters, "total_items", &total_items);
         shardcache_counter_add(cache->counters, "migration_errors", &errors);
 
-        SHC_NOTICE("Migrator starting (%d items to precess)", total_items);
+        SHC_INFO("Migrator starting (%d items to precess)", total_items);
 
         int i;
         for (i = 0; i < index->size; i++) {
@@ -1188,8 +1186,7 @@ void *migrate(void *priv)
             memset(node_name, 0, node_len);
 
             char keystr[1024];
-            memcpy(keystr, key, klen < 1024 ? klen : 1024);
-            keystr[klen] = 0;
+            KEY2STR(key, klen, keystr, sizeof(keystr));
 
             SHC_DEBUG("Migrator processign key %s", keystr);
 
@@ -1237,17 +1234,16 @@ void *migrate(void *priv)
     }
 
     if (!aborted) {
-            SHC_NOTICE("Migration completed, now removing not-owned  items");
+            SHC_INFO("Migration completed, now removing not-owned  items");
         shardcache_storage_index_item_t *item = shift_value(to_delete);
         while (item) {
             if (cache->storage.remove)
                 cache->storage.remove(item->key, item->klen, cache->storage.priv);
-            if (shardcache_log_level() >= LOG_DEBUG) {
-                char ikeystr[1024];
-                memcpy(ikeystr, item->key, item->klen < 1024 ? item->klen : 1024);
-                ikeystr[item->klen] = 0;
-                SHC_DEBUG("removed item %s", ikeystr);
-            }
+
+            char ikeystr[1024];
+            KEY2STR(item->key, item->klen, ikeystr, sizeof(ikeystr));
+            SHC_DEBUG("removed item %s", ikeystr);
+
             item = shift_value(to_delete);
         }
 
@@ -1265,7 +1261,7 @@ void *migrate(void *priv)
     cache->migration_done = 1;
     SPIN_UNLOCK(&cache->migration_lock);
     if (index) {
-        SHC_NOTICE("Migrator ended: processed %d items, migrated %d, errors %d",
+        SHC_INFO("Migrator ended: processed %d items, migrated %d, errors %d",
                 total_items, migrated_items, errors);
     }
 
