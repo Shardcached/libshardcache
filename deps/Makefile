@@ -21,33 +21,18 @@ all:
 	mkdir -p .incs; \
 	for i in $(DEPS); do \
 	    name=`echo $$i | sed 's,.*/,,;s/.git$$//' `; \
-	    if [ ! -d "$$name" ]; then \
-		git clone $$i; \
-	    fi; \
+        if [ ! -f $$name/Makefile ]; then \
+            cd ..;\
+            git submodule init;\
+            git submodule update;\
+            cd -;\
+        fi;\
 	    export LIBDIR="$(shell pwd)/.libs"; \
 	    export INCDIR="$(shell pwd)/.incs"; \
 	    export CFLAGS="$(CFLAGS) $(EXTRA_CFLAGS)"; \
 	    make -eC $$name; \
 	    if [ $$? -ne 0 ] ; then exit $$?; fi; \
 	    make -eC $$name install; \
-	done
-
-update:
-	@for i in $(DEPS); do \
-	    name=`echo $$i | sed 's,.*/,,;s/.git$$//' `; \
-	    if [ -d "$$name" ]; then \
-	        cd $$name;\
-		git pull;\
-		cd -;\
-	    fi;\
-	done
-
-purge: clean
-	@for i in $(DEPS); do \
-	    name=`echo $$i | sed 's,.*/,,;s/.git$$//' `; \
-	    if [ -d "$$name" ]; then \
-		rm -rf $$name; \
-	    fi;\
 	done
 
 clean:

@@ -1,0 +1,12 @@
+[submodule "deps/siphash-c"]
+	path = deps/siphash-c
+	url = https://github.com/xant/siphash-c
+[submodule "deps/libiomux"]
+	path = deps/libiomux
+	url = https://github.com/xant/libiomux
+[submodule "deps/libhl"]
+	path = deps/libhl
+	url = https://github.com/xant/libhl
+[submodule "deps/libchash"]
+	path = deps/libchash
+	url = https://github.com/dgryski/libchash
