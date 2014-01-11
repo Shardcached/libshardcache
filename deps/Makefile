@@ -23,7 +23,7 @@ all:
 	    name=`echo $$i | sed 's,.*/,,;s/.git$$//' `; \
         if [ ! -f $$name/Makefile ]; then \
             cd ..;\
-            git submodule init;\
+            git submodule init deps/$$name;\
             git submodule update;\
             cd -;\
         fi;\
