@@ -47,13 +47,14 @@ static int parse_nodes_string(char *str)
     return 0;
 }
 
-void print_chunk(void *key,
+void print_chunk(char *peer,
+                 void *key,
                  size_t klen,
                  void *data,
                  size_t len,
                  void *priv)
 {
-            fwrite(data, 1, len, stdout);
+    fwrite(data, 1, len, stdout);
 }
 
 int main (int argc, char **argv) {
@@ -82,6 +83,12 @@ int main (int argc, char **argv) {
     int rc = 0;
     char *cmd = argv[1];
     if (strcasecmp(cmd, "get") == 0) {
+        void *out = NULL;
+        size_t len = shardcache_client_get(client, argv[2], strlen(argv[2]), &out); 
+        if (len && out) {
+            print_chunk(NULL, NULL, 0, out, len, NULL);
+        }
+    } else if (strcasecmp(cmd, "geta") == 0) {
         rc = shardcache_client_get_async(client, argv[2], strlen(argv[2]), print_chunk, NULL); 
     } else if (strcasecmp(cmd, "set") == 0) {
         char *in = NULL;

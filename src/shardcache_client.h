@@ -44,11 +44,12 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_
  */
 size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data);
 
-typedef void (*shardcache_client_get_aync_data_cb)(void *key,
-                                             size_t klen,
-                                             void *data,
-                                             size_t len,
-                                             void *priv);
+typedef void (*shardcache_client_get_aync_data_cb)(char *peer,
+                                                   void *key,
+                                                   size_t klen,
+                                                   void *data,
+                                                   size_t len,
+                                                   void *priv);
 
 int shardcache_client_get_async(shardcache_client_t *c,
                                 void *key,

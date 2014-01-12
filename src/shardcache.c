@@ -290,7 +290,7 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
     fbuf_t value = FBUF_STATIC_INITIALIZER;
 
     int fd = shardcache_get_connection_for_peer(cache, peer_addr);
-    int rc = fetch_from_peer(peer_addr, (char *)cache->auth, obj->key, obj->klen, &value, fd);
+    int rc = fetch_from_peer(peer_addr, (char *)cache->auth, SHARDCACHE_HDR_SIG_SIP, obj->key, obj->klen, &value, fd);
     shardcache_release_connection_for_peer(cache, peer_addr, fd);
     if (rc == 0 && fbuf_used(&value)) {
         obj->data = fbuf_data(&value);
@@ -479,7 +479,7 @@ static void *evictor(void *priv)
                 char *peer = cache->shards[i].label;
                 if (strcmp(peer, cache->me) != 0) {
                     int fd = shardcache_get_connection_for_peer(cache, cache->shards[i].address);
-                    delete_from_peer(cache->shards[i].address, (char *)cache->auth, job->key, job->klen, 0, fd);
+                    delete_from_peer(cache->shards[i].address, (char *)cache->auth, SHARDCACHE_HDR_SIG_SIP, job->key, job->klen, 0, fd);
                     shardcache_release_connection_for_peer(cache, cache->shards[i].address, fd);
                 }
             }
@@ -948,7 +948,7 @@ _shardcache_set_internal(shardcache_t *cache,
             return -1;
         }
         int fd = shardcache_get_connection_for_peer(cache, peer);
-        int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, expire, fd);
+        int rc = send_to_peer(peer, (char *)cache->auth, SHARDCACHE_HDR_SIG_SIP, key, klen, value, vlen, expire, fd);
         shardcache_release_connection_for_peer(cache, peer, fd);
         if (rc == 0)
             arc_remove(cache->arc, (const void *)key, klen);
@@ -1037,7 +1037,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
             return -1;
         }
         int fd = shardcache_get_connection_for_peer(cache, peer);
-        int rc = delete_from_peer(peer, (char *)cache->auth, key, klen, 1, fd);
+        int rc = delete_from_peer(peer, (char *)cache->auth, SHARDCACHE_HDR_SIG_SIP, key, klen, 1, fd);
         shardcache_release_connection_for_peer(cache, peer, fd);
         return rc;
     }
@@ -1209,7 +1209,7 @@ void *migrate(void *priv)
                     if (peer) {
                         SHC_DEBUG("Migrator copying %s to peer %s (%s)", keystr, node_name, peer);
                         int fd = shardcache_get_connection_for_peer(cache, peer);
-                        int rc = send_to_peer(peer, (char *)cache->auth, key, klen, value, vlen, 0, fd);
+                        int rc = send_to_peer(peer, (char *)cache->auth, SHARDCACHE_HDR_SIG_SIP, key, klen, value, vlen, 0, fd);
                         shardcache_release_connection_for_peer(cache, peer, fd);
                         if (rc == 0) {
                             __sync_add_and_fetch(&migrated_items, 1);
@@ -1344,6 +1344,7 @@ int shardcache_migration_begin(shardcache_t *cache,
                 int fd = shardcache_get_connection_for_peer(cache, cache->shards[i].address);
                 int rc = migrate_peer(cache->shards[i].address,
                                       (char *)cache->auth,
+                                      SHARDCACHE_HDR_SIG_SIP,
                                       fbuf_data(&mgb_message),
                                       fbuf_used(&mgb_message), fd);
                 shardcache_release_connection_for_peer(cache, cache->shards[i].address, fd);

@@ -63,36 +63,53 @@ struct __shardcache_serving_s {
 };
 
 typedef struct {
-    rbuf_t *input;
+    shardcache_hdr_t hdr;
+    shardcache_sig_hdr_t sig_hdr;
     fbuf_t *output;
     int fd;
     shardcache_t *cache;
-    shardcache_hdr_t hdr;
     fbuf_t *key;
     fbuf_t *value;
     uint32_t expire;
-#define STATE_READING_NONE   0x00
-#define STATE_READING_HDR    0x01
-#define STATE_READING_KEY    0x02
-#define STATE_READING_VALUE  0x03
-#define STATE_READING_EXPIRE 0x04
-#define STATE_READING_AUTH   0x05
-#define STATE_READING_DONE   0x06
-#define STATE_READING_ERR    0x07
-    char    state;
-    char    rsep_expected;
     const char    *auth;
-    sip_hash *shash;
     shardcache_worker_context_t *worker_ctx;
-    uint16_t clen;
+    async_read_ctx_t *reader_ctx;
 } shardcache_connection_context_t;
 
-static shardcache_connection_context_t *
-shardcache_create_connection_context(shardcache_t *cache, const char *auth, int fd)
+static void
+async_read_handler(void *data, size_t len, int idx, void *priv)
 {
-    shardcache_connection_context_t *context = calloc(1, sizeof(shardcache_connection_context_t));
+    shardcache_connection_context_t *ctx =
+        (shardcache_connection_context_t *)priv;
 
-    context->input = rbuf_create(1<<17); // would fit 'almost' 2 max-sized chunks
+    switch(idx) {
+        case 0:
+            fbuf_add_binary(ctx->key, data, len);
+            break;
+        case 1:
+            fbuf_add_binary(ctx->value, data, len);
+            break;
+        case 2:
+            if (len == 4) {
+                uint32_t exp;
+                memcpy(&exp, data, sizeof(uint32_t));
+                ctx->expire = ntohl(exp);
+            } else {
+                // TODO - Error Messages
+            }
+            break;
+    }
+}
+
+
+static shardcache_connection_context_t *
+shardcache_connection_context_create(shardcache_t *cache,
+                                     const char *auth,
+                                     int fd)
+{
+    shardcache_connection_context_t *context =
+        calloc(1, sizeof(shardcache_connection_context_t));
+
     context->output = fbuf_create(0);
 
     context->key = fbuf_create(0);
@@ -100,47 +117,60 @@ shardcache_create_connection_context(shardcache_t *cache, const char *auth, int 
 
     context->cache = cache;
     context->auth = auth;
-    if (auth)
-        context->shash = sip_hash_new((uint8_t *)auth, 2, 4);
     context->fd = fd;
+    context->reader_ctx = async_read_context_create((char *)auth,
+                                                    async_read_handler,
+                                                    context);
     return context;
 }
 
-static void shardcache_destroy_connection_context(shardcache_connection_context_t *ctx) {
-    rbuf_destroy(ctx->input);
+static void
+shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
+{
     fbuf_free(ctx->output);
     fbuf_free(ctx->key);
     fbuf_free(ctx->value);
-    if (ctx->shash)
-        sip_hash_free(ctx->shash);
+    async_read_context_destroy(ctx->reader_ctx);
     free(ctx);
 }
 
-static void write_status(shardcache_connection_context_t *ctx, int rc) {
+static void
+write_status(shardcache_connection_context_t *ctx, int rc)
+{
     char out[20];
 
-    out[0] = SHARDCACHE_HDR_RES;
-    out[1] = 0;
+    out[0] = 0;
 
-    char *p = &out[3];
+    char *p = &out[2];
     if (rc != 0) {
         //fprintf(stderr, "Error running command %d (key %s)\n",
         //	  ctx->hdr, fbuf_data(ctx->key));
-        out[2] = 3;
+        out[1] = 3;
         strncpy(p, "ERR", 3);
         p += 3;
     } else {
-        out[2] = 2;
+        out[1] = 2;
         strncpy(p, "OK", 2);
         p += 2;
     }
     memset(p, 0, 3);
     p += 3;
 
-
     if (ctx->auth) {
-        char hdr_sig = SHARDCACHE_HDR_SIG;
+        char hdr_sig = ctx->sig_hdr;
         fbuf_add_binary(ctx->output, &hdr_sig, 1);
+    }
+
+    uint16_t initial_offset = fbuf_used(ctx->output);
+
+    char hdr = SHARDCACHE_HDR_RES;
+    fbuf_add_binary(ctx->output, &hdr, 1);
+    if (ctx->auth && ctx->sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
+        uint64_t digest;
+        sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
+        sip_hash_digest_integer(shash, &hdr, 1, &digest);
+        sip_hash_free(shash);
+        fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
     }
 
     fbuf_add_binary(ctx->output, out, p - &out[0]);
@@ -148,14 +178,23 @@ static void write_status(shardcache_connection_context_t *ctx, int rc) {
     if (ctx->auth) {
         uint64_t digest;
         sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
-        sip_hash_digest_integer(shash, out, p - &out[0], &digest);
+        if (ctx->sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
+            sip_hash_digest_integer(shash, out, p - &out[0], &digest);
+        } else {
+            sip_hash_digest_integer(shash,
+                                    fbuf_data(ctx->output) + initial_offset,
+                                    p - &out[0] + 1, &digest);
+        }
         sip_hash_free(shash);
         fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
     }
 }
 
-static void *process_request(void *priv) {
-    shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
+static void *
+process_request(void *priv)
+{
+    shardcache_connection_context_t *ctx =
+        (shardcache_connection_context_t *)priv;
     shardcache_t *cache = ctx->cache;
 
     int rc = 0;
@@ -169,13 +208,16 @@ static void *process_request(void *priv) {
             size_t vlen = 0;
             void *v = shardcache_get(cache, key, klen, &vlen, NULL);
             if (build_message((char *)ctx->auth,
+                              ctx->sig_hdr,
                               SHARDCACHE_HDR_RES,
                               v, vlen,
                               NULL, 0,
                               0, &out) == 0)
             {
                 fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
-            } else {
+            }
+            else
+            {
                 // TODO - Error Messages
             }
             fbuf_destroy(&out);
@@ -187,8 +229,12 @@ static void *process_request(void *priv) {
         case SHARDCACHE_HDR_SET:
         {
             if (ctx->expire) {
-                rc = shardcache_set_volatile(cache, key, klen,
-                        fbuf_data(ctx->value), fbuf_used(ctx->value), ctx->expire);
+                rc = shardcache_set_volatile(cache,
+                                             key,
+                                             klen,
+                                             fbuf_data(ctx->value),
+                                             fbuf_used(ctx->value),
+                                             ctx->expire);
 
             } else {
                 rc = shardcache_set(cache, key, klen,
@@ -220,7 +266,8 @@ static void *process_request(void *priv) {
                     char *label = strsep(&tok, ":");
                     char *addr = tok;
                     num_shards++;
-                    nodes = realloc(nodes, num_shards * sizeof(shardcache_node_t));
+                    size_t size = num_shards * sizeof(shardcache_node_t);
+                    nodes = realloc(nodes, size);
                     shardcache_node_t *node = &nodes[num_shards-1];
                     snprintf(node->label, sizeof(node->label), "%s", label);
                     snprintf(node->address, sizeof(node->address), "%s", addr);
@@ -264,7 +311,8 @@ static void *process_request(void *priv) {
                 for (i = 0; i < num_nodes; i++) {
                     if (i > 0)
                         fbuf_add(&buf, ",");
-                    fbuf_printf(&buf, "%s:%s", nodes[i].label, nodes[i].address);
+                    fbuf_printf(&buf, "%s:%s",
+                                nodes[i].label, nodes[i].address);
                 }
                 fbuf_add(&buf, "\r\n");
                 free(nodes);
@@ -273,17 +321,20 @@ static void *process_request(void *priv) {
             int ncounters = shardcache_get_counters(cache, &counters);
             if (counters) {
                 for (i = 0; i < ncounters; i++) {
-                    fbuf_printf(&buf, "%s;%u\r\n", counters[i].name, counters[i].value);
+                    fbuf_printf(&buf, "%s;%u\r\n",
+                                counters[i].name, counters[i].value);
                 }
 
                 fbuf_t out = FBUF_STATIC_INITIALIZER;
                 if (build_message((char *)ctx->auth,
+                                  ctx->sig_hdr,
                                   SHARDCACHE_HDR_RES,
                                   fbuf_data(&buf), fbuf_used(&buf),
                                   NULL, 0,
                                   0, &out) == 0)
                 {
-                    fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+                    fbuf_add_binary(ctx->output,
+                            fbuf_data(&out), fbuf_used(&out));
                 } else {
                     // TODO - Error Messages
                 }
@@ -319,12 +370,14 @@ static void *process_request(void *priv) {
 
             // chunkize the data and build an actual message
             if (build_message((char *)ctx->auth,
+                              ctx->sig_hdr,
                               SHARDCACHE_HDR_IDR,
                               fbuf_data(&buf), fbuf_used(&buf),
                               NULL, 0,
                               0, &out) == 0)
             {
-                fbuf_destroy(&buf); // destroy it early ... since we still need one more copy
+                // destroy it early ... since we still need one more copy
+                fbuf_destroy(&buf);
                 fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
             } else {
                 fbuf_destroy(&buf);
@@ -341,11 +394,16 @@ static void *process_request(void *priv) {
     return NULL;
 }
 
-static void shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
+static void
+shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
 {
-    shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
+    shardcache_connection_context_t *ctx =
+        (shardcache_connection_context_t *)priv;
+
     if (fbuf_used(ctx->output)) {
-        int wb = iomux_write(iomux, fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
+        int wb = iomux_write(iomux, fd,
+                            fbuf_data(ctx->output),
+                            fbuf_used(ctx->output));
         fbuf_remove(ctx->output, wb);
     }
 
@@ -355,230 +413,43 @@ static void shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
     }
 }
 
-static void shardcache_read_asynchronous(shardcache_connection_context_t *ctx, int fd)
+static void
+shardcache_input_handler(iomux_t *iomux,
+                         int fd,
+                         void *data,
+                         int len,
+                         void *priv)
 {
-    if (ctx->state == STATE_READING_NONE || ctx->state == STATE_READING_HDR)
-    {
-        unsigned char hdr;
-        rbuf_read(ctx->input, &hdr, 1);
-        while (hdr == SHARDCACHE_HDR_NOP && rbuf_len(ctx->input) > 0)
-            rbuf_read(ctx->input, &hdr, 1); // skip
+    shardcache_connection_context_t *ctx =
+        (shardcache_connection_context_t *)priv;
 
-        if (hdr == SHARDCACHE_HDR_NOP)
-            return;
-
-        if (ctx->state == STATE_READING_NONE) {
-            if (hdr == SHARDCACHE_HDR_SIG)
-            {
-                if (!ctx->auth) {
-                    ctx->state = STATE_READING_ERR;
-                    return;
-                }
-
-                ctx->state = STATE_READING_HDR;
-
-                if (rbuf_len(ctx->input) < 1) {
-                    return;
-                }
-
-                rbuf_read(ctx->input, &hdr, 1);
-            } else if (ctx->auth) {
-                // we are expecting the signature header
-                ctx->state = STATE_READING_ERR;
-                return;
-            }
-        }
-
-        if (hdr != SHARDCACHE_HDR_GET &&
-            hdr != SHARDCACHE_HDR_SET &&
-            hdr != SHARDCACHE_HDR_DEL &&
-            hdr != SHARDCACHE_HDR_EVI &&
-            hdr != SHARDCACHE_HDR_MGA &&
-            hdr != SHARDCACHE_HDR_MGB &&
-            hdr != SHARDCACHE_HDR_MGE &&
-            hdr != SHARDCACHE_HDR_CHK &&
-            hdr != SHARDCACHE_HDR_STS &&
-            hdr != SHARDCACHE_HDR_IDG &&
-            hdr != SHARDCACHE_HDR_IDR &&
-            hdr != SHARDCACHE_HDR_RES)
-        {
-            // BAD REQUEST
-            struct sockaddr_in saddr;
-            socklen_t addr_len = sizeof(struct sockaddr_in);
-            getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
-            SHC_WARNING("BAD REQUEST %02x from %s", hdr, inet_ntoa(saddr.sin_addr));
-            ctx->state = STATE_READING_ERR;
-            return;
-        }
-
-        ctx->hdr = hdr;
-        ctx->state = STATE_READING_KEY;
-        if (ctx->shash)
-            sip_hash_update(ctx->shash, &hdr, 1);
-    }
-
-    for (;;) {
-        if (ctx->state == STATE_READING_AUTH)
-            break;
-        
-        if (ctx->clen == 0 && !ctx->rsep_expected) {
-            if (rbuf_len(ctx->input) < 2)
-                break;
-            uint16_t nlen = 0;
-            rbuf_read(ctx->input, (u_char *)&nlen, 2);
-            ctx->clen = ntohs(nlen);
-            if (ctx->shash)
-                sip_hash_update(ctx->shash, (char *)&nlen, 2);
-        }
-        if (ctx->clen > 0) {
-            char chunk[ctx->clen];
-            if (rbuf_len(ctx->input) < ctx->clen) {
-                // TRUNCATED - we need more data
-                // XXX
-                break;
-            }
-            rbuf_read(ctx->input, chunk, ctx->clen);
-            if (ctx->state == STATE_READING_KEY) {
-                fbuf_add_binary(ctx->key, chunk, ctx->clen);
-            } else if (ctx->state == STATE_READING_VALUE) {
-                fbuf_add_binary(ctx->value, chunk, ctx->clen);
-            } else if (ctx->state == STATE_READING_EXPIRE && ctx->clen == 4) {
-                uint32_t exp;
-                memcpy(&exp, chunk, sizeof(uint32_t));
-                ctx->expire = ntohl(exp);
-            } else {
-                // BAD FORMAT
-                fprintf(stderr, "Bad formatted requested\n");
-                ctx->state = STATE_READING_ERR;
-                return;
-            }
-            if (ctx->shash) {
-                sip_hash_update(ctx->shash, chunk, ctx->clen);
-            }
-            ctx->clen = 0;
-        } else {
-            if (rbuf_len(ctx->input) < 1) {
-                // TRUNCATED - we need more data
-                ctx->rsep_expected = 1;
-                break;
-            }
-
-            u_char bsep = 0;
-            rbuf_read(ctx->input, &bsep, 1);
-            if (ctx->shash)
-                sip_hash_update(ctx->shash, &bsep, 1);
-            ctx->rsep_expected = 0;
-            if (bsep == SHARDCACHE_RSEP) {
-                if (ctx->state == STATE_READING_KEY) {
-                    if (ctx->hdr == SHARDCACHE_HDR_SET) {
-                        ctx->state = STATE_READING_VALUE;
-                    } else {
-                        // BAD FORMAT - Ignore
-                        // we don't support multiple records if the message is not SET
-                        fprintf(stderr, "Bad formatted requested\n");
-                        ctx->state = STATE_READING_ERR;
-                        return;
-                    }
-
-                } else if (ctx->state == STATE_READING_VALUE) {
-
-                    if (ctx->hdr == SHARDCACHE_HDR_SET) {
-                        // the expiry follows (must be a volatile key)
-                        ctx->state = STATE_READING_EXPIRE;
-                    } else {
-                        fprintf(stderr, "Bad formatted requested\n");
-                        ctx->state = STATE_READING_ERR;
-                        return;
-                    }
-                } else {
-                    fprintf(stderr, "Bad formatted requested\n");
-                    ctx->state = STATE_READING_ERR;
-                    return;
-                }
-            } else if (bsep == 0) {
-                if (ctx->auth)
-                    ctx->state = STATE_READING_AUTH;
-                else
-                    ctx->state = STATE_READING_DONE;
-                break;
-            } else {
-                // BAD FORMAT
-                break;
-            }
-        }
-    }
-
-    if (ctx->state == STATE_READING_AUTH) {
-        if (rbuf_len(ctx->input) < SHARDCACHE_MSG_SIG_LEN)
-            return;
-
-        uint64_t digest;
-        if (!sip_hash_final_integer(ctx->shash, &digest)) {
-            // TODO - Error Messages
-            fprintf(stderr, "Bad signature\n");
-            ctx->state = STATE_READING_ERR;
-            return;
-        }
-
-        uint64_t received_digest;
-        rbuf_read(ctx->input, (u_char *)&received_digest, sizeof(digest));
-
-        if (shardcache_log_level() >= LOG_DEBUG) {
-            SHC_DEBUG("computed digest for received data: %s",
-                      shardcache_hex_escape((char *)&digest, sizeof(digest), 0));
-
-            uint8_t *remote = (uint8_t *)&received_digest;
-            SHC_DEBUG("digest from received data: %s",
-                      shardcache_hex_escape(remote, sizeof(digest), 0));
-        }
-
-        if (memcmp(&digest, &received_digest, sizeof(digest)) != 0) {
-            // AUTH FAILED
-            struct sockaddr_in saddr;
-            socklen_t addr_len = sizeof(struct sockaddr_in);
-            getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
-
-            fprintf(stderr, "Unauthorized request from %s\n",
-                    inet_ntoa(saddr.sin_addr));
-
-            ctx->state = STATE_READING_ERR;
-            return;
-        }
-        ctx->state = STATE_READING_DONE;
-    }
-}
-
-static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len, void *priv)
-{
-    shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
     if (!ctx)
         return;
 
-    int wb = rbuf_write(ctx->input, data, len);
-    if (wb != len) {
-        fprintf(stderr, "Buffer underrun!");
-        iomux_close(iomux, fd);
-        return;
-    }
+    // new data arrived so we want to run the asyncrhonous reader to update
+    // the context
+    async_read_context_input_data(data, len, ctx->reader_ctx);
 
-    if (!rbuf_len(ctx->input))
-        return;
-    
-    // new data arrived so we want to run the asyncrhonous reader to update the context
-    shardcache_read_asynchronous(ctx, fd);
-
-    // if a complete message has been handled (so we are back to STATE_READING_NONE)
-    // but we still have data in the read buffer, it means that multiple commands 
-    // were concatenated, so we need to run the asynchronous reader again to consume
-    // the buffer until we can.
-    while (ctx->state == STATE_READING_DONE) {
+    // if a complete message has been handled (so we are back to
+    // SHC_STATE_READING_NONE) but we still have data in the read buffer,
+    // it means that multiple commands were concatenated, so we need to run
+    // the asynchronous reader again to consume the buffer until we can.
+    int state = async_read_context_state(ctx->reader_ctx);
+    while (state == SHC_STATE_READING_DONE) {
         shardcache_worker_context_t *wrkctx = ctx->worker_ctx;
         ATOMIC_CAS(wrkctx->busy, 0, 1);
+
+        ctx->hdr = async_read_context_hdr(ctx->reader_ctx);
+        ctx->sig_hdr = async_read_context_sig_hdr(ctx->reader_ctx);
 
         process_request(ctx);
         // if we have output, let's send it
         if (fbuf_used(ctx->output)) {
-            int wb = iomux_write(iomux, fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
+
+            int wb = iomux_write(iomux, fd,
+                                 fbuf_data(ctx->output),
+                                 fbuf_used(ctx->output));
+
             fbuf_remove(ctx->output, wb);
             if (fbuf_used(ctx->output)) {
                 // too much output, let's keep pushing it in a timeout handler
@@ -588,37 +459,48 @@ static void shardcache_input_handler(iomux_t *iomux, int fd, void *data, int len
         }
 
         ATOMIC_CAS(wrkctx->busy, 1, 0);
-        ctx->state = STATE_READING_NONE;
         fbuf_clear(ctx->key);
         fbuf_clear(ctx->value);
 
-        if (ctx->shash) {
-            sip_hash_free(ctx->shash);
-            // create a new one for the next request on this same socket (if any)
-        }
-        if (ctx->auth)
-            ctx->shash = sip_hash_new((uint8_t *)ctx->auth, 2, 4);
+        // we might have received already data for the next command,
+        // so let's run the asynchronous reader again to update
+        // consume all pending data, if any, and to update the context 
+        async_read_context_input_data(NULL, 0, ctx->reader_ctx);
 
-        if (ctx->state == STATE_READING_NONE && rbuf_len(ctx->input) > 0)
-            shardcache_read_asynchronous(ctx, fd);
+        state = async_read_context_state(ctx->reader_ctx);
     }
 
-    if (ctx->state == STATE_READING_ERR)
+    if (state == SHC_STATE_READING_ERR || state == SHC_STATE_AUTH_ERR) {
+        // if the asynchronous reader is in error state we want
+        // to close the connection, probably an unauthorized or a
+        // badly formatted message has been sent by the client
+        struct sockaddr_in saddr;
+        socklen_t addr_len = sizeof(struct sockaddr_in);
+        getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
+        SHC_DEBUG("Bad message %02x from %s (%d)\n",
+                  ctx->hdr, inet_ntoa(saddr.sin_addr), state);
         iomux_close(iomux, fd);
+    }
 }
 
-static void shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
+static void
+shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
 {
-    shardcache_connection_context_t *ctx = (shardcache_connection_context_t *)priv;
+    shardcache_connection_context_t *ctx =
+        (shardcache_connection_context_t *)priv;
+
     close(fd);
+
     if (ctx) {
         shardcache_worker_context_t *wrkctx = ctx->worker_ctx;
         ATOMIC_DECREMENT(wrkctx->num_fds);
-        shardcache_destroy_connection_context(ctx);
+        shardcache_connection_context_destroy(ctx);
     }
 }
 
-void *worker(void *priv) {
+void *
+worker(void *priv)
+{
     shardcache_worker_context_t *wrk_ctx = (shardcache_worker_context_t *)priv;
     queue_t *jobs = wrk_ctx->jobs;
 
@@ -659,8 +541,13 @@ void *worker(void *priv) {
             if (rc == 0) {
                 abstime.tv_sec = now.tv_sec + 1;
                 abstime.tv_nsec = now.tv_usec * 1000;
+
                 pthread_mutex_lock(&wrk_ctx->wakeup_lock);
-                pthread_cond_timedwait(&wrk_ctx->wakeup_cond, &wrk_ctx->wakeup_lock, &abstime);
+
+                pthread_cond_timedwait(&wrk_ctx->wakeup_cond,
+                                       &wrk_ctx->wakeup_lock,
+                                       &abstime);
+
                 pthread_mutex_unlock(&wrk_ctx->wakeup_lock);
             } else {
                 // TODO - Error messsages
@@ -671,13 +558,17 @@ void *worker(void *priv) {
     return NULL;
 }
 
-void *serve_cache(void *priv) {
+void *
+serve_cache(void *priv)
+{
     shardcache_serving_t *serv = (shardcache_serving_t *)priv;
 
-    SHC_NOTICE("Listening on %s (num_workers: %d)", serv->me, serv->num_workers);
+    SHC_NOTICE("Listening on %s (num_workers: %d)",
+               serv->me, serv->num_workers);
 
     if (listen(serv->sock, -1) != 0) {
-        SHC_ERROR("Error listening on fd %d: %s", serv->sock, strerror(errno));
+        SHC_ERROR("Error listening on fd %d: %s",
+                  serv->sock, strerror(errno));
         return NULL;
     }
 
@@ -692,7 +583,8 @@ void *serve_cache(void *priv) {
         if (fd >= 0) {
             // begin the worker slection process
             // first get the next worker in the array
-            shardcache_worker_context_t *wrkctx = &serv->workers[idx++ % serv->num_workers];
+            int index = idx++ % serv->num_workers;
+            shardcache_worker_context_t *wrkctx = &serv->workers[index];
             shardcache_worker_context_t *freemost_worker = NULL;
             int cnt = 0;
 
@@ -707,25 +599,30 @@ void *serve_cache(void *priv) {
                     freemost_worker = wrkctx;
 
                 wrkctx = &serv->workers[idx++ % serv->num_workers];
-                // well ...if we've gone through the whole list and all threads are busy)
-                // let's queue this filedescriptor to the one with the least queued  fildescriptors
+                // well ...if we've gone through the whole list and all threads
+                // are busy) let's queue this filedescriptor to the one with
+                // the least queued  fildescriptors
                 if (++cnt == serv->num_workers) {
                     wrkctx = freemost_worker;
                     break;
                 }
             }
-            // now we have selected a worker, let's see if it makes sense to go ahead
+
+            // now we have selected a worker, let's see if it makes sense
+            // to go ahead
             pthread_testcancel();
 
             // create and initialize the context for the new connection
-            shardcache_connection_context_t *ctx = shardcache_create_connection_context(serv->cache, serv->auth, fd);
+            shardcache_connection_context_t *ctx =
+                shardcache_connection_context_create(serv->cache, serv->auth, fd);
+
             queue_push_right(wrkctx->jobs, ctx);
             pthread_mutex_lock(&wrkctx->wakeup_lock);
             pthread_cond_signal(&wrkctx->wakeup_cond);
             pthread_mutex_unlock(&wrkctx->wakeup_lock);
         }
     }
- 
+
     return NULL;
 }
 
@@ -751,22 +648,23 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
 
     s->sock = open_socket(host, port);
     if (s->sock == -1) {
-        fprintf(stderr, "Can't open listening socket %s:%d : %s\n", host, port, strerror(errno));
+        fprintf(stderr, "Can't open listening socket %s:%d : %s\n",
+                host, port, strerror(errno));
         free(addr);
         free(s);
         return NULL;
     }
 
     free(addr); // we don't need it anymore
-    
+
     // create the workers' pool
     s->workers = calloc(num_workers, sizeof(shardcache_worker_context_t));
-    
+
     int i;
     for (i = 0; i < num_workers; i++) {
         s->workers[i].jobs = queue_create();
         queue_set_free_value_callback(s->workers[i].jobs,
-                (queue_free_value_callback_t)shardcache_destroy_connection_context);
+                (queue_free_value_callback_t)shardcache_connection_context_destroy);
 
         if (s->counters) {
             char varname[256];
