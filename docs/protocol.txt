@@ -1,7 +1,6 @@
 The internal communication protocol may described by the following grammar:
 
-MESSAGE      : [<SIG_HDR>]<MSG>[<SIG>] | <NOOP>
-SIG_HDR      : 0xF0
+MESSAGE      : <MSG> | <SIG_MESSAGE> | <NOOP>
 MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
 NOOP         : <MSG_NOP>
 HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_EVI> |
@@ -22,45 +21,82 @@ MSG_NOP      : 0x90
 MSG_RES      : 0x99
 RSEP         : 0x80
 NULL_RECORD  : <EOR>
+EOR          : <NULL_BYTE><NULL_BYTE>
 RECORD       : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
 SIZE         : <WORD>
 WORD         : <HIGH_BYTE><LOW_BYTE>
-EOR          : <NULL_BYTE><NULL_BYTE>
 HIGH_BYTE    : <BYTE>
 LOW_BYTE     : <BYTE>
 DATA         : <BYTE>...<BYTE>
 BYTE         : 0x00 - 0xFF
 NULL_BYTE    : 0x00
 EOM          : <NULL_BYTE>
-SIG          : <BYTE>[8]
 KEY          : <RECORD>
 VALUE        : <RECORD>
 TTL          : <RECORD>
 NODES_LIST   : <RECORD>
 INDEX        : <RECORD>
 
-
 -------------------------------------------------------------------------------
 
 The only supported messages are the following:
 
 
-GET_MESSAGE  : [<SIG_HDR>]<MSG_GET><KEY><EOM>[<SIG>]
-SET_MESSAGE  : [<SIG_HDR>]<MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>[<SIG>]
-DEL_MESSAGE  : [<SIG_HDR>]<MSG_DEL><KEY><EOM>[<SIG>]
-EVI_MESSAGE  : [<SIG_HDR>]<MSG_EVI><KEY><EOM>[<SIG>]
-RES_MESSAGE  : [<SIG_HDR>]<MSG_RES><RECORD><EOM>[<SIG>]
+GET_MESSAGE  : <MSG_GET><KEY><EOM>
+SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
+DEL_MESSAGE  : <MSG_DEL><KEY><EOM>
+EVI_MESSAGE  : <MSG_EVI><KEY><EOM>
+RES_MESSAGE  : <MSG_RES><RECORD><EOM>
 
-MGB_MESSAGE  : [<SIG_HDR>]<MSG_MGB><NODES_LIST><EOM>[<SIG>]
-MGA_MESSAGE  : [<SIG_HDR>]<MSG_MGA><NULL_RECORD><EOM>[<SIG>]
-MGE_MESSAGE  : [<SIG_HDR>]<MSG_MGE><NULL_RECORD><EOM>[<SIG>]
+MGB_MESSAGE  : <MSG_MGB><NODES_LIST><EOM>
+MGA_MESSAGE  : <MSG_MGA><NULL_RECORD><EOM>
+MGE_MESSAGE  : <MSG_MGE><NULL_RECORD><EOM>
 
-STS_MESSAGE  : [<SIG_HDR>]<MSG_STS><NULL_RECORD><EOM>[<SIG>]
-CHK_MESSAGE  : [<SIG_HDR>]<MSG_CHK><NULL_RECORD><EOM>[<SIG>]
+STS_MESSAGE  : <MSG_STS><NULL_RECORD><EOM>
+CHK_MESSAGE  : <MSG_CHK><NULL_RECORD><EOM>
 
-IDG_MESSAGE  : [<SIG_HDR>]<MSG_IDG><NULL_RECORD><EOM>[<SIG>]
-IDR_MESSAGE  : [<SIG_HDR>]<MSG_IDR><INDEX><EOM>[<SIG>]
+IDG_MESSAGE  : <MSG_IDG><NULL_RECORD><EOM>
+IDR_MESSAGE  : <MSG_IDR><INDEX><EOM>
 
+-------------------------------------------------------------------------------
+
+Protocol extensions for signature/crc:
+
+SIG_MESSAGE  : <SIG_MSG> | <CSIG_MSG>
+SIG_MSG      : <SIG_HDR><MESSAGE><SIG>
+CSIG_MSG     : <CSIG_HDR><HDR><CSIG><CSIG_RECORD>[<RSEP><CSIG><CSIG_RECORD>...]<EOM><CSIG>
+SIG_HDR      : <HDR_SIPHASH>
+CSIG_HDR     : <HDR_CSIPHASH>
+HDR_SIPHASH  : 0xF0
+HDR_CSIPHASH : 0xF1
+CSIG_RECORD  : <SIZE><DATA><SIG>[<SIZE><DATA><SIG>...]<EOR>
+SIG          : <BYTE>[8]
+CSIG         : <BYTE>[8]
+
+-------------------------------------------------------------------------------
+
+The signature header SIG_HDR defines the signature algorithm applied and 
+if chunk-signing has been used instead of  simple-signing.
+The least significative bit in the SIG_HDR byte determines if chunk-signing is
+enabled
+
+- simple-signing : There is only one signature applied at the end of the message
+                   and which signs the entire message as a whole.
+
+                    <SIG_HDR><HDR><SIZE><CHUNK>[<SIZE><CHUNK>...]<EOR><EOM><SIG>
+                      0xF0   |---------------------S----------------------|
+
+
+- chunk-signing  : Each chunk of the message has been signed independently
+                   (which allows asynchronous read/flush of big messages without
+                   the need of accumulating them in-memory)
+
+    <CSIG_HDR><HDR><SIG><SIZE><CHUNK><SIG>[<SIZE><CHUNK><SIG>...]<EOR><EOM><SIG>
+       0xF1   |-S-|     |-----S-----|      |-----S-----|         |----S---|
+
+
+NOTE: The actual protocol implementation supports only SIPHASH signatures.
+      The SIG_HDR defined for SIPHASH is 0xF0 (0xF1 if chunk-signing)
 
 -------------------------------------------------------------------------------
 
