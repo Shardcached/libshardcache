@@ -919,7 +919,7 @@ _shardcache_set_internal(shardcache_t *cache,
             }
 
             SPIN_LOCK(&cache->next_expire_lock);
-            if (obj->expire && obj->expire < cache->next_expire)
+            if (obj->expire && (!cache->next_expire || obj->expire < cache->next_expire))
                 cache->next_expire = obj->expire;
 
             SPIN_UNLOCK(&cache->next_expire_lock);
