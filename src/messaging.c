@@ -382,6 +382,30 @@ fetch_from_peer_async(char *peer,
     return rc;
 }
 
+static int
+read_and_check_siphash_signature(int fd, sip_hash *shash)
+{
+    uint64_t digest, received_digest;
+
+    int rb = read_socket(fd, (char *)&received_digest, sizeof(received_digest));
+    if (rb != sizeof(received_digest)) {
+        SHC_WARNING("Truncated message (expected signature)");
+        return -1;
+    }
+    if (!sip_hash_final_integer(shash, &digest)) {
+        SHC_ERROR("Errors computing the siphash digest");
+        return -1;
+    }
+
+    SHC_DEBUG("computed digest for received data: %s",
+            shardcache_hex_escape((unsigned char *)&digest, sizeof(digest), 0));
+
+    SHC_DEBUG("digest from received data: %s",
+              shardcache_hex_escape((unsigned char *)&received_digest, sizeof(digest), 0));
+
+
+    return (memcmp(&digest, &received_digest, sizeof(digest)) == 0);
+}
 
 // synchronous (blocking)  message reading
 int
@@ -391,6 +415,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
     int initial_len = fbuf_used(out);;
     int reading_message = 0;
     unsigned char hdr;
+    int csig = 0;
     sip_hash *shash = NULL;
 
     if (auth)
@@ -406,9 +431,10 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
             } while (rb == 1 && hdr == SHARDCACHE_HDR_NOP);
 
             if (rb == 1) {
-                if (hdr == SHARDCACHE_HDR_SIG_SIP) {
+                if ((hdr&0xFE) == SHARDCACHE_HDR_SIG_SIP) {
                     if (!shash) // no secred is configured but the message is signed
                         return -1;
+                    csig = (hdr&0x01);
                     rb = read_socket(fd, &hdr, 1);
                 } else if (shash) {
                     // we are expecting a signature header
@@ -443,8 +469,17 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 fprintf(stderr, "Uknown message type %02x in read_message()\n", hdr);
                 return -1;
             }
-            if (shash)
+            if (shash) {
                 sip_hash_update(shash, &hdr, 1);
+                if (csig) {
+                    if (!read_and_check_siphash_signature(fd, shash)) {
+                        sip_hash_free(shash);
+                        SHC_WARNING("Can't validate signature (message type %02x) in read_message()", hdr);
+                        return -1;
+                    }
+                }
+
+            }
             if (ohdr)
                 *ohdr = hdr;
             reading_message = 1;
@@ -473,9 +508,24 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 if (rsep == SHARDCACHE_RSEP) {
                     // go ahead fetching the next record
                     // XXX - should we separate the records in the output buffer?
+                    if (shash && csig) {
+                        if (!read_and_check_siphash_signature(fd, shash)) {
+                            sip_hash_free(shash);
+                            fbuf_set_used(out, initial_len);
+                            SHC_WARNING("Unauthorized message type %02x in read_message()", hdr);
+                            return -1;
+                        }
+                    }
                     continue;
                 } else if (rsep == 0) {
                     if (shash) {
+                        if (!read_and_check_siphash_signature(fd, shash)) {
+                            sip_hash_free(shash);
+                            fbuf_set_used(out, initial_len);
+                            SHC_WARNING("Unauthorized message type %02x in read_message()", hdr);
+                            return -1;
+                        }
+#if 0
                         char sig[SHARDCACHE_MSG_SIG_LEN];
                         int ofx = 0;
                         do {
@@ -519,6 +569,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                             return -1;
                             // AUTH FAILED
                         }
+#endif
                         sip_hash_free(shash);
                     }
                     return 0;
@@ -560,6 +611,15 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                     fbuf_set_used(out, initial_len);
                     if (shash)
                         sip_hash_free(shash);
+                    return -1;
+                }
+            }
+
+            if (shash && csig) {
+                if (!read_and_check_siphash_signature(fd, shash)) {
+                    sip_hash_free(shash);
+                    fbuf_set_used(out, initial_len);
+                    SHC_WARNING("Unauthorized message type %02x in read_message()", hdr);
                     return -1;
                 }
             }
