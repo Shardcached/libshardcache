@@ -61,9 +61,6 @@ char *shardcache_hex_escape(const char *buf, int len, int limit)
 
     int olen = (limit > 0 && limit < len) ? limit : len;
 
-    int blen = (olen *2) + 4;
-    if (olen < len)
-        blen += 3;
     str = realloc(str, (olen*2)+4);
     strcpy(str, "0x");
     char *p = str+2;

@@ -83,7 +83,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             return;
 
         if (ctx->state == SHC_STATE_READING_NONE) {
-            if (ctx->hdr == SHARDCACHE_HDR_SIG_SIP || ctx->hdr == SHARDCACHE_HDR_CSIG_SIP)
+            if ((char)ctx->hdr == SHARDCACHE_HDR_SIG_SIP || (char)ctx->hdr == SHARDCACHE_HDR_CSIG_SIP)
             {
                 ctx->sig_hdr = (shardcache_sig_hdr_t)ctx->hdr;
                 if (!ctx->auth) {
@@ -313,8 +313,10 @@ read_message_async(int fd, char *auth, async_read_callback_t cb, void *priv)
         .priv = ctx
     };
     iomux_t *iomux= iomux_create();
-    if (!iomux)
+    if (!iomux) {
+        async_read_context_destroy(ctx);
         return -1;
+    }
 
     iomux_add(iomux, fd, &cbs);
     iomux_loop(iomux, &iomux_timeout);
