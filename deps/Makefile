@@ -14,19 +14,19 @@ DEPS=https://github.com/dgryski/libchash \
      https://github.com/xant/libiomux \
      https://github.com/xant/siphash-c
 
-.PHONY: all update purge clean
+.PHONY: all clean
 
 all:
 	@mkdir -p .libs; \
 	mkdir -p .incs; \
 	for i in $(DEPS); do \
 	    name=`echo $$i | sed 's,.*/,,;s/.git$$//' `; \
-        if [ ! -f $$name/Makefile ]; then \
-            cd ..;\
-            git submodule init deps/$$name;\
-            git submodule update;\
-            cd -;\
-        fi;\
+	    if [ ! -f $$name/Makefile ]; then \
+		cd ..;\
+		git submodule init deps/$$name;\
+		git submodule update;\
+		cd -;\
+	    fi;\
 	    export LIBDIR="$(shell pwd)/.libs"; \
 	    export INCDIR="$(shell pwd)/.incs"; \
 	    export CFLAGS="$(CFLAGS) $(EXTRA_CFLAGS)"; \
