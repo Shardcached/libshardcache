@@ -66,7 +66,7 @@ char *shardcache_hex_escape(const char *buf, int len, int limit)
     char *p = str+2;
 
     for (i = 0; i < olen; i++) {
-        sprintf(p, "%02x", buf[i]);
+        sprintf(p, "%02x", (unsigned char)buf[i]);
         p+=2;
     }
     if (olen < len)
