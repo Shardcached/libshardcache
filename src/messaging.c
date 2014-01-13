@@ -103,7 +103,6 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 rbuf_read(ctx->buf, (char *)&ctx->hdr, 1);
             } else if (ctx->auth) {
                 // we are expecting the signature header
-                printf("EKKOMI1 0x%x -- 0x%x\n", ctx->hdr, SHARDCACHE_HDR_SIG_SIP);
                 ctx->state = SHC_STATE_AUTH_ERR;
                 return;
             }
@@ -146,7 +145,6 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 if (!sip_hash_final_integer(ctx->shash, &digest)) {
                     // TODO - Error Messages
                     fprintf(stderr, "Bad signature\n");
-                printf("EKKOMI2\n");
                     ctx->state = SHC_STATE_AUTH_ERR;
                     return;
                 }
@@ -155,7 +153,6 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 rbuf_read(ctx->buf, (u_char *)&received_digest, sizeof(digest));
 
                 if (memcmp(&digest, &received_digest, sizeof(digest)) != 0) {
-                printf("EKKOMI3\n");
                     ctx->state = SHC_STATE_AUTH_ERR;
                     return;
                 }
