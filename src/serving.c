@@ -157,9 +157,11 @@ write_status(shardcache_connection_context_t *ctx, int rc)
     memset(p, 0, 3);
     p += 3;
 
+    sip_hash *shash = NULL;
     if (ctx->auth) {
         unsigned char hdr_sig = ctx->sig_hdr;
         fbuf_add_binary(ctx->output, (char *)&hdr_sig, 1);
+        shash = sip_hash_new((char *)ctx->auth, 2, 4);
     }
 
     uint16_t initial_offset = fbuf_used(ctx->output);
@@ -168,9 +170,7 @@ write_status(shardcache_connection_context_t *ctx, int rc)
     fbuf_add_binary(ctx->output, (char *)&hdr, 1);
     if (ctx->auth && ctx->sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
         uint64_t digest;
-        sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
         sip_hash_digest_integer(shash, &hdr, 1, &digest);
-        sip_hash_free(shash);
         fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
     }
 
@@ -178,7 +178,6 @@ write_status(shardcache_connection_context_t *ctx, int rc)
 
     if (ctx->auth) {
         uint64_t digest;
-        sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
         if (ctx->sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
             sip_hash_digest_integer(shash, out, p - &out[0], &digest);
         } else {
@@ -186,9 +185,10 @@ write_status(shardcache_connection_context_t *ctx, int rc)
                                     fbuf_data(ctx->output) + initial_offset,
                                     p - &out[0] + 1, &digest);
         }
-        sip_hash_free(shash);
         fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
     }
+    if (shash)
+        sip_hash_free(shash);
 }
 
 static void *

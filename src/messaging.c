@@ -158,10 +158,6 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                     ctx->state = SHC_STATE_AUTH_ERR;
                     return;
                 }
-
-                // renew the siphash descriptor
-                sip_hash_free(ctx->shash);
-                ctx->shash = sip_hash_new((uint8_t *)ctx->auth, 2, 4);
             }
 
             if (ctx->clen > 0)
@@ -578,23 +574,26 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
 }
 
 uint64_t
-_sign_chunk(char *auth, void *buf, size_t len)
+_sign_chunk(sip_hash *shash, void *buf, size_t len)
 {
     uint64_t digest;
-    sip_hash *shash = sip_hash_new(auth, 2, 4);
-    sip_hash_digest_integer(shash, buf, len, &digest);
-    sip_hash_free(shash);
+    sip_hash_update(shash, buf, len);
+    if (!sip_hash_final_integer(shash, &digest)) {
+        // TODO - Error Messages
+        return -1;
+    }
     return digest;
 }
 
 int
-_chunkize_buffer(char *auth,
+_chunkize_buffer(sip_hash *shash,
                  unsigned char sig_hdr,
                  void *buf,
                  size_t blen,
                  fbuf_t *out)
 {
     int ofx = 0;
+
     do {
         size_t out_initial_offset = fbuf_used(out);
         int writelen = (blen > (size_t)UINT16_MAX) ? UINT16_MAX : blen;
@@ -602,8 +601,8 @@ _chunkize_buffer(char *auth,
         uint16_t size = htons(writelen);
         fbuf_add_binary(out, (char *)&size, 2);
         fbuf_add_binary(out, buf + ofx, writelen);
-        if (auth && sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
-            uint64_t digest = _sign_chunk(auth,
+        if (shash && sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
+            uint64_t digest = _sign_chunk(shash,
                                           fbuf_data(out) + out_initial_offset,
                                           fbuf_used(out) - out_initial_offset);
             fbuf_add_binary(out, (char *)&digest, sizeof(digest));
@@ -615,6 +614,7 @@ _chunkize_buffer(char *auth,
         }
         ofx += writelen;
     } while (blen != 0);
+
     return -1;
 }
 
@@ -632,20 +632,26 @@ int build_message(char *auth,
     static char sep = SHARDCACHE_RSEP;
     uint16_t    eor = 0;
 
+    sip_hash *shash = NULL;
     if (auth) {
         unsigned char hdr_sig = sig_hdr ? sig_hdr : SHARDCACHE_HDR_SIG_SIP;
         fbuf_add_binary(out, (char *)&hdr_sig, 1);
+        shash = sip_hash_new(auth, 2, 4);
+
     }
 
     uint16_t out_initial_offset = fbuf_used(out);
     fbuf_add_binary(out, (char *)&hdr, 1);
     if (auth && sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
-        uint64_t digest = _sign_chunk(auth, &hdr, 1);
+        uint64_t digest = _sign_chunk(shash, &hdr, 1);
         fbuf_add_binary(out, (char *)&digest, sizeof(digest));
     }
     if (k && klen) {
-        if (_chunkize_buffer(auth, sig_hdr, k, klen, out) != 0)
+        if (_chunkize_buffer(shash, sig_hdr, k, klen, out) != 0) {
+            if (shash)
+                sip_hash_free(shash);
             return -1;
+        }
     }
     else {
         fbuf_add_binary(out, (char *)&eor, sizeof(eor));
@@ -655,12 +661,15 @@ int build_message(char *auth,
         if (v && vlen) {
             fbuf_add_binary(out, &sep, 1);
             if (auth && sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
-                uint64_t digest = _sign_chunk(auth, fbuf_data(out) + fbuf_used(out) - 3, 3);
+                uint64_t digest = _sign_chunk(shash, fbuf_data(out) + fbuf_used(out) - 3, 3);
                 fbuf_add_binary(out, (char *)&digest, sizeof(digest));
             }
 
-            if (_chunkize_buffer(auth, sig_hdr, v, vlen, out) != 0)
+            if (_chunkize_buffer(shash, sig_hdr, v, vlen, out) != 0) {
+                if (shash)
+                    sip_hash_free(shash);
                 return -1;
+            }
 
             if (expire) {
                 uint16_t clen = htons(sizeof(uint32_t));
@@ -678,10 +687,10 @@ int build_message(char *auth,
 
     if (auth) {
         if (sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
-            uint64_t digest = _sign_chunk(auth, fbuf_data(out) + fbuf_used(out) - 3, 3);
+            uint64_t digest = _sign_chunk(shash, fbuf_data(out) + fbuf_used(out) - 3, 3);
             fbuf_add_binary(out, (char *)&digest, sizeof(digest));
         } else {
-            uint64_t digest = _sign_chunk(auth,
+            uint64_t digest = _sign_chunk(shash,
                                           fbuf_data(out) + out_initial_offset,
                                           fbuf_used(out) - out_initial_offset);
             fbuf_add_binary(out, (char *)&digest, sizeof(digest));
@@ -689,6 +698,8 @@ int build_message(char *auth,
 
     }
 
+    if (shash)
+        sip_hash_free(shash);
     return 0;
 }
 
