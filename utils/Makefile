@@ -22,7 +22,7 @@ dynamic: shardcachec.c
 	gcc shardcachec.c $(CFLAGS) $(LDFLAGS) -lshardcache -o shardcachec
 
 shardcachec: CFLAGS += -fPIC -I../src -I../deps/.incs -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
-shardcachec: shardcachec.c
+shardcachec: shardcachec.c $(DEPS)
 	gcc shardcachec.c $(CFLAGS) $(LDFLAGS) $(DEPS) -o shardcachec
 
 clean:
