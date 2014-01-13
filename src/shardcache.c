@@ -664,13 +664,13 @@ shardcache_t *shardcache_create(char *me,
     if (sa.sa_handler == NULL)
         signal(SIGPIPE, shardcache_do_nothing);
 
-    if (secret && strlen(secret)) {
+    if (secret && *secret) {
         cache->auth = calloc(1, 16);
         strncpy((char *)cache->auth, secret, 16);
     } 
 
     if (shardcache_log_level() >= LOG_DEBUG) {
-        if (secret && strlen(secret)) {
+        if (secret && *secret) {
             SHC_DEBUG("AUTH KEY (secret: %s) : %s\n", secret,
                         shardcache_hex_escape(cache->auth, SHARDCACHE_MSG_SIG_LEN, DEBUG_DUMP_MAXSIZE));
         }

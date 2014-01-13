@@ -128,7 +128,7 @@ open_socket(const char *host, int port)
     struct linger ling = {0, 0};
 
     errno = EINVAL;
-    if (host == NULL || strlen(host) == 0 || port == 0)
+    if (host == NULL || !*host || port == 0)
     return -1;
 
     sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -217,7 +217,7 @@ open_connection(const char *host, int port, unsigned int timeout)
     struct timeval tv = { timeout, 0 };
 
     errno = EINVAL;
-    if (host == NULL || strlen(host) == 0 || port == 0)
+    if (host == NULL || !*host || port == 0)
         return -1;
 
     sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -294,7 +294,7 @@ open_lsocket(const char *filename)
     int sock;
 
     errno = EINVAL;
-    if (filename == NULL || strlen(filename) == 0)
+    if (filename == NULL || !*filename)
         return -1;
 
     sock = socket(PF_UNIX, SOCK_STREAM, 0);
