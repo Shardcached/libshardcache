@@ -134,7 +134,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 break;
 
             if (ctx->csig) {
-                if (rbuf_len(ctx->buf) < SHARDCACHE_MSG_SIG_LEN) // truncated
+                if (rbuf_len(ctx->buf) < SHARDCACHE_MSG_SIG_LEN + 2) // truncated
                     break;
 
                 if (!ctx->shash) {
@@ -152,6 +152,9 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 }
 
                 uint64_t received_digest;
+                if (rbuf_len(ctx->buf) < sizeof(digest))
+                    break;
+
                 rbuf_read(ctx->buf, (u_char *)&received_digest, sizeof(digest));
 
                 if (memcmp(&digest, &received_digest, sizeof(digest)) != 0) {
@@ -220,7 +223,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             }
 
             uint64_t received_digest;
-            rbuf_read(ctx->buf, (u_char *)&received_digest, sizeof(digest));
+            rbuf_read(ctx->buf, (char *)&received_digest, sizeof(digest));
 
             if (shardcache_log_level() >= LOG_DEBUG) {
                 SHC_DEBUG("computed digest for received data: %s",
