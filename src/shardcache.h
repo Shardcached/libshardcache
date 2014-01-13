@@ -397,6 +397,14 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t klen, size_t *vlen, 
  */
 size_t shardcache_head(shardcache_t *cache, void *key, size_t klen, void *head, size_t hlen, struct timeval *timestamp);
 
+size_t shardcache_get_offset(shardcache_t *cache, void *key, size_t klen, void *out, size_t *olen, size_t offset, struct timeval *timestamp);
+
+/*
+typedef void (*shardcache_get_async_callback_t)(void *key, size_t klen, void *data, size_t dlen);
+
+void *shardcache_get_async(shardcache_t *cache, void *key, size_t klen, size_t *vlen, struct timeval *timestamp);
+*/
+
 /**
  * @brief Set the value for a key
  * @param cache   A valid pointer to a shardcache_t structure

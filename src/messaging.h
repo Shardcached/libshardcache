@@ -17,6 +17,7 @@
  * MSG_SET      : 0x02
  * MSG_DEL      : 0x03
  * MSG_EVI      : 0x04
+ * MSG_OFX      : 0x05
  * MSG_MGA      : 0x21
  * MSG_MGB      : 0x22
  * MSG_MGE      : 0x23
@@ -73,6 +74,7 @@ typedef enum {
     SHARDCACHE_HDR_SET      = 0x02,
     SHARDCACHE_HDR_DEL      = 0x03,
     SHARDCACHE_HDR_EVI      = 0x04,
+    SHARDCACHE_HDR_OFX      = 0x05,
     SHARDCACHE_HDR_MGA      = 0x21,
     SHARDCACHE_HDR_MGB      = 0x22,
     SHARDCACHE_HDR_MGE      = 0x23,

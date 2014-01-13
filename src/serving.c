@@ -62,19 +62,24 @@ struct __shardcache_serving_s {
     shardcache_counters_t *counters;
 };
 
-typedef struct {
+typedef struct __shardcache_connection_context_s shardcache_connection_context_t;
+
+typedef void (*shardcache_get_remainder_callback_t)(shardcache_connection_context_t *ctx);
+
+struct __shardcache_connection_context_s {
     shardcache_hdr_t hdr;
     shardcache_hdr_t sig_hdr;
     fbuf_t *output;
     int fd;
     shardcache_t *cache;
-    fbuf_t *key;
-    fbuf_t *value;
-    uint32_t expire;
+#define SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX 4
+    fbuf_t records[SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX];
+    size_t remainder;
+    shardcache_get_remainder_callback_t get_remainder_cb;
     const char    *auth;
     shardcache_worker_context_t *worker_ctx;
     async_read_ctx_t *reader_ctx;
-} shardcache_connection_context_t;
+};
 
 static void
 async_read_handler(void *data, size_t len, int idx, void *priv)
@@ -84,19 +89,19 @@ async_read_handler(void *data, size_t len, int idx, void *priv)
 
     switch(idx) {
         case 0:
-            fbuf_add_binary(ctx->key, data, len);
+            fbuf_add_binary(&ctx->records[0], data, len);
             break;
         case 1:
-            fbuf_add_binary(ctx->value, data, len);
+            fbuf_add_binary(&ctx->records[1], data, len);
             break;
         case 2:
             if (len == 4) {
-                uint32_t exp;
-                memcpy(&exp, data, sizeof(uint32_t));
-                ctx->expire = ntohl(exp);
             } else {
                 // TODO - Error Messages
             }
+            break;
+        default:
+            // TODO - Error Messages
             break;
     }
 }
@@ -112,9 +117,6 @@ shardcache_connection_context_create(shardcache_t *cache,
 
     context->output = fbuf_create(0);
 
-    context->key = fbuf_create(0);
-    context->value = fbuf_create(0);
-
     context->cache = cache;
     context->auth = auth;
     context->fd = fd;
@@ -128,8 +130,9 @@ static void
 shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
 {
     fbuf_free(ctx->output);
-    fbuf_free(ctx->key);
-    fbuf_free(ctx->value);
+    int i;
+    for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++)
+        fbuf_destroy(&ctx->records[i]);
     async_read_context_destroy(ctx->reader_ctx);
     free(ctx);
 }
@@ -143,8 +146,6 @@ write_status(shardcache_connection_context_t *ctx, int rc)
 
     char *p = &out[2];
     if (rc != 0) {
-        //fprintf(stderr, "Error running command %d (key %s)\n",
-        //	  ctx->hdr, fbuf_data(ctx->key));
         out[1] = 3;
         strncpy(p, "ERR", 3);
         p += 3;
@@ -198,47 +199,110 @@ process_request(void *priv)
     shardcache_t *cache = ctx->cache;
 
     int rc = 0;
-    void *key = fbuf_data(ctx->key);
-    size_t klen = fbuf_used(ctx->key);
-    switch(ctx->hdr) {
+    void *key = fbuf_data(&ctx->records[0]);
+    size_t klen = fbuf_used(&ctx->records[0]);
 
-        case SHARDCACHE_HDR_GET:
+    switch(ctx->hdr) {
+        case SHARDCACHE_HDR_OFX:
         {
             fbuf_t out = FBUF_STATIC_INITIALIZER;
-            size_t vlen = 0;
-            void *v = shardcache_get(cache, key, klen, &vlen, NULL);
-            if (build_message((char *)ctx->auth,
-                              ctx->sig_hdr,
-                              SHARDCACHE_HDR_RES,
-                              v, vlen,
-                              NULL, 0,
-                              0, &out) == 0)
-            {
-                fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
-            }
-            else
-            {
+            char buf[1<<16];
+            size_t vlen = sizeof(buf); 
+
+            uint32_t offset = 0;
+            if (fbuf_used(&ctx->records[2]) == 4) {
+                memcpy(&offset, fbuf_data(&ctx->records[2]), sizeof(uint32_t));
+                offset = ntohl(offset);
+            } else {
                 // TODO - Error Messages
             }
-            fbuf_destroy(&out);
 
-            if (v)
-                free(v);
+            ctx->remainder = shardcache_get_offset(cache, key, klen, buf, &vlen, offset, NULL);
+            if (vlen) {
+                uint32_t remainder = htonl(ctx->remainder);
+                if (build_message((char *)ctx->auth,
+                                  ctx->sig_hdr,
+                                  SHARDCACHE_HDR_RES,
+                                  buf, vlen,
+                                  (void *)&remainder, sizeof(remainder),
+                                  0, &out) == 0)
+                {
+                    fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+                }
+                else
+                {
+                    // TODO - Error Messages
+                }
+            }
+            fbuf_destroy(&out);
+        }
+        case SHARDCACHE_HDR_GET:
+        {
+            if (shardcache_test_ownership(cache, key, klen, NULL, 0)) {
+                fbuf_t out = FBUF_STATIC_INITIALIZER;
+                size_t vlen = 0;
+                void *v = shardcache_get(cache, key, klen, &vlen, NULL);
+                if (build_message((char *)ctx->auth,
+                                  ctx->sig_hdr,
+                                  SHARDCACHE_HDR_RES,
+                                  v, vlen,
+                                  NULL, 0,
+                                  0, &out) == 0)
+                {
+                    fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+                }
+                else
+                {
+                    // TODO - Error Messages
+                }
+                fbuf_destroy(&out);
+
+                if (v)
+                    free(v);
+            } else {
+                fbuf_t out = FBUF_STATIC_INITIALIZER;
+                char buf[1<<16];
+                size_t vlen = sizeof(buf); 
+
+                ctx->remainder = shardcache_get_offset(cache, key, klen, buf, &vlen, 0, NULL);
+                if (vlen) {
+                    uint32_t remainder = htonl(ctx->remainder);
+                    if (build_message((char *)ctx->auth,
+                                      ctx->sig_hdr,
+                                      SHARDCACHE_HDR_RES,
+                                      buf, vlen,
+                                      (void *)&remainder, sizeof(remainder),
+                                      0, &out) == 0)
+                    {
+                        fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+                    }
+                    else
+                    {
+                        // TODO - Error Messages
+                    }
+                }
+                fbuf_destroy(&out);
+
+            }
             break;
         }
         case SHARDCACHE_HDR_SET:
         {
-            if (ctx->expire) {
+
+            if (fbuf_used(&ctx->records[2]) == 4) {
+                uint32_t expire;
+                memcpy(&expire, fbuf_data(&ctx->records[2]), sizeof(uint32_t));
+                expire = ntohl(expire);
                 rc = shardcache_set_volatile(cache,
                                              key,
                                              klen,
-                                             fbuf_data(ctx->value),
-                                             fbuf_used(ctx->value),
-                                             ctx->expire);
+                                             fbuf_data(&ctx->records[1]),
+                                             fbuf_used(&ctx->records[1]),
+                                             expire);
 
             } else {
                 rc = shardcache_set(cache, key, klen,
-                        fbuf_data(ctx->value), fbuf_used(ctx->value));
+                        fbuf_data(&ctx->records[1]), fbuf_used(&ctx->records[1]));
             }
             write_status(ctx, rc);
             break;
@@ -259,7 +323,7 @@ process_request(void *priv)
         {
             int num_shards = 0;
             shardcache_node_t *nodes = NULL;
-            char *s = (char *)fbuf_data(ctx->key);
+            char *s = (char *)fbuf_data(&ctx->records[0]);
             while (s && *s) {
                 char *tok = strsep(&s, ",");
                 if(tok) {
@@ -458,9 +522,11 @@ shardcache_input_handler(iomux_t *iomux,
             }
         }
 
+        int i;
+        for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++)
+            fbuf_clear(&ctx->records[i]);
+
         ATOMIC_CAS(wrkctx->busy, 1, 0);
-        fbuf_clear(ctx->key);
-        fbuf_clear(ctx->value);
 
         // we might have received already data for the next command,
         // so let's run the asynchronous reader again to update

@@ -783,7 +783,56 @@ void shardcache_destroy(shardcache_t *cache)
     free(cache);
 }
 
-void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen, struct timeval *timestamp) {
+size_t
+shardcache_get_offset(shardcache_t *cache,
+                      void *key,
+                      size_t klen,
+                      void *data,
+                      size_t *dlen,
+                      size_t offset,
+                      struct timeval *timestamp)
+{
+    size_t vlen = 0;
+    size_t copied = 0;
+    if (!key)
+        return 0;
+
+    if (offset == 0)
+        __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_GETS].value, 1);
+
+    cache_object_t *obj = NULL;
+    arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, (void **)&obj);
+    if (!res)
+        return 0;
+
+    if (obj) {
+        pthread_mutex_lock(&obj->lock);
+        if (obj->data) {
+            if (dlen && data) {
+                if (offset < obj->dlen) {
+                    int size = obj->dlen - offset;
+                    copied = size < *dlen ? size : *dlen;
+                    memcpy(data, obj->data + offset, copied);
+                    *dlen = copied;
+                }
+            }
+            if (timestamp)
+                memcpy(timestamp, &obj->ts, sizeof(struct timeval));
+        }
+        vlen = obj->dlen;
+        pthread_mutex_unlock(&obj->lock);
+    }
+    arc_release_resource(cache->arc, res);
+    uint32_t size = (uint32_t)arc_size(cache->arc);
+    uint32_t prev = __sync_fetch_and_add(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value, 0);
+    __sync_bool_compare_and_swap(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+                                 prev,
+                                 size);
+    return (offset < vlen + copied) ? (vlen - offset - copied) : 0;
+}
+
+void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen, struct timeval *timestamp)
+{
     if (!key)
         return NULL;
 
@@ -821,39 +870,16 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t len, size_t *vlen, s
     return value;
 }
 
-size_t shardcache_head(shardcache_t *cache, void *key, size_t len, void *head, size_t hlen, struct timeval *timestamp) {
-    size_t vlen = 0;
+size_t shardcache_head(shardcache_t *cache, void *key, size_t len, void *head, size_t hlen, struct timeval *timestamp)
+{
     if (!key)
         return 0;
 
     __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_HEADS].value, 1);
 
-    cache_object_t *obj = NULL;
-    arc_resource_t res = arc_lookup(cache->arc, (const void *)key, len, (void **)&obj);
-    if (!res)
-        return 0;
-
-    if (obj) {
-        pthread_mutex_lock(&obj->lock);
-        if (obj->data) {
-            if (hlen && head) {
-                int to_copy = obj->dlen < hlen ? obj->dlen : hlen;
-                memcpy(head, obj->data, to_copy);
-            }
-            if (timestamp) {
-                memcpy(timestamp, &obj->ts, sizeof(struct timeval));
-            }
-        }
-        vlen = obj->dlen;
-        pthread_mutex_unlock(&obj->lock);
-    }
-    arc_release_resource(cache->arc, res);
-    uint32_t size = (uint32_t)arc_size(cache->arc);
-    uint32_t prev = __sync_fetch_and_add(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value, 0);
-    __sync_bool_compare_and_swap(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-                                 prev,
-                                 size);
-    return vlen;
+    size_t rlen = hlen;
+    size_t remainder =  shardcache_get_offset(cache, key, len, head, &rlen, 0, timestamp);
+    return remainder + rlen;
 }
 
 static int
