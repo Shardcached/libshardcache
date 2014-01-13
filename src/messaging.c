@@ -23,7 +23,7 @@
 struct __async_read_ctx_s {
     async_read_callback_t cb;
     shardcache_hdr_t hdr;
-    shardcache_sig_hdr_t sig_hdr;
+    shardcache_hdr_t sig_hdr;
     void *cb_priv;
     char *auth;
     rbuf_t *buf;
@@ -48,7 +48,7 @@ async_read_context_hdr(async_read_ctx_t *ctx)
     return ctx->hdr;
 }
 
-shardcache_sig_hdr_t
+shardcache_hdr_t
 async_read_context_sig_hdr(async_read_ctx_t *ctx)
 {
     return ctx->sig_hdr;
@@ -75,17 +75,17 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
 
     if (ctx->state == SHC_STATE_READING_NONE || ctx->state == SHC_STATE_READING_HDR)
     {
-        rbuf_read(ctx->buf, (char *)&ctx->hdr, 1);
+        rbuf_read(ctx->buf, (unsigned char *)&ctx->hdr, 1);
         while (ctx->hdr == SHARDCACHE_HDR_NOP && rbuf_len(ctx->buf) > 0)
-            rbuf_read(ctx->buf, (char *)&ctx->hdr, 1); // skip
+            rbuf_read(ctx->buf, (unsigned char *)&ctx->hdr, 1); // skip
 
         if (ctx->hdr == SHARDCACHE_HDR_NOP)
             return;
 
         if (ctx->state == SHC_STATE_READING_NONE) {
-            if ((char)ctx->hdr == SHARDCACHE_HDR_SIG_SIP || (char)ctx->hdr == SHARDCACHE_HDR_CSIG_SIP)
+            if (ctx->hdr == SHARDCACHE_HDR_SIG_SIP || ctx->hdr == SHARDCACHE_HDR_CSIG_SIP)
             {
-                ctx->sig_hdr = (shardcache_sig_hdr_t)ctx->hdr;
+                ctx->sig_hdr = ctx->hdr;
                 if (!ctx->auth) {
                     ctx->state = SHC_STATE_AUTH_ERR;
                     return;
@@ -100,7 +100,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                     return;
                 }
 
-                rbuf_read(ctx->buf, (char *)&ctx->hdr, 1);
+                rbuf_read(ctx->buf, (unsigned char *)&ctx->hdr, 1);
             } else if (ctx->auth) {
                 // we are expecting the signature header
                 ctx->state = SHC_STATE_AUTH_ERR;
@@ -119,7 +119,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
         ctx->state = SHC_STATE_READING_RECORD;
         if (ctx->auth) {
             ctx->shash = sip_hash_new((uint8_t *)ctx->auth, 2, 4);
-            sip_hash_update(ctx->shash, (char *)&ctx->hdr, 1);
+            sip_hash_update(ctx->shash, (unsigned char *)&ctx->hdr, 1);
         }
     }
 
@@ -631,12 +631,12 @@ int build_message(char *auth,
     uint16_t    eor = 0;
 
     if (auth) {
-        char hdr_sig = sig_hdr ? sig_hdr : SHARDCACHE_HDR_SIG_SIP;
-        fbuf_add_binary(out, &hdr_sig, 1);
+        unsigned char hdr_sig = sig_hdr ? sig_hdr : SHARDCACHE_HDR_SIG_SIP;
+        fbuf_add_binary(out, (char *)&hdr_sig, 1);
     }
 
     uint16_t out_initial_offset = fbuf_used(out);
-    fbuf_add_binary(out, &hdr, 1);
+    fbuf_add_binary(out, (char *)&hdr, 1);
     if (auth && sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
         uint64_t digest = _sign_chunk(auth, &hdr, 1);
         fbuf_add_binary(out, (char *)&digest, sizeof(digest));
@@ -751,7 +751,7 @@ delete_from_peer(char *peer,
 
     SHC_DEBUG("Sending del command to peer %s (owner: %d)", peer, owner);
     if (fd >= 0) {
-        char hdr = owner ? SHARDCACHE_HDR_DEL : SHARDCACHE_HDR_EVI;
+        unsigned char hdr = owner ? SHARDCACHE_HDR_DEL : SHARDCACHE_HDR_EVI;
         int rc = write_message(fd, auth, sig_hdr, hdr, key, klen, NULL, 0, 0);
 
         // if we are not forwarding a delete command to the owner

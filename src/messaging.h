@@ -69,25 +69,22 @@
 #define SHARDCACHE_MSG_MAX_RECORD_LEN (1<<28) // 256MB
 
 typedef enum {
-    SHARDCACHE_HDR_GET   = 0x01,
-    SHARDCACHE_HDR_SET   = 0x02,
-    SHARDCACHE_HDR_DEL   = 0x03,
-    SHARDCACHE_HDR_EVI   = 0x04,
-    SHARDCACHE_HDR_MGA   = 0x21,
-    SHARDCACHE_HDR_MGB   = 0x22,
-    SHARDCACHE_HDR_MGE   = 0x23,
-    SHARDCACHE_HDR_CHK   = 0x31,
-    SHARDCACHE_HDR_STS   = 0x32,
-    SHARDCACHE_HDR_IDG   = 0x41,
-    SHARDCACHE_HDR_IDR   = 0x42,
-    SHARDCACHE_HDR_NOP   = 0x90,
-    SHARDCACHE_HDR_RES   = 0x99
+    SHARDCACHE_HDR_GET      = 0x01,
+    SHARDCACHE_HDR_SET      = 0x02,
+    SHARDCACHE_HDR_DEL      = 0x03,
+    SHARDCACHE_HDR_EVI      = 0x04,
+    SHARDCACHE_HDR_MGA      = 0x21,
+    SHARDCACHE_HDR_MGB      = 0x22,
+    SHARDCACHE_HDR_MGE      = 0x23,
+    SHARDCACHE_HDR_CHK      = 0x31,
+    SHARDCACHE_HDR_STS      = 0x32,
+    SHARDCACHE_HDR_IDG      = 0x41,
+    SHARDCACHE_HDR_IDR      = 0x42,
+    SHARDCACHE_HDR_NOP      = 0x90,
+    SHARDCACHE_HDR_RES      = 0x99,
+    SHARDCACHE_HDR_SIG_SIP  = 0xF0,
+    SHARDCACHE_HDR_CSIG_SIP = 0xF1
 } shardcache_hdr_t;
-
-typedef enum {
-    SHARDCACHE_HDR_SIG_SIP   = 0xF0,
-    SHARDCACHE_HDR_CSIG_SIP  = 0xF1
-} shardcache_sig_hdr_t;
 
 #define SHARDCACHE_RSEP 0x80
 
@@ -194,7 +191,7 @@ typedef enum {
 
 int async_read_context_state(async_read_ctx_t *ctx);
 shardcache_hdr_t async_read_context_hdr(async_read_ctx_t *ctx);
-shardcache_sig_hdr_t async_read_context_sig_hdr(async_read_ctx_t *ctx);
+shardcache_hdr_t async_read_context_sig_hdr(async_read_ctx_t *ctx);
 
 void async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx);
 

@@ -64,7 +64,7 @@ struct __shardcache_serving_s {
 
 typedef struct {
     shardcache_hdr_t hdr;
-    shardcache_sig_hdr_t sig_hdr;
+    shardcache_hdr_t sig_hdr;
     fbuf_t *output;
     int fd;
     shardcache_t *cache;
@@ -157,14 +157,14 @@ write_status(shardcache_connection_context_t *ctx, int rc)
     p += 3;
 
     if (ctx->auth) {
-        char hdr_sig = ctx->sig_hdr;
-        fbuf_add_binary(ctx->output, &hdr_sig, 1);
+        unsigned char hdr_sig = ctx->sig_hdr;
+        fbuf_add_binary(ctx->output, (char *)&hdr_sig, 1);
     }
 
     uint16_t initial_offset = fbuf_used(ctx->output);
 
-    char hdr = SHARDCACHE_HDR_RES;
-    fbuf_add_binary(ctx->output, &hdr, 1);
+    unsigned char hdr = SHARDCACHE_HDR_RES;
+    fbuf_add_binary(ctx->output, (char *)&hdr, 1);
     if (ctx->auth && ctx->sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
         uint64_t digest;
         sip_hash *shash = sip_hash_new((char *)ctx->auth, 2, 4);
