@@ -238,7 +238,7 @@ process_request(void *priv)
         }
         case SHARDCACHE_HDR_GET:
         {
-            if (shardcache_test_ownership(cache, key, klen, NULL, 0)) {
+            //if (shardcache_test_ownership(cache, key, klen, NULL, 0)) {
                 fbuf_t out = FBUF_STATIC_INITIALIZER;
                 size_t vlen = 0;
                 void *v = shardcache_get(cache, key, klen, &vlen, NULL);
@@ -259,7 +259,7 @@ process_request(void *priv)
 
                 if (v)
                     free(v);
-            } else {
+            /*} else {
                 fbuf_t out = FBUF_STATIC_INITIALIZER;
                 char buf[1<<16];
                 size_t vlen = sizeof(buf); 
@@ -283,7 +283,7 @@ process_request(void *priv)
                 }
                 fbuf_destroy(&out);
 
-            }
+            }*/
             break;
         }
         case SHARDCACHE_HDR_SET:

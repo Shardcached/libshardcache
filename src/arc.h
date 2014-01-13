@@ -21,7 +21,7 @@ typedef struct __arc_ops {
      * this time. Use the arc_object_init() function to initialize
      * the arc_object structure.
      * */
-    void *(*create) (const void *key, size_t len, void *priv);
+    void *(*create) (const void *key, size_t len, int async, void *priv);
     
     //! Fetch the data associated with the object.
     size_t (*fetch) (void *obj, void *priv);
@@ -79,7 +79,7 @@ void arc_destroy(arc_t *cache);
  *       a cached object (which is contained in an ARC resource) it will be retained until
  *       the caller releases it using the arc_release_resource() function
  */
-arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep);
+arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async);
 
 /**
  * @brief Release the resource previously alloc'd by arc_lookup()

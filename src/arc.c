@@ -101,6 +101,7 @@ typedef struct __arc_object {
     pthread_mutex_t lock;
     refcnt_node_t *node;
     arc_t *cache;
+    int async;
 } arc_object_t;
 
 /* The actual cache. */
@@ -388,11 +389,17 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res) {
     release_ref(cache->refcnt, obj->node);
 }
 
-arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep)
+arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
 {
     MUTEX_LOCK(&cache->lock);
     arc_object_t *obj = ht_get(cache->hash, (void *)key, len, NULL);
     if (obj) {
+        if (async && __sync_fetch_and_add(&obj->async, 0)) {
+            retain_ref(cache->refcnt, obj->node);
+            MUTEX_UNLOCK(&cache->lock);
+            return obj;
+        }
+
         MUTEX_LOCK(&obj->lock);
         retain_ref(cache->refcnt, obj->node);
         MUTEX_UNLOCK(&obj->lock);
@@ -422,7 +429,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
         return obj;
     }
 
-    void *ptr = cache->ops->create(key, len, cache->ops->priv);
+    void *ptr = cache->ops->create(key, len, async, cache->ops->priv);
     obj = arc_object_create(cache, ptr, key, len);
     if (!obj) {
         MUTEX_UNLOCK(&cache->lock);

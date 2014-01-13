@@ -57,8 +57,10 @@ async_read_context_sig_hdr(async_read_ctx_t *ctx)
 void
 async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
 {
-    if (ctx->state == SHC_STATE_READING_DONE)
+    if (ctx->state == SHC_STATE_READING_DONE) {
         ctx->state = SHC_STATE_READING_NONE;
+        ctx->rnum = 0;
+    }
 
     int wb = 0;
     if (data && len)
