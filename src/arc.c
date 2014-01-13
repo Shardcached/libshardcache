@@ -270,14 +270,19 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 }
                 MUTEX_UNLOCK(&obj->lock);
                 return -1;
+            } else if (size >= cache->c) {
+                // the object doesn't fit in the cache, let's return it
+                // to the getter without (re)adding it to the cache 
+                release_ref(cache->refcnt, obj->node);
+                MUTEX_LOCK(&cache->lock);
+            } else {
+                obj->size = sizeof(arc_object_t) + obj->klen + size;
+                MUTEX_LOCK(&cache->lock);
+
+                arc_list_prepend(&obj->head, &state->head);
+                obj->state = state;
+                obj->state->size += obj->size;
             }
-
-            obj->size = sizeof(arc_object_t) + obj->klen + size;
-            MUTEX_LOCK(&cache->lock);
-
-            arc_list_prepend(&obj->head, &state->head);
-            obj->state = state;
-            obj->state->size += obj->size;
         } else {
             arc_list_prepend(&obj->head, &state->head);
             obj->state = state;

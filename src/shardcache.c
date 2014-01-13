@@ -12,7 +12,6 @@
 #include <sys/time.h>
 #include <signal.h>
 #include <fcntl.h>
-#include <iomux.h>
 #include <limits.h>
 #include <fbuf.h>
 #include <linklist.h>
@@ -138,7 +137,6 @@ typedef struct {
     size_t dlen;
     struct timeval ts;
     int async;
-    iomux_t *iomux;
     linked_list_t *listeners;
     int complete;
     // we want a mutex here because the object might be locked
@@ -167,7 +165,6 @@ static void *__op_create(const void *key, size_t len, int async, void *priv)
     obj->complete = 0;
     if (async) {
         obj->async = async;
-        obj->iomux = iomux_create();
         obj->listeners = create_list();
         set_free_value_callback(obj->listeners, free);
     }
@@ -354,7 +351,7 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
 
     char *peer_addr = shardcache_get_node_address(cache, peer);
     if (!peer_addr) {
-        // TODO - Error Messages
+        SHC_ERROR("Can't find address for node %s\n", peer);
         return rc;
     }
 
@@ -502,7 +499,6 @@ static void __op_evict(void *item, void *priv)
         obj->data = NULL;
         obj->dlen = 0;
         obj->complete = 0;
-        iomux_clear(obj->iomux);
         clear_list(obj->listeners);
         __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_EVICTS].value, 1);
     }
@@ -522,7 +518,6 @@ static void __op_destroy(void *item, void *priv)
         free(obj->key);
 
     if (obj->async) {
-        iomux_destroy(obj->iomux);
         destroy_list(obj->listeners);
     }
     pthread_mutex_destroy(&obj->lock);
@@ -1136,12 +1131,12 @@ _shardcache_set_internal(shardcache_t *cache,
 
     char keystr[1024];
     KEY2STR(key, klen, keystr, sizeof(keystr));
-
+/*
     if (vlen > cache->arc_size) {
         SHC_ERROR("New value for key %s is bigger than the cache size, skipping set command", keystr);
         return -1;
     }
-
+*/
     __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_SETS].value, 1);
 
     char node_name[1024];
@@ -1214,7 +1209,7 @@ _shardcache_set_internal(shardcache_t *cache,
 
         char *peer = shardcache_get_node_address(cache, (char *)node_name);
         if (!peer) {
-            // TODO - Error Messages
+            SHC_ERROR("Can't find address for node %s\n", peer);
             return -1;
         }
         int fd = shardcache_get_connection_for_peer(cache, peer);
@@ -1303,7 +1298,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
     } else {
         char *peer = shardcache_get_node_address(cache, (char *)node_name);
         if (!peer) {
-            // TODO - Error Messages
+            SHC_ERROR("Can't find address for node %s\n", peer);
             return -1;
         }
         int fd = shardcache_get_connection_for_peer(cache, peer);
