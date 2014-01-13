@@ -55,12 +55,6 @@ tsan:
 build_deps:
 	@make -eC deps all
 
-update_deps:
-	@make -C deps update
-
-purge_deps:
-	@make -C deps purge
-
 static:  objects
 	ar -r libshardcache.a src/*.o
 
