@@ -40,7 +40,7 @@ endif
 TARGETS = $(patsubst %.c, %.o, $(wildcard src/*.c))
 TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
-TEST_EXEC_ORDER = 
+TEST_EXEC_ORDER = shardcache_test
 
 all: CFLAGS += -Ideps/.incs
 all: $(DEPS) objects static shared
@@ -104,12 +104,12 @@ clean:
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
 
-tests: CFLAGS += -Isrc -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
+tests: CFLAGS += -Isrc -Ideps/.incs -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3
 
 tests: support/testing.o static
 	@for i in $(TESTS); do\
 	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(LDFLAGS) $(DEPS) -lm";\
-	  $(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a support/testing.o $(LDFLAGS) -lm;\
+	  $(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(DEPS) support/testing.o $(LDFLAGS) -lm;\
 	done;\
 	for i in $(TEST_EXEC_ORDER); do echo; test/$$i; echo; done
 
