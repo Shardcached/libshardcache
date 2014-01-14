@@ -501,6 +501,19 @@ int shardcache_exists(shardcache_t *cache,
                       size_t klen);
 
 /**
+ * @brief Load a key into the cache if not present already,
+ *        otherwise update the loaded-timestamp
+ * @param cache   A valid pointer to a shardcache_t structure
+ * @param key     A valid pointer to the key
+ * @param klen    The length of the key
+ * @return 0 if successfully touched the item, -1 if it doesn't exists
+ *           or in case of errors
+ */
+int shardcache_touch(shardcache_t *cache,
+                     void *key,
+                     size_t klen);
+
+/**
  * @brief Set the value for a key
  * @param cache   A valid pointer to a shardcache_t structure
  * @param key   A valid pointer to the key

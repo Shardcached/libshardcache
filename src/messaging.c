@@ -474,6 +474,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 hdr != SHC_HDR_GET_OFFSET &&
                 hdr != SHC_HDR_ADD &&
                 hdr != SHC_HDR_EXISTS &&
+                hdr != SHC_HDR_TOUCH &&
                 hdr != SHC_HDR_MIGRATION_BEGIN &&
                 hdr != SHC_HDR_MIGRATION_ABORT &&
                 hdr != SHC_HDR_MIGRATION_END &&
@@ -1061,6 +1062,55 @@ exists_on_peer(char *peer,
                     rc = 0;
                 else
                     rc = -1;
+                fbuf_destroy(&resp);
+                return rc;
+            } else {
+                // TODO - Error messages
+            }
+            fbuf_destroy(&resp);
+        }
+        if (should_close)
+            close(fd);
+        return 0;
+    }
+    return -1;
+}
+
+int
+touch_on_peer(char *peer,
+              char *auth,
+              unsigned char sig_hdr,
+              void *key,
+              size_t klen,
+              int fd)
+{
+    int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
+
+    SHC_DEBUG("Sending touch command to peer %s", peer);
+    if (fd >= 0) {
+        unsigned char hdr = SHC_HDR_TOUCH;
+        int rc = write_message(fd, auth, sig_hdr, hdr, key, klen, NULL, 0, 0);
+
+        // if we are not forwarding a delete command to the owner
+        // of the key, but only an eviction request to a peer,
+        // we don't need to wait for the response
+        if (rc == 0) {
+            shardcache_hdr_t hdr = 0;
+            fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            rc = read_message(fd, auth, &resp, &hdr);
+            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+                SHC_DEBUG("Got (touch) response from peer %s : %s\n",
+                          peer, fbuf_data(&resp));
+                if (should_close)
+                    close(fd);
+
+                if (fbuf_used(&resp) != 2 || strncmp(fbuf_data(&resp), "OK", 2) != 0)
+                    rc = -1;
+
                 fbuf_destroy(&resp);
                 return rc;
             } else {

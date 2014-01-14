@@ -533,6 +533,12 @@ process_request(void *priv)
             write_status(ctx, rc, 1);
             break;
         }
+        case SHC_HDR_TOUCH:
+        {
+            rc = shardcache_touch(cache, key, klen);
+            write_status(ctx, rc, 0);
+            break;
+        }
         case SHC_HDR_DELETE:
         {
             rc = shardcache_del(cache, key, klen);

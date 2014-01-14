@@ -1180,6 +1180,49 @@ shardcache_exists(shardcache_t *cache, void *key, size_t klen)
     return -1;
 }
 
+int
+shardcache_touch(shardcache_t *cache, void *key, size_t klen)
+{
+    if (!key || !klen)
+        return -1;
+
+    // if we are not the owner try propagating the command to the responsible peer
+    char node_name[1024];
+    size_t node_len = sizeof(node_name);
+    memset(node_name, 0, node_len);
+
+    int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+    if (is_mine == -1)
+        is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
+
+    if (is_mine == 1)
+    {
+        cache_object_t *obj = NULL;
+        arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, (void **)&obj, 0);
+        if (res) {
+            pthread_mutex_lock(&obj->lock);
+            gettimeofday(&obj->ts, NULL);
+            pthread_mutex_unlock(&obj->lock);
+            arc_release_resource(cache->arc, res);
+            return obj ? 0 : -1;
+        }
+    } else {
+        char *peer = shardcache_get_node_address(cache, (char *)node_name);
+        if (!peer) {
+            SHC_ERROR("Can't find address for node %s\n", peer);
+            return -1;
+        }
+        int fd = shardcache_get_connection_for_peer(cache, peer);
+        int rc = touch_on_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
+        shardcache_release_connection_for_peer(cache, peer, fd);
+        return rc;
+    }
+
+    return -1;
+}
+
+
+
 static int
 _shardcache_set_internal(shardcache_t *cache,
                          void *key,

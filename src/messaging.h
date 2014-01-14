@@ -15,12 +15,16 @@
  *                <MSG_GET_ASYNC> | <MSG_GET_OFFSET> | <MSG_GET_INDEX> |
  *                <MSG_INDEX_RESPONSE> | <MSG_MIGRATION_BEGIN> |
  *                <MSG_MIGRATION_ABORT> | <MSG_MIGRATION_END> | <MSG_RESPONSE>
+ *
  * MSG_GET                 : 0x01
  * MSG_SET                 : 0x02
  * MSG_DELETE              : 0x03
  * MSG_EVICT               : 0x04
  * MSG_GET_ASYNC           : 0x05
  * MSG_GET_OFFSET          : 0x06
+ * MSG_ADD                 : 0x07
+ * MSG_EXISTS              : 0x08
+ * MSG_TOUCH               : 0x09
  * MSG_MIGRATION_ABORT     : 0x21
  * MSG_MIGRATION_BEGIN     : 0x22
  * MSG_MIGRATION_END       : 0x23
@@ -51,23 +55,26 @@
  * 
  * The only valid/supported messages are :
  * 
- * GET_MESSAGE  : <MSG_GET><KEY><EOM>
- * GET_ASYNC    : <MSG_GETA><KEY><EOM>
- * GET_OFFSET   : <MSG_GTO><KEY><LONG_SIZE><LONG_SIZE><EOM>
- * SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
- * DEL_MESSAGE  : <MSG_DEL><KEY><EOM>
- * EVI_MESSAGE  : <MSG_EVI><KEY><EOM>
- * RES_MESSAGE  : <MSG_RES><RECORD><EOM>
+ * GET_MESSAGE    : <MSG_GET><KEY><EOM>
+ * GET_ASYNC      : <MSG_GETA><KEY><EOM>
+ * GET_OFFSET     : <MSG_GTO><KEY><LONG_SIZE><LONG_SIZE><EOM>
+ * EXISTS_MESSAGE : <MSG_EXISTS><KEY><EOM>
+ * TOUCH_MESSAGE  : <MSG_TOUCH><KEY><EOM>
+ * SET_MESSAGE    : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
+ * ADD_MESSAGE    : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
+ * DEL_MESSAGE    : <MSG_DEL><KEY><EOM>
+ * EVI_MESSAGE    : <MSG_EVI><KEY><EOM>
+ * RES_MESSAGE    : <MSG_RES><RECORD><EOM>
  *
- * MGB_MESSAGE  : <MSG_MGB><NODES_LIST><EOM>
- * MGA_MESSAGE  : <MSG_MGA><NULL_RECORD><EOM>
- * MGE_MESSAGE  : <MSG_MGE><NULL_RECORD><EOM>
+ * MGB_MESSAGE    : <MSG_MGB><NODES_LIST><EOM>
+ * MGA_MESSAGE    : <MSG_MGA><NULL_RECORD><EOM>
+ * MGE_MESSAGE    : <MSG_MGE><NULL_RECORD><EOM>
  * 
- * STS_MESSAGE  : <MSG_STS><NULL_RECORD><EOM>
- * CHK_MESSAGE  : <MSG_PNG><NULL_RECORD><EOM>
+ * STS_MESSAGE    : <MSG_STS><NULL_RECORD><EOM>
+ * CHK_MESSAGE    : <MSG_PNG><NULL_RECORD><EOM>
  * 
- * IDG_MESSAGE  : <MSG_IDG><NULL_RECORD><EOM>
- * IDR_MESSAGE  : <MSG_IDR><INDEX><EOM>
+ * IDG_MESSAGE    : <MSG_IDG><NULL_RECORD><EOM>
+ * IDR_MESSAGE    : <MSG_IDR><INDEX><EOM>
  */
 
 // in bytes
@@ -84,6 +91,7 @@ typedef enum {
     SHC_HDR_GET_OFFSET      = 0x06,
     SHC_HDR_ADD             = 0x07,
     SHC_HDR_EXISTS          = 0x08,
+    SHC_HDR_TOUCH           = 0x09,
 
     // migration commands
     SHC_HDR_MIGRATION_ABORT = 0x21,
@@ -111,6 +119,8 @@ typedef enum {
 } shardcache_hdr_t;
 
 #define SHARDCACHE_RSEP 0x80
+
+// TODO - Document all exposed functions
 
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr);
 
@@ -184,6 +194,14 @@ int exists_on_peer(char *peer,
                    void *key,
                    size_t len,
                    int fd);
+
+int
+touch_on_peer(char *peer,
+              char *auth,
+              unsigned char sig_hdr,
+              void *key,
+              size_t klen,
+              int fd);
 
 int stats_from_peer(char *peer,
                     char *auth,

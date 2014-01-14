@@ -14,12 +14,13 @@ void usage(char *prgname) {
            "        set       <Key> [ <Expire> ] (gets value on stdin)\n"
            "        add       <Key> [ <Expire> ] (gets value on stdin)\n"
            "        exists    <Key>\n"
+           "        touch     <Key>\n"
            "        del       <Key>\n"
            "        evict     <Key>\n"
            "        index     [ <node> ]\n"
            "        stats     [ <node> ]\n"
            "        check     [ <node> ]\n\n", prgname);
-    exit(-1);
+    exit(-2);
 }
 
 int num_nodes = 0;
@@ -85,6 +86,8 @@ int main (int argc, char **argv) {
     shardcache_client_t *client = shardcache_client_create(nodes, num_nodes, secret);
 
     int rc = 0;
+    int is_boolean = 0;
+
     char *cmd = argv[1];
     if (strcasecmp(cmd, "get") == 0) {
         void *out = NULL;
@@ -117,26 +120,13 @@ int main (int argc, char **argv) {
         }
     } else if (strcasecmp(cmd, "del") == 0 || strcasecmp(cmd, "delete") == 0) {
         rc = shardcache_client_del(client, argv[2], strlen(argv[2]));
-        if (rc == 0)
-            printf("OK\n");
-        else
-            printf("ERR\n");
     } else if (strcasecmp(cmd, "evict") == 0) {
         rc = shardcache_client_evict(client, argv[2], strlen(argv[2]));
-        if (rc == 0)
-            printf("OK\n");
-        else
-            printf("ERR\n");
     } else if (strcasecmp(cmd, "exists") == 0) {
         rc = shardcache_client_exists(client, argv[2], strlen(argv[2]));
-        if (rc == 0) {
-            printf("NO\n");
-        } else if (rc == 1) {
-            printf("YES\n");
-            rc = 0;
-        } else {
-            printf("ERR\n");
-        }
+        is_boolean = 1;
+    } else if (strcasecmp(cmd, "touch") == 0) {
+        rc = shardcache_client_touch(client, argv[2], strlen(argv[2]));
     } else if (strcasecmp(cmd, "stats") == 0) {
         int found = 0;
         char *selected_node = NULL;
@@ -214,8 +204,24 @@ int main (int argc, char **argv) {
         usage(argv[0]);
     }
 
-    if (rc != 0 || shardcache_client_errno(client) != SHARDCACHE_CLIENT_OK) {
-        fprintf(stderr, "Error %d: %s\n",
+    if (is_boolean) {
+        if (rc == 0) {
+            printf("NO\n");
+        } else if (rc == 1) {
+            printf("YES\n");
+            rc = 0;
+        } else {
+            printf("ERR\n");
+        }
+    } else {
+        if (rc == 0)
+            printf("OK\n");
+        else
+            printf("ERR\n");
+    }
+
+    if (shardcache_client_errno(client) != SHARDCACHE_CLIENT_OK) {
+        fprintf(stderr, "errorno: %d, errstr: %s\n",
                 shardcache_client_errno(client), shardcache_client_errstr(client));
     }
 

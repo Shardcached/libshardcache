@@ -94,6 +94,17 @@ int shardcache_client_get_async(shardcache_client_t *c,
 int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen);
 
 /**
+ * @brief Force loading a key into the cache of the node responsible for it.
+ *        If the key is already loaded, update the loaded-timestamp.
+ * @param cache   A valid pointer to a shardcache_t structure
+ * @param key     A valid pointer to the key
+ * @param klen    The length of the key
+ * @return 0 if successfully touched the item, -1 in case of errors
+ */
+int shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen);
+
+
+/**
  * @brief Set the value for a key if it doesn't exist already
  * @param c      A valid pointer to a shardcache_client_t structure
  * @param key    A valid pointer to the key
