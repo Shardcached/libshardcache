@@ -20,7 +20,7 @@ is intended as a replacement for memcached with some additions:
    When using the library to run a new node, the library will connect to its own peers and handle
    the internal communication.
 
- * It has a cache filling mechanism based on ARC (Adaptive Replacement Cache)
+ * It has a cache filling mechanism and minimizes access to the underlying storage
 
  * It ensures fetching the items from the peers or from the storage only once
    even when multiple concurrent requests are looking for the same uncached item.

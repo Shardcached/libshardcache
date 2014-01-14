@@ -759,11 +759,9 @@ shardcache_t *shardcache_create(char *me,
         strncpy((char *)cache->auth, secret, 16);
     } 
 
-    if (shardcache_log_level() >= LOG_DEBUG) {
-        if (secret && *secret) {
-            SHC_DEBUG("AUTH KEY (secret: %s) : %s\n", secret,
-                        shardcache_hex_escape(cache->auth, SHARDCACHE_MSG_SIG_LEN, DEBUG_DUMP_MAXSIZE));
-        }
+    if (secret && *secret) {
+        SHC_DEBUG("AUTH KEY (secret: %s) : %s\n", secret,
+                  shardcache_hex_escape(cache->auth, SHARDCACHE_MSG_SIG_LEN, DEBUG_DUMP_MAXSIZE));
     }
 
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
@@ -1045,7 +1043,14 @@ typedef struct {
     int complete;
 } shardcache_get_helper_arg_t;
 
-static int shardcache_get_helper(void *key, size_t klen, void *data, size_t dlen, size_t total_size, struct timeval *timestamp, void *priv)
+static int
+shardcache_get_helper(void *key,
+                      size_t klen,
+                      void *data,
+                      size_t dlen,
+                      size_t total_size,
+                      struct timeval *timestamp,
+                      void *priv)
 {
     shardcache_get_helper_arg_t *arg = (shardcache_get_helper_arg_t *)priv;
     pthread_mutex_lock(&arg->lock);
@@ -1074,7 +1079,11 @@ static int shardcache_get_helper(void *key, size_t klen, void *data, size_t dlen
     return 0;
 }
 
-void *shardcache_get(shardcache_t *cache, void *key, size_t klen, size_t *vlen, struct timeval *timestamp)
+void *shardcache_get(shardcache_t *cache,
+                     void *key,
+                     size_t klen,
+                     size_t *vlen,
+                     struct timeval *timestamp)
 {
     if (!key)
         return NULL;
@@ -1113,7 +1122,13 @@ void *shardcache_get(shardcache_t *cache, void *key, size_t klen, size_t *vlen, 
     return NULL;
 }
 
-size_t shardcache_head(shardcache_t *cache, void *key, size_t len, void *head, size_t hlen, struct timeval *timestamp)
+size_t
+shardcache_head(shardcache_t *cache,
+                void *key,
+                size_t len,
+                void *head,
+                size_t hlen,
+                struct timeval *timestamp)
 {
     if (!key)
         return 0;
@@ -1140,12 +1155,6 @@ _shardcache_set_internal(shardcache_t *cache,
 
     char keystr[1024];
     KEY2STR(key, klen, keystr, sizeof(keystr));
-/*
-    if (vlen > cache->arc_size) {
-        SHC_ERROR("New value for key %s is bigger than the cache size, skipping set command", keystr);
-        return -1;
-    }
-*/
     __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_SETS].value, 1);
 
     char node_name[1024];
