@@ -204,20 +204,22 @@ int main (int argc, char **argv) {
         usage(argv[0]);
     }
 
-    if (is_boolean) {
-        if (rc == 0) {
-            printf("NO\n");
-        } else if (rc == 1) {
-            printf("YES\n");
-            rc = 0;
+    if (strncasecmp(cmd, "get", 3) != 0) {
+        if (is_boolean) {
+            if (rc == 0) {
+                printf("NO\n");
+            } else if (rc == 1) {
+                printf("YES\n");
+                rc = 0;
+            } else {
+                printf("ERR\n");
+            }
         } else {
-            printf("ERR\n");
+            if (rc == 0)
+                printf("OK\n");
+            else
+                printf("ERR\n");
         }
-    } else {
-        if (rc == 0)
-            printf("OK\n");
-        else
-            printf("ERR\n");
     }
 
     if (shardcache_client_errno(client) != SHARDCACHE_CLIENT_OK) {
