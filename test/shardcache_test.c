@@ -77,21 +77,17 @@ int main(int argc, char **argv)
     sprintf(key, "test_key1");
     sprintf(val, "test_value1");
 
-    t_testing("shardcache_client_set(client, test_key1, 9, test_value1, 11, 0)");
+    t_testing("shardcache_client_set(client, test_key1, 9, test_value1, 11, 0) == 0");
     int ret = shardcache_client_set(client, key, strlen(key), val, strlen(val), 0);
     t_validate_int(ret, 0);
-    if (ret == 0) {
-        t_testing("shardcache_client_get()");
-        size = shardcache_client_get(client, key, strlen(key), (void **)&value);
-        t_validate_buffer(value, size, val, strlen(val));
-    } else {
-        printf("ERROR\n");
-    }
+    t_testing("shardcache_client_get(client, test_key1, 9, &value) == test_value1");
+    size = shardcache_client_get(client, key, strlen(key), (void **)&value);
+    t_validate_buffer(value, size, val, strlen(val));
 
-    t_testing("shardcache_client_del(client, test_key1, 9)");
+    t_testing("shardcache_client_del(client, test_key1, 9) == 0");
     ret = shardcache_client_del(client, "test_key1", 9);
     t_validate_int(ret, 0);
-    t_testing("shardcache_client_get(client, test_key1, 9, &value)");
+    t_testing("shardcache_client_get(client, test_key1, 9, &value) == NULL");
     size = shardcache_client_get(client, "test_key1", 9, &value);
     t_validate_int((size == 0 && value == NULL), 1);
     
