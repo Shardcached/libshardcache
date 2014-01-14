@@ -1062,6 +1062,8 @@ shardcache_get_helper(void *key,
         // error notified (dlen == 0 && total_size == 0)
         pthread_mutex_lock(&arg->lock);
         arg->stat = -1;
+        if (arg->data)
+            free(arg->data);
         pthread_cond_signal(&arg->cond);
         pthread_mutex_unlock(&arg->lock);
         return -1;
@@ -1071,8 +1073,11 @@ shardcache_get_helper(void *key,
         arg->complete = 1;
         if (timestamp)
             memcpy(&arg->ts, timestamp, sizeof(struct timeval));
-        if (total_size != arg->dlen)
+        if (total_size != arg->dlen) {
             arg->stat = -1;
+            if (arg->data)
+                free(arg->data);
+        }
         pthread_cond_signal(&arg->cond);
     }
     pthread_mutex_unlock(&arg->lock);
@@ -1106,10 +1111,8 @@ void *shardcache_get(shardcache_t *cache,
             pthread_cond_wait(&arg.cond, &arg.lock);
         pthread_mutex_unlock(&arg.lock);
 
-        if (arg.stat != 0) {
-            free(arg.data);
+        if (arg.stat != 0)
             return NULL;
-        }
 
         char *value = arg.data;
         if (vlen)
