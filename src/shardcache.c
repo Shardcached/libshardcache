@@ -1036,8 +1036,7 @@ shardcache_get_async(shardcache_t *cache,
 typedef struct {
     pthread_mutex_t lock;
     pthread_cond_t cond;
-    void *data;
-    size_t dlen;
+    fbuf_t data;
     size_t stat;
     struct timeval ts;
     int complete;
@@ -1055,15 +1054,11 @@ shardcache_get_helper(void *key,
     shardcache_get_helper_arg_t *arg = (shardcache_get_helper_arg_t *)priv;
     pthread_mutex_lock(&arg->lock);
     if (dlen) {
-        arg->data = realloc(arg->data, arg->dlen + dlen);
-        memcpy(arg->data, data, dlen);
-        arg->dlen += dlen;
+        fbuf_add_binary(&arg->data, data, dlen);
     } else if (!total_size) {
         // error notified (dlen == 0 && total_size == 0)
         pthread_mutex_lock(&arg->lock);
         arg->stat = -1;
-        if (arg->data)
-            free(arg->data);
         pthread_cond_signal(&arg->cond);
         pthread_mutex_unlock(&arg->lock);
         return -1;
@@ -1073,10 +1068,8 @@ shardcache_get_helper(void *key,
         arg->complete = 1;
         if (timestamp)
             memcpy(&arg->ts, timestamp, sizeof(struct timeval));
-        if (total_size != arg->dlen) {
+        if (total_size != fbuf_used(&arg->data)) {
             arg->stat = -1;
-            if (arg->data)
-                free(arg->data);
         }
         pthread_cond_signal(&arg->cond);
     }
@@ -1097,8 +1090,7 @@ void *shardcache_get(shardcache_t *cache,
 
         .lock = PTHREAD_MUTEX_INITIALIZER,
         .cond = PTHREAD_COND_INITIALIZER,
-        .data = NULL,
-        .dlen = 0,
+        .data = FBUF_STATIC_INITIALIZER,
         .stat = 0,
         .ts = { 0, 0 },
         .complete = 0
@@ -1111,17 +1103,20 @@ void *shardcache_get(shardcache_t *cache,
             pthread_cond_wait(&arg.cond, &arg.lock);
         pthread_mutex_unlock(&arg.lock);
 
-        if (arg.stat != 0)
+        if (arg.stat != 0) {
+            fbuf_destroy(&arg.data);
             return NULL;
+        }
 
-        char *value = arg.data;
+        char *value = fbuf_data(&arg.data);
         if (vlen)
-            *vlen = arg.dlen;
+            *vlen = fbuf_used(&arg.data);
 
         if (timestamp)
             memcpy(timestamp, &arg.ts, sizeof(struct timeval));
         return value;
     }
+    fbuf_destroy(&arg.data);
     return NULL;
 }
 
