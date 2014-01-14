@@ -1,6 +1,3 @@
- * support touch command, which would load the item in the cache (without returning it)
-   if the keys is not already in the cache, otherwise it would just update the last-loaded timestamp
-
  * parallelize eviction
    evict commands are very small and can be handled quickly but now it's
    only one thread making this job and it might be not enough in case of
