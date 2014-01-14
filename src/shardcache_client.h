@@ -84,6 +84,10 @@ int shardcache_client_get_async(shardcache_client_t *c,
                                 shardcache_client_get_aync_data_cb cb,
                                 void *priv);
 
+int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen);
+
+int shardcache_client_add(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire);
+
 /**
  * @brief Set the value for a key
  * @param c      A valid pointer to a shardcache_client_t structure

@@ -1285,7 +1285,11 @@ _shardcache_set_internal(shardcache_t *cache,
             return -1;
         }
         int fd = shardcache_get_connection_for_peer(cache, peer);
-        int rc = send_to_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
+        int rc = -1;
+        if (inx)
+            add_to_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
+        else
+            send_to_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
         shardcache_release_connection_for_peer(cache, peer, fd);
         if (rc == 0)
             arc_remove(cache->arc, (const void *)key, klen);

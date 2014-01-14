@@ -134,14 +134,40 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
     return 0;
 }
 
-int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
+int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
+{
+    char *node = select_node(c, key, klen);
+    int fd = connections_pool_get(c->connections, node);
+    if (fd < 0)
+        return -1;
+    int rc = exists_on_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
+    if (rc == -1) {
+        close(fd);
+        c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't check existance of data on node: %s", node);
+    } else {
+        connections_pool_add(c->connections, node, fd);
+        c->errno = SHARDCACHE_CLIENT_OK;
+        c->errstr[0] = 0;
+    }
+    return rc;
+}
+
+
+static int
+_shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire, int inx)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return -1;
 
-    int rc = send_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
+    int rc = -1;
+    if (inx)
+        add_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
+    else
+        send_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
+
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -152,6 +178,18 @@ int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *
         c->errstr[0] = 0;
     }
     return rc;
+}
+
+int
+shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
+{
+     return _shardcache_client_set_internal(c, key, klen, data, dlen, expire, 0);
+}
+
+int
+shardcache_client_add(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
+{
+     return _shardcache_client_set_internal(c, key, klen, data, dlen, expire, 1);
 }
 
 int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)

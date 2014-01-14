@@ -159,6 +159,17 @@ int send_to_peer(char *peer,
                  uint32_t expire,
                  int fd);
 
+int
+add_to_peer(char *peer,
+            char *auth,
+            unsigned char sig,
+            void *key,
+            size_t klen,
+            void *value,
+            size_t vlen,
+            uint32_t expire,
+            int fd);
+
 int fetch_from_peer(char *peer,
                     char *auth,
                     unsigned char sig_hdr,
