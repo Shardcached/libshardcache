@@ -151,6 +151,8 @@ int main (int argc, char **argv) {
             int rc = shardcache_client_stats(client, nodes[i].label, &stats, &len); 
             if (rc == 0)
                 printf("%s\n", stats);
+            else
+                printf("Error querying node: %s (%s)\n", nodes[i].label, nodes[i].address);
             if (stats)
                 free(stats);
             printf("\n");
