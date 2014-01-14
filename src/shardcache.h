@@ -489,9 +489,17 @@ int shardcache_get_async(shardcache_t *cache,
                          shardcache_get_async_callback_t cb,
                          void *priv);
 
+/**
+ * @brief Check if a specific key exists on the node responsible for it
+ * @param cache   A valid pointer to a shardcache_t structure
+ * @param key     A valid pointer to the key
+ * @param klen    The length of the key
+ * @return 1 if exists, 0 if doesn't exist, -1 in case of errors
+ */
 int shardcache_exists(shardcache_t *cache,
                       void *key,
                       size_t klen);
+
 /**
  * @brief Set the value for a key
  * @param cache   A valid pointer to a shardcache_t structure
@@ -508,6 +516,16 @@ int shardcache_set(shardcache_t *cache,
                    void *value,
                    size_t vlen);
 
+/**
+ * @brief Set the value for a key if it doesn't already exist 
+ * @param cache   A valid pointer to a shardcache_t structure
+ * @param key   A valid pointer to the key
+ * @param klen   The length of the key
+ * @param value   A valid pointer to the value
+ * @param vlen   The length of the value
+ * @return 0 on success, 1 if the key already exists, -1 in case of error
+ * @see shardcache_set_volatile()
+ */
 int shardcache_add(shardcache_t *cache,
                    void *key,
                    size_t klen,
@@ -522,9 +540,9 @@ int shardcache_add(shardcache_t *cache,
  * @param value    A valid pointer to the value
  * @param vlen     The length of the value
  * @param expire   The number of seconds after which the volatile value expires
- *               If 0 the value will not expire and it will be stored using the
- *               actual storage module (which might evntually be a presistent
- *               storage backend as the filesystem or database ones)
+ *                 If 0 the value will not expire and it will be stored using the
+ *                 actual storage module (which might evntually be a presistent
+ *                 storage backend as the filesystem or database ones)
  * @return 0 on success, -1 otherwise
  * @see shardcache_set()
  */
@@ -535,6 +553,20 @@ int shardcache_set_volatile(shardcache_t *cache,
                             size_t vlen,
                             time_t expire);
 
+/**
+ * @brief Set the volatile value for a key if it doesn't already exist 
+ * @param cache   A valid pointer to a shardcache_t structure
+ * @param key   A valid pointer to the key
+ * @param klen   The length of the key
+ * @param value   A valid pointer to the value
+ * @param vlen   The length of the value
+ * @param expire   The number of seconds after which the volatile value expires
+ *                 If 0 the value will not expire and it will be stored using the
+ *                 actual storage module (which might evntually be a presistent
+ *                 storage backend as the filesystem or database ones)
+ * @return 0 on success, 1 if the key already exists, -1 in case of error
+ * @see shardcache_set_volatile()
+ */
 int shardcache_add_volatile(shardcache_t *cache,
                             void *key,
                             size_t klen,

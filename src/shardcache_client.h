@@ -84,8 +84,29 @@ int shardcache_client_get_async(shardcache_client_t *c,
                                 shardcache_client_get_aync_data_cb cb,
                                 void *priv);
 
+/**
+ * @brief Check if a specific key exists on the node responsible for it
+ * @param c      A valid pointer to a shardcache_client_t structure
+ * @param key    A valid pointer to the key
+ * @param klen   The length of the key
+ * @return 1 if exists, 0 if doesn't exist, -1 in case of errors
+ */
 int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen);
 
+/**
+ * @brief Set the value for a key if it doesn't exist already
+ * @param c      A valid pointer to a shardcache_client_t structure
+ * @param key    A valid pointer to the key
+ * @param klen   The length of the key
+ * @param data   A valid pointer to the value
+ * @param dlen   The length of the value
+ * @param expire The number of seconds after which the value should expire
+ * @return 0 on success, 1 if the key already exists,
+ *         -1 in case of errors and the internal errno is set
+ * @note On success the internal errno will be set to SHARDCACHE_CLIENT_OK
+ * @see shardcache_client_errno()
+ * @see shardcache_client_errstr()
+ */
 int shardcache_client_add(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire);
 
 /**
