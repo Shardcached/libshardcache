@@ -399,7 +399,7 @@ size_t shardcache_head(shardcache_t *cache, void *key, size_t klen, void *head, 
 
 size_t shardcache_get_offset(shardcache_t *cache, void *key, size_t klen, void *out, size_t *olen, size_t offset, struct timeval *timestamp);
 
-typedef void (*shardcache_get_async_callback_t)(void *key, size_t klen, void *data, size_t dlen, size_t total_size, struct timeval *timestamp, void *priv);
+typedef int (*shardcache_get_async_callback_t)(void *key, size_t klen, void *data, size_t dlen, size_t total_size, struct timeval *timestamp, void *priv);
 
 int shardcache_get_async(shardcache_t *cache, void *key, size_t klen, shardcache_get_async_callback_t cb, void *priv);
 

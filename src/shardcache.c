@@ -297,8 +297,8 @@ shardcache_fetch_from_peer_notify_listener (void *item, uint32_t idx, void *user
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
     shardcache_fetch_from_peer_notify_arg *arg = (shardcache_fetch_from_peer_notify_arg *)user;
     cache_object_t *obj = arg->obj;
-    listener->cb(obj->key, obj->klen, arg->data, arg->len, 0, NULL, listener->priv);
-    return 1;
+    int rc = listener->cb(obj->key, obj->klen, arg->data, arg->len, 0, NULL, listener->priv);
+    return (rc == 0);
 }
 
 static void
@@ -370,13 +370,13 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
         __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
     } else { 
         rc = fetch_from_peer(peer_addr, (char *)cache->auth, SHARDCACHE_HDR_SIG_SIP, obj->key, obj->klen, &value, fd);
-        shardcache_release_connection_for_peer(cache, peer_addr, fd);
         if (rc == 0 && fbuf_used(&value)) {
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
             __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
         }
     }
+    shardcache_release_connection_for_peer(cache, peer_addr, fd);
 
     fbuf_destroy(&value);
     return rc;
@@ -931,7 +931,7 @@ typedef struct {
     void *priv;
 } shardcache_get_async_helper_arg_t;
 
-static void
+static int
 shardcache_get_async_helper(void *key,
                             size_t klen,
                             void *data,
@@ -942,13 +942,13 @@ shardcache_get_async_helper(void *key,
 {
     shardcache_get_async_helper_arg_t *arg = (shardcache_get_async_helper_arg_t *)priv;
 
-    arg->cb(key, klen, data, dlen, total_size, timestamp, arg->priv);
-    if (!dlen && !total_size) { // error
+    int rc = arg->cb(key, klen, data, dlen, total_size, timestamp, arg->priv);
+    if (rc != 0 || (!dlen && !total_size)) { // error
         arg->stat = -1;
         pthread_mutex_lock(&arg->lock);
         pthread_cond_signal(&arg->cond);
         pthread_mutex_unlock(&arg->lock);
-        return;
+        return -1;
     }
 
     arg->dlen += dlen;
@@ -960,6 +960,7 @@ shardcache_get_async_helper(void *key,
         pthread_cond_signal(&arg->cond);
         pthread_mutex_unlock(&arg->lock);
     }
+    return 0;
 }
 
 int
@@ -976,8 +977,15 @@ shardcache_get_async(shardcache_t *cache,
 
     cache_object_t *obj = NULL;
     arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, (void **)&obj, 1);
+
     if (!res)
         return -1;
+
+    if (!obj) {
+        arc_release_resource(cache->arc, res);
+        return -1;
+    }
+
     pthread_mutex_lock(&obj->lock);
     if (obj->complete) {
         cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
@@ -1037,7 +1045,7 @@ typedef struct {
     int complete;
 } shardcache_get_helper_arg_t;
 
-static void shardcache_get_helper(void *key, size_t klen, void *data, size_t dlen, size_t total_size, struct timeval *timestamp, void *priv)
+static int shardcache_get_helper(void *key, size_t klen, void *data, size_t dlen, size_t total_size, struct timeval *timestamp, void *priv)
 {
     shardcache_get_helper_arg_t *arg = (shardcache_get_helper_arg_t *)priv;
     pthread_mutex_lock(&arg->lock);
@@ -1051,7 +1059,7 @@ static void shardcache_get_helper(void *key, size_t klen, void *data, size_t dle
         arg->stat = -1;
         pthread_cond_signal(&arg->cond);
         pthread_mutex_unlock(&arg->lock);
-        return;
+        return -1;
     }
 
     if (total_size) {
@@ -1063,6 +1071,7 @@ static void shardcache_get_helper(void *key, size_t klen, void *data, size_t dle
         pthread_cond_signal(&arg->cond);
     }
     pthread_mutex_unlock(&arg->lock);
+    return 0;
 }
 
 void *shardcache_get(shardcache_t *cache, void *key, size_t klen, size_t *vlen, struct timeval *timestamp)
