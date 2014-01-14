@@ -1055,11 +1055,14 @@ exists_on_peer(char *peer,
                           peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
-                int exists = -1;
-                if (fbuf_used(&resp) == 2)
-                    exists = (strncmp(fbuf_data(&resp), "OK", 2) == 0) ? 1 : 0;
+                if (fbuf_used(&resp) == 3 && strncmp(fbuf_data(&resp), "YES", 3) == 0)
+                    rc = 1;
+                else if (fbuf_used(&resp) == 2 && strncmp(fbuf_data(&resp), "NO", 2) == 0)
+                    rc = 0;
+                else
+                    rc = -1;
                 fbuf_destroy(&resp);
-                return exists;
+                return rc;
             } else {
                 // TODO - Error messages
             }
