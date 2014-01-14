@@ -715,8 +715,8 @@ shardcache_t *shardcache_create(char *me,
         memcpy(&cache->storage, st, sizeof(cache->storage));
         cache->use_persistent_storage = 1;
     } else {
-        fprintf(stderr, "No storage callbacks provided, "
-                        "using only the internal volatile storage\n");
+        SHC_NOTICE("No storage callbacks provided,"
+                   "using only the internal volatile storage");
         cache->use_persistent_storage = 0;
     }
 
