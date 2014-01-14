@@ -69,12 +69,18 @@ typedef void (*shardcache_get_remainder_callback_t)(shardcache_connection_contex
 struct __shardcache_connection_context_s {
     shardcache_hdr_t hdr;
     shardcache_hdr_t sig_hdr;
+
+    pthread_mutex_t output_lock;
+    int fetching;
+    sip_hash *fetch_shash;
+    rbuf_t *fetch_accumulator;
+    int fetch_error;
+
     fbuf_t *output;
     int fd;
     shardcache_t *cache;
 #define SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX 4
     fbuf_t records[SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX];
-    size_t remainder;
     shardcache_get_remainder_callback_t get_remainder_cb;
     const char    *auth;
     shardcache_worker_context_t *worker_ctx;
@@ -112,18 +118,20 @@ shardcache_connection_context_create(shardcache_t *cache,
                                      const char *auth,
                                      int fd)
 {
-    shardcache_connection_context_t *context =
+    shardcache_connection_context_t *ctx =
         calloc(1, sizeof(shardcache_connection_context_t));
 
-    context->output = fbuf_create(0);
+    ctx->output = fbuf_create(0);
 
-    context->cache = cache;
-    context->auth = auth;
-    context->fd = fd;
-    context->reader_ctx = async_read_context_create((char *)auth,
+    ctx->cache = cache;
+    ctx->auth = auth;
+    ctx->fd = fd;
+    ctx->reader_ctx = async_read_context_create((char *)auth,
                                                     async_read_handler,
-                                                    context);
-    return context;
+                                                    ctx);
+    pthread_mutex_init(&ctx->output_lock, NULL);
+    ctx->fetch_accumulator = rbuf_create(1<<16);
+    return ctx;
 }
 
 static void
@@ -134,6 +142,8 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
     for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++)
         fbuf_destroy(&ctx->records[i]);
     async_read_context_destroy(ctx->reader_ctx);
+    rbuf_destroy(ctx->fetch_accumulator);
+    pthread_mutex_destroy(&ctx->output_lock);
     free(ctx);
 }
 
@@ -191,6 +201,158 @@ write_status(shardcache_connection_context_t *ctx, int rc)
         sip_hash_free(shash);
 }
 
+static int get_async_data_handler(void *key,
+                                   size_t klen,
+                                   void *data,
+                                   size_t dlen,
+                                   size_t total_size,
+                                   struct timeval *timestamp,
+                                   void *priv)
+{
+
+    shardcache_connection_context_t *ctx =
+        (shardcache_connection_context_t *)priv;
+
+    if (dlen == 0 && total_size == 0) {
+        // error
+        __sync_fetch_and_add(&ctx->fetch_error, 1);
+        __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+        return -1;
+    }
+    static int max_chunk_size = (1<<16)-1;
+
+    uint16_t accumulated_size = rbuf_len(ctx->fetch_accumulator);
+    size_t to_process = accumulated_size + dlen;
+    size_t data_offset = 0;
+    while(to_process >= max_chunk_size) {
+        pthread_mutex_lock(&ctx->output_lock);
+        size_t copy_size = max_chunk_size;
+        uint16_t clen = htons(max_chunk_size);
+        fbuf_add_binary(ctx->output, (void *)&clen, sizeof(clen));
+        if (ctx->fetch_shash)
+            sip_hash_update(ctx->fetch_shash, (void *)&clen, sizeof(clen));
+
+        if (accumulated_size) {
+            char buf[accumulated_size];
+            rbuf_read(ctx->fetch_accumulator, buf, accumulated_size);
+            fbuf_add_binary(ctx->output, buf, accumulated_size);
+            if (ctx->fetch_shash)
+                sip_hash_update(ctx->fetch_shash, buf, accumulated_size);
+            copy_size -= accumulated_size;
+            accumulated_size = 0;
+        }
+        if (dlen - data_offset >= copy_size) {
+            fbuf_add_binary(ctx->output, data + data_offset, copy_size);
+            if (ctx->fetch_shash)
+                sip_hash_update(ctx->fetch_shash, data + data_offset, copy_size);
+            data_offset += copy_size;
+        }
+        if (ctx->fetch_shash && (ctx->sig_hdr&0x01)) {
+            uint64_t digest;
+            if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
+                SHC_ERROR("Can't compute the siphash digest!\n");
+                pthread_mutex_unlock(&ctx->output_lock);
+                __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+                __sync_fetch_and_add(&ctx->fetch_error, 1);
+                return -1;
+            }
+            fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
+        }
+        pthread_mutex_unlock(&ctx->output_lock);
+        to_process = accumulated_size + (dlen - data_offset);
+    }
+
+    if (dlen > data_offset) {
+        int remainder = dlen - data_offset;
+        if (remainder) {
+            rbuf_write(ctx->fetch_accumulator, data + data_offset, remainder);
+            accumulated_size = remainder;
+        }
+    }
+    
+    if (total_size > 0 && timestamp) {
+        uint16_t eor = 0;
+        char eom = 0;
+        pthread_mutex_lock(&ctx->output_lock);
+        if (accumulated_size) {
+            // flush what we have left in the accumulator
+            uint16_t clen = htons(accumulated_size);
+            fbuf_add_binary(ctx->output, (void *)&clen, sizeof(clen));
+            if (ctx->fetch_shash)
+                sip_hash_update(ctx->fetch_shash, (void *)&clen, sizeof(clen));
+            char buf[accumulated_size];
+            rbuf_read(ctx->fetch_accumulator, buf, accumulated_size);
+            fbuf_add_binary(ctx->output, buf, accumulated_size);
+            if (ctx->fetch_shash) {
+                sip_hash_update(ctx->fetch_shash, buf, accumulated_size);
+                if (ctx->sig_hdr&0x01) {
+                    uint64_t digest;
+                    if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
+                        SHC_ERROR("Can't compute the siphash digest!\n");
+                        pthread_mutex_unlock(&ctx->output_lock);
+                        __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+                        __sync_fetch_and_add(&ctx->fetch_error, 1);
+                        return -1;
+                    }
+                    fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
+                }
+            }
+        }
+        fbuf_add_binary(ctx->output, (void *)&eor, 2);
+        fbuf_add_binary(ctx->output, &eom, 1);
+        if (ctx->fetch_shash) {
+            uint64_t digest;
+            sip_hash_update(ctx->fetch_shash, (void *)&eor, 2);
+            sip_hash_update(ctx->fetch_shash, &eom, 1);
+            if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
+                SHC_ERROR("Can't compute the siphash digest!\n");
+                pthread_mutex_unlock(&ctx->output_lock);
+                __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+                __sync_fetch_and_add(&ctx->fetch_error, 1);
+                return -1;
+            }
+            fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
+        }
+
+        pthread_mutex_unlock(&ctx->output_lock);
+        __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+    }
+    return 0;
+}
+
+static void get_async_data(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            shardcache_get_async_callback_t cb,
+                            shardcache_connection_context_t *ctx)
+{
+    int rc = shardcache_get_async(cache, key, klen, cb, ctx);
+    if (rc != 0) {
+        uint16_t eor = 0;
+        char eom = 0;
+        pthread_mutex_lock(&ctx->output_lock);
+        fbuf_add_binary(ctx->output, (void *)&eor, 2);
+        fbuf_add_binary(ctx->output, &eom, 1);
+        if (ctx->fetch_shash) {
+            uint64_t digest;
+            sip_hash_update(ctx->fetch_shash, (void *)&eor, 2);
+            sip_hash_update(ctx->fetch_shash, &eom, 1);
+            if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
+                SHC_ERROR("Can't compute the siphash digest!\n");
+                pthread_mutex_unlock(&ctx->output_lock);
+                __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+                __sync_fetch_and_add(&ctx->fetch_error, 1);
+                return;
+            }
+            fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
+        }
+
+ 
+        pthread_mutex_unlock(&ctx->output_lock);
+    }
+    __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+}
+
 static void *
 process_request(void *priv)
 {
@@ -203,28 +365,38 @@ process_request(void *priv)
     size_t klen = fbuf_used(&ctx->records[0]);
 
     switch(ctx->hdr) {
-        case SHARDCACHE_HDR_OFX:
+        case SHARDCACHE_HDR_GTO:
         {
             fbuf_t out = FBUF_STATIC_INITIALIZER;
             char buf[1<<16];
-            size_t vlen = sizeof(buf); 
 
             uint32_t offset = 0;
-            if (fbuf_used(&ctx->records[2]) == 4) {
+            if (fbuf_used(&ctx->records[1]) == 4) {
                 memcpy(&offset, fbuf_data(&ctx->records[2]), sizeof(uint32_t));
                 offset = ntohl(offset);
             } else {
                 // TODO - Error Messages
+                break;
             }
 
-            ctx->remainder = shardcache_get_offset(cache, key, klen, buf, &vlen, offset, NULL);
-            if (vlen) {
-                uint32_t remainder = htonl(ctx->remainder);
+            uint32_t size = 0;
+            if (fbuf_used(&ctx->records[2]) == 4) {
+                memcpy(&size, fbuf_data(&ctx->records[2]), sizeof(uint32_t));
+                size = ntohl(size);
+            } else {
+                // TODO - Error Messages
+                break;
+            }
+
+            size_t bsize = size;
+            uint32_t remainder = shardcache_get_offset(cache, key, klen, buf, &bsize, offset, NULL);
+            if (size) {
+                uint32_t remainder_nbo = htonl(remainder);
                 if (build_message((char *)ctx->auth,
                                   ctx->sig_hdr,
                                   SHARDCACHE_HDR_RES,
-                                  buf, vlen,
-                                  (void *)&remainder, sizeof(remainder),
+                                  buf, size,
+                                  (void *)&remainder_nbo, sizeof(remainder_nbo),
                                   0, &out) == 0)
                 {
                     fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
@@ -232,58 +404,65 @@ process_request(void *priv)
                 else
                 {
                     // TODO - Error Messages
+                    break;
                 }
             }
             fbuf_destroy(&out);
+            break;
+        }
+        case SHARDCACHE_HDR_GTA:
+        {
+            shardcache_hdr_t hdr = SHARDCACHE_HDR_RES;
+
+            if (ctx->auth) {
+                ctx->fetch_shash = sip_hash_new((char *)ctx->auth, 2, 4);
+                fbuf_add_binary(ctx->output, (void *)&ctx->sig_hdr, 1);
+            }
+
+            fbuf_add_binary(ctx->output, (void *)&hdr, 1);
+
+            if (ctx->auth && ctx->fetch_shash) {
+                sip_hash_update(ctx->fetch_shash, (char *)&hdr, 1);
+                if (ctx->sig_hdr&0x01) {
+                    uint64_t digest;
+                    if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
+                        fbuf_set_used(ctx->output, fbuf_used(ctx->output) - 2);
+                        SHC_ERROR("Can't compute the siphash digest!\n");
+                        break;
+                    }
+                    fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
+                }
+         
+            }
+
+            __sync_bool_compare_and_swap(&ctx->fetching, 0, 1);
+            get_async_data(cache, key, klen, get_async_data_handler, ctx);
+            if (ctx->fetch_shash)
+                sip_hash_free(ctx->fetch_shash);
+            break;
         }
         case SHARDCACHE_HDR_GET:
         {
-            //if (shardcache_test_ownership(cache, key, klen, NULL, 0)) {
-                fbuf_t out = FBUF_STATIC_INITIALIZER;
-                size_t vlen = 0;
-                void *v = shardcache_get(cache, key, klen, &vlen, NULL);
-                if (build_message((char *)ctx->auth,
-                                  ctx->sig_hdr,
-                                  SHARDCACHE_HDR_RES,
-                                  v, vlen,
-                                  NULL, 0,
-                                  0, &out) == 0)
-                {
-                    fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
-                }
-                else
-                {
-                    // TODO - Error Messages
-                }
-                fbuf_destroy(&out);
+            fbuf_t out = FBUF_STATIC_INITIALIZER;
+            size_t vlen = 0;
+            void *v = shardcache_get(cache, key, klen, &vlen, NULL);
+            if (build_message((char *)ctx->auth,
+                              ctx->sig_hdr,
+                              SHARDCACHE_HDR_RES,
+                              v, vlen,
+                              NULL, 0,
+                              0, &out) == 0)
+            {
+                fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+            }
+            else
+            {
+                // TODO - Error Messages
+            }
+            fbuf_destroy(&out);
 
-                if (v)
-                    free(v);
-            /*} else {
-                fbuf_t out = FBUF_STATIC_INITIALIZER;
-                char buf[1<<16];
-                size_t vlen = sizeof(buf); 
-
-                ctx->remainder = shardcache_get_offset(cache, key, klen, buf, &vlen, 0, NULL);
-                if (vlen) {
-                    uint32_t remainder = htonl(ctx->remainder);
-                    if (build_message((char *)ctx->auth,
-                                      ctx->sig_hdr,
-                                      SHARDCACHE_HDR_RES,
-                                      buf, vlen,
-                                      (void *)&remainder, sizeof(remainder),
-                                      0, &out) == 0)
-                    {
-                        fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
-                    }
-                    else
-                    {
-                        // TODO - Error Messages
-                    }
-                }
-                fbuf_destroy(&out);
-
-            }*/
+            if (v)
+                free(v);
             break;
         }
         case SHARDCACHE_HDR_SET:
@@ -464,6 +643,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
     shardcache_connection_context_t *ctx =
         (shardcache_connection_context_t *)priv;
 
+    pthread_mutex_lock(&ctx->output_lock);
     if (fbuf_used(ctx->output)) {
         int wb = iomux_write(iomux, fd,
                             fbuf_data(ctx->output),
@@ -471,10 +651,11 @@ shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
         fbuf_remove(ctx->output, wb);
     }
 
-    if (!fbuf_used(ctx->output)) {
+    if (!fbuf_used(ctx->output) && !__sync_fetch_and_add(&ctx->fetching, 0)) {
         iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
         cbs->mux_output = NULL;
     }
+    pthread_mutex_unlock(&ctx->output_lock);
 }
 
 static void
@@ -488,6 +669,9 @@ shardcache_input_handler(iomux_t *iomux,
         (shardcache_connection_context_t *)priv;
 
     if (!ctx)
+        return;
+
+    if (__sync_fetch_and_add(&ctx->fetching, 0) != 0)
         return;
 
     // new data arrived so we want to run the asyncrhonous reader to update
@@ -507,6 +691,7 @@ shardcache_input_handler(iomux_t *iomux,
         ctx->sig_hdr = async_read_context_sig_hdr(ctx->reader_ctx);
 
         process_request(ctx);
+        pthread_mutex_lock(&ctx->output_lock);
         // if we have output, let's send it
         if (fbuf_used(ctx->output)) {
 
@@ -520,6 +705,13 @@ shardcache_input_handler(iomux_t *iomux,
                 iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
                 cbs->mux_output = shardcache_output_handler;
             }
+        }
+        pthread_mutex_unlock(&ctx->output_lock);
+
+        if (__sync_fetch_and_add(&ctx->fetching, 0)) {
+                iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
+                cbs->mux_output = shardcache_output_handler;
+            break;
         }
 
         int i;
