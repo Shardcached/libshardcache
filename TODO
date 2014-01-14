@@ -1,7 +1,3 @@
- * support set-if-not-exists command
-
- * support exists command
-
  * support touch command, which would load the item in the cache (without returning it)
    if the keys is not already in the cache, otherwise it would just update the last-loaded timestamp
 
