@@ -937,6 +937,8 @@ _send_to_peer_internal(char *peer,
                 if (should_close)
                     close(fd);
                 fbuf_destroy(&resp);
+                if (fbuf_used(&resp) == 3 && strncmp(fbuf_data(&resp), "ERR", 3) == 0)
+                    return -1;
                 return 0;
             } else {
                 fprintf(stderr, "Bad response (%02x) from %s : %s\n",

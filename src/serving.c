@@ -524,7 +524,7 @@ process_request(void *priv)
                 rc = shardcache_add(cache, key, klen,
                         fbuf_data(&ctx->records[1]), fbuf_used(&ctx->records[1]));
             }
-            write_status(ctx, rc, 0);
+            write_status(ctx, rc, 1);
             break;
         }
         case SHC_HDR_EXISTS:

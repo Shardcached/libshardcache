@@ -1249,15 +1249,16 @@ _shardcache_set_internal(shardcache_t *cache,
     if (is_mine == -1)
         is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
 
-    if (is_mine == 1) {
-
+    if (is_mine == 1)
+    {
         SHC_DEBUG("Storing value %s (%d) for key %s",
                   shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
                   (int)vlen, keystr);
 
         volatile_object_t *prev = NULL;
         uint32_t *counter = &cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value;
-        if (!cache->use_persistent_storage || expire) {
+        if (!cache->use_persistent_storage || expire)
+        {
             // ensure removing this key from the persistent storage (if present)
             // since it's now going to be a volatile item
             if (cache->use_persistent_storage && cache->storage.remove)
@@ -1271,13 +1272,18 @@ _shardcache_set_internal(shardcache_t *cache,
             SHC_DEBUG("Setting volatile item %s to expire %d (now: %d)", 
                 keystr, obj->expire, (int)time(NULL));
 
-            if (!inx) {
+            if (!inx)
+            {
                 ht_get_and_set(cache->volatile_storage, key, klen,
                     obj, sizeof(volatile_object_t), (void **)&prev, NULL);
-            } else if(!ht_exists(cache->volatile_storage, key, klen)) {
+            }
+            else if(!ht_exists(cache->volatile_storage, key, klen))
+            {
                 ht_set(cache->volatile_storage, key, klen,
                         obj, sizeof(volatile_object_t));
-            } else {
+            }
+            else
+            {
                 return 1;
             }
 
@@ -1298,26 +1304,37 @@ _shardcache_set_internal(shardcache_t *cache,
 
             SPIN_UNLOCK(&cache->next_expire_lock);
 
-        } else if (cache->use_persistent_storage && cache->storage.store) {
-            // remove this key from the volatile storage (if present)
-            // it's going to be eventually persistent now (depending on the storage type)
-            ht_delete(cache->volatile_storage, key, klen, (void **)&prev, NULL);
+        }
+        else if (cache->use_persistent_storage && cache->storage.store)
+        {
+            if (inx) {
+                if (ht_exists(cache->volatile_storage, key, klen) == 1)
+                    return 1;
+            } else {
+                // remove this key from the volatile storage (if present)
+                // it's going to be eventually persistent now (depending on the storage type)
+                ht_delete(cache->volatile_storage, key, klen, (void **)&prev, NULL);
+            }
+
             if (prev) {
                 __sync_sub_and_fetch(counter, prev->dlen);
                 destroy_volatile(prev);
             }
-            if (!inx || !cache->storage.exist ||
-                !cache->storage.exist(key, klen, cache->storage.priv))
+
+            if (inx && cache->storage.exist &&
+                    cache->storage.exist(key, klen, cache->storage.priv) == 1)
             {
-                cache->storage.store(key, klen, value, vlen, cache->storage.priv);
-            } else {
                 return 1;
             }
+
+            cache->storage.store(key, klen, value, vlen, cache->storage.priv);
+
         }
         arc_remove(cache->arc, (const void *)key, klen);
         return 0;
-    } else if (node_len) {
-
+    }
+    else if (node_len)
+    {
         SHC_DEBUG("Forwarding set command %s => %s (%d) to %s",
                 keystr, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
                 (int)vlen, node_name);

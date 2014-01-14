@@ -188,7 +188,7 @@ _shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, 
     else
         rc = send_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
 
-    if (rc != 0) {
+    if (rc == -1) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
         snprintf(c->errstr, sizeof(c->errstr), "Can't set new data on node '%s'", node);
