@@ -47,7 +47,7 @@ static int parse_nodes_string(char *str)
     return 0;
 }
 
-void print_chunk(char *peer,
+int print_chunk(char *peer,
                  void *key,
                  size_t klen,
                  void *data,
@@ -55,6 +55,7 @@ void print_chunk(char *peer,
                  void *priv)
 {
     fwrite(data, 1, len, stdout);
+    return 0;
 }
 
 int main (int argc, char **argv) {
