@@ -475,7 +475,7 @@ typedef int (*shardcache_get_async_callback_t)(void *key,
  *
  * @note This function might return immediately if the value for the
  *       requested key is already being downloaded (but not complete yet)
- *       In such a cahse The callback function will be called by the 
+ *       In such a case The callback function will be called by the 
  *       thread which is actually downloading the data hence the callback
  *       needs to be thread-safe.
  *
