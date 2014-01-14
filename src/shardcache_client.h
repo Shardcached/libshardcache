@@ -54,12 +54,12 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
  * @param dlen   The length of the current chunk of data
  * @param priv   The priv pointer passed to shardcache_client_get_async()
  */
-typedef void (*shardcache_client_get_aync_data_cb)(char *node,
-                                                   void *key,
-                                                   size_t klen,
-                                                   void *data,
-                                                   size_t dlen,
-                                                   void *priv);
+typedef int (*shardcache_client_get_aync_data_cb)(char *node,
+                                                  void *key,
+                                                  size_t klen,
+                                                  void *data,
+                                                  size_t dlen,
+                                                  void *priv);
 
 /**
  * @brief Get the value for a key asynchronously

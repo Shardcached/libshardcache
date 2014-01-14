@@ -2,44 +2,46 @@ The internal communication protocol may described by the following grammar:
 
 MESSAGE      : <MSG> | <SIG_MESSAGE> | <NOOP>
 MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
-NOOP         : <MSG_NOP>
-HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_EVI> |
-               <MSG_GTA> | <MSG_GTO> | <MSG_MGB> | <MSG_MGA> |
-               <MSG_MGE> | <MSG_STS> | <MSG_CHK> | <MSG_IDG> |
-               <MSG_IDR> | <MSG_RES>
-MSG_GET      : 0x01
-MSG_SET      : 0x02
-MSG_DEL      : 0x03
-MSG_EVI      : 0x04
-MSG_MGA      : 0x21
-MSG_MGB      : 0x22
-MSG_MGE      : 0x23
-MSG_CHK      : 0x31
-MSG_STS      : 0x32
-MSG_IDG      : 0x41
-MSG_IDR      : 0x42
-MSG_NOP      : 0x90
-MSG_RES      : 0x99
-RSEP         : 0x80
-NULL_RECORD  : <EOR>
-EOR          : <NULL_BYTE><NULL_BYTE>
-RECORD       : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
-SIZE         : <WORD>
-WORD         : <HIGH_BYTE><LOW_BYTE>
-HIGH_BYTE    : <BYTE>
-LOW_BYTE     : <BYTE>
-DATA         : <BYTE>...<BYTE>
-BYTE         : 0x00 - 0xFF
-NULL_BYTE    : 0x00
-EOM          : <NULL_BYTE>
-KEY          : <RECORD>
-VALUE        : <RECORD>
-TTL          : <RECORD>
-NODES_LIST   : <RECORD>
-INDEX        : <RECORD>
-LONGSIZE     : <HIGH_WORD><LOW_WORD>
-HIGH_WORD    : <WORD>
-LOW_WORD     : <WORD>
+NOOP         : <MSG_NOOP>
+HDR          : <MSG_GET> | <MSG_SET> | <MSG_DELETE> | <MSG_EVICT> |
+               <MSG_GET_ASYNC> | <MSG_GET_OFFSET> | <MSG_GET_INDEX> |
+               <MSG_INDEX_RESPONSE> | <MSG_MIGRATION_BEGIN> |
+               <MSG_MIGRATION_ABORT> | <MSG_MIGRATION_END> | <MSG_RESPONSE>
+MSG_GET              : 0x01
+MSG_SET              : 0x02
+MSG_DELETE           : 0x03
+MSG_EVICT            : 0x04
+MSG_GET_ASYNC        : 0x05
+MSG_GET_OFFSET       : 0x06
+MSG_MIGRATION_ABORT  : 0x21
+MSG_MIGRATION_BEGIN  : 0x22
+MSG_MIGRATION_END    : 0x23
+MSG_CHECK            : 0x31
+MSG_STATS            : 0x32
+MSG_GET_INDEX        : 0x41
+MSG_INDEX_RESPONSE   : 0x42
+MSG_NOOP             : 0x90
+MSG_RESPONSE         : 0x99
+RSEP                 : 0x80
+NULL_RECORD          : <EOR>
+EOR                  : <NULL_BYTE><NULL_BYTE>
+RECORD               : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
+SIZE                 : <WORD>
+WORD                 : <HIGH_BYTE><LOW_BYTE>
+HIGH_BYTE            : <BYTE>
+LOW_BYTE             : <BYTE>
+DATA                 : <BYTE>...<BYTE>
+BYTE                 : 0x00 - 0xFF
+NULL_BYTE            : 0x00
+EOM                  : <NULL_BYTE>
+KEY                  : <RECORD>
+VALUE                : <RECORD>
+TTL                  : <RECORD>
+NODES_LIST           : <RECORD>
+INDEX                : <RECORD>
+LONGSIZE             : <HIGH_WORD><LOW_WORD>
+HIGH_WORD            : <WORD>
+LOW_WORD             : <WORD>
 
 -------------------------------------------------------------------------------
 
@@ -47,22 +49,22 @@ The only supported messages are the following:
 
 
 GET_MESSAGE  : <MSG_GET><KEY><EOM>
-GET_ASYNC    : <MSG_GETA><KEY><EOM>
-GET_OFFSET   : <MSG_GTO><KEY><LONG_SIZE><LONG_SIZE><EOM>
+GET_ASYNC    : <MSG_GET_ASYNC><KEY><EOM>
+GET_OFFSET   : <MSG_GET_OFFSET><KEY><LONG_SIZE><LONG_SIZE><EOM>
 SET_MESSAGE  : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
-DEL_MESSAGE  : <MSG_DEL><KEY><EOM>
-EVI_MESSAGE  : <MSG_EVI><KEY><EOM>
-RES_MESSAGE  : <MSG_RES><RECORD><EOM>
+DEL_MESSAGE  : <MSG_DELETE><KEY><EOM>
+EVI_MESSAGE  : <MSG_EVICT><KEY><EOM>
+RES_MESSAGE  : <MSG_RESPONSE><RECORD><EOM>
 
-MGB_MESSAGE  : <MSG_MGB><NODES_LIST><EOM>
-MGA_MESSAGE  : <MSG_MGA><NULL_RECORD><EOM>
-MGE_MESSAGE  : <MSG_MGE><NULL_RECORD><EOM>
+MGB_MESSAGE  : <MSG_MIGRATION_BEGIN><NODES_LIST><EOM>
+MGA_MESSAGE  : <MSG_MIGRATION_ABORT><NULL_RECORD><EOM>
+MGE_MESSAGE  : <MSG_MIGRATION_END><NULL_RECORD><EOM>
 
-STS_MESSAGE  : <MSG_STS><NULL_RECORD><EOM>
-CHK_MESSAGE  : <MSG_CHK><NULL_RECORD><EOM>
+STS_MESSAGE  : <MSG_STATS><NULL_RECORD><EOM>
+CHK_MESSAGE  : <MSG_CHECK><NULL_RECORD><EOM>
 
-IDG_MESSAGE  : <MSG_IDG><NULL_RECORD><EOM>
-IDR_MESSAGE  : <MSG_IDR><INDEX><EOM>
+IDG_MESSAGE  : <MSG_GET_INDEX><NULL_RECORD><EOM>
+IDR_MESSAGE  : <MSG_INDEX_RESPONSE><INDEX><EOM>
 
 -------------------------------------------------------------------------------
 
@@ -71,10 +73,10 @@ Protocol extensions for signature/crc:
 SIG_MESSAGE  : <SIG_MSG> | <CSIG_MSG>
 SIG_MSG      : <SIG_HDR><MESSAGE><SIG>
 CSIG_MSG     : <CSIG_HDR><HDR><CSIG><CSIG_RECORD>[<RSEP><CSIG><CSIG_RECORD>...]<EOM><CSIG>
-SIG_HDR      : <HDR_SIPHASH>
-CSIG_HDR     : <HDR_CSIPHASH>
-HDR_SIPHASH  : 0xF0
-HDR_CSIPHASH : 0xF1
+SIG_HDR      : <HDR_SIG_SIPHASH>
+CSIG_HDR     : <HDR_CSIG_SIPHASH>
+HDR_SIG_SIPHASH  : 0xF0
+HDR_CSIG_SIPHASH : 0xF1
 CSIG_RECORD  : <SIZE><DATA><SIG>[<SIZE><DATA><SIG>...]<EOR>
 SIG          : <BYTE>[8]
 CSIG         : <BYTE>[8]

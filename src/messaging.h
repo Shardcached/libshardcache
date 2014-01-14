@@ -10,41 +10,44 @@
  * SIG_HDR      : 0xF0
  * CSIG_HDR     : 0xF1
  * MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
- * NOOP         : <MSG_NOP>
- * HDR          : <MSG_GET> | <MSG_SET> | <MSG_DEL> | <MSG_EVI> |
- *                <MSG_MGB> | <MSG_MGA> | <MSG_MGE> | <MSG_RES>
- * MSG_GET      : 0x01
- * MSG_SET      : 0x02
- * MSG_DEL      : 0x03
- * MSG_EVI      : 0x04
- * MSG_OFX      : 0x05
- * MSG_MGA      : 0x21
- * MSG_MGB      : 0x22
- * MSG_MGE      : 0x23
- * MSG_CHK      : 0x31
- * MSG_STS      : 0x32
- * MSG_IDG      : 0x41
- * MSG_IDR      : 0x42
- * MSG_NOP      : 0x90
- * MSG_RES      : 0x99
- * RSEP         : 0x80
- * NULL_RECORD  : <EOR>
- * RECORD       : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
- * SIZE         : <WORD>
- * WORD         : <HIGH_BYTE><LOW_BYTE>
- * EOR          : <NULL_BYTE><NULL_BYTE>
- * HIGH_BYTE    : <BYTE>
- * LOW_BYTE     : <BYTE>
- * DATA         : <BYTE>...<BYTE>
- * BYTE         : 0x00 - 0xFF
- * NULL_BYTE    : 0x00
- * EOM          : <NULL_BYTE>
- * SIG          : <BYTE>[8]
- * KEY          : <RECORD>
- * VALUE        : <RECORD>
- * TTL          : <RECORD>
- * NODES_LIST   : <RECORD>
- * INDEX        : <RECORD>
+ * NOOP         : <MSG_NOOP>
+ * HDR          : <MSG_GET> | <MSG_SET> | <MSG_DELETE> | <MSG_EVICT> |
+ *                <MSG_GET_ASYNC> | <MSG_GET_OFFSET> | <MSG_GET_INDEX> |
+ *                <MSG_INDEX_RESPONSE> | <MSG_MIGRATION_BEGIN> |
+ *                <MSG_MIGRATION_ABORT> | <MSG_MIGRATION_END> | <MSG_RESPONSE>
+ * MSG_GET                 : 0x01
+ * MSG_SET                 : 0x02
+ * MSG_DELETE              : 0x03
+ * MSG_EVICT               : 0x04
+ * MSG_GET_ASYNC           : 0x05
+ * MSG_GET_OFFSET          : 0x06
+ * MSG_MIGRATION_ABORT     : 0x21
+ * MSG_MIGRATION_BEGIN     : 0x22
+ * MSG_MIGRATION_END       : 0x23
+ * MSG_CHECK               : 0x31
+ * MSG_STATS               : 0x32
+ * MSG_GET_INDEX           : 0x41
+ * MSG_INDEX_RESPONSE      : 0x42
+ * MSG_NOOP                : 0x90
+ * MSG_RESPONSE            : 0x99
+ * RSEP                    : 0x80
+ * NULL_RECORD             : <EOR>
+ * RECORD                  : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
+ * SIZE                    : <WORD>
+ * WORD                    : <HIGH_BYTE><LOW_BYTE>
+ * EOR                     : <NULL_BYTE><NULL_BYTE>
+ * HIGH_BYTE               : <BYTE>
+ * LOW_BYTE                : <BYTE>
+ * DATA                    : <BYTE>...<BYTE>
+ * BYTE                    : 0x00 - 0xFF
+ * NULL_BYTE               : 0x00
+ * EOM                     : <NULL_BYTE>
+ * SIG                     : <BYTE>[8]
+ * KEY                     : <RECORD>
+ * VALUE                   : <RECORD>
+ * TTL                     : <RECORD>
+ * NODES_LIST              : <RECORD>
+ * INDEX                   : <RECORD>
  * 
  * The only valid/supported messages are :
  * 
@@ -72,23 +75,37 @@
 #define SHARDCACHE_MSG_MAX_RECORD_LEN (1<<28) // 256MB
 
 typedef enum {
-    SHARDCACHE_HDR_GET      = 0x01,
-    SHARDCACHE_HDR_SET      = 0x02,
-    SHARDCACHE_HDR_DEL      = 0x03,
-    SHARDCACHE_HDR_EVI      = 0x04,
-    SHARDCACHE_HDR_GTA      = 0x05,
-    SHARDCACHE_HDR_GTO      = 0x06,
-    SHARDCACHE_HDR_MGA      = 0x21,
-    SHARDCACHE_HDR_MGB      = 0x22,
-    SHARDCACHE_HDR_MGE      = 0x23,
-    SHARDCACHE_HDR_CHK      = 0x31,
-    SHARDCACHE_HDR_STS      = 0x32,
-    SHARDCACHE_HDR_IDG      = 0x41,
-    SHARDCACHE_HDR_IDR      = 0x42,
-    SHARDCACHE_HDR_NOP      = 0x90,
-    SHARDCACHE_HDR_RES      = 0x99,
-    SHARDCACHE_HDR_SIG_SIP  = 0xF0,
-    SHARDCACHE_HDR_CSIG_SIP = 0xF1
+    // data commands
+    SHC_HDR_GET             = 0x01,
+    SHC_HDR_SET             = 0x02,
+    SHC_HDR_DELETE          = 0x03,
+    SHC_HDR_EVICT           = 0x04,
+    SHC_HDR_GET_ASYNC       = 0x05,
+    SHC_HDR_GET_OFFSET      = 0x06,
+
+    // migration commands
+    SHC_HDR_MIGRATION_ABORT = 0x21,
+    SHC_HDR_MIGRATION_BEGIN = 0x22,
+    SHC_HDR_MIGRATION_END   = 0x23,
+
+    // administrative commands
+    SHC_HDR_CHECK           = 0x31,
+    SHC_HDR_STATS           = 0x32,
+
+    // index-related commands
+    SHC_HDR_GET_INDEX       = 0x41,
+    SHC_HDR_INDEX_RESPONSE  = 0x42,
+
+    // no-op (for ping/health-check)
+    SHC_HDR_NOOP            = 0x90,
+
+    // generic response header
+    SHC_HDR_RESPONSE        = 0x99,
+
+    // signature headers
+    SHC_HDR_SIGNATURE_SIP   = 0xF0,
+    SHC_HDR_CSIGNATURE_SIP  = 0xF1
+
 } shardcache_hdr_t;
 
 #define SHARDCACHE_RSEP 0x80
@@ -170,7 +187,7 @@ shardcache_storage_index_t *index_from_peer(char *peer,
                                             unsigned char sig_hdr,
                                             int fd);
 
-typedef void (*async_read_callback_t)(void *data,
+typedef int (*async_read_callback_t)(void *data,
                                       size_t len,
                                       int  idx,
                                       void *priv);
@@ -198,19 +215,19 @@ int async_read_context_state(async_read_ctx_t *ctx);
 shardcache_hdr_t async_read_context_hdr(async_read_ctx_t *ctx);
 shardcache_hdr_t async_read_context_sig_hdr(async_read_ctx_t *ctx);
 
-void async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx);
+int async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx);
 
 int read_message_async(int fd,
                        char *auth,
                        async_read_callback_t cb,
                        void *priv);
 
-typedef void (*fetch_from_peer_async_cb)(char *peer,
-                                         void *key,
-                                         size_t klen,
-                                         void *data,
-                                         size_t len,
-                                         void *priv);
+typedef int (*fetch_from_peer_async_cb)(char *peer,
+                                        void *key,
+                                        size_t klen,
+                                        void *data,
+                                        size_t len,
+                                        void *priv);
 
 
 int fetch_from_peer_async(char *peer,

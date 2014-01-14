@@ -115,7 +115,7 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
         return 0;
 
     fbuf_t value = FBUF_STATIC_INITIALIZER;
-    int rc = fetch_from_peer(node, (char *)c->auth, SHARDCACHE_HDR_SIG_SIP, key, klen, &value, fd);
+    int rc = fetch_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, &value, fd);
     if (rc == 0) {
         if (data)
             *data = fbuf_data(&value);
@@ -141,7 +141,7 @@ int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *
     if (fd < 0)
         return -1;
 
-    int rc = send_to_peer(node, (char *)c->auth, SHARDCACHE_HDR_SIG_SIP, key, klen, data, dlen, expire, fd);
+    int rc = send_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -160,7 +160,7 @@ int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
     int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return -1;
-    int rc = delete_from_peer(node, (char *)c->auth, SHARDCACHE_HDR_SIG_SIP, key, klen, 1, fd);
+    int rc = delete_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, 1, fd);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -180,7 +180,7 @@ int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
     if (fd < 0)
         return -1;
 
-    int rc = delete_from_peer(node, (char *)c->auth, SHARDCACHE_HDR_SIG_SIP, key, klen, 0, fd);
+    int rc = delete_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, 0, fd);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -225,7 +225,7 @@ int shardcache_client_stats(shardcache_client_t *c, char *node_name, char **buf,
     if (fd < 0)
         return -1;
 
-    int rc = stats_from_peer(node->address, (char *)c->auth, SHARDCACHE_HDR_SIG_SIP, buf, len, fd);
+    int rc = stats_from_peer(node->address, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, buf, len, fd);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -248,7 +248,7 @@ int shardcache_client_check(shardcache_client_t *c, char *node_name) {
     if (fd < 0)
         return -1;
 
-    int rc = check_peer(node->address, (char *)c->auth, SHARDCACHE_HDR_SIG_SIP, fd);
+    int rc = check_peer(node->address, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, fd);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -291,7 +291,7 @@ shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char
     if (fd < 0)
         return NULL;
 
-    shardcache_storage_index_t *index = index_from_peer(node->address, (char *)c->auth, SHARDCACHE_HDR_SIG_SIP, fd);
+    shardcache_storage_index_t *index = index_from_peer(node->address, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, fd);
     if (!index) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -331,7 +331,7 @@ int shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t 
 
         int rc = migrate_peer(c->shards[i].address,
                               (char *)c->auth,
-                              SHARDCACHE_HDR_SIG_SIP,
+                              SHC_HDR_SIGNATURE_SIP,
                               fbuf_data(&mgb_message),
                               fbuf_used(&mgb_message), fd);
         if (rc != 0) {
@@ -362,7 +362,7 @@ int shardcache_client_migration_abort(shardcache_client_t *c)
             return -1;
         }
 
-        int rc =  abort_migrate_peer(c->shards[i].label, (char *)c->auth, SHARDCACHE_HDR_SIG_SIP, fd);
+        int rc =  abort_migrate_peer(c->shards[i].label, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, fd);
 
         if (rc != 0) {
             close(fd);
@@ -391,6 +391,6 @@ int shardcache_client_get_async(shardcache_client_t *c,
     if (fd < 0)
         return -1;
 
-    return fetch_from_peer_async(node, (char *)c->auth, SHARDCACHE_HDR_CSIG_SIP, key, klen, data_cb, priv, fd);
+    return fetch_from_peer_async(node, (char *)c->auth, SHC_HDR_CSIGNATURE_SIP, key, klen, data_cb, priv, fd);
 }
 

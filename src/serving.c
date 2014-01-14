@@ -87,7 +87,7 @@ struct __shardcache_connection_context_s {
     async_read_ctx_t *reader_ctx;
 };
 
-static void
+static int
 async_read_handler(void *data, size_t len, int idx, void *priv)
 {
     shardcache_connection_context_t *ctx =
@@ -104,12 +104,14 @@ async_read_handler(void *data, size_t len, int idx, void *priv)
             if (len == 4) {
             } else {
                 // TODO - Error Messages
+                return -1;
             }
             break;
         default:
             // TODO - Error Messages
-            break;
+            return -1;
     }
+    return 0;
 }
 
 
@@ -176,9 +178,9 @@ write_status(shardcache_connection_context_t *ctx, int rc)
 
     uint16_t initial_offset = fbuf_used(ctx->output);
 
-    unsigned char hdr = SHARDCACHE_HDR_RES;
+    unsigned char hdr = SHC_HDR_RESPONSE;
     fbuf_add_binary(ctx->output, (char *)&hdr, 1);
-    if (ctx->auth && ctx->sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
+    if (ctx->auth && ctx->sig_hdr == SHC_HDR_CSIGNATURE_SIP) {
         uint64_t digest;
         sip_hash_digest_integer(shash, &hdr, 1, &digest);
         fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
@@ -188,7 +190,7 @@ write_status(shardcache_connection_context_t *ctx, int rc)
 
     if (ctx->auth) {
         uint64_t digest;
-        if (ctx->sig_hdr == SHARDCACHE_HDR_CSIG_SIP) {
+        if (ctx->sig_hdr == SHC_HDR_CSIGNATURE_SIP) {
             sip_hash_digest_integer(shash, out, p - &out[0], &digest);
         } else {
             sip_hash_digest_integer(shash,
@@ -374,7 +376,7 @@ process_request(void *priv)
     size_t klen = fbuf_used(&ctx->records[0]);
 
     switch(ctx->hdr) {
-        case SHARDCACHE_HDR_GTO:
+        case SHC_HDR_GET_OFFSET:
         {
             fbuf_t out = FBUF_STATIC_INITIALIZER;
             char buf[1<<16];
@@ -403,7 +405,7 @@ process_request(void *priv)
                 uint32_t remainder_nbo = htonl(remainder);
                 if (build_message((char *)ctx->auth,
                                   ctx->sig_hdr,
-                                  SHARDCACHE_HDR_RES,
+                                  SHC_HDR_RESPONSE,
                                   buf, size,
                                   (void *)&remainder_nbo, sizeof(remainder_nbo),
                                   0, &out) == 0)
@@ -419,9 +421,9 @@ process_request(void *priv)
             fbuf_destroy(&out);
             break;
         }
-        case SHARDCACHE_HDR_GTA:
+        case SHC_HDR_GET_ASYNC:
         {
-            shardcache_hdr_t hdr = SHARDCACHE_HDR_RES;
+            shardcache_hdr_t hdr = SHC_HDR_RESPONSE;
 
             if (ctx->auth) {
                 ctx->fetch_shash = sip_hash_new((char *)ctx->auth, 2, 4);
@@ -448,14 +450,14 @@ process_request(void *priv)
             get_async_data(cache, key, klen, get_async_data_handler, ctx);
             break;
         }
-        case SHARDCACHE_HDR_GET:
+        case SHC_HDR_GET:
         {
             fbuf_t out = FBUF_STATIC_INITIALIZER;
             size_t vlen = 0;
             void *v = shardcache_get(cache, key, klen, &vlen, NULL);
             if (build_message((char *)ctx->auth,
                               ctx->sig_hdr,
-                              SHARDCACHE_HDR_RES,
+                              SHC_HDR_RESPONSE,
                               v, vlen,
                               NULL, 0,
                               0, &out) == 0)
@@ -472,7 +474,7 @@ process_request(void *priv)
                 free(v);
             break;
         }
-        case SHARDCACHE_HDR_SET:
+        case SHC_HDR_SET:
         {
 
             if (fbuf_used(&ctx->records[2]) == 4) {
@@ -493,19 +495,19 @@ process_request(void *priv)
             write_status(ctx, rc);
             break;
         }
-        case SHARDCACHE_HDR_DEL:
+        case SHC_HDR_DELETE:
         {
             rc = shardcache_del(cache, key, klen);
             write_status(ctx, rc);
             break;
         }
-        case SHARDCACHE_HDR_EVI:
+        case SHC_HDR_EVICT:
         {
             shardcache_evict(cache, key, klen);
             write_status(ctx, 0);
             break;
         }
-        case SHARDCACHE_HDR_MGB:
+        case SHC_HDR_MIGRATION_BEGIN:
         {
             int num_shards = 0;
             shardcache_node_t *nodes = NULL;
@@ -531,25 +533,25 @@ process_request(void *priv)
             write_status(ctx, 0);
             break;
         }
-        case SHARDCACHE_HDR_MGA:
+        case SHC_HDR_MIGRATION_ABORT:
         {
             rc = shardcache_migration_abort(cache);
             write_status(ctx, rc);
             break;
         }
-        case SHARDCACHE_HDR_MGE:
+        case SHC_HDR_MIGRATION_END:
         {
             rc = shardcache_migration_end(cache);
             write_status(ctx, rc);
             break;
         }
-        case SHARDCACHE_HDR_CHK:
+        case SHC_HDR_CHECK:
         {
             // TODO - HEALTH CHECK
             write_status(ctx, 0);
             break;
         }
-        case SHARDCACHE_HDR_STS:
+        case SHC_HDR_STATS:
         {
             fbuf_t buf = FBUF_STATIC_INITIALIZER;
             shardcache_counter_t *counters = NULL;
@@ -578,7 +580,7 @@ process_request(void *priv)
                 fbuf_t out = FBUF_STATIC_INITIALIZER;
                 if (build_message((char *)ctx->auth,
                                   ctx->sig_hdr,
-                                  SHARDCACHE_HDR_RES,
+                                  SHC_HDR_RESPONSE,
                                   fbuf_data(&buf), fbuf_used(&buf),
                                   NULL, 0,
                                   0, &out) == 0)
@@ -594,7 +596,7 @@ process_request(void *priv)
             fbuf_destroy(&buf);
             break;
         }
-        case SHARDCACHE_HDR_IDG:
+        case SHC_HDR_GET_INDEX:
         {
             fbuf_t buf = FBUF_STATIC_INITIALIZER;
             fbuf_t out = FBUF_STATIC_INITIALIZER;
@@ -621,7 +623,7 @@ process_request(void *priv)
             // chunkize the data and build an actual message
             if (build_message((char *)ctx->auth,
                               ctx->sig_hdr,
-                              SHARDCACHE_HDR_IDR,
+                              SHC_HDR_INDEX_RESPONSE,
                               fbuf_data(&buf), fbuf_used(&buf),
                               NULL, 0,
                               0, &out) == 0)

@@ -67,7 +67,7 @@ int connections_pool_get(connections_pool_t *cc, char *addr)
 
     int *fd = queue_pop_left(connection_queue);
     while (fd) {
-        char noop = SHARDCACHE_HDR_NOP;
+        char noop = SHC_HDR_NOOP;
         if (write(*fd, &noop, 1) == 1) {
             int rfd = *fd;
             free(fd);
