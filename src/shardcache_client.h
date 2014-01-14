@@ -80,7 +80,7 @@ typedef void (*shardcache_client_get_aync_data_cb)(char *peer,
 int shardcache_client_get_async(shardcache_client_t *c,
                                 void *key,
                                 size_t klen,
-                                shardcache_client_get_aync_data_cb data_cb,
+                                shardcache_client_get_aync_data_cb cb,
                                 void *priv);
 
 /**
