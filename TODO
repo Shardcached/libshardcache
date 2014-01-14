@@ -1,11 +1,7 @@
- * use asynchronous i/o when sending messages to peers (all functions in messaging.c)
-
- * make asynchronous versions of shardcache_get() and shardcache_set()
-   which provide/send data in chunks while available by calling some callback
-   passed as argument
-
  * support set-if-not-exists command
+
  * support exists command
+
  * support touch command, which would load the item in the cache (without returning it)
    if the keys is not already in the cache, otherwise it would just update the last-loaded timestamp
 
@@ -30,3 +26,7 @@
    key is requested , so further threads will lock on that same object). If this won't be the case anymore
    we still need a way to serialize access to the storage for the same key , while still allowing parallel 
    access to different keys
+
+ * assign a thread (or a pool of threads) to handle the asynchronous i/o and act as a 
+   data-provider/communication-manager for the shardcache node. So that the serving threads
+   would be never blocked when communicating with other peers.

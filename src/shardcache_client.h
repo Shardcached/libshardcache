@@ -44,13 +44,39 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_
  */
 size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data);
 
+/**
+ * @brief Callback passed to shardcache_client_get_async()
+ *        to retrieve the data asynchronously
+ * @param key         A valid pointer to the key
+ * @param klen        The length of the key
+ * @param data        The pointer to the chunk of data
+ * @param dlen        The length of the current chunk of data
+ * @param priv        The priv pointer passed to shardcache_client_get_async()
+ */
 typedef void (*shardcache_client_get_aync_data_cb)(char *peer,
                                                    void *key,
                                                    size_t klen,
                                                    void *data,
-                                                   size_t len,
+                                                   size_t dlen,
                                                    void *priv);
 
+/**
+ * @brief Get the value for a key asynchronously
+ * @param c       A valid pointer to a shardcache_client_t structure
+ * @param key     A valid pointer to the key
+ * @param klen    The length of the key
+ * @param cb      The shardcache_client_get_aync_data_cb which will be
+ *                called for each received chunk
+ * @param priv    A pointer which will be passed to the
+ *                shardcache_client_get_aync_data_cb at each call
+ *
+ * @return 0 on success, -1 otherwise
+ *
+ * @note This function will block and call the provided callback as soon 
+ *       as a chunk of data is read from the node.
+ *       The control will be returned to the caller when there is no
+ *       more data to read or an error occurred
+ */
 int shardcache_client_get_async(shardcache_client_t *c,
                                 void *key,
                                 size_t klen,

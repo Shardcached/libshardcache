@@ -448,7 +448,10 @@ size_t shardcache_get_offset(shardcache_t *cache,
  *       has been completely loaded into the cache.
  *       The callback will not be called anymore once this parameter has been
  *       provided
- * @param priv A pointer which will be passed to the callback at each call
+ * @param priv        The priv pointer passed to shardcache_get_async()
+ * @return 0 if no errors occurred and more data can be provided safely
+ *         -1 if an error occurs and we don't want the callback to be called
+ *         again (which could eventually abort the fetch operation)
  */
 typedef int (*shardcache_get_async_callback_t)(void *key,
                                                size_t klen,
