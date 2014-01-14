@@ -217,6 +217,8 @@ static int get_async_data_handler(void *key,
         // error
         __sync_fetch_and_add(&ctx->fetch_error, 1);
         __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+        if (ctx->fetch_shash)
+            sip_hash_free(ctx->fetch_shash);
         return -1;
     }
     static int max_chunk_size = (1<<16)-1;
@@ -251,6 +253,7 @@ static int get_async_data_handler(void *key,
             uint64_t digest;
             if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
                 SHC_ERROR("Can't compute the siphash digest!\n");
+                sip_hash_free(ctx->fetch_shash);
                 pthread_mutex_unlock(&ctx->output_lock);
                 __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
                 __sync_fetch_and_add(&ctx->fetch_error, 1);
@@ -289,6 +292,7 @@ static int get_async_data_handler(void *key,
                     uint64_t digest;
                     if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
                         SHC_ERROR("Can't compute the siphash digest!\n");
+                        sip_hash_free(ctx->fetch_shash);
                         pthread_mutex_unlock(&ctx->output_lock);
                         __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
                         __sync_fetch_and_add(&ctx->fetch_error, 1);
@@ -306,6 +310,7 @@ static int get_async_data_handler(void *key,
             sip_hash_update(ctx->fetch_shash, &eom, 1);
             if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
                 SHC_ERROR("Can't compute the siphash digest!\n");
+                sip_hash_free(ctx->fetch_shash);
                 pthread_mutex_unlock(&ctx->output_lock);
                 __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
                 __sync_fetch_and_add(&ctx->fetch_error, 1);
@@ -314,6 +319,9 @@ static int get_async_data_handler(void *key,
             fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
         }
 
+        if (ctx->fetch_shash)
+            sip_hash_free(ctx->fetch_shash);
+        __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
         pthread_mutex_unlock(&ctx->output_lock);
         __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
     }
@@ -342,6 +350,8 @@ static void get_async_data(shardcache_t *cache,
                 pthread_mutex_unlock(&ctx->output_lock);
                 __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
                 __sync_fetch_and_add(&ctx->fetch_error, 1);
+                if (ctx->fetch_shash)
+                    sip_hash_free(ctx->fetch_shash);
                 return;
             }
             fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
@@ -350,7 +360,6 @@ static void get_async_data(shardcache_t *cache,
  
         pthread_mutex_unlock(&ctx->output_lock);
     }
-    __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
 }
 
 static void *
@@ -437,8 +446,6 @@ process_request(void *priv)
 
             __sync_bool_compare_and_swap(&ctx->fetching, 0, 1);
             get_async_data(cache, key, klen, get_async_data_handler, ctx);
-            if (ctx->fetch_shash)
-                sip_hash_free(ctx->fetch_shash);
             break;
         }
         case SHARDCACHE_HDR_GET:
