@@ -24,7 +24,10 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 	shardcache_client_evict
 	shardcache_client_get
 	shardcache_client_get_async
+	shardcache_client_touch
+	shardcache_client_exists
 	shardcache_client_set
+	shardcache_client_add
         shardcache_client_check
         shardcache_client_index
         shardcache_client_stats
@@ -141,6 +144,46 @@ sub set {
     my ($self, $key, $value, $expire) = @_;
     $expire = 0 unless defined $expire;
     my $ret = shardcache_client_set($self->{_client}, $key, $value, $expire);
+    if ($ret == 0) {
+        undef($self->{_errstr});
+        $self->{_errno} = 0;
+    } else {
+        $self->{_errstr} = shardcache_client_errstr($self->{_client});
+        $self->{_errno} = shardcache_client_errno($self->{_client});
+    }
+    return ($ret == 0);
+}
+
+sub add {
+    my ($self, $key, $value, $expire) = @_;
+    $expire = 0 unless defined $expire;
+    my $ret = shardcache_client_add($self->{_client}, $key, $value, $expire);
+    if ($ret == 0) {
+        undef($self->{_errstr});
+        $self->{_errno} = 0;
+    } else {
+        $self->{_errstr} = shardcache_client_errstr($self->{_client});
+        $self->{_errno} = shardcache_client_errno($self->{_client});
+    }
+    return ($ret == 0);
+}
+
+sub exists {
+    my ($self, $key) = @_;
+    my $ret = shardcache_client_exists($self->{_client}, $key);
+    if ($ret == 1 || $ret == 0) {
+        undef($self->{_errstr});
+        $self->{_errno} = 0;
+    } else {
+        $self->{_errstr} = shardcache_client_errstr($self->{_client});
+        $self->{_errno} = shardcache_client_errno($self->{_client});
+    }
+    return $ret;
+}
+
+sub touch {
+    my ($self, $key) = @_;
+    my $ret = shardcache_client_touch($self->{_client}, $key);
     if ($ret == 0) {
         undef($self->{_errstr});
         $self->{_errno} = 0;
@@ -352,9 +395,26 @@ None by default.
     anymore.
     Returning a TRUE value will make it go ahead until completed.
 
+=item * exists ( $key )
+
+    Check existance of the key on the node responsible for it
+    Returns 1 if the key exists, 0 if doesn't exist, -1 on errors
+
+=item * touch ( $key )
+
+    Fore loading of a key into the cache if not loaded already,
+    otherwise updates the loaded-timestamp for the cached key
+
+    Returns 0 on succes, -1 on errors
+
 =item * set ( $key, $value, [ $expire ] )
 
     Set a new value for $key in the underlying storage
+
+=item * add ( $key, $value, [ $expire ] )
+
+    Set a new value for $key in the underlying storage if it doesn't exists
+    Returns 0 if successfully stored, 1 if already existsing, -1 in case of errors
 
 =item * del ( $key )
 
@@ -380,7 +440,10 @@ None by default.
   int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
   size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data)
   int shardcache_get_async(shardcache_t *cache, void *key, size_t klen, shardcache_get_async_callback_t cb, void *priv);
+  int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
+  int shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen)
   int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
+  int shardcache_client_add(shardcache_client_t *c, void *key, size_t klen)
   int shardcache_client_stats(shardcache_client_t *c, char *peer, char **buf, size_t *len);
   int shardcache_client_check(shardcache_client_t *c, char *peer);
   shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *peer);

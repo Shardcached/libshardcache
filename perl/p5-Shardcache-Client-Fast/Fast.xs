@@ -191,6 +191,29 @@ shardcache_client_get_async(c, key, coderef, priv=&PL_sv_undef)
     OUTPUT:
         RETVAL
 
+int
+shardcache_client_exists(c, key)
+	shardcache_client_t *	c
+	SV *	key
+    CODE:
+	STRLEN	klen = 0;
+        char *k = SvPVbyte(key, klen);
+        RETVAL = shardcache_client_exists(c, k, klen);
+    OUTPUT:
+        RETVAL
+
+int
+shardcache_client_touch(c, key)
+	shardcache_client_t *	c
+	SV *	key
+    CODE:
+	STRLEN	klen = 0;
+        char *k = SvPVbyte(key, klen);
+        RETVAL = shardcache_client_touch(c, k, klen);
+    OUTPUT:
+        RETVAL
+
+
 
 int
 shardcache_client_set(c, key, data, expire)
@@ -204,6 +227,21 @@ shardcache_client_set(c, key, data, expire)
 	STRLEN	dlen = 0;
         char *d = SvPVbyte(data, dlen);
         RETVAL = (shardcache_client_set(c, k, klen, d, dlen, expire) == 0);
+    OUTPUT:
+        RETVAL
+
+int
+shardcache_client_add(c, key, data, expire)
+	shardcache_client_t *	c
+	SV *	key
+	SV *	data
+	uint32_t	expire
+    CODE:
+	STRLEN	klen = 0;
+        char *k = SvPVbyte(key, klen);
+	STRLEN	dlen = 0;
+        char *d = SvPVbyte(data, dlen);
+        RETVAL = (shardcache_client_add(c, k, klen, d, dlen, expire) == 0);
     OUTPUT:
         RETVAL
 
