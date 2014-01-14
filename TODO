@@ -26,3 +26,6 @@
  * assign a thread (or a pool of threads) to handle the asynchronous i/o and act as a 
    data-provider/communication-manager for the shardcache node. So that the serving threads
    would be never blocked when communicating with other peers.
+
+ * make fetch_from_peer_async()/read_message_async() able to run an existing iomux so that
+   serving.c can keep running its connections while a big data is being fetched from a peer node
