@@ -9,13 +9,16 @@
 void usage(char *prgname) {
     printf("Usage: %s <Command> <Key>\n"
            "   Commands: \n"
-           "        get   <Key>\n"
-           "        set   <Key> [ <Expire> ] (gets value on stdin)\n"
-           "        del   <Key>\n"
-           "        evict <Key>\n"
-           "        index [ <node> ]\n"
-           "        stats [ <node> ]\n"
-           "        check [ <node> ]\n\n", prgname);
+           "        get        <Key>\n"
+           "        get_async <Key>\n"
+           "        set       <Key> [ <Expire> ] (gets value on stdin)\n"
+           "        add       <Key> [ <Expire> ] (gets value on stdin)\n"
+           "        exists    <Key>\n"
+           "        del       <Key>\n"
+           "        evict     <Key>\n"
+           "        index     [ <node> ]\n"
+           "        stats     [ <node> ]\n"
+           "        check     [ <node> ]\n\n", prgname);
     exit(-1);
 }
 
@@ -91,7 +94,9 @@ int main (int argc, char **argv) {
         }
     } else if (strcasecmp(cmd, "geta") == 0) {
         rc = shardcache_client_get_async(client, argv[2], strlen(argv[2]), print_chunk, NULL); 
-    } else if (strcasecmp(cmd, "set") == 0) {
+    } else if (strcasecmp(cmd, "set") == 0 ||
+               strcasecmp(cmd, "add") == 0)
+    {
         char *in = NULL;
         size_t s = 0;
         char buf[1024];
@@ -102,11 +107,33 @@ int main (int argc, char **argv) {
             s += rb;
             rb = fread(buf, 1, 1024, stdin);
         }
-        rc = shardcache_client_set(client, argv[2], strlen(argv[2]), in, s, argc > 3 ? strtol(argv[3], NULL, 10) : 0);
-    } else if (strcasecmp(cmd, "del") == 0) {
+        if (strcasecmp(cmd, "set") == 0) {
+            rc = shardcache_client_set(client, argv[2], strlen(argv[2]), in, s, argc > 3 ? strtol(argv[3], NULL, 10) : 0);
+        } else {
+            rc = shardcache_client_add(client, argv[2], strlen(argv[2]), in, s, argc > 3 ? strtol(argv[3], NULL, 10) : 0);
+            if (rc == 1)
+                printf("Already exists!\n");
+        }
+    } else if (strcasecmp(cmd, "del") == 0 || strcasecmp(cmd, "delete") == 0) {
         rc = shardcache_client_del(client, argv[2], strlen(argv[2]));
+        if (rc == 0)
+            printf("OK\n");
+        else
+            printf("ERR\n");
     } else if (strcasecmp(cmd, "evict") == 0) {
         rc = shardcache_client_evict(client, argv[2], strlen(argv[2]));
+        if (rc == 0)
+            printf("OK\n");
+        else
+            printf("ERR\n");
+    } else if (strcasecmp(cmd, "exists") == 0) {
+        rc = shardcache_client_exists(client, argv[2], strlen(argv[2]));
+        if (rc == 0)
+            printf("NO\n");
+        else if (rc == 1)
+            printf("YES\n");
+        else
+            printf("ERR\n");
     } else if (strcasecmp(cmd, "stats") == 0) {
         int found = 0;
         char *selected_node = NULL;
@@ -183,7 +210,8 @@ int main (int argc, char **argv) {
     }
 
     if (rc != 0 || shardcache_client_errno(client) != SHARDCACHE_CLIENT_OK) {
-        fprintf(stderr, "EKKOMI %d  -- %d %s\n", rc, shardcache_client_errno(client), shardcache_client_errstr(client));
+        fprintf(stderr, "Error %d: %s\n",
+                shardcache_client_errno(client), shardcache_client_errstr(client));
     }
 
     shardcache_client_destroy(client);
