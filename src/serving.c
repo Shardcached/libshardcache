@@ -150,21 +150,33 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
 }
 
 static void
-write_status(shardcache_connection_context_t *ctx, int rc)
+write_status(shardcache_connection_context_t *ctx, int rc, int is_boolean)
 {
     char out[20];
 
     out[0] = 0;
 
     char *p = &out[2];
-    if (rc != 0) {
+    if (rc == -1) {
         out[1] = 3;
         strncpy(p, "ERR", 3);
         p += 3;
     } else {
-        out[1] = 2;
-        strncpy(p, "OK", 2);
-        p += 2;
+        if (is_boolean) {
+            if (rc == 1) {
+                out[1] = 3;
+                strncpy(p, "YES", 3);
+                p += 3;
+            } else {
+                out[1] = 2;
+                strncpy(p, "NO", 2);
+                p += 2;
+            }
+        } else {
+            out[1] = 2;
+            strncpy(p, "OK", 2);
+            p += 2;
+        }
     }
     memset(p, 0, 3);
     p += 3;
@@ -492,7 +504,7 @@ process_request(void *priv)
                 rc = shardcache_set(cache, key, klen,
                         fbuf_data(&ctx->records[1]), fbuf_used(&ctx->records[1]));
             }
-            write_status(ctx, rc);
+            write_status(ctx, rc, 0);
             break;
         }
         case SHC_HDR_ADD:
@@ -512,25 +524,25 @@ process_request(void *priv)
                 rc = shardcache_add(cache, key, klen,
                         fbuf_data(&ctx->records[1]), fbuf_used(&ctx->records[1]));
             }
-            write_status(ctx, rc);
+            write_status(ctx, rc, 0);
             break;
         }
         case SHC_HDR_EXISTS:
         {
             rc = shardcache_exists(cache, key, klen);
-            write_status(ctx, rc);
+            write_status(ctx, rc, 1);
             break;
         }
         case SHC_HDR_DELETE:
         {
             rc = shardcache_del(cache, key, klen);
-            write_status(ctx, rc);
+            write_status(ctx, rc, 0);
             break;
         }
         case SHC_HDR_EVICT:
         {
             shardcache_evict(cache, key, klen);
-            write_status(ctx, 0);
+            write_status(ctx, 0, 0);
             break;
         }
         case SHC_HDR_MIGRATION_BEGIN:
@@ -556,25 +568,25 @@ process_request(void *priv)
                 // TODO - Error messages
             }
             free(nodes);
-            write_status(ctx, 0);
+            write_status(ctx, 0, 0);
             break;
         }
         case SHC_HDR_MIGRATION_ABORT:
         {
             rc = shardcache_migration_abort(cache);
-            write_status(ctx, rc);
+            write_status(ctx, rc, 0);
             break;
         }
         case SHC_HDR_MIGRATION_END:
         {
             rc = shardcache_migration_end(cache);
-            write_status(ctx, rc);
+            write_status(ctx, rc, 0);
             break;
         }
         case SHC_HDR_CHECK:
         {
             // TODO - HEALTH CHECK
-            write_status(ctx, 0);
+            write_status(ctx, 0, 0);
             break;
         }
         case SHC_HDR_STATS:
@@ -666,7 +678,7 @@ process_request(void *priv)
         }
         default:
             fprintf(stderr, "Unsupported command: 0x%02x\n", (char)ctx->hdr);
-            write_status(ctx, -1);
+            write_status(ctx, -1, 0);
             break;
     }
 
