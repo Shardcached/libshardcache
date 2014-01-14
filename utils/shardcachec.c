@@ -92,7 +92,8 @@ int main (int argc, char **argv) {
         if (len && out) {
             print_chunk(NULL, NULL, 0, out, len, NULL);
         }
-    } else if (strcasecmp(cmd, "geta") == 0) {
+    } else if (strcasecmp(cmd, "geta") == 0 || strcasecmp(cmd, "get_async") == 0)
+    {
         rc = shardcache_client_get_async(client, argv[2], strlen(argv[2]), print_chunk, NULL); 
     } else if (strcasecmp(cmd, "set") == 0 ||
                strcasecmp(cmd, "add") == 0)
@@ -128,12 +129,14 @@ int main (int argc, char **argv) {
             printf("ERR\n");
     } else if (strcasecmp(cmd, "exists") == 0) {
         rc = shardcache_client_exists(client, argv[2], strlen(argv[2]));
-        if (rc == 0)
+        if (rc == 0) {
             printf("NO\n");
-        else if (rc == 1)
+        } else if (rc == 1) {
             printf("YES\n");
-        else
+            rc = 0;
+        } else {
             printf("ERR\n");
+        }
     } else if (strcasecmp(cmd, "stats") == 0) {
         int found = 0;
         char *selected_node = NULL;
