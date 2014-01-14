@@ -47,13 +47,14 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
 /**
  * @brief Callback passed to shardcache_client_get_async()
  *        to retrieve the data asynchronously
- * @param key         A valid pointer to the key
- * @param klen        The length of the key
- * @param data        The pointer to the chunk of data
- * @param dlen        The length of the current chunk of data
- * @param priv        The priv pointer passed to shardcache_client_get_async()
+ * @param node   The node from which we are receiving the new chunk of data
+ * @param key    A valid pointer to the key
+ * @param klen   The length of the key
+ * @param data   The pointer to the chunk of data
+ * @param dlen   The length of the current chunk of data
+ * @param priv   The priv pointer passed to shardcache_client_get_async()
  */
-typedef void (*shardcache_client_get_aync_data_cb)(char *peer,
+typedef void (*shardcache_client_get_aync_data_cb)(char *node,
                                                    void *key,
                                                    size_t klen,
                                                    void *data,
