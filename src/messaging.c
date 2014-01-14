@@ -737,7 +737,7 @@ int build_message(char *auth,
         fbuf_add_binary(out, (char *)&eor, sizeof(eor));
     }
 
-    if (hdr == SHC_HDR_SET) {
+    if (hdr == SHC_HDR_SET || hdr == SHC_HDR_ADD) {
         if (v && vlen) {
             fbuf_add_binary(out, &sep, 1);
             if (auth && sig_hdr == SHC_HDR_CSIGNATURE_SIP) {
