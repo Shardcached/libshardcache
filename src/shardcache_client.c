@@ -164,9 +164,9 @@ _shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, 
 
     int rc = -1;
     if (inx)
-        add_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
+        rc = add_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
     else
-        send_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
+        rc = send_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
 
     if (rc != 0) {
         close(fd);
