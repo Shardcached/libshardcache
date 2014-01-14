@@ -251,7 +251,7 @@ read_async_input_data(iomux_t *iomux, int fd, void *data, int len, void *priv)
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
     async_read_context_input_data(data, len, ctx);
-    if (ctx->state == SHC_STATE_READING_DONE) {
+    if (ctx->state == SHC_STATE_READING_DONE || ctx->state == SHC_STATE_READING_NONE) {
         iomux_close(iomux, fd);
     } else if (ctx->state == SHC_STATE_READING_ERR) {
         struct sockaddr_in saddr;
@@ -268,6 +268,7 @@ read_async_input_data(iomux_t *iomux, int fd, void *data, int len, void *priv)
 
         fprintf(stderr, "Unauthorized request from %s\n",
                 inet_ntoa(saddr.sin_addr));
+        iomux_close(iomux, fd);
     }
 }
 
@@ -302,7 +303,7 @@ async_read_context_destroy(async_read_ctx_t *ctx)
 int
 read_message_async(int fd, char *auth, async_read_callback_t cb, void *priv)
 {
-    struct timeval iomux_timeout = { 0, 20000 };
+    struct timeval iomux_timeout = { 0, 20000 }; // 20ms
     async_read_ctx_t *ctx = async_read_context_create(auth, cb, priv);
 
     iomux_callbacks_t cbs = {
@@ -317,7 +318,12 @@ read_message_async(int fd, char *auth, async_read_callback_t cb, void *priv)
     }
 
     iomux_add(iomux, fd, &cbs);
-    iomux_loop(iomux, &iomux_timeout);
+    for (;;) {
+        iomux_run(iomux, &iomux_timeout);
+        if (iomux_isempty(iomux))
+            break;
+    }
+
     iomux_destroy(iomux);
 
     char state = ctx->state;
@@ -368,7 +374,7 @@ fetch_from_peer_async(char *peer,
     }
 
     if (fd >= 0) {
-        rc = write_message(fd, auth, sig_hdr, SHARDCACHE_HDR_GET, key, klen, NULL, 0, 0);
+        rc = write_message(fd, auth, sig_hdr, SHARDCACHE_HDR_GTA, key, klen, NULL, 0, 0);
         if (rc == 0) {
             fetch_from_peer_helper_arg_t arg = {
                 .peer = peer,
@@ -458,6 +464,8 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 hdr != SHARDCACHE_HDR_SET &&
                 hdr != SHARDCACHE_HDR_DEL &&
                 hdr != SHARDCACHE_HDR_EVI &&
+                hdr != SHARDCACHE_HDR_GTA &&
+                hdr != SHARDCACHE_HDR_GTO &&
                 hdr != SHARDCACHE_HDR_MGB &&
                 hdr != SHARDCACHE_HDR_MGA &&
                 hdr != SHARDCACHE_HDR_MGE &&
