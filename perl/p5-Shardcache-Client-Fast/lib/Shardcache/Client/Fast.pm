@@ -23,6 +23,7 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 	shardcache_client_destroy
 	shardcache_client_evict
 	shardcache_client_get
+	shardcache_client_get_async
 	shardcache_client_set
         shardcache_client_check
         shardcache_client_index
@@ -131,6 +132,11 @@ sub get {
     return $val;
 }
 
+sub get_async {
+    my ($self, $key, $cb, $priv) = @_;
+    return shardcache_client_get_async($self->{_client}, $key, $cb, $priv);
+}
+
 sub set {
     my ($self, $key, $value, $expire) = @_;
     $expire = 0 unless defined $expire;
@@ -236,7 +242,7 @@ Shardcache::Client::Fast - Perl extension for the client part of libshardcache
 =head1 SYNOPSIS
 
   use Shardcache::Client::Fast;
-  @hosts = [ [ "peer1", "localhost:4444" ], [ "peer2", "localhost:4445" ], [ "peer3", "localhost:4446" ] ];
+  @hosts = ("peer1:localhost:4444", "peer2:localhost:4445", "peer3:localhost:4446" );
   $secret = "some_secret";
   $c = Shardcache::Client::Fast->new(\@hosts, $secret);
 
@@ -328,6 +334,24 @@ None by default.
     otherwise a request to the responsible node in the shardcache 'cloud' will be done to obtain the value
     (and the local cache will be populated)
 
+=item * get_async ( $key, $coderef, [ $priv ] )
+
+    Get the value for $key asynchronously.
+
+    This function will block and call the provided callback as soon 
+    as a chunk of data is read from the node.
+    The control will be returned to the caller when there is no
+    more data to read or an error occurred
+
+    $coderef must be a reference to a perl SUB which will get as arguments
+    the tuple : ($node, $key, $data, $priv)
+    $priv will be the same scalar value passed to get_async() as last argument
+
+    If the $coderef, called at each chunk of data being received, returns a 
+    NON-TRUE value the fetch will be interrupted and the coderef won't be called
+    anymore.
+    Returning a TRUE value will make it go ahead until completed.
+
 =item * set ( $key, $value, [ $expire ] )
 
     Set a new value for $key in the underlying storage
@@ -355,6 +379,7 @@ None by default.
   void shardcache_client_destroy(shardcache_client_t *c)
   int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
   size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data)
+  int shardcache_get_async(shardcache_t *cache, void *key, size_t klen, shardcache_get_async_callback_t cb, void *priv);
   int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
   int shardcache_client_stats(shardcache_client_t *c, char *peer, char **buf, size_t *len);
   int shardcache_client_check(shardcache_client_t *c, char *peer);
