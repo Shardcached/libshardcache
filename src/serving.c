@@ -495,6 +495,32 @@ process_request(void *priv)
             write_status(ctx, rc);
             break;
         }
+        case SHC_HDR_ADD:
+        {
+            if (fbuf_used(&ctx->records[2]) == 4) {
+                uint32_t expire;
+                memcpy(&expire, fbuf_data(&ctx->records[2]), sizeof(uint32_t));
+                expire = ntohl(expire);
+                rc = shardcache_add_volatile(cache,
+                                             key,
+                                             klen,
+                                             fbuf_data(&ctx->records[1]),
+                                             fbuf_used(&ctx->records[1]),
+                                             expire);
+
+            } else {
+                rc = shardcache_add(cache, key, klen,
+                        fbuf_data(&ctx->records[1]), fbuf_used(&ctx->records[1]));
+            }
+            write_status(ctx, rc);
+            break;
+        }
+        case SHC_HDR_EXISTS:
+        {
+            rc = shardcache_exists(cache, key, klen);
+            write_status(ctx, rc);
+            break;
+        }
         case SHC_HDR_DELETE:
         {
             rc = shardcache_del(cache, key, klen);

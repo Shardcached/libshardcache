@@ -569,7 +569,7 @@ static void *evictor(void *priv)
                 char *peer = cache->shards[i].label;
                 if (strcmp(peer, cache->me) != 0) {
                     int fd = shardcache_get_connection_for_peer(cache, cache->shards[i].address);
-                    delete_from_peer(cache->shards[i].address, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, 0, fd);
+                    evict_from_peer(cache->shards[i].address, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd);
                     shardcache_release_connection_for_peer(cache, cache->shards[i].address, fd);
                 }
             }
@@ -1139,13 +1139,55 @@ shardcache_head(shardcache_t *cache,
     return remainder + rlen;
 }
 
+int
+shardcache_exists(shardcache_t *cache, void *key, size_t klen)
+{
+    if (!key || !klen)
+        return -1;
+
+    // if we are not the owner try propagating the command to the responsible peer
+    char node_name[1024];
+    size_t node_len = sizeof(node_name);
+    memset(node_name, 0, node_len);
+
+    int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+    if (is_mine == -1)
+        is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
+
+    if (is_mine == 1)
+    {
+        if (!ht_exists(cache->volatile_storage, key, klen)) {
+            if (cache->use_persistent_storage && cache->storage.exist) {
+                if (!cache->storage.exist(key, klen, cache->storage.priv))
+                    return 0;
+            } else {
+                return -1;
+            }
+        }
+        return 1;
+    } else {
+        char *peer = shardcache_get_node_address(cache, (char *)node_name);
+        if (!peer) {
+            SHC_ERROR("Can't find address for node %s\n", peer);
+            return -1;
+        }
+        int fd = shardcache_get_connection_for_peer(cache, peer);
+        int rc = exists_on_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
+        shardcache_release_connection_for_peer(cache, peer, fd);
+        return rc;
+    }
+
+    return -1;
+}
+
 static int
 _shardcache_set_internal(shardcache_t *cache,
                          void *key,
                          size_t klen,
                          void *value,
                          size_t vlen,
-                         time_t expire)
+                         time_t expire,
+                         int inx)
 {
     // if we are not the owner try propagating the command to the responsible peer
     
@@ -1186,8 +1228,15 @@ _shardcache_set_internal(shardcache_t *cache,
             SHC_DEBUG("Setting volatile item %s to expire %d (now: %d)", 
                 keystr, obj->expire, (int)time(NULL));
 
-            ht_get_and_set(cache->volatile_storage, key, klen,
-                obj, sizeof(volatile_object_t), (void **)&prev, NULL);
+            if (!inx) {
+                ht_get_and_set(cache->volatile_storage, key, klen,
+                    obj, sizeof(volatile_object_t), (void **)&prev, NULL);
+            } else if(!ht_exists(cache->volatile_storage, key, klen)) {
+                ht_set(cache->volatile_storage, key, klen,
+                        obj, sizeof(volatile_object_t));
+            } else {
+                return 1;
+            }
 
             if (prev) {
                 if (vlen > prev->dlen) {
@@ -1214,7 +1263,13 @@ _shardcache_set_internal(shardcache_t *cache,
                 __sync_sub_and_fetch(counter, prev->dlen);
                 destroy_volatile(prev);
             }
-            cache->storage.store(key, klen, value, vlen, cache->storage.priv);
+            if (!inx || !cache->storage.exist ||
+                !cache->storage.exist(key, klen, cache->storage.priv))
+            {
+                cache->storage.store(key, klen, value, vlen, cache->storage.priv);
+            } else {
+                return 1;
+            }
         }
         arc_remove(cache->arc, (const void *)key, klen);
         return 0;
@@ -1238,7 +1293,6 @@ _shardcache_set_internal(shardcache_t *cache,
     }
 
     return -1;
-
 }
 
 int shardcache_set_volatile(shardcache_t *cache,
@@ -1248,7 +1302,17 @@ int shardcache_set_volatile(shardcache_t *cache,
                             size_t vlen,
                             time_t expire)
 {
-    return _shardcache_set_internal(cache, key, klen, value, vlen, expire);
+    return _shardcache_set_internal(cache, key, klen, value, vlen, expire, 0);
+}
+
+int shardcache_add_volatile(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            void *value,
+                            size_t vlen,
+                            time_t expire)
+{
+    return _shardcache_set_internal(cache, key, klen, value, vlen, expire, 1);
 }
 
 int shardcache_set(shardcache_t *cache,
@@ -1257,7 +1321,16 @@ int shardcache_set(shardcache_t *cache,
                    void *value,
                    size_t vlen)
 {
-    return _shardcache_set_internal(cache, key, klen, value, vlen, 0);
+    return _shardcache_set_internal(cache, key, klen, value, vlen, 0, 0);
+}
+
+int shardcache_add(shardcache_t *cache,
+                   void *key,
+                   size_t klen,
+                   void *value,
+                   size_t vlen)
+{
+    return _shardcache_set_internal(cache, key, klen, value, vlen, 0, 1);
 }
 
 int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
@@ -1319,7 +1392,7 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
             return -1;
         }
         int fd = shardcache_get_connection_for_peer(cache, peer);
-        int rc = delete_from_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, 1, fd);
+        int rc = delete_from_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
         shardcache_release_connection_for_peer(cache, peer, fd);
         return rc;
     }

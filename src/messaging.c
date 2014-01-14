@@ -472,6 +472,8 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 hdr != SHC_HDR_EVICT &&
                 hdr != SHC_HDR_GET_ASYNC &&
                 hdr != SHC_HDR_GET_OFFSET &&
+                hdr != SHC_HDR_ADD &&
+                hdr != SHC_HDR_EXISTS &&
                 hdr != SHC_HDR_MIGRATION_BEGIN &&
                 hdr != SHC_HDR_MIGRATION_ABORT &&
                 hdr != SHC_HDR_MIGRATION_END &&
@@ -824,14 +826,14 @@ write_message(int fd,
 }
 
 
-int
-delete_from_peer(char *peer,
-                 char *auth,
-                 unsigned char sig_hdr,
-                 void *key,
-                 size_t klen,
-                 int owner,
-                 int fd)
+static int
+_delete_from_peer_internal(char *peer,
+                           char *auth,
+                           unsigned char sig_hdr,
+                           void *key,
+                           size_t klen,
+                           int owner,
+                           int fd)
 {
     int should_close = 0;
     if (fd < 0) {
@@ -856,8 +858,9 @@ delete_from_peer(char *peer,
                           peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
+                rc = strncmp(fbuf_data(&resp), "OK", 2);
                 fbuf_destroy(&resp);
-                return 0;
+                return rc == 0 ? 0 : -1;
             } else {
                 // TODO - Error messages
             }
@@ -870,17 +873,41 @@ delete_from_peer(char *peer,
     return -1;
 }
 
+int
+delete_from_peer(char *peer,
+                 char *auth,
+                 unsigned char sig,
+                 void *key,
+                 size_t klen,
+                 int fd)
+{
+    return _delete_from_peer_internal(peer, auth, sig, key, klen, 1, fd);
+}
 
 int
-send_to_peer(char *peer,
-             char *auth,
-             unsigned char sig_hdr,
-             void *key,
-             size_t klen,
-             void *value,
-             size_t vlen,
-             uint32_t expire,
-             int fd)
+evict_from_peer(char *peer,
+                char *auth,
+                unsigned char sig,
+                void *key,
+                size_t klen,
+                int fd)
+{
+    return _delete_from_peer_internal(peer, auth, sig, key, klen, 0, fd);
+}
+
+
+
+int
+_send_to_peer_internal(char *peer,
+                       char *auth,
+                       unsigned char sig_hdr,
+                       void *key,
+                       size_t klen,
+                       void *value,
+                       size_t vlen,
+                       uint32_t expire,
+                       int add,
+                       int fd)
 {
     int should_close = 0;
     if (fd < 0) {
@@ -890,7 +917,8 @@ send_to_peer(char *peer,
 
     if (fd >= 0) {
         int rc = write_message(fd, auth, sig_hdr,
-                SHC_HDR_SET, key, klen, value, vlen, expire);
+                               add ? SHC_HDR_ADD : SHC_HDR_SET,
+                               key, klen, value, vlen, expire);
         if (rc != 0) {
             if (should_close)
                 close(fd);
@@ -922,6 +950,36 @@ send_to_peer(char *peer,
             close(fd);
     }
     return -1;
+}
+
+int
+send_to_peer(char *peer,
+             char *auth,
+             unsigned char sig,
+             void *key,
+             size_t klen,
+             void *value,
+             size_t vlen,
+             uint32_t expire,
+             int fd)
+{
+    return _send_to_peer_internal(peer,
+            auth, sig, key, klen, value, vlen, expire, 0, fd);
+}
+
+int
+add_to_peer(char *peer,
+            char *auth,
+            unsigned char sig,
+            void *key,
+            size_t klen,
+            void *value,
+            size_t vlen,
+            uint32_t expire,
+            int fd)
+{
+    return _send_to_peer_internal(peer, auth, sig, key, klen,
+                                  value, vlen, expire, 1, fd);
 }
 
 int
@@ -965,6 +1023,55 @@ fetch_from_peer(char *peer,
     }
     return -1;
 }
+
+int
+exists_on_peer(char *peer,
+               char *auth,
+               unsigned char sig_hdr,
+               void *key,
+               size_t klen,
+               int fd)
+{
+    int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
+
+    SHC_DEBUG("Sending exists command to peer %s", peer);
+    if (fd >= 0) {
+        unsigned char hdr = SHC_HDR_EXISTS;
+        int rc = write_message(fd, auth, sig_hdr, hdr, key, klen, NULL, 0, 0);
+
+        // if we are not forwarding a delete command to the owner
+        // of the key, but only an eviction request to a peer,
+        // we don't need to wait for the response
+        if (rc == 0) {
+            shardcache_hdr_t hdr = 0;
+            fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            rc = read_message(fd, auth, &resp, &hdr);
+            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+                SHC_DEBUG("Got (exists) response from peer %s : %s\n",
+                          peer, fbuf_data(&resp));
+                if (should_close)
+                    close(fd);
+                int exists = -1;
+                if (fbuf_used(&resp) == 2)
+                    exists = (strncmp(fbuf_data(&resp), "OK", 2) == 0) ? 1 : 0;
+                fbuf_destroy(&resp);
+                return exists;
+            } else {
+                // TODO - Error messages
+            }
+            fbuf_destroy(&resp);
+        }
+        if (should_close)
+            close(fd);
+        return 0;
+    }
+    return -1;
+}
+
 
 int
 stats_from_peer(char *peer,

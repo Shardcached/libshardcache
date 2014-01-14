@@ -160,7 +160,7 @@ int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
     int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return -1;
-    int rc = delete_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, 1, fd);
+    int rc = delete_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -180,7 +180,7 @@ int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
     if (fd < 0)
         return -1;
 
-    int rc = delete_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, 0, fd);
+    int rc = evict_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;

@@ -489,6 +489,9 @@ int shardcache_get_async(shardcache_t *cache,
                          shardcache_get_async_callback_t cb,
                          void *priv);
 
+int shardcache_exists(shardcache_t *cache,
+                      void *key,
+                      size_t klen);
 /**
  * @brief Set the value for a key
  * @param cache   A valid pointer to a shardcache_t structure
@@ -504,6 +507,13 @@ int shardcache_set(shardcache_t *cache,
                    size_t klen,
                    void *value,
                    size_t vlen);
+
+int shardcache_add(shardcache_t *cache,
+                   void *key,
+                   size_t klen,
+                   void *value,
+                   size_t vlen);
+
 /**
  * @brief Set a volatile value for a key
  * @param cache    A valid pointer to a shardcache_t structure
@@ -519,6 +529,13 @@ int shardcache_set(shardcache_t *cache,
  * @see shardcache_set()
  */
 int shardcache_set_volatile(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            void *value,
+                            size_t vlen,
+                            time_t expire);
+
+int shardcache_add_volatile(shardcache_t *cache,
                             void *key,
                             size_t klen,
                             void *value,

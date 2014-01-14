@@ -82,6 +82,8 @@ typedef enum {
     SHC_HDR_EVICT           = 0x04,
     SHC_HDR_GET_ASYNC       = 0x05,
     SHC_HDR_GET_OFFSET      = 0x06,
+    SHC_HDR_ADD             = 0x07,
+    SHC_HDR_EXISTS          = 0x08,
 
     // migration commands
     SHC_HDR_MIGRATION_ABORT = 0x21,
@@ -137,8 +139,15 @@ int delete_from_peer(char *peer,
                      unsigned char sig_hdr,
                      void *key,
                      size_t klen,
-                     int owner,
                      int fd);
+
+int
+evict_from_peer(char *peer,
+                char *auth,
+                unsigned char sig,
+                void *key,
+                size_t klen,
+                int fd);
 
 int send_to_peer(char *peer,
                  char *auth,
@@ -157,6 +166,13 @@ int fetch_from_peer(char *peer,
                     size_t len,
                     fbuf_t *out,
                     int fd);
+
+int exists_on_peer(char *peer,
+                   char *auth,
+                   unsigned char sig_hdr,
+                   void *key,
+                   size_t len,
+                   int fd);
 
 int stats_from_peer(char *peer,
                     char *auth,
