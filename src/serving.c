@@ -666,6 +666,7 @@ process_request(void *priv)
         }
         default:
             fprintf(stderr, "Unsupported command: 0x%02x\n", (char)ctx->hdr);
+            write_status(ctx, -1);
             break;
     }
 
