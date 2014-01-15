@@ -134,9 +134,10 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             } else {
                 ctx->hdr = ctx->sig_hdr;
                 ctx->sig_hdr = 0;
+                ctx->state = SHC_STATE_READING_RECORD;
             }
-            ctx->state = SHC_STATE_READING_HDR;
-        } else {
+        }
+        if (ctx->state == SHC_STATE_READING_HDR) {
             if (rbuf_len(ctx->buf) < 1)
                 return 0;
             rbuf_read(ctx->buf, (unsigned char *)&ctx->hdr, 1);
