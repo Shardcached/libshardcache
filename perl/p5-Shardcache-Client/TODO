@@ -1,1 +1,3 @@
+* support all missing messages (touch, exists, add)
+* support chunked-signing
 * implement a retry logic when sending/receiving messages
