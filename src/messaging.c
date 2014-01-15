@@ -936,10 +936,14 @@ _send_to_peer_internal(char *peer,
                           peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
+                if (fbuf_used(&resp) == 3) {
+                    if (strncmp(fbuf_data(&resp), "YES", 3) == 0)
+                        rc = 1;
+                    else
+                        rc = -1;
+                }
                 fbuf_destroy(&resp);
-                if (fbuf_used(&resp) == 3 && strncmp(fbuf_data(&resp), "ERR", 3) == 0)
-                    return -1;
-                return 0;
+                return rc;
             } else {
                 fprintf(stderr, "Bad response (%02x) from %s : %s\n",
                         hdr, peer, strerror(errno));
