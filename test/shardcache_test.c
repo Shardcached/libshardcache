@@ -94,9 +94,17 @@ int main(int argc, char **argv)
     size = shardcache_client_get(client, "test_key1", 9, &value);
     t_validate_int((size == 0 && value == NULL), 1);
 
+    t_testing("shardcache_client_exists(client, test_key1, 9) == 0");
+    ret = shardcache_client_exists(client, "test_key1", 9);
+    t_validate_int(ret, 0);
+
     t_testing("shardcache_client_add(client, test_key2, 9, test_value2, 11, 0) == 0");
     ret = shardcache_client_add(client, "test_key2", 9, "test_value2", 11, 0);
     t_validate_int(ret, 0);
+
+    t_testing("shardcache_client_exists(client, test_key2, 9) == 0");
+    ret = shardcache_client_exists(client, "test_key2", 9);
+    t_validate_int(ret, 1);
 
     t_testing("shardcache_client_get(client, test_key2, 9, &value) == test_value2");
     size = shardcache_client_get(client, "test_key2", 9, &value);
