@@ -122,26 +122,25 @@ typedef enum {
 
 // TODO - Document all exposed functions
 
+typedef struct {
+    void  *v;
+    size_t l;
+} message_record_t;
+
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr);
 
 int write_message(int fd,
                   char *auth,
                   unsigned char sig_hdr,
                   unsigned char hdr,
-                  void *k,
-                  size_t klen,
-                  void *v,
-                  size_t vlen,
-                  uint32_t expire);
+                  message_record_t *records,
+                  int num_records);
 
 int build_message(char *auth,
                   unsigned char sig_hdr,
                   unsigned char hdr,
-                  void *k,
-                  size_t klen,
-                  void *v,
-                  size_t vlen,
-                  uint32_t expire,
+                  message_record_t *records,
+                  int num_records,
                   fbuf_t *out);
 
 int delete_from_peer(char *peer,

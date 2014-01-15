@@ -380,7 +380,11 @@ fetch_from_peer_async(char *peer,
     }
 
     if (fd >= 0) {
-        rc = write_message(fd, auth, sig_hdr, SHC_HDR_GET_ASYNC, key, klen, NULL, 0, 0);
+        message_record_t record = {
+            .v = key,
+            .l = klen
+        };
+        rc = write_message(fd, auth, sig_hdr, SHC_HDR_GET_ASYNC, &record, 1);
         if (rc == 0) {
             fetch_from_peer_helper_arg_t arg = {
                 .peer = peer,
@@ -486,7 +490,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
             {
                 if (shash)
                     sip_hash_free(shash);
-                fprintf(stderr, "Uknown message type %02x in read_message()\n", hdr);
+                fprintf(stderr, "Unknown message type %02x in read_message()\n", hdr);
                 return -1;
             }
             if (shash) {
@@ -545,51 +549,6 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                             SHC_WARNING("Unauthorized message type %02x in read_message()", hdr);
                             return -1;
                         }
-#if 0
-                        char sig[SHARDCACHE_MSG_SIG_LEN];
-                        int ofx = 0;
-                        do {
-                            rb = read_socket(fd, &sig[ofx], SHARDCACHE_MSG_SIG_LEN-ofx);
-                            if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
-                                fbuf_set_used(out, initial_len);
-                                if (shash)
-                                    sip_hash_free(shash);
-                                return -1;
-                            } else if (rb == -1) {
-                                continue;
-                            }
-                            ofx += rb;
-                        } while (ofx != SHARDCACHE_MSG_SIG_LEN);
-
-                        uint64_t digest;
-                        if (!sip_hash_final_integer(shash, &digest)) {
-                            // TODO - Error Messages
-                            fbuf_set_used(out, initial_len);
-                            sip_hash_free(shash);
-                            return -1;
-                        }
-
-                        SHC_DEBUG("computed digest for received data: (%s) %s", auth,
-                                shardcache_hex_escape((char *)&digest, sizeof(digest), 0));
-
-                        uint8_t *remote = sig;
-                        SHC_DEBUG("digest from received data: %s",
-                                  shardcache_hex_escape(remote, sizeof(digest), 0));
-
-
-                        if (memcmp(&digest, &sig, SHARDCACHE_MSG_SIG_LEN) != 0) {
-                            struct sockaddr_in saddr;
-                            socklen_t addr_len = sizeof(struct sockaddr_in);
-                            getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
-
-                            fprintf(stderr, "Unauthorized message from %s\n",
-                            inet_ntoa(saddr.sin_addr));
-                            fbuf_set_used(out, initial_len);
-                            sip_hash_free(shash);
-                            return -1;
-                            // AUTH FAILED
-                        }
-#endif
                         sip_hash_free(shash);
                     }
                     return 0;
@@ -701,11 +660,8 @@ _chunkize_buffer(sip_hash *shash,
 int build_message(char *auth,
                   unsigned char sig_hdr,
                   unsigned char hdr,
-                  void *k,
-                  size_t klen,
-                  void *v,
-                  size_t vlen,
-                  uint32_t expire,
+                  message_record_t *records,
+                  int num_records,
                   fbuf_t *out)
 {
     static char eom = 0;
@@ -726,43 +682,31 @@ int build_message(char *auth,
         uint64_t digest = _sign_chunk(shash, &hdr, 1);
         fbuf_add_binary(out, (char *)&digest, sizeof(digest));
     }
-    if (k && klen) {
-        if (_chunkize_buffer(shash, sig_hdr, k, klen, out) != 0) {
-            if (shash)
-                sip_hash_free(shash);
-            return -1;
+
+    if (num_records) {
+        int i;
+        for (i = 0; i < num_records; i++) {
+            if (i > 0) {
+                fbuf_add_binary(out, &sep, 1);
+                if (auth && sig_hdr == SHC_HDR_CSIGNATURE_SIP) {
+                    uint64_t digest = _sign_chunk(shash, fbuf_data(out) + fbuf_used(out) - 3, 3);
+                    fbuf_add_binary(out, (char *)&digest, sizeof(digest));
+                }
+            }
+            if (records[i].v && records[i].l) {
+                if (_chunkize_buffer(shash, sig_hdr, records[i].v, records[i].l, out) != 0) {
+                    if (shash)
+                        sip_hash_free(shash);
+                    return -1;
+                }
+            } else {
+                fbuf_add_binary(out, (char *)&eor, sizeof(eor));
+            }
         }
-    }
-    else {
+    } else {
         fbuf_add_binary(out, (char *)&eor, sizeof(eor));
     }
 
-    if (hdr == SHC_HDR_SET || hdr == SHC_HDR_ADD) {
-        if (v && vlen) {
-            fbuf_add_binary(out, &sep, 1);
-            if (auth && sig_hdr == SHC_HDR_CSIGNATURE_SIP) {
-                uint64_t digest = _sign_chunk(shash, fbuf_data(out) + fbuf_used(out) - 3, 3);
-                fbuf_add_binary(out, (char *)&digest, sizeof(digest));
-            }
-
-            if (_chunkize_buffer(shash, sig_hdr, v, vlen, out) != 0) {
-                if (shash)
-                    sip_hash_free(shash);
-                return -1;
-            }
-
-            if (expire) {
-                uint16_t clen = htons(sizeof(uint32_t));
-                uint32_t exp = htonl(expire);
-                fbuf_add_binary(out, &sep, 1);
-                fbuf_add_binary(out, (char *)&clen, sizeof(clen));
-                fbuf_add_binary(out, (char *)&exp, sizeof(exp));
-                fbuf_add_binary(out, (char *)&eor, sizeof(eor));
-            }
-        } else {
-            fbuf_add_binary(out, (char *)&eor, sizeof(eor));
-        }
-    }
     fbuf_add_binary(out, &eom, 1);
 
     if (auth) {
@@ -788,16 +732,13 @@ write_message(int fd,
               char *auth,
               unsigned char sig_hdr,
               unsigned char hdr,
-              void *k,
-              size_t klen,
-              void *v,
-              size_t vlen,
-              uint32_t expire)
+              message_record_t *records,
+              int num_records)
 {
 
     fbuf_t msg = FBUF_STATIC_INITIALIZER;
 
-    if (build_message(auth, sig_hdr, hdr, k, klen, v, vlen, expire, &msg) != 0)
+    if (build_message(auth, sig_hdr, hdr, records, num_records, &msg) != 0)
     {
         // TODO - Error Messages
         fbuf_destroy(&msg);
@@ -845,7 +786,11 @@ _delete_from_peer_internal(char *peer,
     SHC_DEBUG("Sending del command to peer %s (owner: %d)", peer, owner);
     if (fd >= 0) {
         unsigned char hdr = owner ? SHC_HDR_DELETE : SHC_HDR_EVICT;
-        int rc = write_message(fd, auth, sig_hdr, hdr, key, klen, NULL, 0, 0);
+        message_record_t record = {
+            .v = key,
+            .l = klen
+        };
+        int rc = write_message(fd, auth, sig_hdr, hdr, &record, 1);
 
         // if we are not forwarding a delete command to the owner
         // of the key, but only an eviction request to a peer,
@@ -917,9 +862,26 @@ _send_to_peer_internal(char *peer,
     }
 
     if (fd >= 0) {
+        message_record_t record[3] = {
+            {
+                .v = key,
+                .l = klen
+            },
+            {
+                .v = value,
+                .l = vlen
+            }
+        };
+
+        uint32_t expire_nbo = 0;
+        if (expire) {
+            expire_nbo = htonl(expire_nbo);
+            record[2].v = &expire_nbo;
+            record[2].l = sizeof(expire);
+        }
         int rc = write_message(fd, auth, sig_hdr,
                                add ? SHC_HDR_ADD : SHC_HDR_SET,
-                               key, klen, value, vlen, expire);
+                               record, expire ? 3 : 2);
         if (rc != 0) {
             if (should_close)
                 close(fd);
@@ -1005,8 +967,12 @@ fetch_from_peer(char *peer,
     }
 
     if (fd >= 0) {
+        message_record_t record = {
+            .v = key,
+            .l = len
+        };
         int rc = write_message(fd, auth, sig_hdr,
-                SHC_HDR_GET, key, len, NULL, 0, 0);
+                SHC_HDR_GET, &record, 1);
         if (rc == 0) {
             shardcache_hdr_t hdr = 0;
             rc = read_message(fd, auth, out, &hdr);
@@ -1048,7 +1014,11 @@ exists_on_peer(char *peer,
     SHC_DEBUG("Sending exists command to peer %s", peer);
     if (fd >= 0) {
         unsigned char hdr = SHC_HDR_EXISTS;
-        int rc = write_message(fd, auth, sig_hdr, hdr, key, klen, NULL, 0, 0);
+        message_record_t record = {
+            .v = key,
+            .l = klen
+        };
+        int rc = write_message(fd, auth, sig_hdr, hdr, &record, 1);
 
         // if we are not forwarding a delete command to the owner
         // of the key, but only an eviction request to a peer,
@@ -1099,7 +1069,11 @@ touch_on_peer(char *peer,
     SHC_DEBUG("Sending touch command to peer %s", peer);
     if (fd >= 0) {
         unsigned char hdr = SHC_HDR_TOUCH;
-        int rc = write_message(fd, auth, sig_hdr, hdr, key, klen, NULL, 0, 0);
+        message_record_t record = {
+            .v = key,
+            .l = klen
+        };
+        int rc = write_message(fd, auth, sig_hdr, hdr, &record, 1);
 
         // if we are not forwarding a delete command to the owner
         // of the key, but only an eviction request to a peer,
@@ -1148,7 +1122,7 @@ stats_from_peer(char *peer,
 
     if (fd >= 0) {
         int rc = write_message(fd, auth, sig_hdr,
-                SHC_HDR_STATS, NULL, 0, NULL, 0, 0);
+                SHC_HDR_STATS, NULL, 0);
         if (rc == 0) {
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             shardcache_hdr_t hdr = 0;
@@ -1187,7 +1161,7 @@ check_peer(char *peer,
     }
 
     if (fd >= 0) {
-        int rc = write_message(fd, auth, sig_hdr, SHC_HDR_CHECK, NULL, 0, NULL, 0, 0);
+        int rc = write_message(fd, auth, sig_hdr, SHC_HDR_CHECK, NULL, 0);
         if (rc == 0) {
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             shardcache_hdr_t hdr = 0;
@@ -1220,7 +1194,7 @@ index_from_peer(char *peer,
 
     shardcache_storage_index_t *index = calloc(1, sizeof(shardcache_storage_index_t));
     if (fd >= 0) {
-        int rc = write_message(fd, auth, sig_hdr, SHC_HDR_GET_INDEX, NULL, 0, NULL, 0, 0);
+        int rc = write_message(fd, auth, sig_hdr, SHC_HDR_GET_INDEX, NULL, 0);
         if (rc == 0) {
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             shardcache_hdr_t hdr = 0;
@@ -1278,14 +1252,11 @@ migrate_peer(char *peer,
     SHC_NOTICE("Sending migration_begin command to peer %s", peer);
 
     if (fd >= 0) {
-        int rc = write_message(fd,
-                               auth,
-                               sig_hdr,
-                               SHC_HDR_MIGRATION_BEGIN,
-                               msgdata,
-                               len,
-                               NULL,
-                               0, 0);
+        message_record_t record = {
+            .v = msgdata,
+            .l = len
+        };
+        int rc = write_message(fd, auth, sig_hdr, SHC_HDR_MIGRATION_BEGIN, &record, 1);
         if (rc != 0) {
             if (should_close)
                 close(fd);
@@ -1325,7 +1296,7 @@ abort_migrate_peer(char *peer,
     }
 
     if (fd >= 0) {
-        int rc = write_message(fd, auth, sig_hdr, SHC_HDR_MIGRATION_ABORT, NULL, 0, NULL, 0, 0);
+        int rc = write_message(fd, auth, sig_hdr, SHC_HDR_MIGRATION_ABORT, NULL, 0);
         if (rc == 0) {
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             shardcache_hdr_t hdr = 0;

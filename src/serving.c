@@ -415,12 +415,21 @@ process_request(void *priv)
             uint32_t remainder = shardcache_get_offset(cache, key, klen, buf, &bsize, offset, NULL);
             if (size) {
                 uint32_t remainder_nbo = htonl(remainder);
+                message_record_t record[2] = {
+                    {
+                        .v = buf,
+                        .l = size
+                    },
+                    {
+                        .v = &remainder_nbo,
+                        .l = sizeof(remainder_nbo)
+                    }
+                };
+
                 if (build_message((char *)ctx->auth,
                                   ctx->sig_hdr,
                                   SHC_HDR_RESPONSE,
-                                  buf, size,
-                                  (void *)&remainder_nbo, sizeof(remainder_nbo),
-                                  0, &out) == 0)
+                                  record, 2, &out) == 0)
                 {
                     fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
                 }
@@ -467,12 +476,14 @@ process_request(void *priv)
             fbuf_t out = FBUF_STATIC_INITIALIZER;
             size_t vlen = 0;
             void *v = shardcache_get(cache, key, klen, &vlen, NULL);
+            message_record_t record = {
+                .v = v,
+                .l = vlen
+            };
             if (build_message((char *)ctx->auth,
                               ctx->sig_hdr,
                               SHC_HDR_RESPONSE,
-                              v, vlen,
-                              NULL, 0,
-                              0, &out) == 0)
+                              &record, 1, &out) == 0)
             {
                 fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
             }
@@ -622,12 +633,14 @@ process_request(void *priv)
                 }
 
                 fbuf_t out = FBUF_STATIC_INITIALIZER;
+                message_record_t record = {
+                    .v = fbuf_data(&buf),
+                    .l = fbuf_used(&buf)
+                };
                 if (build_message((char *)ctx->auth,
                                   ctx->sig_hdr,
                                   SHC_HDR_RESPONSE,
-                                  fbuf_data(&buf), fbuf_used(&buf),
-                                  NULL, 0,
-                                  0, &out) == 0)
+                                  &record, 1, &out) == 0)
                 {
                     fbuf_add_binary(ctx->output,
                             fbuf_data(&out), fbuf_used(&out));
@@ -665,12 +678,14 @@ process_request(void *priv)
             }
 
             // chunkize the data and build an actual message
+            message_record_t record = {
+                .v = fbuf_data(&buf),
+                .l = fbuf_used(&buf)
+            };
             if (build_message((char *)ctx->auth,
                               ctx->sig_hdr,
                               SHC_HDR_INDEX_RESPONSE,
-                              fbuf_data(&buf), fbuf_used(&buf),
-                              NULL, 0,
-                              0, &out) == 0)
+                              &record, 1, &out) == 0)
             {
                 // destroy it early ... since we still need one more copy
                 fbuf_destroy(&buf);
