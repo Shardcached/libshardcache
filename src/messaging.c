@@ -95,16 +95,23 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
         ctx->state = SHC_STATE_READING_MAGIC;
         ctx->moff = 1;
 
-        if (rbuf_len(ctx->buf) < sizeof(SHC_MAGIC) - ctx->moff) {
+        if (rbuf_len(ctx->buf) < sizeof(uint32_t) - ctx->moff) {
             return 0;
         }
 
-        rbuf_read(ctx->buf, &ctx->magic[ctx->moff], sizeof(SHC_MAGIC) - ctx->moff);
-        if ((*((uint32_t *)ctx->magic)&0xFFFFFF00) != (htonl(SHC_MAGIC)&0xFFFFFF00)) {
+        rbuf_read(ctx->buf, &ctx->magic[ctx->moff], sizeof(uint32_t) - ctx->moff);
+        uint32_t rmagic;
+        memcpy((char *)&rmagic, ctx->magic, sizeof(uint32_t));
+        if ((rmagic&0xFFFFFF00) != (htonl(SHC_MAGIC)&0xFFFFFF00)) {
             ctx->state = SHC_STATE_READING_ERR;
             return -1;
         }
         ctx->version = ctx->magic[3];
+        if (ctx->version > SHC_PROTOCOL_VERSION) {
+            SHC_WARNING("Unsupported protocol version %02x", ctx->version);
+            ctx->state = SHC_STATE_READING_ERR;
+            return -1;
+        }
 
         ctx->state = SHC_STATE_READING_SIG_HDR;
     }
@@ -487,6 +494,12 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                     return -1;
                 }
                 version = ((char *)&magic)[3];
+                if (version > SHC_PROTOCOL_VERSION) {
+                    SHC_WARNING("Unsupported protocol version 0x%02x\n", version);
+                    if (shash)
+                        sip_hash_free(shash);
+                    return -1;
+                }
             }
  
             rb = read_socket(fd, &hdr, 1);

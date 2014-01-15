@@ -82,8 +82,8 @@
 #define SHARDCACHE_MSG_MAX_RECORD_LEN (1<<28) // 256MB
 
 // last byte holds the protocol version
-#define SHC_PROTOCOL_VERSION 0x01
-#define SHC_MAGIC 'shc\0'|SHC_PROTOCOL_VERSION
+#define SHC_PROTOCOL_VERSION 1
+#define SHC_MAGIC 0x73686301
 
 typedef enum {
     // data commands
