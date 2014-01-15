@@ -80,17 +80,39 @@ int main(int argc, char **argv)
     t_testing("shardcache_client_set(client, test_key1, 9, test_value1, 11, 0) == 0");
     int ret = shardcache_client_set(client, key, strlen(key), val, strlen(val), 0);
     t_validate_int(ret, 0);
+
     t_testing("shardcache_client_get(client, test_key1, 9, &value) == test_value1");
     size = shardcache_client_get(client, key, strlen(key), (void **)&value);
     t_validate_buffer(value, size, val, strlen(val));
+    free(value);
 
     t_testing("shardcache_client_del(client, test_key1, 9) == 0");
     ret = shardcache_client_del(client, "test_key1", 9);
     t_validate_int(ret, 0);
+
     t_testing("shardcache_client_get(client, test_key1, 9, &value) == NULL");
     size = shardcache_client_get(client, "test_key1", 9, &value);
     t_validate_int((size == 0 && value == NULL), 1);
-    
+
+    t_testing("shardcache_client_add(client, test_key2, 9, test_value2, 11, 0) == 0");
+    ret = shardcache_client_add(client, "test_key2", 9, "test_value2", 11, 0);
+    t_validate_int(ret, 0);
+
+    t_testing("shardcache_client_get(client, test_key2, 9, &value) == test_value2");
+    size = shardcache_client_get(client, "test_key2", 9, &value);
+    t_validate_buffer(value, size, "test_value2", 11);
+    free(value);
+
+    t_testing("shardcache_client_add(client, test_key2, 9, test_value_modified, 19, 0) == 1");
+    ret = shardcache_client_add(client, "test_key2", 9, "test_value_modified", 19, 0);
+    t_validate_int(ret, 1);
+
+    // the value is unchanged because already existing
+    t_testing("shardcache_client_get(client, test_key2, 9, &value) == test_value2 (unchanged)");
+    size = shardcache_client_get(client, "test_key2", 9, &value);
+    t_validate_buffer(value, size, "test_value2", 11);
+    free(value);
+
     int *child;
     while ((child = shift_value(children))) {
         kill(*child, 3);
