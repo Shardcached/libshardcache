@@ -141,9 +141,11 @@ sub send_msg {
         $sock = $self->{_sock}->{"$addr:$port"};
     }
                                      
+    return unless $sock->write(pack("C4", 0x73, 0x68, 0x63, 0x01));
+
     if ($self->{_secret}) {
-        return undef unless $sock->write(pack("C", 0xF0)) == 1;
-     }
+        return undef unless $sock->write(pack("C", 0xF0));
+    }
 
     my $wb = $sock->write($msg);
     
@@ -161,6 +163,13 @@ sub send_msg {
         return undef 
             if (unpack("C", $data) != 0xF0); 
     }
+    # read the magic
+    my $magic;
+    if (read($sock, $magic, 4) != 4) {
+        delete $self->{_sock}->{"$addr:$port"};
+        return undef;
+    }
+
     # read the header
     if (read($sock, $data, 1) != 1) {
         delete $self->{_sock}->{"$addr:$port"};
