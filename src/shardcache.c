@@ -520,9 +520,9 @@ static void __op_destroy(void *item, void *priv)
     if (obj->key)
         free(obj->key);
 
-    if (obj->async) {
+    if (obj->listeners)
         destroy_list(obj->listeners);
-    }
+
     pthread_mutex_destroy(&obj->lock);
     free(obj);
 }
