@@ -375,6 +375,7 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
             __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
+            obj->complete = 1;
         }
     }
     shardcache_release_connection_for_peer(cache, peer_addr, fd);
@@ -483,10 +484,11 @@ static size_t __op_fetch(void *item, void * priv)
     pthread_mutex_unlock(&obj->lock);
     __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
 
-    if (obj->async) {
-        obj->complete = 1;
+    obj->complete = 1;
+
+    if (obj->async)
         foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_complete, obj);
-    }
+
     return obj->dlen;
 }
 
