@@ -998,6 +998,69 @@ fetch_from_peer(char *peer,
 }
 
 int
+offset_from_peer(char *peer,
+                 char *auth,
+                 unsigned char sig_hdr,
+                 void *key,
+                 size_t len,
+                 uint32_t offset,
+                 uint32_t dlen,
+                 fbuf_t *out,
+                 int fd)
+{
+    int should_close = 0;
+    if (fd < 0) {
+        fd = connect_to_peer(peer, 30);
+        should_close = 1;
+    }
+
+    size_t offset_nbo = htonl(offset);
+    size_t dlen_nbo = htonl(dlen);
+    if (fd >= 0) {
+        message_record_t record[3] = {
+            {
+                .v = key,
+                .l = len
+            },
+            {
+                .v = &offset_nbo,
+                .l = sizeof(uint32_t)
+            },
+            {
+                .v = &dlen_nbo,
+                .l = sizeof(uint32_t)
+            }
+        };
+        int rc = write_message(fd, auth, sig_hdr,
+                SHC_HDR_GET_OFFSET, record, 3);
+
+        if (rc == 0) {
+            shardcache_hdr_t hdr = 0;
+            rc = read_message(fd, auth, out, &hdr);
+            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+                if (fbuf_used(out)) {
+                    char keystr[1024];
+                    memcpy(keystr, key, len < 1024 ? len : 1024);
+                    keystr[len] = 0;
+                    SHC_DEBUG("Got new data from peer %s : %s => %s", peer, keystr,
+                              shardcache_hex_escape(fbuf_data(out), fbuf_used(out), DEBUG_DUMP_MAXSIZE));
+                }
+                if (should_close)
+                    close(fd);
+                return 0;
+            } else {
+                // TODO - Error messages
+            }
+        }
+        if (should_close)
+            close(fd);
+    }
+    return -1;
+}
+
+
+
+int
 exists_on_peer(char *peer,
                char *auth,
                unsigned char sig_hdr,

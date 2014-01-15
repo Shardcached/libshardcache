@@ -132,6 +132,12 @@ int main(int argc, char **argv)
     t_validate_buffer(value, size, "test_value2", 11);
     free(value);
 
+    // the value is unchanged because already existing
+    t_testing("shardcache_client_offset(client, test_key2, 9, 5, &partial, 5) == value");
+    char partial[4];
+    size = shardcache_client_offset(client, "test_key2", 9, 5, &partial, 5);
+    t_validate_buffer(partial, 5, "value", 5);
+
     stop_nodes(children);
 
     destroy_list(children);

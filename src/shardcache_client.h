@@ -45,6 +45,24 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_
 size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data);
 
 /**
+ * @brief Get part of the value for a key
+ * @param c       A valid pointer to a shardcache_client_t structure
+ * @param key     A valid pointer to the key
+ * @param klen    The length of the key
+ * @param offset  The offset from which to start copying the value
+ * @param data    A pointer where the partial data will be copied
+ * @param dlen    The size of the data pointer (also the size we are interested into)
+ *
+ * @return the size actually copied to the data pointer
+ *
+ * @note On success the internal errno will be set to SHARDCACHE_CLIENT_OK
+ *
+ * @see shardcache_client_errno()
+ * @see shardcache_client_errstr()
+ */
+size_t shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, uint32_t offset, void *data, uint32_t dlen);
+
+/**
  * @brief Callback passed to shardcache_client_get_async()
  *        to retrieve the data asynchronously
  * @param node   The node from which we are receiving the new chunk of data

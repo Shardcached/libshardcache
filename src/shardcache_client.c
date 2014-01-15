@@ -134,6 +134,34 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
     return 0;
 }
 
+size_t shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, uint32_t offset, void *data, uint32_t dlen)
+{
+    char *node = select_node(c, key, klen);
+    int fd = connections_pool_get(c->connections, node);
+    if (fd < 0)
+        return 0;
+
+    fbuf_t value = FBUF_STATIC_INITIALIZER;
+    int rc = offset_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, offset, dlen, &value, fd);
+    if (rc == 0) {
+        uint32_t to_copy = dlen > fbuf_used(&value) ? fbuf_used(&value) : dlen;
+        if (data)
+            memcpy(data, fbuf_data(&value), to_copy);
+
+        c->errno = SHARDCACHE_CLIENT_OK;
+        c->errstr[0] = 0;
+
+        connections_pool_add(c->connections, node, fd);
+        return to_copy;
+    } else {
+        close(fd);
+        c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't fetch data from node '%s'", node);
+        return 0;
+    }
+    return 0;
+}
+
 int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
@@ -451,4 +479,5 @@ int shardcache_client_get_async(shardcache_client_t *c,
 
     return fetch_from_peer_async(node, (char *)c->auth, SHC_HDR_CSIGNATURE_SIP, key, klen, data_cb, priv, fd);
 }
+
 

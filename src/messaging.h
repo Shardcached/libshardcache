@@ -187,6 +187,16 @@ int fetch_from_peer(char *peer,
                     fbuf_t *out,
                     int fd);
 
+int offset_from_peer(char *peer,
+                     char *auth,
+                     unsigned char sig_hdr,
+                     void *key,
+                     size_t len,
+                     uint32_t offset,
+                     uint32_t dlen,
+                     fbuf_t *out,
+                     int fd);
+
 int exists_on_peer(char *peer,
                    char *auth,
                    unsigned char sig_hdr,

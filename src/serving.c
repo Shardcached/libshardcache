@@ -93,24 +93,11 @@ async_read_handler(void *data, size_t len, int idx, void *priv)
     shardcache_connection_context_t *ctx =
         (shardcache_connection_context_t *)priv;
 
-    switch(idx) {
-        case 0:
-            fbuf_add_binary(&ctx->records[0], data, len);
-            break;
-        case 1:
-            fbuf_add_binary(&ctx->records[1], data, len);
-            break;
-        case 2:
-            if (len == 4) {
-            } else {
-                // TODO - Error Messages
-                return -1;
-            }
-            break;
-        default:
-            // TODO - Error Messages
-            return -1;
-    }
+    if (idx < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX)
+        fbuf_add_binary(&ctx->records[idx], data, len);
+    else
+        return -1;
+
     return 0;
 }
 
@@ -395,7 +382,7 @@ process_request(void *priv)
 
             uint32_t offset = 0;
             if (fbuf_used(&ctx->records[1]) == 4) {
-                memcpy(&offset, fbuf_data(&ctx->records[2]), sizeof(uint32_t));
+                memcpy(&offset, fbuf_data(&ctx->records[1]), sizeof(uint32_t));
                 offset = ntohl(offset);
             } else {
                 // TODO - Error Messages
