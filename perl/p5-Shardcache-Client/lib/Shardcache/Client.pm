@@ -266,18 +266,46 @@ sub evi {
     return ($resp eq "OK")
 }
 
+sub evict {
+    my $self = shift;
+    return $self->evi(@_);
+}
+
 sub mgb {
     my ($self, $key) = @_;
     return unless $key;
-    my $resp = $self->send_msg(0x04, $key);
+    # TODO - nodes-list must be sent together with the MGB command
+    my $resp = $self->send_msg(0x22, $key);
     return ($resp eq "OK")
+}
+
+sub migration_begin {
+    my $self = shift;
+    return $self->mgb(@_);
+}
+
+sub mge {
+    my ($self, $key) = @_;
+    return unless $key;
+    my $resp = $self->send_msg(0x23, $key);
+    return ($resp eq "OK")
+}
+
+sub migration_end {
+    my $self = shift;
+    return $self->mge(@_);
 }
 
 sub mga {
     my ($self, $key) = @_;
     return unless $key;
-    my $resp = $self->send_msg(0x04, $key);
+    my $resp = $self->send_msg(0x21, $key);
     return ($resp eq "OK")
+}
+
+sub migration_abort {
+    my $self = shift;
+    return $self->mga(@_);
 }
 
 sub _get_sock_for_peer {
