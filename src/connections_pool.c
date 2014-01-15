@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <pthread.h>
+#include <fcntl.h>
 
 #include <fbuf.h>
 #include <hashtable.h>
@@ -71,6 +72,16 @@ int connections_pool_get(connections_pool_t *cc, char *addr)
         if (write(*fd, &noop, 1) == 1) {
             int rfd = *fd;
             free(fd);
+
+            int flags = fcntl(rfd, F_GETFL, 0);
+            if (flags == -1) {
+                close(rfd);
+                return -1;
+            }
+
+            flags &= ~O_NONBLOCK;
+            fcntl(rfd, F_SETFL, flags);
+
             return rfd;
         } else {
             close(*fd);
