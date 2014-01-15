@@ -487,21 +487,22 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 if (shash)
                     sip_hash_free(shash);
                 return -1;
-                if (((ntohl(magic))&0xFFFFFF00) != (SHC_MAGIC&0xFFFFFF00)) {
-                    SHC_DEBUG("Wrong magic");
-                    if (shash)
-                        sip_hash_free(shash);
-                    return -1;
-                }
-                version = ((char *)&magic)[3];
-                if (version > SHC_PROTOCOL_VERSION) {
-                    SHC_WARNING("Unsupported protocol version 0x%02x\n", version);
-                    if (shash)
-                        sip_hash_free(shash);
-                    return -1;
-                }
             }
- 
+
+            if (((ntohl(magic))&0xFFFFFF00) != (SHC_MAGIC&0xFFFFFF00)) {
+                SHC_DEBUG("Wrong magic");
+                if (shash)
+                    sip_hash_free(shash);
+                return -1;
+            }
+            version = ((char *)&magic)[3];
+            if (version > SHC_PROTOCOL_VERSION) {
+                SHC_WARNING("Unsupported protocol version 0x%02x\n", version);
+                if (shash)
+                    sip_hash_free(shash);
+                return -1;
+            }
+
             rb = read_socket(fd, &hdr, 1);
             if (rb != 1) {
                 if (shash)
@@ -629,6 +630,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                         fbuf_set_used(out, initial_len);
                         if (shash)
                             sip_hash_free(shash);
+
                         return -1;
                     }
                     continue;
@@ -636,6 +638,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                     fbuf_set_used(out, initial_len);
                     if (shash)
                         sip_hash_free(shash);
+
                     return -1;
                 }
                 chunk_len -= rb;
@@ -650,6 +653,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                     fbuf_set_used(out, initial_len);
                     if (shash)
                         sip_hash_free(shash);
+
                     return -1;
                 }
             }
@@ -669,6 +673,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
     }
     if (shash)
         sip_hash_free(shash);
+
     return -1;
 }
 
