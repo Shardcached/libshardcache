@@ -56,12 +56,12 @@
  * The only valid/supported messages are :
  * 
  * GET_MESSAGE    : <MSG_GET><KEY><EOM>
- * GET_ASYNC      : <MSG_GETA><KEY><EOM>
- * GET_OFFSET     : <MSG_GTO><KEY><LONG_SIZE><LONG_SIZE><EOM>
+ * GET_ASYNC      : <MSG_GET_ASYNC><KEY><EOM>
+ * GET_OFFSET     : <MSG_GET_OFFSET><KEY><LONG_SIZE><LONG_SIZE><EOM>
  * EXISTS_MESSAGE : <MSG_EXISTS><KEY><EOM>
  * TOUCH_MESSAGE  : <MSG_TOUCH><KEY><EOM>
  * SET_MESSAGE    : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
- * ADD_MESSAGE    : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
+ * ADD_MESSAGE    : <MSG_ADD><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
  * DEL_MESSAGE    : <MSG_DEL><KEY><EOM>
  * EVI_MESSAGE    : <MSG_EVI><KEY><EOM>
  * RES_MESSAGE    : <MSG_RES><RECORD><EOM>
@@ -80,6 +80,10 @@
 // in bytes
 #define SHARDCACHE_MSG_SIG_LEN 8
 #define SHARDCACHE_MSG_MAX_RECORD_LEN (1<<28) // 256MB
+
+// last byte holds the protocol version
+#define SHC_PROTOCOL_VERSION 0x01
+#define SHC_MAGIC 'shc\0'|SHC_PROTOCOL_VERSION
 
 typedef enum {
     // data commands
@@ -256,13 +260,15 @@ void async_read_context_destroy(async_read_ctx_t *ctx);
 
 typedef enum {
     SHC_STATE_READING_NONE    = 0x00,
-    SHC_STATE_READING_HDR     = 0x01,
-    SHC_STATE_READING_RECORD  = 0x02,
-    SHC_STATE_READING_RSEP    = 0x03,
-    SHC_STATE_READING_AUTH    = 0x04,
-    SHC_STATE_READING_DONE    = 0x05,
-    SHC_STATE_READING_ERR     = 0x06,
-    SHC_STATE_AUTH_ERR        = 0x07
+    SHC_STATE_READING_MAGIC   = 0x01,
+    SHC_STATE_READING_SIG_HDR = 0x02,
+    SHC_STATE_READING_HDR     = 0x03,
+    SHC_STATE_READING_RECORD  = 0x04,
+    SHC_STATE_READING_RSEP    = 0x05,
+    SHC_STATE_READING_AUTH    = 0x06,
+    SHC_STATE_READING_DONE    = 0x07,
+    SHC_STATE_READING_ERR     = 0x08,
+    SHC_STATE_AUTH_ERR        = 0x09
 } async_read_context_state_t;
 
 int async_read_context_state(async_read_ctx_t *ctx);

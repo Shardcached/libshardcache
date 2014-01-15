@@ -168,6 +168,9 @@ write_status(shardcache_connection_context_t *ctx, int rc, int is_boolean)
     memset(p, 0, 3);
     p += 3;
 
+    uint32_t magic = htonl(SHC_MAGIC);
+    fbuf_add_binary(ctx->output, (char *)&magic, sizeof(magic));
+
     sip_hash *shash = NULL;
     if (ctx->auth) {
         unsigned char hdr_sig = ctx->sig_hdr;
@@ -178,7 +181,9 @@ write_status(shardcache_connection_context_t *ctx, int rc, int is_boolean)
     uint16_t initial_offset = fbuf_used(ctx->output);
 
     unsigned char hdr = SHC_HDR_RESPONSE;
+
     fbuf_add_binary(ctx->output, (char *)&hdr, 1);
+    
     if (ctx->auth && ctx->sig_hdr == SHC_HDR_CSIGNATURE_SIP) {
         uint64_t digest;
         sip_hash_digest_integer(shash, &hdr, 1, &digest);

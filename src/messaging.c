@@ -33,6 +33,9 @@ struct __async_read_ctx_s {
     int rnum;
     char state;
     int csig;
+    char magic[4];
+    char version;
+    int moff;
     sip_hash *shash;
 };
 
@@ -60,6 +63,9 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
     if (ctx->state == SHC_STATE_READING_DONE) {
         ctx->state = SHC_STATE_READING_NONE;
         ctx->rnum = 0;
+        ctx->moff = 0;
+        ctx->version = 0;
+        memset(ctx->magic, 0, sizeof(ctx->magic));
     }
 
     int wb = 0;
@@ -75,19 +81,42 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
     if (!rbuf_len(ctx->buf))
         return 0;
 
-    if (ctx->state == SHC_STATE_READING_NONE || ctx->state == SHC_STATE_READING_HDR)
+    if (ctx->state == SHC_STATE_READING_NONE || ctx->state == SHC_STATE_READING_MAGIC)
     {
-        rbuf_read(ctx->buf, (unsigned char *)&ctx->hdr, 1);
-        while (ctx->hdr == SHC_HDR_NOOP && rbuf_len(ctx->buf) > 0)
-            rbuf_read(ctx->buf, (unsigned char *)&ctx->hdr, 1); // skip
+        unsigned char byte;
+        rbuf_read(ctx->buf, &byte, 1);
+        while (byte == SHC_HDR_NOOP && rbuf_len(ctx->buf) > 0)
+            rbuf_read(ctx->buf, &byte, 1); // skip
 
-        if (ctx->hdr == SHC_HDR_NOOP)
+        if (byte == SHC_HDR_NOOP && !rbuf_len(ctx->buf))
             return 0;
 
-        if (ctx->state == SHC_STATE_READING_NONE) {
-            if (ctx->hdr == SHC_HDR_SIGNATURE_SIP || ctx->hdr == SHC_HDR_CSIGNATURE_SIP)
+        ctx->magic[0] = byte;
+        ctx->state = SHC_STATE_READING_MAGIC;
+        ctx->moff = 1;
+
+        if (rbuf_len(ctx->buf) < sizeof(SHC_MAGIC) - ctx->moff) {
+            return 0;
+        }
+
+        rbuf_read(ctx->buf, &ctx->magic[ctx->moff], sizeof(SHC_MAGIC) - ctx->moff);
+        if ((*((uint32_t *)ctx->magic)&0xFFFFFF00) != (htonl(SHC_MAGIC)&0xFFFFFF00)) {
+            ctx->state = SHC_STATE_READING_ERR;
+            return -1;
+        }
+        ctx->version = ctx->magic[3];
+
+        ctx->state = SHC_STATE_READING_SIG_HDR;
+    }
+
+    if (ctx->state == SHC_STATE_READING_SIG_HDR || ctx->state == SHC_STATE_READING_HDR)
+    {
+        if (ctx->state == SHC_STATE_READING_SIG_HDR) {
+            if (rbuf_len(ctx->buf) < 1)
+                return 0;
+            rbuf_read(ctx->buf, (unsigned char *)&ctx->sig_hdr, 1);
+            if (ctx->sig_hdr == SHC_HDR_SIGNATURE_SIP || ctx->sig_hdr == SHC_HDR_CSIGNATURE_SIP)
             {
-                ctx->sig_hdr = ctx->hdr;
                 if (!ctx->auth) {
                     ctx->state = SHC_STATE_AUTH_ERR;
                     return -1;
@@ -98,25 +127,20 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 if (ctx->sig_hdr == SHC_HDR_CSIGNATURE_SIP)
                     ctx->csig = 1;
 
-                if (rbuf_len(ctx->buf) < 1) {
-                    return 0;
-                }
-
-                rbuf_read(ctx->buf, (unsigned char *)&ctx->hdr, 1);
             } else if (ctx->auth) {
                 // we are expecting the signature header
                 ctx->state = SHC_STATE_AUTH_ERR;
                 return -1;
+            } else {
+                ctx->hdr = ctx->sig_hdr;
+                ctx->sig_hdr = 0;
             }
+            ctx->state = SHC_STATE_READING_HDR;
+        } else {
+            if (rbuf_len(ctx->buf) < 1)
+                return 0;
+            rbuf_read(ctx->buf, (unsigned char *)&ctx->hdr, 1);
         }
-
-        /*
-        if (ctx->hdr != SHC_HDR_RES)
-        {
-            ctx->state = SHC_STATE_READING_ERR;
-            return;
-        }
-        */
 
         ctx->state = SHC_STATE_READING_RECORD;
         if (ctx->auth) {
@@ -361,7 +385,6 @@ fetch_from_peer_helper(void *data,
     return -1;
 }
 
-
 int
 fetch_from_peer_async(char *peer,
                       char *auth,
@@ -436,6 +459,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
     unsigned char hdr;
     int csig = 0;
     sip_hash *shash = NULL;
+    char version = 0;
 
     if (auth)
         shash = sip_hash_new(auth, 2, 4);
@@ -444,10 +468,32 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
         int rb;
 
         if (reading_message == 0) {
-
+            uint32_t magic = 0;
             do {
                 rb = read_socket(fd, &hdr, 1);
             } while (rb == 1 && hdr == SHC_HDR_NOOP);
+
+            ((char *)&magic)[0] = hdr;
+            rb = read_socket(fd, ((char *)&magic)+1, sizeof(magic)-1);
+            if (rb != sizeof(magic) -1) {
+                if (shash)
+                    sip_hash_free(shash);
+                return -1;
+                if (((ntohl(magic))&0xFFFFFF00) != (SHC_MAGIC&0xFFFFFF00)) {
+                    SHC_DEBUG("Wrong magic");
+                    if (shash)
+                        sip_hash_free(shash);
+                    return -1;
+                }
+                version = ((char *)&magic)[3];
+            }
+ 
+            rb = read_socket(fd, &hdr, 1);
+            if (rb != 1) {
+                if (shash)
+                    sip_hash_free(shash);
+                return -1;
+            }
 
             if (rb == 1) {
                 if ((hdr&0xFE) == SHC_HDR_SIGNATURE_SIP) {
@@ -667,6 +713,9 @@ int build_message(char *auth,
     static char eom = 0;
     static char sep = SHARDCACHE_RSEP;
     uint16_t    eor = 0;
+
+    uint32_t magic = htonl(SHC_MAGIC);
+    fbuf_add_binary(out, (char *)&magic, sizeof(magic));
 
     sip_hash *shash = NULL;
     if (auth) {
