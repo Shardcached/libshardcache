@@ -1161,7 +1161,7 @@ shardcache_exists(shardcache_t *cache, void *key, size_t klen)
                 if (!cache->storage.exist(key, klen, cache->storage.priv))
                     return 0;
             } else {
-                return -1;
+                return 0;
             }
         }
         return 1;
