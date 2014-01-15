@@ -43,6 +43,17 @@ static void start_nodes(shardcache_node_t *nodes, int num_nodes, linked_list_t *
     }
 }
 
+static void stop_nodes(linked_list_t *children)
+{
+    int *child;
+    while ((child = shift_value(children))) {
+        kill(*child, 3);
+        waitpid(*child, NULL, 0);
+        printf("child %d exited\n", *child);
+        free(child);
+    }
+}
+
 int main(int argc, char **argv)
 {
     int i;
@@ -102,7 +113,7 @@ int main(int argc, char **argv)
     ret = shardcache_client_add(client, "test_key2", 9, "test_value2", 11, 0);
     t_validate_int(ret, 0);
 
-    t_testing("shardcache_client_exists(client, test_key2, 9) == 0");
+    t_testing("shardcache_client_exists(client, test_key2, 9) == 1");
     ret = shardcache_client_exists(client, "test_key2", 9);
     t_validate_int(ret, 1);
 
@@ -121,13 +132,9 @@ int main(int argc, char **argv)
     t_validate_buffer(value, size, "test_value2", 11);
     free(value);
 
-    int *child;
-    while ((child = shift_value(children))) {
-        kill(*child, 3);
-        waitpid(*child, NULL, 0);
-        printf("child %d exited\n", *child);
-        free(child);
-    }
+    stop_nodes(children);
+
+    destroy_list(children);
 
     exit(0);
 }
