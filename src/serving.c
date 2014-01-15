@@ -365,6 +365,7 @@ static void get_async_data(shardcache_t *cache,
 
  
         pthread_mutex_unlock(&ctx->output_lock);
+        __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
     }
 }
 
@@ -437,6 +438,9 @@ process_request(void *priv)
         case SHC_HDR_GET_ASYNC:
         {
             shardcache_hdr_t hdr = SHC_HDR_RESPONSE;
+
+            uint32_t magic = htonl(SHC_MAGIC);
+            fbuf_add_binary(ctx->output, (char *)&magic, sizeof(magic));
 
             if (ctx->auth) {
                 ctx->fetch_shash = sip_hash_new((char *)ctx->auth, 2, 4);
