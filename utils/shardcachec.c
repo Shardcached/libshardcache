@@ -11,6 +11,7 @@ void usage(char *prgname) {
            "   Commands: \n"
            "        get        <Key>\n"
            "        get_async <Key>\n"
+           "        offset    <Key> <Offset> <Length>\n"
            "        set       <Key> [ <Expire> ] (gets value on stdin)\n"
            "        add       <Key> [ <Expire> ] (gets value on stdin)\n"
            "        exists    <Key>\n"
@@ -95,8 +96,17 @@ int main (int argc, char **argv) {
         if (len && out) {
             print_chunk(NULL, NULL, 0, out, len, NULL);
         }
-    } else if (strcasecmp(cmd, "geta") == 0 || strcasecmp(cmd, "get_async") == 0)
-    {
+    } else if (strcasecmp(cmd, "offset") == 0) {
+        if (argc < 5)
+            usage(argv[0]);
+        int offset = strtol(argv[3], NULL, 10);
+        int size = strtol(argv[4], NULL, 10);
+        char out[size];
+        size_t len = shardcache_client_offset(client, argv[2], strlen(argv[2]), offset, out, size); 
+        if (len && out) {
+            print_chunk(NULL, NULL, 0, out, len, NULL);
+        }
+    } else if (strcasecmp(cmd, "geta") == 0 || strcasecmp(cmd, "get_async") == 0) {
         rc = shardcache_client_get_async(client, argv[2], strlen(argv[2]), print_chunk, NULL); 
     } else if (strcasecmp(cmd, "set") == 0 ||
                strcasecmp(cmd, "add") == 0)
@@ -204,7 +214,9 @@ int main (int argc, char **argv) {
         usage(argv[0]);
     }
 
-    if (strncasecmp(cmd, "get", 3) != 0) {
+    if (strncasecmp(cmd, "get", 3) != 0 &&
+        strncasecmp(cmd, "offset", 6) != 0)
+    {
         if (is_boolean) {
             if (rc == 0) {
                 printf("NO\n");
