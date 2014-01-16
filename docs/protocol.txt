@@ -1,12 +1,12 @@
 The internal communication protocol may described by the following grammar:
 
 MESSAGE              : <NOOP> | <MSG> | <SIG_MESSAGE> | <RESPONSE_MESSAGE>
+NOOP                 : <MSG_NOOP>
+MSG_NOOP             : 0x90
+MSG                  : <MAGIC><HDR><RECORD>[<RSEP><RECORD>...]<EOM>
+MAGIC                : <MAGIC_BYTES><VERSION>
 MAGIC_BYTES          : <0x73><0x68><0x63>
 VERSION              : <BYTE>
-NOOP                 : <MSG_NOOP>
-MSG                  : <MAGIC><HDR><RECORD>[<RSEP><RECORD>...]<EOM>
-RESPONSE_MESSAGE     : <MSG_RESPONSE>(<RECORD>|<STATUS_RES>|<BOOLEAN_RES>|<EXISTS_RES>)<EOM>
-MAGIC                : <MAGIC_BYTES><VERSION>
 HDR                  : <MSG_GET> | <MSG_SET> | <MSG_DELETE> | <MSG_EVICT> |
                        <MSG_GET_ASYNC> | <MSG_GET_OFFSET> | <MSG_GET_INDEX> |
                        <MSG_MIGRATION_BEGIN> | <MSG_MIGRATION_ABORT> | <MSG_MIGRATION_END>
@@ -26,39 +26,57 @@ MSG_CHECK            : 0x31
 MSG_STATS            : 0x32
 MSG_GET_INDEX        : 0x41
 MSG_INDEX_RESPONSE   : 0x42
-MSG_NOOP             : 0x90
-MSG_RESPONSE         : 0x99
-RSEP                 : 0x80
-NULL_RECORD          : <EOR>
-EOR                  : <NULL_BYTE><NULL_BYTE>
-RECORD               : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
+RECORD               : <SIZE><DATA>[<SIZE><DATA>...]<EOR> | <NULL_RECORD>
 SIZE                 : <WORD>
 WORD                 : <HIGH_BYTE><LOW_BYTE>
 HIGH_BYTE            : <BYTE>
 LOW_BYTE             : <BYTE>
-DATA                 : <BYTE>...<BYTE>
 BYTE                 : 0x00 - 0xFF
+DATA                 : <BYTE>...<BYTE>
+EOR                  : <NULL_BYTE><NULL_BYTE>
 NULL_BYTE            : 0x00
+NULL_RECORD          : <EOR>
+RSEP                 : 0x80
 EOM                  : <NULL_BYTE>
-KEY                  : <RECORD>
-VALUE                : <RECORD>
-TTL                  : <RECORD>
-NODES_LIST           : <RECORD>
-INDEX                : <RECORD>
-LONGSIZE             : <HIGH_WORD><LOW_WORD>
-HIGH_WORD            : <WORD>
-LOW_WORD             : <WORD>
+RESPONSE_MESSAGE     : <MSG_RESPONSE>(<RECORD>|<STATUS_RES>|<BOOLEAN_RES>|<EXISTS_RES>)<EOM>
+MSG_RESPONSE         : 0x99
 STATUS_RES           : <OK> | <ERR>
+OK                   : <SIZE><0x4F><0x4B><EOR>
+ERR                  : <SIZE><0x45><0x52><0x52><EOR>
 BOOLEAN_RES          : <YES> | <NO> | <ERR>
-EXISTS_RES           : <OK> | <EXISTS> | <ERR>
 YES                  : <SIZE><0x59><0x45><0x53><EOR>
 NO                   : <SIZE><0x4E><0x4F><EOR>
+EXISTS_RES           : <OK> | <EXISTS> | <ERR>
 EXISTS               : <SIZE><0x45><0x58><0x49><0x53><0x54><0x53><EOR>
-ERR                  : <SIZE><0x45><0x52><0x52><EOR>
 
 -------------------------------------------------------------------------------
 
-The only supported messages are the following:
+Extra definitions:
+
+KEY                  : <RECORD>
+VALUE                : <RECORD>
+TTL                  : <RECORD>
+INDEX                : <RECORD>
+OFFSET               : <LONG_SIZE>
+LONG_SIZE            : <HIGH_WORD><LOW_WORD>
+LENGTH               : <LONG_SIZE>
+HIGH_WORD            : <WORD>
+LOW_WORD             : <WORD>
+NODES_LIST           : <NODES_STRING>
+NODES_STRING         : <LABEL><:><ADDRESS><:><PORT>[<,><LABEL><:><ADDRESS><:><PORT>...]
+LABEL                : <STRING>
+ADDRESS              : <STRING>
+PORT                 : <STRING>
+,                    : 0x2C
+:                    : 0x3A
+STRING               : <DATA>
+INDEX                : <KSIZE><KEY><VSIZE>[<KSIZE><KEY><VSIZE>...]<EOR>
+KSIZE                : <LONG_SIZE>
+KEY                  : <DATA>
+VSIZE                : <LONG_SIZE>
+
+
+The implemented messages in libshardcache are the following:
 
 
 GET_MESSAGE       : <MSG_GET><KEY><EOM>
@@ -67,7 +85,7 @@ GET_MESSAGE       : <MSG_GET><KEY><EOM>
 GET_ASYNC         : <MSG_GET_ASYNC><KEY><EOM>
                     RESPONSE: <MSG_RESPONSE><RECORD><EOM>
 
-GET_OFFSET        : <MSG_GET_OFFSET><KEY><LONG_SIZE><LONG_SIZE><EOM>
+GET_OFFSET        : <MSG_GET_OFFSET><KEY><OFFSET><LENGTH><EOM>
                     RESPONSE: <MSG_RESPONSE><RECORD><EOM>
 
 EXISTS_MESSAGE    : <MSG_EXISTS><KEY><EOM>
@@ -110,16 +128,16 @@ RESPONSE          : <MSG_INDEX_RESPONSE><INDEX><EOM>
 
 Protocol extensions for signature/crc:
 
-SIG_MESSAGE  : <SIG_MSG> | <CSIG_MSG>
-SIG_MSG      : <MAGIC><SIG_HDR><MESSAGE><SIG>
-CSIG_MSG     : <MAGIC><CSIG_HDR><HDR><CSIG><CSIG_RECORD>[<RSEP><CSIG><CSIG_RECORD>...]<EOM><CSIG>
-SIG_HDR      : <HDR_SIG_SIPHASH>
-CSIG_HDR     : <HDR_CSIG_SIPHASH>
+SIG_MESSAGE      : <SIG_MSG> | <CSIG_MSG>
+SIG_MSG          : <MAGIC><SIG_HDR><MESSAGE><SIG>
+CSIG_MSG         : <MAGIC><CSIG_HDR><HDR><CSIG><CSIG_RECORD>[<RSEP><CSIG><CSIG_RECORD>...]<EOM><CSIG>
+SIG_HDR          : <HDR_SIG_SIPHASH>
+CSIG_HDR         : <HDR_CSIG_SIPHASH>
 HDR_SIG_SIPHASH  : 0xF0
 HDR_CSIG_SIPHASH : 0xF1
-CSIG_RECORD  : <SIZE><DATA><SIG>[<SIZE><DATA><SIG>...]<EOR>
-SIG          : <BYTE>[8]
-CSIG         : <BYTE>[8]
+CSIG_RECORD      : <SIZE><DATA><SIG>[<SIZE><DATA><SIG>...]<EOR>
+SIG              : <BYTE>[8]
+CSIG             : <BYTE>[8]
 
 -------------------------------------------------------------------------------
 
@@ -149,58 +167,23 @@ NOTE: The actual protocol implementation supports only SIPHASH signatures.
 
 -------------------------------------------------------------------------------
 
-NOTE: Some commands/responses require the transmitter record to contain
-      data formatted in a specific way.
-
-
-The MGB_MESSAGE command expects the NODE_LIST to be conform
-to the following grammar :
-
-NODES_LIST   : <NODES_STRING>
-NODES_STRING : <LABEL><:><ADDRESS><:><PORT>[<,><LABEL><:><ADDRESS><:><PORT>...]
-LABEL        : <STRING>
-ADDRESS      : <STRING>
-PORT         : <STRING>
-,            : 0x2C
-:            : 0x3A
-STRING       : <DATA>
-
-The IDR_MESSAGE response returns the INDEX in the form
-defined by the following grammar:
-
-INDEX        : <KSIZE><KEY><VSIZE>[<KSIZE><KEY><VSIZE>...]<EOR>
-KSIZE        : <LONGSIZE>
-KEY          : <DATA>
-VSIZE        : <LONGSIZE>
-
-
--------------------------------------------------------------------------------
-
-
 
 The layout for an empty (but still valid) message would be :
 
 ===============================================================================
 |  FIELD   |  SIZE   |  DESC                                                  |
 |----------|---------|--------------------------------------------------------|
-| SIG_HDR  | 1 Byte  |  The signature header (0xF0)                           |
-|----------|---------|--------------------------------------------------------|
 |   HDR    | 1 Byte  |  The message type                                      |
 |----------|---------|--------------------------------------------------------|
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
 |   EOM    | 1 Byte  |  Message Terminator (0x00)                             |
-|----------|---------|--------------------------------------------------------|
-|   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
-|          |         |  using the shared secret                               |
 -------------------------------------------------------------------------------
 
 A message containing one record (fitting a single chunk) would look like :
 
 ===============================================================================
 |  FIELD   |  SIZE   |  DESC                                                  |
-|----------|---------|--------------------------------------------------------|
-| SIG_HDR  | 1 Byte  |  The signature header (0xF0)                           |
 |----------|---------|--------------------------------------------------------|
 |   HDR    | 1 Byte  |  The message type                                      |
 |----------|---------|--------------------------------------------------------|
@@ -212,9 +195,6 @@ A message containing one record (fitting a single chunk) would look like :
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
 |   EOM    | 1 Byte  |  Message Terminator (0x00)                             |
-|----------|---------|--------------------------------------------------------|
-|   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
-|          |         |  using the shared secret                               |
 -------------------------------------------------------------------------------
 
 
@@ -223,8 +203,6 @@ key, value and ttl need to be provided (still fitting in one chunk) :
 
 ===============================================================================
 |  FIELD   |  SIZE   |  DESC                                                  |
-|----------|---------|--------------------------------------------------------|
-| SIG_HDR  | 1 Byte  |  The signature header (0xF0)                           |
 |----------|---------|--------------------------------------------------------|
 |   HDR    | 1 Byte  |  The message type                                      |
 |----------|---------|--------------------------------------------------------|
@@ -250,9 +228,6 @@ key, value and ttl need to be provided (still fitting in one chunk) :
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
 |   EOM    | 1 Byte  |  Message Terminator (0x00)                             |
-|----------|---------|--------------------------------------------------------|
-|   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
-|          |         |  using the shared secret                               |
 -------------------------------------------------------------------------------
 
 
@@ -262,8 +237,6 @@ look like (this time without the ttl record):
 
 ===============================================================================
 |  FIELD   |  SIZE   |  DESC                                                  |
-|----------|---------|--------------------------------------------------------|
-| SIG_HDR  | 1 Byte  |  The signature header (0xF0)                           |
 |----------|---------|--------------------------------------------------------|
 |   HDR    | 1 Byte  |  The message type                                      |
 |----------|---------|--------------------------------------------------------|
@@ -303,9 +276,6 @@ look like (this time without the ttl record):
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
 |   EOM    | 1 Byte  |  Message Terminator (0x00)                             |
-|----------|---------|--------------------------------------------------------|
-|   SIG    | 8 Bytes |  SIPHASH digest computed on the message                |
-|          |         |  using the shared secret                               |
 -------------------------------------------------------------------------------
 
 NOTE: The protocol allows for an unlimited amount of records, even though 
