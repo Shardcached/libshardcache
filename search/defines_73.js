@@ -1,0 +1,23 @@
+var searchData=
+[
+  ['shardcache_5fclient_5ferror_5fargs',['SHARDCACHE_CLIENT_ERROR_ARGS',['../shardcache__client_8h.html#ab786722217a8f10ebd311c9f022b447e',1,'shardcache_client.h']]],
+  ['shardcache_5fclient_5ferror_5fnetwork',['SHARDCACHE_CLIENT_ERROR_NETWORK',['../shardcache__client_8h.html#aceaff77ea24a3cebc15700bd2e18cc40',1,'shardcache_client.h']]],
+  ['shardcache_5fclient_5ferror_5fnode',['SHARDCACHE_CLIENT_ERROR_NODE',['../shardcache__client_8h.html#a7ca6f4ee9ac339ad1c6f40f5c897803d',1,'shardcache_client.h']]],
+  ['shardcache_5fclient_5fok',['SHARDCACHE_CLIENT_OK',['../shardcache__client_8h.html#abf2b82c9da13faf809b7bad02626a2ae',1,'shardcache_client.h']]],
+  ['shardcache_5fnode_5faddress_5fmaxlen',['SHARDCACHE_NODE_ADDRESS_MAXLEN',['../shardcache_8h.html#a638701bd253025fa203bf5c659d72366',1,'shardcache.h']]],
+  ['shardcache_5fnode_5flabel_5fmaxlen',['SHARDCACHE_NODE_LABEL_MAXLEN',['../shardcache_8h.html#a1216dc1e3ecd0c48c8de285179cf4b24',1,'shardcache.h']]],
+  ['shardcache_5fport_5fdefault',['SHARDCACHE_PORT_DEFAULT',['../shardcache_8h.html#a2acb8d72a99ea98491e67ec0031c7046',1,'shardcache.h']]],
+  ['shardcache_5ftcp_5ftimeout_5fdefault',['SHARDCACHE_TCP_TIMEOUT_DEFAULT',['../shardcache_8h.html#a9d5fe7f7e7f330d07a614c15d8259bd8',1,'shardcache.h']]],
+  ['shc_5fdebug',['SHC_DEBUG',['../shardcache_8h.html#aa2c1a05b61586536a8e4e860b32cba48',1,'shardcache.h']]],
+  ['shc_5fdebug1',['SHC_DEBUG1',['../shardcache_8h.html#a7e9caca0c2676677794b14d83e0eba76',1,'shardcache.h']]],
+  ['shc_5fdebug2',['SHC_DEBUG2',['../shardcache_8h.html#a5cbc48c6b87385f39cae15201b64a749',1,'shardcache.h']]],
+  ['shc_5fdebug3',['SHC_DEBUG3',['../shardcache_8h.html#a97bde0d6c209a9137868e777ec0a1a71',1,'shardcache.h']]],
+  ['shc_5fdebug4',['SHC_DEBUG4',['../shardcache_8h.html#a9c156d27815c618dc5f1c2fd5eda7164',1,'shardcache.h']]],
+  ['shc_5fdebug5',['SHC_DEBUG5',['../shardcache_8h.html#abd926cd2de1dda73067b6fdc03852b5d',1,'shardcache.h']]],
+  ['shc_5fdie',['SHC_DIE',['../shardcache_8h.html#ab59995d60636a51455084945f01fc37d',1,'shardcache.h']]],
+  ['shc_5ferror',['SHC_ERROR',['../shardcache_8h.html#a47343854a30632e853005c55aa412b2f',1,'shardcache.h']]],
+  ['shc_5finfo',['SHC_INFO',['../shardcache_8h.html#a44321dbcac3b0196fefee592e13603e5',1,'shardcache.h']]],
+  ['shc_5fnotice',['SHC_NOTICE',['../shardcache_8h.html#ad8424a700bcebe2ed362e72da046a4a3',1,'shardcache.h']]],
+  ['shc_5fwarn',['SHC_WARN',['../shardcache_8h.html#a509a7a4fedbf44c473fc94e0d1ff31d5',1,'shardcache.h']]],
+  ['shc_5fwarning',['SHC_WARNING',['../shardcache_8h.html#a3ec9a169d886ff06f76774931f0edd71',1,'shardcache.h']]]
+];

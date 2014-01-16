@@ -1,0 +1,27 @@
+var shardcache__client_8h =
+[
+    [ "SHARDCACHE_CLIENT_OK", "shardcache__client_8h.html#abf2b82c9da13faf809b7bad02626a2ae", null ],
+    [ "SHARDCACHE_CLIENT_ERROR_NODE", "shardcache__client_8h.html#a7ca6f4ee9ac339ad1c6f40f5c897803d", null ],
+    [ "SHARDCACHE_CLIENT_ERROR_NETWORK", "shardcache__client_8h.html#aceaff77ea24a3cebc15700bd2e18cc40", null ],
+    [ "SHARDCACHE_CLIENT_ERROR_ARGS", "shardcache__client_8h.html#ab786722217a8f10ebd311c9f022b447e", null ],
+    [ "shardcache_client_t", "shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc", null ],
+    [ "shardcache_client_get_aync_data_cb", "shardcache__client_8h.html#a01dd180fd921bd30aa89313bfe4e9ae6", null ],
+    [ "shardcache_client_create", "shardcache__client_8h.html#ae0f7c08ea8eae9123c511c992c0dc09c", null ],
+    [ "shardcache_client_get", "shardcache__client_8h.html#ab2726441e78cf6acc0a7a02c8588c65d", null ],
+    [ "shardcache_client_offset", "shardcache__client_8h.html#ace8520f114acd08eba2408dfa1b6b9aa", null ],
+    [ "shardcache_client_get_async", "shardcache__client_8h.html#af6017e6ed41d61157413aa94e72a4ddf", null ],
+    [ "shardcache_client_exists", "shardcache__client_8h.html#af990f59d4d3ba864042b5552a16348e0", null ],
+    [ "shardcache_client_touch", "shardcache__client_8h.html#a8b1eb394e45a0c3458c46be5b52f7719", null ],
+    [ "shardcache_client_add", "shardcache__client_8h.html#ae7fa3b07937e4886394db885b0d120f8", null ],
+    [ "shardcache_client_set", "shardcache__client_8h.html#a2c983186e3265e6aacc1c387ef68faa4", null ],
+    [ "shardcache_client_del", "shardcache__client_8h.html#ae7af65679cd37cdb5d821f60a4c07378", null ],
+    [ "shardcache_client_evict", "shardcache__client_8h.html#aabd6d9ca94722c30a55c711212b6a424", null ],
+    [ "shardcache_client_stats", "shardcache__client_8h.html#a28b99e0ba482cbeb29ca18be7e91485b", null ],
+    [ "shardcache_client_check", "shardcache__client_8h.html#adc7bc694f1f9504c88655abda10973e1", null ],
+    [ "shardcache_client_migration_begin", "shardcache__client_8h.html#a25b7479bb2d53c2f2ccf84f1d38914fb", null ],
+    [ "shardcache_client_migration_abort", "shardcache__client_8h.html#a165b44c42b84aece07c5f28193f35424", null ],
+    [ "shardcache_client_index", "shardcache__client_8h.html#a5bbe3ff7a05cdf73d25eff5d2ad90737", null ],
+    [ "shardcache_client_errno", "shardcache__client_8h.html#a9017579f462e76f482f93b61dd80afc5", null ],
+    [ "shardcache_client_errstr", "shardcache__client_8h.html#a9af4a5d4b40f51b43947a9d5a1160661", null ],
+    [ "shardcache_client_destroy", "shardcache__client_8h.html#a1e1d79558d46f7fbe4abd4287641c0ae", null ]
+];
