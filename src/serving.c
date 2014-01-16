@@ -169,7 +169,7 @@ write_status(shardcache_connection_context_t *ctx, int rc, char mode)
 
     sip_hash *shash = NULL;
     if (ctx->auth) {
-        unsigned char hdr_sig = SHC_HDR_CSIGNATURE_SIP;
+        unsigned char hdr_sig = SHC_HDR_SIGNATURE_SIP;
         fbuf_add_binary(ctx->output, (char *)&hdr_sig, 1);
         shash = sip_hash_new((char *)ctx->auth, 2, 4);
     }
