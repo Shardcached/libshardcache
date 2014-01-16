@@ -351,6 +351,8 @@ static void get_async_data(shardcache_t *cache,
         }
 
  
+        if (ctx->fetch_shash)
+            sip_hash_free(ctx->fetch_shash);
         pthread_mutex_unlock(&ctx->output_lock);
         __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
     }
@@ -430,6 +432,8 @@ process_request(void *priv)
             fbuf_add_binary(ctx->output, (char *)&magic, sizeof(magic));
 
             if (ctx->auth) {
+                if (ctx->fetch_shash)
+                    sip_hash_free(ctx->fetch_shash);
                 ctx->fetch_shash = sip_hash_new((char *)ctx->auth, 2, 4);
                 fbuf_add_binary(ctx->output, (void *)&ctx->sig_hdr, 1);
             }
