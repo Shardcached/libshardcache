@@ -787,7 +787,7 @@ shardcache_input_handler(iomux_t *iomux,
         struct sockaddr_in saddr;
         socklen_t addr_len = sizeof(struct sockaddr_in);
         getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
-        SHC_DEBUG("Bad message %02x from %s (%d)\n",
+        SHC_DEBUG("Bad message %02x from %s (%d)",
                   ctx->hdr, inet_ntoa(saddr.sin_addr), state);
         iomux_close(iomux, fd);
     }
