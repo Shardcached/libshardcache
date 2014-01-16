@@ -136,44 +136,40 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
     free(ctx);
 }
 
+#define WRITE_STATUS_MODE_SIMPLE  0x00
+#define WRITE_STATUS_MODE_BOOLEAN 0x01
+#define WRITE_STATUS_MODE_EXISTS  0x02
 static void
-write_status(shardcache_connection_context_t *ctx, int rc, int is_boolean)
+write_status(shardcache_connection_context_t *ctx, int rc, char mode)
 {
-    char out[20];
+    char out[6] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00 };
 
-    out[0] = 0;
-
-    char *p = &out[2];
     if (rc == -1) {
-        out[1] = 3;
-        strncpy(p, "ERR", 3);
-        p += 3;
+        out[2] = SHC_RES_ERR;
     } else {
-        if (is_boolean) {
-            if (rc == 1) {
-                out[1] = 3;
-                strncpy(p, "YES", 3);
-                p += 3;
-            } else {
-                out[1] = 2;
-                strncpy(p, "NO", 2);
-                p += 2;
-            }
+        if (mode == WRITE_STATUS_MODE_BOOLEAN) {
+            if (rc == 1)
+                out[2] = SHC_RES_YES;
+            else if (rc == 0)
+                out[2] = SHC_RES_NO;
+            else
+                out[2] = SHC_RES_ERR;
+        } else if (mode == WRITE_STATUS_MODE_EXISTS && rc == 1) {
+            out[2] = SHC_RES_EXISTS;
+        }
+        else if (rc == 0) {
+            out[2] = SHC_RES_OK;
         } else {
-            out[1] = 2;
-            strncpy(p, "OK", 2);
-            p += 2;
+            out[2] = SHC_RES_ERR;
         }
     }
-    memset(p, 0, 3);
-    p += 3;
 
     uint32_t magic = htonl(SHC_MAGIC);
     fbuf_add_binary(ctx->output, (char *)&magic, sizeof(magic));
 
     sip_hash *shash = NULL;
     if (ctx->auth) {
-        unsigned char hdr_sig = ctx->sig_hdr;
+        unsigned char hdr_sig = SHC_HDR_CSIGNATURE_SIP;
         fbuf_add_binary(ctx->output, (char *)&hdr_sig, 1);
         shash = sip_hash_new((char *)ctx->auth, 2, 4);
     }
@@ -184,25 +180,16 @@ write_status(shardcache_connection_context_t *ctx, int rc, int is_boolean)
 
     fbuf_add_binary(ctx->output, (char *)&hdr, 1);
     
-    if (ctx->auth && ctx->sig_hdr == SHC_HDR_CSIGNATURE_SIP) {
-        uint64_t digest;
-        sip_hash_digest_integer(shash, &hdr, 1, &digest);
-        fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
-    }
-
-    fbuf_add_binary(ctx->output, out, p - &out[0]);
+    fbuf_add_binary(ctx->output, out, sizeof(out));
 
     if (ctx->auth) {
         uint64_t digest;
-        if (ctx->sig_hdr == SHC_HDR_CSIGNATURE_SIP) {
-            sip_hash_digest_integer(shash, out, p - &out[0], &digest);
-        } else {
-            sip_hash_digest_integer(shash,
-                                    fbuf_data(ctx->output) + initial_offset,
-                                    p - &out[0] + 1, &digest);
-        }
+        sip_hash_digest_integer(shash,
+                                fbuf_data(ctx->output) + initial_offset,
+                                fbuf_used(ctx->output) - initial_offset, &digest);
         fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
     }
+
     if (shash)
         sip_hash_free(shash);
 }
@@ -511,7 +498,7 @@ process_request(void *priv)
                 rc = shardcache_set(cache, key, klen,
                         fbuf_data(&ctx->records[1]), fbuf_used(&ctx->records[1]));
             }
-            write_status(ctx, rc, 0);
+            write_status(ctx, rc, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_ADD:
@@ -531,31 +518,31 @@ process_request(void *priv)
                 rc = shardcache_add(cache, key, klen,
                         fbuf_data(&ctx->records[1]), fbuf_used(&ctx->records[1]));
             }
-            write_status(ctx, rc, 1);
+            write_status(ctx, rc, WRITE_STATUS_MODE_EXISTS);
             break;
         }
         case SHC_HDR_EXISTS:
         {
             rc = shardcache_exists(cache, key, klen);
-            write_status(ctx, rc, 1);
+            write_status(ctx, rc, WRITE_STATUS_MODE_BOOLEAN);
             break;
         }
         case SHC_HDR_TOUCH:
         {
             rc = shardcache_touch(cache, key, klen);
-            write_status(ctx, rc, 0);
+            write_status(ctx, rc, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_DELETE:
         {
             rc = shardcache_del(cache, key, klen);
-            write_status(ctx, rc, 0);
+            write_status(ctx, rc, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_EVICT:
         {
             shardcache_evict(cache, key, klen);
-            write_status(ctx, 0, 0);
+            write_status(ctx, 0, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_MIGRATION_BEGIN:
@@ -581,25 +568,25 @@ process_request(void *priv)
                 // TODO - Error messages
             }
             free(nodes);
-            write_status(ctx, 0, 0);
+            write_status(ctx, 0, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_MIGRATION_ABORT:
         {
             rc = shardcache_migration_abort(cache);
-            write_status(ctx, rc, 0);
+            write_status(ctx, rc, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_MIGRATION_END:
         {
             rc = shardcache_migration_end(cache);
-            write_status(ctx, rc, 0);
+            write_status(ctx, rc, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_CHECK:
         {
             // TODO - HEALTH CHECK
-            write_status(ctx, 0, 0);
+            write_status(ctx, 0, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_STATS:
@@ -695,7 +682,7 @@ process_request(void *priv)
         }
         default:
             fprintf(stderr, "Unsupported command: 0x%02x\n", (char)ctx->hdr);
-            write_status(ctx, -1, 0);
+            write_status(ctx, -1, WRITE_STATUS_MODE_SIMPLE);
             break;
     }
 

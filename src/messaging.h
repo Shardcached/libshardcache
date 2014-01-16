@@ -4,77 +4,8 @@
 #include <sys/types.h>
 #include "shardcache.h"
 
-/* protocol specification
- *
- * MESSAGE      : [<SIG_HDR> | <CSIG_HDR>]<MSG>[<SIG>] | <NOOP>
- * SIG_HDR      : 0xF0
- * CSIG_HDR     : 0xF1
- * MSG          : <HDR><RECORD>[<RSEP><RECORD>...]<EOM>
- * NOOP         : <MSG_NOOP>
- * HDR          : <MSG_GET> | <MSG_SET> | <MSG_DELETE> | <MSG_EVICT> |
- *                <MSG_GET_ASYNC> | <MSG_GET_OFFSET> | <MSG_GET_INDEX> |
- *                <MSG_INDEX_RESPONSE> | <MSG_MIGRATION_BEGIN> |
- *                <MSG_MIGRATION_ABORT> | <MSG_MIGRATION_END> | <MSG_RESPONSE>
- *
- * MSG_GET                 : 0x01
- * MSG_SET                 : 0x02
- * MSG_DELETE              : 0x03
- * MSG_EVICT               : 0x04
- * MSG_GET_ASYNC           : 0x05
- * MSG_GET_OFFSET          : 0x06
- * MSG_ADD                 : 0x07
- * MSG_EXISTS              : 0x08
- * MSG_TOUCH               : 0x09
- * MSG_MIGRATION_ABORT     : 0x21
- * MSG_MIGRATION_BEGIN     : 0x22
- * MSG_MIGRATION_END       : 0x23
- * MSG_CHECK               : 0x31
- * MSG_STATS               : 0x32
- * MSG_GET_INDEX           : 0x41
- * MSG_INDEX_RESPONSE      : 0x42
- * MSG_NOOP                : 0x90
- * MSG_RESPONSE            : 0x99
- * RSEP                    : 0x80
- * NULL_RECORD             : <EOR>
- * RECORD                  : <SIZE><DATA>[<SIZE><DATA>...]<EOR>
- * SIZE                    : <WORD>
- * WORD                    : <HIGH_BYTE><LOW_BYTE>
- * EOR                     : <NULL_BYTE><NULL_BYTE>
- * HIGH_BYTE               : <BYTE>
- * LOW_BYTE                : <BYTE>
- * DATA                    : <BYTE>...<BYTE>
- * BYTE                    : 0x00 - 0xFF
- * NULL_BYTE               : 0x00
- * EOM                     : <NULL_BYTE>
- * SIG                     : <BYTE>[8]
- * KEY                     : <RECORD>
- * VALUE                   : <RECORD>
- * TTL                     : <RECORD>
- * NODES_LIST              : <RECORD>
- * INDEX                   : <RECORD>
- * 
- * The only valid/supported messages are :
- * 
- * GET_MESSAGE    : <MSG_GET><KEY><EOM>
- * GET_ASYNC      : <MSG_GET_ASYNC><KEY><EOM>
- * GET_OFFSET     : <MSG_GET_OFFSET><KEY><LONG_SIZE><LONG_SIZE><EOM>
- * EXISTS_MESSAGE : <MSG_EXISTS><KEY><EOM>
- * TOUCH_MESSAGE  : <MSG_TOUCH><KEY><EOM>
- * SET_MESSAGE    : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
- * ADD_MESSAGE    : <MSG_ADD><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
- * DEL_MESSAGE    : <MSG_DEL><KEY><EOM>
- * EVI_MESSAGE    : <MSG_EVI><KEY><EOM>
- * RES_MESSAGE    : <MSG_RES><RECORD><EOM>
- *
- * MGB_MESSAGE    : <MSG_MGB><NODES_LIST><EOM>
- * MGA_MESSAGE    : <MSG_MGA><NULL_RECORD><EOM>
- * MGE_MESSAGE    : <MSG_MGE><NULL_RECORD><EOM>
- * 
- * STS_MESSAGE    : <MSG_STS><NULL_RECORD><EOM>
- * CHK_MESSAGE    : <MSG_PNG><NULL_RECORD><EOM>
- * 
- * IDG_MESSAGE    : <MSG_IDG><NULL_RECORD><EOM>
- * IDR_MESSAGE    : <MSG_IDR><INDEX><EOM>
+/* For the protocol specification check the 'docs/protocol.txt' file
+ * in the libshardcache source distribution
  */
 
 // in bytes
@@ -121,6 +52,14 @@ typedef enum {
     SHC_HDR_CSIGNATURE_SIP  = 0xF1
 
 } shardcache_hdr_t;
+
+typedef enum {
+    SHC_RES_OK     = 0x00,
+    SHC_RES_YES    = 0x01,
+    SHC_RES_EXISTS = 0x02,
+    SHC_RES_NO     = 0xFE,
+    SHC_RES_ERR    = 0xFF
+} shardcache_res_t;
 
 #define SHARDCACHE_RSEP 0x80
 

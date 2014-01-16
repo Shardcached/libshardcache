@@ -872,7 +872,11 @@ _delete_from_peer_internal(char *peer,
                           peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
-                rc = strncmp(fbuf_data(&resp), "OK", 2);
+                rc = -1;
+                char *res = fbuf_data(&resp);
+                if (res && *res == SHC_RES_OK)
+                    rc = 0;
+
                 fbuf_destroy(&resp);
                 return rc == 0 ? 0 : -1;
             } else {
@@ -966,11 +970,22 @@ _send_to_peer_internal(char *peer,
                           peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
-                if (fbuf_used(&resp) == 3) {
-                    if (strncmp(fbuf_data(&resp), "YES", 3) == 0)
-                        rc = 1;
-                    else
-                        rc = -1;
+
+                char *res = fbuf_data(&resp);
+                if (res) {
+                    switch(*res) {
+                        case SHC_RES_EXISTS:
+                            rc = 1;
+                            break;
+                        case SHC_RES_OK:
+                            rc = 0;
+                            break;
+                        default:
+                            rc = -1;
+                            break;
+                    }
+                } else {
+                    rc = -1;
                 }
                 fbuf_destroy(&resp);
                 return rc;
@@ -1163,12 +1178,21 @@ exists_on_peer(char *peer,
                           peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
-                if (fbuf_used(&resp) == 3 && strncmp(fbuf_data(&resp), "YES", 3) == 0)
-                    rc = 1;
-                else if (fbuf_used(&resp) == 2 && strncmp(fbuf_data(&resp), "NO", 2) == 0)
-                    rc = 0;
-                else
-                    rc = -1;
+
+                unsigned char *res = (unsigned char *)fbuf_data(&resp);
+                if (res) {
+                    switch(*res) {
+                        case SHC_RES_YES:
+                            rc = 1;
+                            break;
+                        case SHC_RES_NO:
+                            rc = 0;
+                            break;
+                        default:
+                            rc = -1;
+                            break;
+                    }
+                }
                 fbuf_destroy(&resp);
                 return rc;
             } else {
@@ -1219,8 +1243,10 @@ touch_on_peer(char *peer,
                 if (should_close)
                     close(fd);
 
-                if (fbuf_used(&resp) != 2 || strncmp(fbuf_data(&resp), "OK", 2) != 0)
-                    rc = -1;
+                rc = -1;
+                char *res = fbuf_data(&resp);
+                if (res && *res == SHC_RES_OK)
+                    rc = 0;
 
                 fbuf_destroy(&resp);
                 return rc;
@@ -1298,11 +1324,15 @@ check_peer(char *peer,
             shardcache_hdr_t hdr = 0;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHC_HDR_RESPONSE && rc == 0) {
-                if (fbuf_used(&resp) == 2 && memcmp(fbuf_data(&resp), "OK", 2) == 0) {
-                    if (should_close)
-                        close(fd);
-                    return 0;
-                }
+                rc = -1;
+                char *res = fbuf_data(&resp);
+                if (res && *res == SHC_RES_OK)
+                    rc = 0;
+
+                if (should_close)
+                    close(fd);
+
+                return rc;
             }
         }
         if (should_close)
@@ -1433,11 +1463,16 @@ abort_migrate_peer(char *peer,
             shardcache_hdr_t hdr = 0;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHC_HDR_RESPONSE && rc == 0) {
-                if (fbuf_used(&resp) == 2 && memcmp(fbuf_data(&resp), "OK", 2) == 0) {
-                    if (should_close)
-                        close(fd);
-                    return 0;
-                }
+
+                rc = -1;
+                char *res = fbuf_data(&resp);
+                if (res && *res == SHC_RES_OK)
+                    rc = 0;
+
+                if (should_close)
+                    close(fd);
+
+                return rc;
             }
         }
         if (should_close)

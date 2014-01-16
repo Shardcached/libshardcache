@@ -1,6 +1,6 @@
 The internal communication protocol may described by the following grammar:
 
-MESSAGE              : <NOOP> | <MSG> | <SIG_MESSAGE> | <RESPONSE_MESSAGE>
+MESSAGE              : <NOOP> | <MSG> | <SIG_MESSAGE> | <RESPONSE_MESSAGE> | <EMPTY_RESPONSE>
 NOOP                 : <MSG_NOOP>
 MSG_NOOP             : 0x90
 MSG                  : <MAGIC><HDR><RECORD>[<RSEP><RECORD>...]<EOM>
@@ -38,16 +38,16 @@ NULL_BYTE            : 0x00
 NULL_RECORD          : <EOR>
 RSEP                 : 0x80
 EOM                  : <NULL_BYTE>
-RESPONSE_MESSAGE     : <MSG_RESPONSE>(<RECORD>|<STATUS_RES>|<BOOLEAN_RES>|<EXISTS_RES>)<EOM>
+RESPONSE_MESSAGE     : <MSG_RESPONSE><1-SIZE><RESPONSE_BYTE><EOR><EOM>
 MSG_RESPONSE         : 0x99
-STATUS_RES           : <OK> | <ERR>
-OK                   : <SIZE><0x4F><0x4B><EOR>
-ERR                  : <SIZE><0x45><0x52><0x52><EOR>
-BOOLEAN_RES          : <YES> | <NO> | <ERR>
-YES                  : <SIZE><0x59><0x45><0x53><EOR>
-NO                   : <SIZE><0x4E><0x4F><EOR>
-EXISTS_RES           : <OK> | <EXISTS> | <ERR>
-EXISTS               : <SIZE><0x45><0x58><0x49><0x53><0x54><0x53><EOR>
+<1-SIZE>             : <0x00><0x01>
+RESPONSE_BYTE        : <OK> | <ERR> | <YES> | <NO> | <EXISTS>
+OK                   : 0x00
+ERR                  : 0xff
+YES                  : 0x01
+NO                   : 0xfe
+EXISTS               : 0x02
+EMPTY_RESPONSE       : <MSG_RESPONSE><NULL_RECORD><EOM>
 
 -------------------------------------------------------------------------------
 
@@ -89,37 +89,37 @@ GET_OFFSET        : <MSG_GET_OFFSET><KEY><OFFSET><LENGTH><EOM>
                     RESPONSE: <MSG_RESPONSE><RECORD><EOM>
 
 EXISTS_MESSAGE    : <MSG_EXISTS><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><BOOLEAN_RES><EOM>
+                    RESPONSE: <MSG_RESPONSE>(<YES> | <NO>)<EOM>
 
 TOUCH_MESSAGE     : <MSG_TOUCH><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS_RES><EOM>
+                    RESPONSE: <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
 
 SET_MESSAGE       : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS_RES><EOM>
+                    RESPONSE: <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
 
 ADD_MESSAGE       : <MSG_ADD><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
-                    RESPONSE: <MSG_RESPONSE><EXISTS_RES><EOM>
+                    RESPONSE: <MSG_RESPONSE>(<OK> | <ERR> | <EXISTS>)<EOM>
 
 DEL_MESSAGE       : <MSG_DELETE><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS_RES><EOM>
+                    RESPONSE: <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
 
 EVI_MESSAGE       : <MSG_EVICT><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS_RES><EOM>
+                    RESPONSE: <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
 
 MGB_MESSAGE       : <MSG_MIGRATION_BEGIN><NODES_LIST><EOM>
-RESPONSE          : <MSG_RESPONSE><STATUS_RES><EOM>
+RESPONSE          : <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
 
 MGA_MESSAGE       : <MSG_MIGRATION_ABORT><NULL_RECORD><EOM>
-RESPONSE          : <MSG_RESPONSE><STATUS_RES><EOM>
+RESPONSE          : <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
 
 MGE_MESSAGE       : <MSG_MIGRATION_END><NULL_RECORD><EOM>
-RESPONSE          : <MSG_RESPONSE><STATUS_RES><EOM>
+RESPONSE          : <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
 
 STS_MESSAGE       : <MSG_STATS><NULL_RECORD><EOM>
 RESPONSE          : <MSG_RESPONSE><RECORD><EOM>
 
 CHK_MESSAGE       : <MSG_CHECK><NULL_RECORD><EOM>
-RESPONSE          : <MSG_RESPONSE><STATUS_RES><EOM>
+RESPONSE          : <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
 
 IDG_MESSAGE       : <MSG_GET_INDEX><NULL_RECORD><EOM>
 RESPONSE          : <MSG_INDEX_RESPONSE><INDEX><EOM>
@@ -309,9 +309,9 @@ to 0x04
 
 -------------------------------------------------------------------------------
 
-A RES message containing a value "OK" (0x4f 0x4b) would look like:
+A RES message containing an <OK> response byte looks like:
 
-<99><00><02><4f><4b><00><00><00>
+<99><00><01><00><00><00><00>
 
 -------------------------------------------------------------------------------
 
@@ -333,8 +333,8 @@ The signature is optional and can be omitted.
 Responses to 'GET' requests will return the value for the requested key
 if found, an empty value otherwise
 
-Responses to 'SET', 'DEL' and 'EVI' requests will return either the string
-'OK' or 'ERR' depending on the status of the operation
+Responses to 'SET', 'DEL' and 'EVI' requests will return either the
+<OK> response byte or the <ERR> one depending on the status of the operation
 
 The actual implementation serves only one request per connection, so
 implementing the protocol you should expect the peer to close its socket
