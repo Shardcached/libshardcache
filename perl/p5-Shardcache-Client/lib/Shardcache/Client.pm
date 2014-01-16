@@ -153,6 +153,14 @@ sub send_msg {
     my $in;
     my $data;
 
+   # read the magic
+    my $magic;
+    if (read($sock, $magic, 4) != 4) {
+        delete $self->{_sock}->{"$addr:$port"};
+        return undef;
+    }
+
+    # read the signature if necessary
     if ($self->{_secret}) {
         my $rb = read($sock, $data, 1);
         if ($rb != 1) {
@@ -160,25 +168,20 @@ sub send_msg {
             return undef;
         }
 
-        return undef 
-            if (unpack("C", $data) != 0xF0); 
+        if (unpack("C", $data) != 0xF0) {
+            return undef;
+        }
     }
-    # read the magic
-    my $magic;
-    if (read($sock, $magic, 4) != 4) {
-        delete $self->{_sock}->{"$addr:$port"};
-        return undef;
-    }
-
+ 
     # read the header
     if (read($sock, $data, 1) != 1) {
         delete $self->{_sock}->{"$addr:$port"};
         return undef;
     }
 
-
-    return undef
-        if (unpack("C", $data) == 0xF0);
+    if (unpack("C", $data) == 0xF0) {
+        return undef;
+    }
 
     $in .= $data;
 
@@ -249,21 +252,21 @@ sub set {
     my ($self, $key, $value, $expire) = @_;
     return unless $key && defined $value;
     my $resp = $self->send_msg(0x02, $key, $value, $expire);
-    return (defined $resp && $resp eq "OK")
+    return (defined $resp && unpack("C", $resp) == 0x00);
 }
 
 sub del {
     my ($self, $key) = @_;
     return unless $key;
     my $resp = $self->send_msg(0x03, $key);
-    return ($resp eq "OK")
+    return (unpack("C", $resp) == 0x00);
 }
 
 sub evi {
     my ($self, $key) = @_;
     return unless $key;
     my $resp = $self->send_msg(0x04, $key);
-    return ($resp eq "OK")
+    return (unpack("C", $resp) == 0x00);
 }
 
 sub evict {
@@ -276,7 +279,7 @@ sub mgb {
     return unless $key;
     # TODO - nodes-list must be sent together with the MGB command
     my $resp = $self->send_msg(0x22, $key);
-    return ($resp eq "OK")
+    return (unpack("C", $resp) == 0x00);
 }
 
 sub migration_begin {
@@ -288,7 +291,7 @@ sub mge {
     my ($self, $key) = @_;
     return unless $key;
     my $resp = $self->send_msg(0x23, $key);
-    return ($resp eq "OK")
+    return (unpack("C", $resp) == 0x00);
 }
 
 sub migration_end {
@@ -300,7 +303,7 @@ sub mga {
     my ($self, $key) = @_;
     return unless $key;
     my $resp = $self->send_msg(0x21, $key);
-    return ($resp eq "OK")
+    return (unpack("C", $resp) == 0x00);
 }
 
 sub migration_abort {
@@ -340,7 +343,7 @@ sub chk {
     return unless $sock;
 
     my $resp = $self->send_msg(0x31, undef, undef, undef, $sock);
-    return ($resp eq "OK");
+    return (unpack("C", $resp) == 0x00);
 }
 
 sub sts {
