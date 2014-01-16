@@ -65,6 +65,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
         ctx->rnum = 0;
         ctx->moff = 0;
         ctx->version = 0;
+        ctx->csig = 0;
         memset(ctx->magic, 0, sizeof(ctx->magic));
     }
 
@@ -878,7 +879,7 @@ _delete_from_peer_internal(char *peer,
                     rc = 0;
 
                 fbuf_destroy(&resp);
-                return rc == 0 ? 0 : -1;
+                return rc;
             } else {
                 // TODO - Error messages
             }
