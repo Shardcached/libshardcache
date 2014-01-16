@@ -135,6 +135,19 @@ sub get {
     return $val;
 }
 
+sub offset {
+    my ($self, $key, $offset, $length) = @_;
+    my $val =  shardcache_client_offset($self->{_client}, $key, $offset, $length);
+    if ($val) {
+        undef($self->{_errstr});
+        $self->{_errno} = 0;
+    } else {
+        $self->{_errstr} = shardcache_client_errstr($self->{_client});
+        $self->{_errno} = shardcache_client_errno($self->{_client});
+    }
+    return $val;
+}
+
 sub get_async {
     my ($self, $key, $cb, $priv) = @_;
     return shardcache_client_get_async($self->{_client}, $key, $cb, $priv);

@@ -168,6 +168,25 @@ shardcache_client_get(c, key)
     OUTPUT:
         RETVAL
 
+SV *
+shardcache_client_offset(c, key, offset, length)
+	shardcache_client_t *	c
+	SV *	key
+        int     offset
+        int     length
+    CODE:
+	char    data[length];
+	STRLEN	klen = 0;
+        char *k = SvPVbyte(key, klen);
+        size_t size = shardcache_client_offset(c, k, klen, offset, &data, length);
+        if (size > 0) {
+            RETVAL = newSVpv(data, size);
+        } else {
+            RETVAL = &PL_sv_undef;
+        }
+    OUTPUT:
+        RETVAL
+
 int
 shardcache_client_get_async(c, key, coderef, priv=&PL_sv_undef)
 	shardcache_client_t *	c
