@@ -10,3 +10,6 @@
 [submodule "deps/libchash"]
 	path = deps/libchash
 	url = https://github.com/dgryski/libchash
+[submodule "external/go-shardcache"]
+	path = external/go-shardcache
+	url = https://github.com/dgryski/go-shardcache.git
