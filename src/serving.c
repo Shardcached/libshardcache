@@ -210,8 +210,10 @@ static int get_async_data_handler(void *key,
         // error
         __sync_fetch_and_add(&ctx->fetch_error, 1);
         __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
-        if (ctx->fetch_shash)
+        if (ctx->fetch_shash) {
             sip_hash_free(ctx->fetch_shash);
+            ctx->fetch_shash = NULL;
+        }
         return -1;
     }
     static int max_chunk_size = (1<<16)-1;
@@ -247,6 +249,7 @@ static int get_async_data_handler(void *key,
             if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
                 SHC_ERROR("Can't compute the siphash digest!\n");
                 sip_hash_free(ctx->fetch_shash);
+                ctx->fetch_shash = NULL;
                 pthread_mutex_unlock(&ctx->output_lock);
                 __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
                 __sync_fetch_and_add(&ctx->fetch_error, 1);
@@ -286,6 +289,7 @@ static int get_async_data_handler(void *key,
                     if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
                         SHC_ERROR("Can't compute the siphash digest!\n");
                         sip_hash_free(ctx->fetch_shash);
+                        ctx->fetch_shash = NULL;
                         pthread_mutex_unlock(&ctx->output_lock);
                         __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
                         __sync_fetch_and_add(&ctx->fetch_error, 1);
@@ -301,20 +305,16 @@ static int get_async_data_handler(void *key,
             uint64_t digest;
             sip_hash_update(ctx->fetch_shash, (void *)&eor, 2);
             sip_hash_update(ctx->fetch_shash, &eom, 1);
-            if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
+            if (sip_hash_final_integer(ctx->fetch_shash, &digest)) {
+                fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
+            } else {
                 SHC_ERROR("Can't compute the siphash digest!\n");
-                sip_hash_free(ctx->fetch_shash);
-                pthread_mutex_unlock(&ctx->output_lock);
-                __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
                 __sync_fetch_and_add(&ctx->fetch_error, 1);
-                return -1;
             }
-            fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
+            sip_hash_free(ctx->fetch_shash);
+            ctx->fetch_shash = NULL;
         }
 
-        if (ctx->fetch_shash)
-            sip_hash_free(ctx->fetch_shash);
-        __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
         pthread_mutex_unlock(&ctx->output_lock);
         __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
     }
@@ -338,21 +338,17 @@ static void get_async_data(shardcache_t *cache,
             uint64_t digest;
             sip_hash_update(ctx->fetch_shash, (void *)&eor, 2);
             sip_hash_update(ctx->fetch_shash, &eom, 1);
-            if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
+            if (sip_hash_final_integer(ctx->fetch_shash, &digest)) {
+                fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
+            } else {
                 SHC_ERROR("Can't compute the siphash digest!\n");
-                pthread_mutex_unlock(&ctx->output_lock);
-                __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
                 __sync_fetch_and_add(&ctx->fetch_error, 1);
-                if (ctx->fetch_shash)
-                    sip_hash_free(ctx->fetch_shash);
-                return;
+                sip_hash_free(ctx->fetch_shash);
+                ctx->fetch_shash = NULL;
             }
-            fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
-        }
-
- 
-        if (ctx->fetch_shash)
             sip_hash_free(ctx->fetch_shash);
+            ctx->fetch_shash = NULL;
+        }
         pthread_mutex_unlock(&ctx->output_lock);
         __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
     }
@@ -432,8 +428,10 @@ process_request(void *priv)
             fbuf_add_binary(ctx->output, (char *)&magic, sizeof(magic));
 
             if (ctx->auth) {
-                if (ctx->fetch_shash)
+                if (ctx->fetch_shash) {
                     sip_hash_free(ctx->fetch_shash);
+                    ctx->fetch_shash = NULL;
+                }
                 ctx->fetch_shash = sip_hash_new((char *)ctx->auth, 2, 4);
                 fbuf_add_binary(ctx->output, (void *)&ctx->sig_hdr, 1);
             }
