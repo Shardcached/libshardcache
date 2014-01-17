@@ -9,7 +9,9 @@ MAGIC_BYTES          : <0x73><0x68><0x63>
 VERSION              : <BYTE>
 HDR                  : <MSG_GET> | <MSG_SET> | <MSG_DELETE> | <MSG_EVICT> |
                        <MSG_GET_ASYNC> | <MSG_GET_OFFSET> | <MSG_GET_INDEX> |
-                       <MSG_MIGRATION_BEGIN> | <MSG_MIGRATION_ABORT> | <MSG_MIGRATION_END>
+                       <MSG_ADD> | <MSG_EXISTS> | <MSG_TOUCH> |
+                       <MSG_MIGRATION_BEGIN> | <MSG_MIGRATION_ABORT> | <MSG_MIGRATION_END> |
+                       <MSG_CHECK> | <MSG_STATS> | <MSG_INDEX_RESPONSE>
 MSG_GET              : 0x01
 MSG_SET              : 0x02
 MSG_DELETE           : 0x03
