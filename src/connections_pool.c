@@ -38,7 +38,7 @@ free_connection(void *conn)
     free(fdp);
 }
 
-queue_t *
+static queue_t *
 get_connection_queue(connections_pool_t *cc, char *addr)
 {
     static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
