@@ -72,11 +72,6 @@ PORT                 : <STRING>
 ,                    : 0x2C
 :                    : 0x3A
 STRING               : <DATA>
-INDEX                : <KSIZE><KEY><VSIZE>[<KSIZE><KEY><VSIZE>...]<EOR>
-KSIZE                : <LONG_SIZE>
-KEY                  : <DATA>
-VSIZE                : <LONG_SIZE>
-
 
 The implemented messages in libshardcache are the following:
 
@@ -125,6 +120,14 @@ RESPONSE          : <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
 
 IDG_MESSAGE       : <MSG_GET_INDEX><NULL_RECORD><EOM>
 RESPONSE          : <MSG_INDEX_RESPONSE><INDEX><EOM>
+
+NOTE: The index record contained in the MSG_INDEX_RESPONSE is encoded using
+      a specific format
+
+INDEX_RECORD      : <KSIZE><KDATA><VSIZE>[<KSIZE><KDATA><VSIZE>...]<EOR>
+KSIZE             : <LONG_SIZE>
+KDATA             : <DATA>
+VSIZE             : <LONG_SIZE>
 
 -------------------------------------------------------------------------------
 
