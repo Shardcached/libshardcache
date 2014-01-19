@@ -62,6 +62,7 @@ INDEX                : <RECORD>
 OFFSET               : <LONG_SIZE>
 LONG_SIZE            : <HIGH_WORD><LOW_WORD>
 LENGTH               : <LONG_SIZE>
+REMAINING_BYTES      : <LONG_SIZE>
 HIGH_WORD            : <WORD>
 LOW_WORD             : <WORD>
 NODES_LIST           : <NODES_STRING>
@@ -83,7 +84,7 @@ GET_ASYNC         : <MSG_GET_ASYNC><KEY><EOM>
                     RESPONSE: <MSG_RESPONSE><RECORD><EOM>
 
 GET_OFFSET        : <MSG_GET_OFFSET><KEY><OFFSET><LENGTH><EOM>
-                    RESPONSE: <MSG_RESPONSE><RECORD><EOM>
+                    RESPONSE: <MSG_RESPONSE><RECORD><REMAINING_BYTES><EOM>
 
 EXISTS_MESSAGE    : <MSG_EXISTS><KEY><EOM>
                     RESPONSE: <MSG_RESPONSE>(<YES> | <NO>)<EOM>
