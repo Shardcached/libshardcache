@@ -1,5 +1,9 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.05  Tue Jan 21 00:54:22 CET 2014
+        - Change in libshardcache and in the protocol
+        - new methods: 'add', 'offset', 'exists'
+        - asynchronous api
 0.04  Thu Jan  9 16:45:25 CET 2014
         - Changes to be consistent with the API exposed by
           the pure-perl implementation (Shardcache::Client)
