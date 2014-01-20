@@ -103,7 +103,7 @@ int main (int argc, char **argv) {
         int size = strtol(argv[4], NULL, 10);
         char out[size];
         size_t len = shardcache_client_offset(client, argv[2], strlen(argv[2]), offset, out, size); 
-        if (len && out) {
+        if (len) {
             print_chunk(NULL, NULL, 0, out, len, NULL);
         }
     } else if (strcasecmp(cmd, "geta") == 0 || strcasecmp(cmd, "get_async") == 0) {
