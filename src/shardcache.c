@@ -1265,6 +1265,10 @@ _shardcache_set_internal(shardcache_t *cache,
             // since it's now going to be a volatile item
             if (cache->use_persistent_storage && cache->storage.remove)
                 cache->storage.remove(key, klen, cache->storage.priv);
+
+            if (inx && ht_exists(cache->volatile_storage, key, klen))
+                return 1;
+
             volatile_object_t *obj = malloc(sizeof(volatile_object_t));
             obj->data = malloc(vlen);
             memcpy(obj->data, value, vlen);
@@ -1274,19 +1278,12 @@ _shardcache_set_internal(shardcache_t *cache,
             SHC_DEBUG("Setting volatile item %s to expire %d (now: %d)", 
                 keystr, obj->expire, (int)time(NULL));
 
-            if (!inx)
-            {
-                ht_get_and_set(cache->volatile_storage, key, klen,
-                    obj, sizeof(volatile_object_t), (void **)&prev, NULL);
-            }
-            else if(!ht_exists(cache->volatile_storage, key, klen))
-            {
+            if (inx) {
                 ht_set(cache->volatile_storage, key, klen,
                         obj, sizeof(volatile_object_t));
-            }
-            else
-            {
-                return 1;
+            } else {
+                ht_get_and_set(cache->volatile_storage, key, klen,
+                    obj, sizeof(volatile_object_t), (void **)&prev, NULL);
             }
 
             if (prev) {
