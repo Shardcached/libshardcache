@@ -1224,6 +1224,21 @@ shardcache_touch(shardcache_t *cache, void *key, size_t klen)
 }
 
 
+static void
+_shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
+{
+    shardcache_evictor_job_t *job = create_evictor_job(key, klen);
+
+    char keystr[1024];
+    KEY2STR(key, klen, keystr, sizeof(keystr));
+    SHC_INFO("Adding evictor job for key %s", keystr);
+
+    push_value(cache->evictor_jobs, job);
+    pthread_mutex_lock(&cache->evictor_lock);
+    pthread_cond_signal(&cache->evictor_cond);
+    pthread_mutex_unlock(&cache->evictor_lock);
+}
+
 
 static int
 _shardcache_set_internal(shardcache_t *cache,
@@ -1330,6 +1345,8 @@ _shardcache_set_internal(shardcache_t *cache,
 
         }
         arc_remove(cache->arc, (const void *)key, klen);
+
+        _shardcache_commence_eviction(cache, key, klen);
         return 0;
     }
     else if (node_len)
@@ -1350,8 +1367,11 @@ _shardcache_set_internal(shardcache_t *cache,
         else
             rc = send_to_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
         shardcache_release_connection_for_peer(cache, peer, fd);
-        if (rc == 0)
+        if (rc == 0) {
             arc_remove(cache->arc, (const void *)key, klen);
+
+            _shardcache_commence_eviction(cache, key, klen);
+        }
         return rc;
     }
 
@@ -1429,16 +1449,8 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
         if (__sync_fetch_and_add(&cache->evict_on_delete, 0))
         {
             arc_remove(cache->arc, (const void *)key, klen);
-            shardcache_evictor_job_t *job = create_evictor_job(key, klen);
 
-            char keystr[1024];
-            KEY2STR(key, klen, keystr, sizeof(keystr));
-            SHC_INFO("Adding evictor job for key %s", keystr);
-
-            push_value(cache->evictor_jobs, job);
-            pthread_mutex_lock(&cache->evictor_lock);
-            pthread_cond_signal(&cache->evictor_cond);
-            pthread_mutex_unlock(&cache->evictor_lock);
+            _shardcache_commence_eviction(cache, key, klen);
         }
 
         uint32_t size = (uint32_t)arc_size(cache->arc);
