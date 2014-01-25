@@ -864,7 +864,7 @@ _delete_from_peer_internal(char *peer,
         // if we are not forwarding a delete command to the owner
         // of the key, but only an eviction request to a peer,
         // we don't need to wait for the response
-        if (owner && rc == 0) {
+        if (rc == 0) {
             shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
@@ -887,7 +887,6 @@ _delete_from_peer_internal(char *peer,
         }
         if (should_close)
             close(fd);
-        return 0;
     }
     return -1;
 }
