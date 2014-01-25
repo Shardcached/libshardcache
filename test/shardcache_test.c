@@ -175,5 +175,9 @@ int main(int argc, char **argv)
 
     destroy_list(children);
 
+    shardcache_client_destroy(client);
+    shardcache_client_destroy(client1);
+    shardcache_client_destroy(client2);
+
     exit(0);
 }
