@@ -1,4 +1,4 @@
-#include <shardcache.h>
+
 #include <shardcache_client.h>
 #include <linklist.h>
 #include <unistd.h>
@@ -111,6 +111,7 @@ int main(int argc, char **argv)
     ret = shardcache_client_exists(client, "test_key1", 9);
     t_validate_int(ret, 0);
 
+    shardcache_client_del(client, "test_key2", 9);
     t_testing("shardcache_client_add(client, test_key2, 9, test_value2, 11, 0) == 0");
     ret = shardcache_client_add(client, "test_key2", 9, "test_value2", 11, 0);
     t_validate_int(ret, 0);
@@ -139,6 +140,36 @@ int main(int argc, char **argv)
     char partial[4];
     size = shardcache_client_offset(client, "test_key2", 9, 5, &partial, 5);
     t_validate_buffer(partial, 5, "value", 5);
+
+    shardcache_client_t *client1 = shardcache_client_create(&nodes[0], 1, NULL);
+    shardcache_client_t *client2 = shardcache_client_create(&nodes[1], 1, NULL);
+
+    // the following tests communication among peers
+    // (sets 100 keys using one node and reads them using the other node,
+    //  so some keys will be owned from the node used for writing while other
+    //  ones will be owned by the node used for reading)
+    t_testing("shardcache_client_set(c1, k, kl, &v) == shardcache_client_get(c2, k, kl)");
+    int failed = 0;
+    for (i = 100; i < 200; i++) {
+        char k[64];
+        char v[64];
+        char *vv;
+
+        sprintf(k, "test_key%d", i);
+        sprintf(v, "test_value%d", i);
+        shardcache_client_set(client1, k, strlen(k), v, strlen(v), 0);
+        size_t s = shardcache_client_get(client2, k, strlen(k), (void **)&vv);
+        if (s == 0) {
+            t_failure("no data for key %s", k);
+            failed = 1;
+        } else if(strcmp(vv, v) != 0) {
+            t_failure("%s != %s", vv, v);
+            failed = 1;
+        }
+        free(vv);
+    }
+    if (!failed)
+        t_success();
 
     stop_nodes(children);
 
