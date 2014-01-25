@@ -2,6 +2,7 @@
 #define __MESSAGING_H__
 
 #include <sys/types.h>
+#include <iomux.h>
 #include "shardcache.h"
 
 /* For the protocol specification check the 'docs/protocol.txt' file
@@ -184,6 +185,8 @@ shardcache_storage_index_t *index_from_peer(char *peer,
                                             unsigned char sig_hdr,
                                             int fd);
 
+// idx = -1 , data == NULL, len = 0 when finished
+// idx = -2 , data == NULL, len = 0 if an error occurred
 typedef int (*async_read_callback_t)(void *data,
                                       size_t len,
                                       int  idx,
@@ -217,6 +220,7 @@ shardcache_hdr_t async_read_context_sig_hdr(async_read_ctx_t *ctx);
 int async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx);
 
 int read_message_async(int fd,
+                       iomux_t *iomux,
                        char *auth,
                        async_read_callback_t cb,
                        void *priv);
@@ -226,6 +230,7 @@ typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         size_t klen,
                                         void *data,
                                         size_t len,
+                                        int error,
                                         void *priv);
 
 
@@ -236,6 +241,7 @@ int fetch_from_peer_async(char *peer,
                           size_t len,
                           fetch_from_peer_async_cb cb,
                           void *priv,
-                          int fd);
+                          int fd,
+                          iomux_t *iomux);
 
 #endif

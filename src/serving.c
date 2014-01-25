@@ -85,6 +85,7 @@ struct __shardcache_connection_context_s {
     const char    *auth;
     shardcache_worker_context_t *worker_ctx;
     async_read_ctx_t *reader_ctx;
+    iomux_t *iomux;
 };
 
 static int
@@ -93,12 +94,13 @@ async_read_handler(void *data, size_t len, int idx, void *priv)
     shardcache_connection_context_t *ctx =
         (shardcache_connection_context_t *)priv;
 
-    if (idx < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX)
+    if (idx >= 0 && idx < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX)
         fbuf_add_binary(&ctx->records[idx], data, len);
-    else
-        return -1;
 
-    return 0;
+    // idx == -1 means that reading finished 
+    // idx == -2 means error
+    // any idx >= 0 refers to the record index
+    return (idx >= -1) ? 0 : -1;
 }
 
 
@@ -315,9 +317,10 @@ static int get_async_data_handler(void *key,
             ctx->fetch_shash = NULL;
         }
 
-        pthread_mutex_unlock(&ctx->output_lock);
         __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+        pthread_mutex_unlock(&ctx->output_lock);
     }
+
     return 0;
 }
 
@@ -327,6 +330,7 @@ static void get_async_data(shardcache_t *cache,
                             shardcache_get_async_callback_t cb,
                             shardcache_connection_context_t *ctx)
 {
+    __sync_bool_compare_and_swap(&ctx->fetching, 0, 1);
     int rc = shardcache_get_async(cache, key, klen, cb, ctx);
     if (rc != 0) {
         uint16_t eor = 0;
@@ -352,6 +356,27 @@ static void get_async_data(shardcache_t *cache,
         pthread_mutex_unlock(&ctx->output_lock);
         __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
     }
+}
+
+static void
+shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
+{
+    shardcache_connection_context_t *ctx =
+        (shardcache_connection_context_t *)priv;
+
+    pthread_mutex_lock(&ctx->output_lock);
+    if (fbuf_used(ctx->output)) {
+        int wb = iomux_write(iomux, fd,
+                            fbuf_data(ctx->output),
+                            fbuf_used(ctx->output));
+        fbuf_remove(ctx->output, wb);
+    }
+
+    if (!fbuf_used(ctx->output) && !__sync_fetch_and_add(&ctx->fetching, 0)) {
+        iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
+        cbs->mux_output = NULL;
+    }
+    pthread_mutex_unlock(&ctx->output_lock);
 }
 
 static void *
@@ -452,8 +477,9 @@ process_request(void *priv)
          
             }
 
-            __sync_bool_compare_and_swap(&ctx->fetching, 0, 1);
             get_async_data(cache, key, klen, get_async_data_handler, ctx);
+            iomux_callbacks_t *cbs = iomux_callbacks(ctx->iomux, ctx->fd);
+            cbs->mux_output = shardcache_output_handler;
             break;
         }
         case SHC_HDR_GET:
@@ -692,27 +718,6 @@ process_request(void *priv)
 }
 
 static void
-shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
-{
-    shardcache_connection_context_t *ctx =
-        (shardcache_connection_context_t *)priv;
-
-    pthread_mutex_lock(&ctx->output_lock);
-    if (fbuf_used(ctx->output)) {
-        int wb = iomux_write(iomux, fd,
-                            fbuf_data(ctx->output),
-                            fbuf_used(ctx->output));
-        fbuf_remove(ctx->output, wb);
-    }
-
-    if (!fbuf_used(ctx->output) && !__sync_fetch_and_add(&ctx->fetching, 0)) {
-        iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
-        cbs->mux_output = NULL;
-    }
-    pthread_mutex_unlock(&ctx->output_lock);
-}
-
-static void
 shardcache_input_handler(iomux_t *iomux,
                          int fd,
                          void *data,
@@ -746,9 +751,14 @@ shardcache_input_handler(iomux_t *iomux,
 
         process_request(ctx);
         pthread_mutex_lock(&ctx->output_lock);
+        if (__sync_fetch_and_add(&ctx->fetching, 0)) {
+                iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
+                cbs->mux_output = shardcache_output_handler;
+            pthread_mutex_unlock(&ctx->output_lock);
+            break;
+        }
         // if we have output, let's send it
         if (fbuf_used(ctx->output)) {
-
             int wb = iomux_write(iomux, fd,
                                  fbuf_data(ctx->output),
                                  fbuf_used(ctx->output));
@@ -760,13 +770,8 @@ shardcache_input_handler(iomux_t *iomux,
                 cbs->mux_output = shardcache_output_handler;
             }
         }
-        pthread_mutex_unlock(&ctx->output_lock);
 
-        if (__sync_fetch_and_add(&ctx->fetching, 0)) {
-                iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
-                cbs->mux_output = shardcache_output_handler;
-            break;
-        }
+        pthread_mutex_unlock(&ctx->output_lock);
 
         int i;
         for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++)
@@ -830,8 +835,10 @@ worker(void *priv)
             };
             ctx->worker_ctx = wrk_ctx;
 
+            ctx->iomux = iomux;
             iomux_add(iomux, ctx->fd, &connection_callbacks);
             ATOMIC_INCREMENT(wrk_ctx->num_fds);
+
             ctx = queue_pop_left(jobs);
         }
         pthread_testcancel();

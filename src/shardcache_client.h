@@ -70,13 +70,18 @@ size_t shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, 
  * @param klen   The length of the key
  * @param data   The pointer to the chunk of data
  * @param dlen   The length of the current chunk of data
+ * @param error  True (1) if there was an error. data will point to NULL and dlen will be 0 as well
  * @param priv   The priv pointer passed to shardcache_client_get_async()
+ *
+ * @note data == NULL and dlen == 0 indicates that the opartion finished
+ *       error will be set to 1 if the operation failed, 0 otherwise
  */
 typedef int (*shardcache_client_get_aync_data_cb)(char *node,
                                                   void *key,
                                                   size_t klen,
                                                   void *data,
                                                   size_t dlen,
+                                                  int error,
                                                   void *priv);
 
 /**

@@ -37,6 +37,7 @@ struct __async_read_ctx_s {
     char version;
     int moff;
     sip_hash *shash;
+    int blocking;
 };
 
 int
@@ -197,12 +198,10 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             }
 
             // let's call the read_async callback
-            if (ctx->clen > 0 &&
-                ctx->cb(ctx->chunk, ctx->clen, ctx->rnum, ctx->cb_priv) != 0)
-            {
+            if (ctx->clen > 0 && ctx->cb(ctx->chunk, ctx->clen, ctx->rnum, ctx->cb_priv) != 0) {
                 ctx->state = SHC_STATE_READING_ERR;
                 return -1;
-            } 
+            }
 
             uint16_t nlen = 0;
             rbuf_read(ctx->buf, (u_char *)&nlen, 2);
@@ -310,12 +309,6 @@ read_async_input_data(iomux_t *iomux, int fd, void *data, int len, void *priv)
     }
 }
 
-static void
-read_async_input_eof(iomux_t *iomux, int fd, void *priv)
-{
-    iomux_end_loop(iomux);
-}
-
 async_read_ctx_t *
 async_read_context_create(char *auth,
                           async_read_callback_t cb,
@@ -338,8 +331,29 @@ async_read_context_destroy(async_read_ctx_t *ctx)
     free(ctx);
 }
 
+static void
+read_async_input_eof(iomux_t *iomux, int fd, void *priv)
+{
+    async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
+
+    if (ctx->state == SHC_STATE_READING_DONE || ctx->state == SHC_STATE_READING_NONE)
+        ctx->cb(NULL, 0, -1, ctx->cb_priv);
+    else
+        ctx->cb(NULL, 0, -2, ctx->cb_priv);
+
+    if (ctx->blocking) {
+        async_read_context_destroy(ctx);
+    } else {
+        iomux_end_loop(iomux);
+    }
+}
+
 int
-read_message_async(int fd, char *auth, async_read_callback_t cb, void *priv)
+read_message_async(int fd,
+                   iomux_t *iomux,
+                   char *auth,
+                   async_read_callback_t cb,
+                   void *priv)
 {
     struct timeval iomux_timeout = { 0, 20000 }; // 20ms
     async_read_ctx_t *ctx = async_read_context_create(auth, cb, priv);
@@ -349,26 +363,33 @@ read_message_async(int fd, char *auth, async_read_callback_t cb, void *priv)
         .mux_eof = read_async_input_eof,
         .priv = ctx
     };
-    iomux_t *iomux= iomux_create();
+
     if (!iomux) {
-        async_read_context_destroy(ctx);
-        return -1;
+        iomux= iomux_create();
+        if (!iomux) {
+            async_read_context_destroy(ctx);
+            return -1;
+        }
+        ctx->blocking = 1;
     }
 
     iomux_add(iomux, fd, &cbs);
-    for (;;) {
-        iomux_run(iomux, &iomux_timeout);
-        if (iomux_isempty(iomux))
-            break;
-    }
 
-    iomux_destroy(iomux);
+    if (ctx->blocking) {
+        for (;;) {
+            iomux_run(iomux, &iomux_timeout);
+            if (iomux_isempty(iomux))
+                break;
+        }
 
-    char state = ctx->state;
-    async_read_context_destroy(ctx);
+        iomux_destroy(iomux);
 
-    if (state == SHC_STATE_READING_ERR) {
-        return -1;
+        char state = ctx->state;
+        async_read_context_destroy(ctx);
+
+        if (state == SHC_STATE_READING_ERR) {
+            return -1;
+        }
     }
 
     return 0;
@@ -378,6 +399,7 @@ typedef struct {
     char *peer;
     void *key;
     size_t klen;
+    int fd;
     fetch_from_peer_async_cb cb;
     void *priv;
 } fetch_from_peer_helper_arg_t;
@@ -389,9 +411,23 @@ fetch_from_peer_helper(void *data,
                        void *priv)
 {
     fetch_from_peer_helper_arg_t *arg = (fetch_from_peer_helper_arg_t *)priv;
+
+    // idx == -1 means that reading finished 
+    // idx == -2 means error
+    // any idx >= 0 refers to the record index
+    
     if (idx == 0)
-        return arg->cb(arg->peer, arg->key, arg->klen, data, len, arg->priv);
-    return -1;
+        return arg->cb(arg->peer, arg->key, arg->klen, data, len, 0, arg->priv);
+    else
+        return arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx != -1), arg->priv);
+
+    if (idx < 0) {
+        if (arg->fd >= 0)
+            close(arg->fd);
+        free(arg);
+    }
+
+    return (idx >= -1) ? 0 : -1;
 }
 
 int
@@ -402,7 +438,8 @@ fetch_from_peer_async(char *peer,
                       size_t klen,
                       fetch_from_peer_async_cb cb,
                       void *priv,
-                      int fd)
+                      int fd,
+                      iomux_t *iomux)
 {
     int rc = -1;
     int should_close = 0;
@@ -418,17 +455,16 @@ fetch_from_peer_async(char *peer,
         };
         rc = write_message(fd, auth, sig_hdr, SHC_HDR_GET_ASYNC, &record, 1);
         if (rc == 0) {
-            fetch_from_peer_helper_arg_t arg = {
-                .peer = peer,
-                .key = key,
-                .klen = klen,
-                .cb = cb,
-                .priv = priv
-            };
-            rc = read_message_async(fd, auth, fetch_from_peer_helper, &arg);
+            fetch_from_peer_helper_arg_t *arg = calloc(1, sizeof(fetch_from_peer_helper_arg_t));
+            arg->peer = peer;
+            arg->key = malloc(klen);
+            memcpy(arg->key, key, klen);
+            arg->klen = klen;
+            arg->fd = should_close ? fd : -1;
+            arg->cb = cb;
+            arg->priv = priv;
+            rc = read_message_async(fd, iomux, auth, fetch_from_peer_helper, arg);
         }
-        if (should_close)
-            close(fd);
     }
     return rc;
 }

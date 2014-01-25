@@ -247,7 +247,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             // unlock the mutex while the backend is fetching the data
             MUTEX_UNLOCK(&cache->lock);
             size_t size = cache->ops->fetch(obj->ptr, cache->ops->priv);
-            if (size == 0) {
+            if (size == 0 && !obj->async) {
                 /* If the fetch fails we can drop the object without
                  * calling arc_balance() since we don't want a not-existing key
                  * to affect the cache.
@@ -438,6 +438,8 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
 
     void *ptr = cache->ops->create(key, len, async, cache->ops->priv);
     obj = arc_object_create(cache, ptr, key, len);
+    obj->async = async;
+
     if (!obj) {
         MUTEX_UNLOCK(&cache->lock);
         return NULL;

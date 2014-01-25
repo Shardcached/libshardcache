@@ -478,7 +478,7 @@ int shardcache_client_get_async(shardcache_client_t *c,
     if (fd < 0)
         return -1;
 
-    return fetch_from_peer_async(node, (char *)c->auth, SHC_HDR_CSIGNATURE_SIP, key, klen, data_cb, priv, fd);
+    return fetch_from_peer_async(node, (char *)c->auth, SHC_HDR_CSIGNATURE_SIP, key, klen, data_cb, priv, fd, NULL);
 }
 
 
