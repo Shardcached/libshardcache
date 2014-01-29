@@ -1268,6 +1268,7 @@ _shardcache_set_internal(shardcache_t *cache,
 
     if (is_mine == 1)
     {
+        int rc = -1;
         SHC_DEBUG("Storing value %s (%d) for key %s",
                   shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
                   (int)vlen, keystr);
@@ -1294,11 +1295,12 @@ _shardcache_set_internal(shardcache_t *cache,
                 keystr, obj->expire, (int)time(NULL));
 
             if (inx) {
-                ht_set(cache->volatile_storage, key, klen,
-                        obj, sizeof(volatile_object_t));
+                ret = ht_set(cache->volatile_storage, key, klen,
+                             obj, sizeof(volatile_object_t));
             } else {
-                ht_get_and_set(cache->volatile_storage, key, klen,
-                    obj, sizeof(volatile_object_t), (void **)&prev, NULL);
+                ret = ht_get_and_set(cache->volatile_storage, key, klen,
+                                     obj, sizeof(volatile_object_t),
+                                     (void **)&prev, NULL);
             }
 
             if (prev) {
@@ -1341,13 +1343,13 @@ _shardcache_set_internal(shardcache_t *cache,
                 return 1;
             }
 
-            cache->storage.store(key, klen, value, vlen, cache->storage.priv);
+            rc = cache->storage.store(key, klen, value, vlen, cache->storage.priv);
 
         }
         arc_remove(cache->arc, (const void *)key, klen);
 
         _shardcache_commence_eviction(cache, key, klen);
-        return 0;
+        return rc;
     }
     else if (node_len)
     {
