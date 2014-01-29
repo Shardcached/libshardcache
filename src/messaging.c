@@ -947,7 +947,7 @@ _send_to_peer_internal(char *peer,
 
         uint32_t expire_nbo = 0;
         if (expire) {
-            expire_nbo = htonl(expire_nbo);
+            expire_nbo = htonl(expire);
             record[2].v = &expire_nbo;
             record[2].l = sizeof(expire);
         }
