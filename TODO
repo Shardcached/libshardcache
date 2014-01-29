@@ -1,7 +1,11 @@
  * support message compression
 
- * allow get messages to contain multiple keys to be fetched at once
-   and include a record (eventually empty) for each queried key in the response
+ * expose a get_multi() and set_multi() api in shardcache_client and implement it 
+   so that operations can be parallelized among different servers when possible
+
+ * extend the expire interface in set() commands to allow the use of some flag to 
+   control if the expiry time should be renewed when the key is accessed or not
+   (and let it honor the initial expiration time)
 
  * parallelize eviction
    evict commands are very small and can be handled quickly but now it's
