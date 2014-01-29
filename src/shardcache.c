@@ -1295,10 +1295,10 @@ _shardcache_set_internal(shardcache_t *cache,
                 keystr, obj->expire, (int)time(NULL));
 
             if (inx) {
-                ret = ht_set(cache->volatile_storage, key, klen,
+                rc = ht_set(cache->volatile_storage, key, klen,
                              obj, sizeof(volatile_object_t));
             } else {
-                ret = ht_get_and_set(cache->volatile_storage, key, klen,
+                rc = ht_get_and_set(cache->volatile_storage, key, klen,
                                      obj, sizeof(volatile_object_t),
                                      (void **)&prev, NULL);
             }
