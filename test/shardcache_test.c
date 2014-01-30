@@ -1,82 +1,43 @@
 
 #include <shardcache_client.h>
-#include <linklist.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
 #include <testing.h>
 
-int quit = 0;
-static void stop_node(int sig)
-{
-    quit = 1;
-}
-
-static void start_nodes(shardcache_node_t *nodes, int num_nodes, linked_list_t *children)
-{
-    int pid;
-    int i;
-    for (i = 0; i < num_nodes; i++) {
-        pid = fork();
-        if (pid) {
-            int *child = malloc(sizeof(int));
-            *child = pid;
-            push_value(children, child);
-        } else {
-            // child
-            signal(SIGQUIT, stop_node);
-
-            shardcache_t *cache = shardcache_create(nodes[i].label,
-                                                    nodes,
-                                                    num_nodes,
-                                                    NULL,
-                                                    NULL,
-                                                    5,
-                                                    1<<29);
-
-
-            while (!quit) {
-                printf("RUN\n");
-                sleep(1);
-            }
-
-            shardcache_destroy(cache);
-            exit(0);
-        }
-    }
-}
-
-static void stop_nodes(linked_list_t *children)
-{
-    int *child;
-    while ((child = shift_value(children))) {
-        kill(*child, 3);
-        waitpid(*child, NULL, 0);
-        printf("child %d exited\n", *child);
-        free(child);
-    }
-}
-
 int main(int argc, char **argv)
 {
     int i;
     int num_nodes = 2;
-    linked_list_t *children = create_list();
     shardcache_node_t nodes[num_nodes];
+    shardcache_t *servers[num_nodes];
 
-    shardcache_log_init("shardcached", LOG_DEBUG+4);
+    shardcache_log_init("shardcached", LOG_WARNING);
+
+
+    t_init();
+
 
     for (i = 0; i < num_nodes; i++) {
         sprintf(nodes[i].label, "peer%d", i);
         sprintf(nodes[i].address, "localhost:975%d", i);
     }
 
-    t_init();
-
-    t_testing("start_nodes(nodes, num_nodes, children)");
-    start_nodes(nodes, num_nodes, children);
-    t_validate_int(list_count(children), 2);
+    for (i = 0; i < num_nodes; i++) {
+        t_testing("shardcache_create(nodes[%d].label, nodes, num_nodes, NULL, NULL, 5, 1<<29", i);
+        servers[i] = shardcache_create(nodes[i].label,
+                                       nodes,
+                                       num_nodes,
+                                       NULL,
+                                       NULL,
+                                       5,
+                                       1<<29);
+        if (servers[i])
+            t_success();
+        else
+            t_failure("Errors creating the shardcache instance");
+    }
 
     sleep(1);
 
@@ -173,10 +134,10 @@ int main(int argc, char **argv)
     if (!failed)
         t_success();
 
-    stop_nodes(children);
 
-    destroy_list(children);
-
+    for (i = 0; i < num_nodes; i++) {
+        shardcache_destroy(servers[i]);
+    }
     shardcache_client_destroy(client);
     shardcache_client_destroy(client1);
     shardcache_client_destroy(client2);
