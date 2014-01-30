@@ -525,6 +525,7 @@ static void __op_evict(void *item, void *priv)
         obj->data = NULL;
         obj->dlen = 0;
         obj->complete = 0;
+        obj->async = 0;
         clear_list(obj->listeners);
         __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_EVICTS].value, 1);
     }
@@ -1114,7 +1115,15 @@ void *shardcache_get(shardcache_t *cache,
         .ts = { 0, 0 },
         .complete = 0
     };
+
+    char keystr[1024];
+    if (shardcache_log_level() >= LOG_DEBUG)
+        KEY2STR(key, klen, keystr, sizeof(keystr));
+
+    SHC_DEBUG("Getting value for key: %s", keystr);
+
     int rc = shardcache_get_async(cache, key, klen, shardcache_get_helper, &arg);
+
     if (rc == 0) {
         pthread_mutex_lock(&arg.lock);
         if (!arg.complete)
@@ -1123,6 +1132,7 @@ void *shardcache_get(shardcache_t *cache,
 
         if (arg.stat != 0) {
             fbuf_destroy(&arg.data);
+            SHC_DEBUG("Error trying to get key: %s", keystr);
             return NULL;
         }
 
@@ -1132,11 +1142,11 @@ void *shardcache_get(shardcache_t *cache,
 
         if (timestamp)
             memcpy(timestamp, &arg.ts, sizeof(struct timeval));
-        return value;
-    }
-    fbuf_destroy(&arg.data);
-    return NULL;
-}
+
+        if (!value)
+            SHC_DEBUG("No value for key: %s", keystr);
+
+        return value; } fbuf_destroy(&arg.data); return NULL; }
 
 size_t
 shardcache_head(shardcache_t *cache,
@@ -1297,8 +1307,10 @@ _shardcache_set_internal(shardcache_t *cache,
             if (cache->use_persistent_storage && cache->storage.remove)
                 cache->storage.remove(key, klen, cache->storage.priv);
 
-            if (inx && ht_exists(cache->volatile_storage, key, klen))
+            if (inx && ht_exists(cache->volatile_storage, key, klen)) {
+                SHC_DEBUG("A volatile value already exists for key %s", keystr);
                 return 1;
+            }
 
             volatile_object_t *obj = malloc(sizeof(volatile_object_t));
             obj->data = malloc(vlen);
@@ -1341,8 +1353,10 @@ _shardcache_set_internal(shardcache_t *cache,
         else if (cache->use_persistent_storage && cache->storage.store)
         {
             if (inx) {
-                if (ht_exists(cache->volatile_storage, key, klen) == 1)
+                if (ht_exists(cache->volatile_storage, key, klen) == 1) {
+                    SHC_DEBUG("A volatile value already exists for key %s", keystr);
                     return 1;
+                }
             } else {
                 // remove this key from the volatile storage (if present)
                 // it's going to be eventually persistent now (depending on the storage type)
@@ -1357,6 +1371,7 @@ _shardcache_set_internal(shardcache_t *cache,
             if (inx && cache->storage.exist &&
                     cache->storage.exist(key, klen, cache->storage.priv) == 1)
             {
+                SHC_DEBUG("A value already exists for key %s", keystr);
                 return 1;
             }
 
