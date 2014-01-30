@@ -571,7 +571,7 @@ static void *evictor(void *priv)
                 char *peer = cache->shards[i].label;
                 if (strcmp(peer, cache->me) != 0) {
                     SHC_DEBUG3("Sending Eviction command to %s", peer);
-                    int fd = shardcache_get_connection_for_peer(cache, cache->shards[i].address);
+                    int fd = -1;//shardcache_get_connection_for_peer(cache, cache->shards[i].address);
                     SHC_DEBUG4("Using fd %d\n", fd);
                     int rc = evict_from_peer(cache->shards[i].address, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd);
                     SHC_DEBUG3("evict_from_peer() returned %d", rc);
