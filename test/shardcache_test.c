@@ -13,7 +13,7 @@ int main(int argc, char **argv)
     shardcache_node_t nodes[num_nodes];
     shardcache_t *servers[num_nodes];
 
-    shardcache_log_init("shardcached", LOG_DEBUG+4);
+    shardcache_log_init("shardcached", LOG_DEBUG+5);
 
 
     t_init();
