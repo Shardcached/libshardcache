@@ -86,6 +86,7 @@ struct __shardcache_s {
 #endif
     pthread_t expirer_th;
     int expirer_started;
+    int expirer_quit;
 
     int evict_on_delete;
 
@@ -101,6 +102,7 @@ struct __shardcache_s {
     pthread_mutex_t evictor_lock;
     pthread_cond_t evictor_cond;
     linked_list_t *evictor_jobs;
+    int evictor_quit;
 
     shardcache_counters_t *counters;
 #define SHARDCACHE_COUNTER_GETS         0
@@ -558,8 +560,8 @@ static void *evictor(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     linked_list_t *jobs = cache->evictor_jobs;
-    for (;;) {
-        pthread_testcancel();
+    while (!__sync_fetch_and_add(&cache->evictor_quit, 0))
+    {
         shardcache_evictor_job_t *job = (shardcache_evictor_job_t *)shift_value(jobs);
         while (job) {
             char keystr[1024];
@@ -585,7 +587,6 @@ static void *evictor(void *priv)
 
             job = (shardcache_evictor_job_t *)shift_value(jobs);
         }
-        pthread_testcancel();
         struct timeval now;
         int rc = 0;
         rc = gettimeofday(&now, NULL);
@@ -638,18 +639,15 @@ static int expire_volatile(hashtable_t *table, void *key, size_t klen, void *val
 void *shardcache_expire_volatile_keys(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
-    for (;;) {
+    while (!__sync_fetch_and_add(&cache->expirer_quit, 0))
+    {
         time_t now = time(NULL);
-
-        pthread_testcancel();
 
         SPIN_LOCK(&cache->next_expire_lock);
 
         if (cache->next_expire && now >= cache->next_expire && ht_count(cache->volatile_storage)) {
             int prev_expire = cache->next_expire;
             SPIN_UNLOCK(&cache->next_expire_lock);
-
-            pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 
             expire_volatile_arg_t arg = {
                 .list = create_list(),
@@ -683,12 +681,9 @@ void *shardcache_expire_volatile_keys(void *priv)
 
             destroy_list(arg.list);
 
-            pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         } else {
             SPIN_UNLOCK(&cache->next_expire_lock);
         }
-
-        pthread_testcancel();
 
         sleep(1);
     }
@@ -851,7 +846,7 @@ void shardcache_destroy(shardcache_t *cache)
     free(cache->shards);
 
     if (__sync_fetch_and_add(&cache->evict_on_delete, 0)) {
-        pthread_cancel(cache->evictor_th);
+        __sync_add_and_fetch(&cache->evictor_quit, 1);
         pthread_join(cache->evictor_th, NULL);
         pthread_mutex_destroy(&cache->evictor_lock);
         pthread_cond_destroy(&cache->evictor_cond);
@@ -861,7 +856,7 @@ void shardcache_destroy(shardcache_t *cache)
     shardcache_release_counters(cache->counters);
 
     if (cache->expirer_started) {
-        pthread_cancel(cache->expirer_th);
+        __sync_add_and_fetch(&cache->expirer_quit, 1);
         pthread_join(cache->expirer_th, NULL);
     }
 
