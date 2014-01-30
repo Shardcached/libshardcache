@@ -63,7 +63,7 @@ int main(int argc, char **argv)
     linked_list_t *children = create_list();
     shardcache_node_t nodes[num_nodes];
 
-    shardcache_log_init("shardcached", LOG_WARNING);
+    shardcache_log_init("shardcached", LOG_DEBUG+4);
 
     for (i = 0; i < num_nodes; i++) {
         sprintf(nodes[i].label, "peer%d", i);
