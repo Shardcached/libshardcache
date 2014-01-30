@@ -232,6 +232,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             if (obj->ptr)
                 cache->ops->evict(obj->ptr, cache->ops->priv);
 
+            obj->async = 0;
             arc_list_prepend(&obj->head, &state->head);
             obj->state = state;
             obj->state->size += obj->size;
@@ -402,6 +403,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
         if (async && __sync_fetch_and_add(&obj->async, 0)) {
             retain_ref(cache->refcnt, obj->node);
             MUTEX_UNLOCK(&cache->lock);
+            *valuep = obj->ptr;
             return obj;
         }
 
