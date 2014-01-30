@@ -55,10 +55,11 @@ tsan:
 build_deps:
 	@make -eC deps all
 
-static:  objects
+.PHONY: static
+static: $(DEPS) objects
 	ar -r libshardcache.a src/*.o
 
-standalone: objects
+standalone: $(DEPS) objects
 	@cwd=`pwd`; \
 	dir="/tmp/libshardcache_build$$$$"; \
 	mkdir $$dir; \
@@ -71,11 +72,11 @@ standalone: objects
 	ar -r libshardcache_standalone.a $$dir/*.o src/*.o; \
 	rm -rf $$dir
 
-shared: objects
+shared: $(DEPS) objects
 	$(CC) src/*.o $(LDFLAGS) $(DEPS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
 
 dynamic: LDFLAGS += -lhl -lchash -liomux -lsiphash
-dynamic: objects
+dynamic: $(DEPS) objects
 	 $(CC) src/*.o $(LDFLAGS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
 
 $(DEPS): build_deps
@@ -104,13 +105,17 @@ clean:
 support/testing.o:
 	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
 
-tests: CFLAGS += -Isrc -Ideps/.incs -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
 
-tests: support/testing.o static
+.PHONY: buld_tests
+build_tests: CFLAGS += -Isrc -Ideps/.incs -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
+build_tests: support/testing.o static
 	@for i in $(TESTS); do\
 	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(LDFLAGS) $(DEPS) -lm";\
 	  $(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(DEPS) support/testing.o $(LDFLAGS) -lm;\
 	done;\
+
+.PHONY: test
+test: build_tests
 	for i in $(TEST_EXEC_ORDER); do echo; test/$$i; echo; done
 
 perl_install:
