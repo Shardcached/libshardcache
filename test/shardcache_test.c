@@ -36,8 +36,10 @@ static void start_nodes(shardcache_node_t *nodes, int num_nodes, linked_list_t *
                                                     1<<29);
 
 
-            while (!quit)
+            while (!quit) {
+                printf("RUN\n");
                 sleep(1);
+            }
 
             shardcache_destroy(cache);
             exit(0);
