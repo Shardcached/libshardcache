@@ -13,7 +13,7 @@ int main(int argc, char **argv)
     shardcache_node_t nodes[num_nodes];
     shardcache_t *servers[num_nodes];
 
-    shardcache_log_init("shardcached", LOG_DEBUG+5);
+    shardcache_log_init("shardcached", LOG_WARNING);
 
 
     t_init();
@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 
     for (i = 0; i < num_nodes; i++) {
         sprintf(nodes[i].label, "peer%d", i);
-        sprintf(nodes[i].address, "localhost:975%d", i);
+        sprintf(nodes[i].address, "127.0.0.1:975%d", i);
     }
 
     for (i = 0; i < num_nodes; i++) {
