@@ -1310,6 +1310,8 @@ _shardcache_set_internal(shardcache_t *cache,
                     __sync_sub_and_fetch(counter, prev->dlen - vlen);
                 }
                 destroy_volatile(prev); 
+                arc_remove(cache->arc, (const void *)key, klen);
+                _shardcache_commence_eviction(cache, key, klen);
             } else {
                 __sync_add_and_fetch(counter, vlen);
             }
@@ -1345,10 +1347,9 @@ _shardcache_set_internal(shardcache_t *cache,
 
             rc = cache->storage.store(key, klen, value, vlen, cache->storage.priv);
 
+            arc_remove(cache->arc, (const void *)key, klen);
+            _shardcache_commence_eviction(cache, key, klen);
         }
-        arc_remove(cache->arc, (const void *)key, klen);
-
-        _shardcache_commence_eviction(cache, key, klen);
         return rc;
     }
     else if (node_len)
