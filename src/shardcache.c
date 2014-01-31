@@ -357,6 +357,10 @@ shardcache_fetch_from_peer_async_cb(char *peer,
     } else {
         foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_complete, obj);
         obj->complete = 1;
+        if (obj->dlen)
+            arc_update_size(obj->arc, obj->key, obj->klen, obj->dlen);
+        else
+            arc_remove(obj->arc, obj->key, obj->klen);
     }
     pthread_mutex_unlock(&obj->lock);
     return !error ? 0 : -1;
@@ -979,7 +983,6 @@ typedef struct {
     size_t dlen;
     shardcache_get_async_callback_t cb;
     void *priv;
-    shardcache_t *cache;
 } shardcache_get_async_helper_arg_t;
 
 static int
@@ -997,7 +1000,6 @@ shardcache_get_async_helper(void *key,
     if (rc != 0 || (!dlen && !total_size)) { // error
         //arg->stat = -1;
         free(arg);
-        arc_remove(arg->cache->arc, (const void *)key, klen);
         return -1;
     }
 
@@ -1043,7 +1045,6 @@ shardcache_get_async(shardcache_t *cache,
         shardcache_get_async_helper_arg_t *arg = calloc(1, sizeof(shardcache_get_async_helper_arg_t));
         arg->cb = cb;
         arg->priv = priv;
-        arg->cache = cache;
 
         shardcache_get_listener_t *listener = malloc(sizeof(shardcache_get_listener_t));
         listener->cb = shardcache_get_async_helper;
