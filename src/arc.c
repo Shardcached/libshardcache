@@ -190,6 +190,23 @@ static void arc_balance(arc_t *cache, size_t size)
     }
 }
 
+void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size)
+{
+    arc_object_t *obj = ht_get(cache->hash, key, klen, NULL);
+    if (obj) {
+        MUTEX_LOCK(&obj->lock);
+        if (obj && (obj->state == &cache->mru || obj->state == &cache->mfu))
+        {
+            MUTEX_LOCK(&cache->lock);
+            obj->state->size -= obj->size;
+            obj->size = sizeof(arc_object_t) + obj->klen + size;
+            obj->state->size += obj->size;
+            MUTEX_UNLOCK(&cache->lock);
+        }
+        MUTEX_UNLOCK(&obj->lock);
+    }
+}
+
 /* Move the object to the given state. If the state transition requires,
 * fetch, evict or destroy the object. */
 static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)

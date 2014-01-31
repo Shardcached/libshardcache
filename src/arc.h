@@ -96,12 +96,13 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res);
  */
 void arc_remove(arc_t *cache, const void *key, size_t len);
 
+void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size);
+
 /**
  * @brief Returns the actual cache size (in bytes)
  * @param cache  : A valid pointer to an initialized arc_t structure
  * @return The actual size of the cache
  */
 size_t arc_size(arc_t *cache);
-
 
 #endif /* __ARC_H__ */
