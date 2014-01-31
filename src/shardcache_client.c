@@ -152,13 +152,14 @@ size_t shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, 
         c->errstr[0] = 0;
 
         connections_pool_add(c->connections, node, fd);
+        fbuf_destroy(&value);
         return to_copy;
     } else {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
         snprintf(c->errstr, sizeof(c->errstr), "Can't fetch data from node '%s'", node);
-        return 0;
     }
+    fbuf_destroy(&value);
     return 0;
 }
 
