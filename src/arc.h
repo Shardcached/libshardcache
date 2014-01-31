@@ -29,8 +29,7 @@ typedef struct __arc_ops {
      *         that the object has not been found.\n
      *         If the object is async 0 will be returned in case the operation
      *         is successful and data will follow asynchronously, 
-     *         UINT_MAX will be returned if the object has not been found\n
-     *         In all cases -1 will indicate an error.
+     *         UINT_MAX will be returned if the object has not been found
      */
     size_t (*fetch) (void *obj, void *priv);
     
