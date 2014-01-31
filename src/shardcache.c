@@ -871,10 +871,6 @@ void shardcache_destroy(shardcache_t *cache)
     if (cache->serv)
         stop_serving(cache->serv);
 
-    __sync_add_and_fetch(&cache->async_leave, 1);
-    pthread_join(cache->async_io_th, NULL);
-    iomux_destroy(cache->async_mux);
-
     SPIN_LOCK(&cache->migration_lock);
     if (cache->migration) {
         shardcache_migration_abort(cache);    
@@ -883,10 +879,6 @@ void shardcache_destroy(shardcache_t *cache)
 #ifndef __MACH__
     pthread_spin_destroy(&cache->migration_lock);
 #endif
-
-    for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
-        shardcache_counter_remove(cache->counters, cache->cnt[i].name);
-    }
 
     if (__sync_fetch_and_add(&cache->evict_on_delete, 0)) {
         __sync_add_and_fetch(&cache->evictor_quit, 1);
@@ -901,6 +893,15 @@ void shardcache_destroy(shardcache_t *cache)
     if (cache->expirer_started) {
         __sync_add_and_fetch(&cache->expirer_quit, 1);
         pthread_join(cache->expirer_th, NULL);
+    }
+
+    __sync_add_and_fetch(&cache->async_leave, 1);
+    pthread_join(cache->async_io_th, NULL);
+    iomux_destroy(cache->async_mux);
+    pthread_mutex_destroy(&cache->async_lock);
+
+    for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
+        shardcache_counter_remove(cache->counters, cache->cnt[i].name);
     }
 
     ht_destroy(cache->volatile_storage);
@@ -919,7 +920,6 @@ void shardcache_destroy(shardcache_t *cache)
 
     free(cache->me);
     free(cache->shards);
-
 
     connections_pool_destroy(cache->connections_pool);
 
