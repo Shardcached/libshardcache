@@ -330,6 +330,14 @@ shardcache_fetch_from_peer_notify_listener_error(void *item, uint32_t idx, void 
     return -1;
 }
 
+typedef struct
+{
+    cache_object_t *obj;
+    shardcache_t *cache;
+    char *peer_addr;
+    int fd;
+} shc_fetch_async_arg_t;
+
 static int
 shardcache_fetch_from_peer_async_cb(char *peer,
                                     void *key,
@@ -339,11 +347,18 @@ shardcache_fetch_from_peer_async_cb(char *peer,
                                     int error,
                                     void *priv)
 {
-    cache_object_t *obj = (cache_object_t *)priv;
+    shc_fetch_async_arg_t *arg = (shc_fetch_async_arg_t *)priv;
+    cache_object_t *obj = arg->obj;
+    shardcache_t *cache = arg->cache;
+    char *peer_addr = arg->peer_addr;
+    int fd = arg->fd;
+
     pthread_mutex_lock(&obj->lock);
     if (error) {
         foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_error, obj);
         arc_remove(obj->arc, obj->key, obj->klen);
+        shardcache_release_connection_for_peer(cache, peer_addr, fd);
+        free(arg);
     } else if (len) {
         obj->data = realloc(obj->data, obj->dlen + len);
         memcpy(obj->data + obj->dlen, data, len);
@@ -361,6 +376,8 @@ shardcache_fetch_from_peer_async_cb(char *peer,
             arc_update_size(obj->arc, obj->key, obj->klen, obj->dlen);
         else
             arc_remove(obj->arc, obj->key, obj->klen);
+        shardcache_release_connection_for_peer(cache, peer_addr, fd);
+        free(arg);
     }
     pthread_mutex_unlock(&obj->lock);
     return !error ? 0 : -1;
@@ -382,27 +399,33 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
     }
 
     // another peer is responsible for this item, let's get the value from there
-    fbuf_t value = FBUF_STATIC_INITIALIZER;
 
     int fd = shardcache_get_connection_for_peer(cache, peer_addr);
     if (obj->async) {
         pthread_mutex_lock(&cache->async_lock);
+        shc_fetch_async_arg_t *arg = malloc(sizeof(shc_fetch_async_arg_t));
+        arg->obj = obj;
+        arg->cache = cache;
+        arg->peer_addr = peer_addr;
+        arg->fd = fd;
         rc = fetch_from_peer_async(peer_addr,
                                    (char *)cache->auth,
                                    SHC_HDR_CSIGNATURE_SIP,
                                    obj->key,
                                    obj->klen,
                                    shardcache_fetch_from_peer_async_cb,
-                                   obj,
+                                   arg,
                                    fd,
                                    cache->async_mux);
         pthread_mutex_unlock(&cache->async_lock);
         if (rc != 0) {
             foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_error, obj);
             arc_remove(cache->arc, obj->key, obj->klen);
+            shardcache_release_connection_for_peer(cache, peer_addr, fd);
         }
         __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
     } else { 
+        fbuf_t value = FBUF_STATIC_INITIALIZER;
         rc = fetch_from_peer(peer_addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, obj->key, obj->klen, &value, fd);
         if (rc == 0 && fbuf_used(&value)) {
             obj->data = fbuf_data(&value);
@@ -410,10 +433,10 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
             __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
             obj->complete = 1;
         }
+        shardcache_release_connection_for_peer(cache, peer_addr, fd);
+        fbuf_destroy(&value);
     }
-    shardcache_release_connection_for_peer(cache, peer_addr, fd);
 
-    fbuf_destroy(&value);
     return rc;
 }
 
@@ -442,7 +465,7 @@ static size_t __op_fetch(void *item, void * priv)
     char node_name[1024];
     size_t node_len = sizeof(node_name);
     memset(node_name, 0, node_len);
-    // if we are not the owner try asking our peer responsible for this data
+    // if we are not the owner try asking to the peer responsible for this data
     if (!shardcache_test_ownership(cache, obj->key, obj->klen, node_name, &node_len))
     {
         int done = 1;
