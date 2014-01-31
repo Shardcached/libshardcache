@@ -53,9 +53,6 @@ static int parse_nodes_string(char *str)
     return 0;
 }
 
-pthread_mutex_t async_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t async_cond = PTHREAD_COND_INITIALIZER;
-
 int print_chunk(char *peer,
                  void *key,
                  size_t klen,
@@ -66,14 +63,7 @@ int print_chunk(char *peer,
 {
     if (data && len)
         fwrite(data, 1, len, stdout);
-
-    if (!data && !len) {
-        pthread_mutex_lock(&async_lock);
-        pthread_cond_signal(&async_cond);
-        pthread_mutex_unlock(&async_lock);
-    }
-
-    return (!error);
+    return error;
 }
 
 int main (int argc, char **argv) {
@@ -121,9 +111,6 @@ int main (int argc, char **argv) {
         }
     } else if (strcasecmp(cmd, "geta") == 0 || strcasecmp(cmd, "get_async") == 0) {
         rc = shardcache_client_get_async(client, argv[2], strlen(argv[2]), print_chunk, NULL); 
-        pthread_mutex_lock(&async_lock);
-        pthread_cond_wait(&async_cond, &async_lock);
-        pthread_mutex_unlock(&async_lock);
     } else if (strcasecmp(cmd, "set") == 0 ||
                strcasecmp(cmd, "add") == 0)
     {
