@@ -308,7 +308,7 @@ shardcache_fetch_from_peer_notify_listener (void *item, uint32_t idx, void *user
     shardcache_fetch_from_peer_notify_arg *arg = (shardcache_fetch_from_peer_notify_arg *)user;
     cache_object_t *obj = arg->obj;
     int rc = listener->cb(obj->key, obj->klen, arg->data, arg->len, 0, NULL, listener->priv);
-    return (rc == 0) ? 0 : -1;
+    return (rc == 0) ? 1 : -1;
 }
 
 static int
@@ -1047,7 +1047,6 @@ shardcache_get_async(shardcache_t *cache,
         listener->cb = shardcache_get_async_helper;
         listener->priv = arg;
         push_value(obj->listeners, listener);
-
    }
 
     pthread_mutex_unlock(&obj->lock);
