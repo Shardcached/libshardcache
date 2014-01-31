@@ -125,6 +125,7 @@ struct __shardcache_s {
     int tcp_timeout;
     pthread_t async_io_th;
     iomux_t *async_mux;
+    pthread_mutex_t async_lock;
     int async_leave;
 };
 
@@ -338,6 +339,7 @@ shardcache_fetch_from_peer_async_cb(char *peer,
                                     void *priv)
 {
     cache_object_t *obj = (cache_object_t *)priv;
+    pthread_mutex_lock(&obj->lock);
     if (error) {
         foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_error, obj);
         arc_remove(obj->arc, obj->key, obj->klen);
@@ -355,6 +357,7 @@ shardcache_fetch_from_peer_async_cb(char *peer,
         foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_complete, obj);
         obj->complete = 1;
     }
+    pthread_mutex_unlock(&obj->lock);
     return !error ? 0 : -1;
 }
 
@@ -378,6 +381,7 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
 
     int fd = shardcache_get_connection_for_peer(cache, peer_addr);
     if (obj->async) {
+        pthread_mutex_lock(&cache->async_lock);
         rc = fetch_from_peer_async(peer_addr,
                                    (char *)cache->auth,
                                    SHC_HDR_CSIGNATURE_SIP,
@@ -387,6 +391,7 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
                                    obj,
                                    fd,
                                    cache->async_mux);
+        pthread_mutex_unlock(&cache->async_lock);
         if (rc != 0) {
             foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_error, obj);
             arc_remove(cache->arc, obj->key, obj->klen);
@@ -452,8 +457,9 @@ static size_t __op_fetch(void *item, void * priv)
         if (done) {
             if (ret == 0) {
                 gettimeofday(&obj->ts, NULL);
+                size_t dlen = obj->dlen;
                 pthread_mutex_unlock(&obj->lock);
-                return obj->dlen;
+                return dlen;
             }
             return 0;
         }
@@ -717,7 +723,9 @@ void *shardcache_run_async(void *priv)
     struct timeval timeout = { 0, 20000 };
     shardcache_t *cache = (shardcache_t *)priv;
     while (!__sync_fetch_and_add(&cache->async_leave, 0)) {
+        pthread_mutex_lock(&cache->async_lock);
         iomux_run(cache->async_mux, &timeout);
+        pthread_mutex_unlock(&cache->async_lock);
     }
     return NULL;
 }
@@ -830,6 +838,7 @@ shardcache_t *shardcache_create(char *me,
     cache->connections_pool = connections_pool_create(cache->tcp_timeout);
 
     cache->async_mux = iomux_create();
+    pthread_mutex_init(&cache->async_lock, NULL);
     if (pthread_create(&cache->async_io_th, NULL, shardcache_run_async, cache) != 0) {
         fprintf(stderr, "Can't create the async i/o thread: %s\n", strerror(errno));
         shardcache_destroy(cache);
