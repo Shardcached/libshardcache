@@ -1155,7 +1155,11 @@ void *shardcache_get(shardcache_t *cache,
         if (!value)
             SHC_DEBUG("No value for key: %s", keystr);
 
-        return value; } fbuf_destroy(&arg.data); return NULL; }
+        return value;
+    }
+    fbuf_destroy(&arg.data);
+    return NULL;
+}
 
 size_t
 shardcache_head(shardcache_t *cache,
