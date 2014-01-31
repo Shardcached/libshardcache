@@ -869,8 +869,8 @@ _delete_from_peer_internal(char *peer,
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHC_HDR_RESPONSE && rc == 0) {
-                SHC_DEBUG("Got (del) response from peer %s : %s\n",
-                          peer, fbuf_data(&resp));
+                SHC_DEBUG("Got (del) response from peer %s: %02x\n",
+                          peer, *((char *)fbuf_data(&resp)));
                 if (should_close)
                     close(fd);
                 rc = -1;
@@ -1484,14 +1484,6 @@ abort_migrate_peer(char *peer,
 int
 connect_to_peer(char *address_string, unsigned int timeout)
 {
-    char *brkt = NULL;
-    char *addr = strdup(address_string);
-    char *host = strtok_r(addr, ":", &brkt);
-    char *port_string = strtok_r(NULL, ":", &brkt);
-    int port = port_string ? atoi(port_string) : SHARDCACHE_PORT_DEFAULT;
-
-    int fd = open_connection(host, port, timeout);
-
-    free(addr);
+    int fd = open_connection(address_string, SHARDCACHE_PORT_DEFAULT, timeout);
     return fd;
 }
