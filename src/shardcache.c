@@ -560,6 +560,7 @@ static void *evictor(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     linked_list_t *jobs = cache->evictor_jobs;
+
     while (!__sync_fetch_and_add(&cache->evictor_quit, 0))
     {
         shardcache_evictor_job_t *job = (shardcache_evictor_job_t *)shift_value(jobs);
@@ -574,13 +575,12 @@ static void *evictor(void *priv)
                 if (strcmp(peer, cache->me) != 0) {
                     SHC_DEBUG3("Sending Eviction command to %s", peer);
                     int fd = shardcache_get_connection_for_peer(cache, cache->shards[i].address);
-                    SHC_DEBUG4("Using fd %d\n", fd);
                     int rc = evict_from_peer(cache->shards[i].address, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd);
-                    SHC_DEBUG3("evict_from_peer() returned %d", rc);
+                    if (rc != 0)
+                        SHC_WARNING("evict_from_peer return %d for peer %s", rc, peer);
                     shardcache_release_connection_for_peer(cache, cache->shards[i].address, fd);
                 }
             }
-            SHC_DEBUG3("Destroying eviction job");
             destroy_evictor_job(job);
 
             SHC_DEBUG2("Eviction job for key '%s' completed", keystr);
@@ -793,7 +793,7 @@ shardcache_t *shardcache_create(char *me,
         return NULL;
     }
 
-    cache->volatile_storage = ht_create(1<<20, 10<<20, (ht_free_item_callback_t)destroy_volatile);
+    cache->volatile_storage = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)destroy_volatile);
 
     cache->connections_pool = connections_pool_create(cache->tcp_timeout);
 
@@ -836,15 +836,6 @@ void shardcache_destroy(shardcache_t *cache)
         shardcache_counter_remove(cache->counters, cache->cnt[i].name);
     }
 
-    if (cache->arc)
-        arc_destroy(cache->arc);
-
-    if (cache->chash)
-        chash_free(cache->chash);
-
-    free(cache->me);
-    free(cache->shards);
-
     if (__sync_fetch_and_add(&cache->evict_on_delete, 0)) {
         __sync_add_and_fetch(&cache->evictor_quit, 1);
         pthread_join(cache->evictor_th, NULL);
@@ -867,6 +858,16 @@ void shardcache_destroy(shardcache_t *cache)
 
     if (cache->auth)
         free((void *)cache->auth);
+
+    if (cache->arc)
+        arc_destroy(cache->arc);
+
+    if (cache->chash)
+        chash_free(cache->chash);
+
+    free(cache->me);
+    free(cache->shards);
+
 
     connections_pool_destroy(cache->connections_pool);
 
