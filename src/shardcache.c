@@ -997,7 +997,7 @@ shardcache_get_async_helper(void *key,
     if (rc != 0 || (!dlen && !total_size)) { // error
         //arg->stat = -1;
         free(arg);
-        arc_remove(cache->arc, (const void *)key, klen);
+        arc_remove(arg->cache->arc, (const void *)key, klen);
         return -1;
     }
 
