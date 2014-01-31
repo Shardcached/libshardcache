@@ -1,6 +1,6 @@
 #include "shardcache.h"
 
-#define SHC_ESCAPE_BUFFER_SIZE_MAX 1<<16
+#define SHC_ESCAPE_BUFFER_SIZE_MAX (1<<16)
 
 static unsigned int __loglevel = 0;
 
@@ -59,12 +59,12 @@ unsigned long shardcache_byte_escape(char ch,
 char *shardcache_hex_escape(const char *buf, int len, int limit)
 {
     int i;
-    static __thread char str[SHC_ESCAPE_BUFFER_SIZE_MAX+5];
+    static __thread char str[SHC_ESCAPE_BUFFER_SIZE_MAX+6];
 
     int olen = (limit > 0 && limit < len) ? limit : len;
 
     if (olen > SHC_ESCAPE_BUFFER_SIZE_MAX/2)
-        olen = SHC_ESCAPE_BUFFER_SIZE_MAX;
+        olen = SHC_ESCAPE_BUFFER_SIZE_MAX/2;
 
     strcpy(str, "0x");
     char *p = str+2;
