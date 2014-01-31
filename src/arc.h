@@ -21,9 +21,16 @@ typedef struct __arc_ops {
      * this time. Use the arc_object_init() function to initialize
      * the arc_object structure.
      * */
-    void *(*create) (const void *key, size_t len, int async, void *priv);
+    void *(*create) (const void *key, size_t klen, int async, void *priv);
     
-    //! Fetch the data associated with the object.
+    /**
+     * @brief Fetch the data associated with the object.
+     * @return If the object is not async a 0 return value will indicate
+     *         that the object has not been found.\n
+     *         If the object is async 0 will be returned in case the operation
+     *         is successful and data will follow asynchronously, 
+     *         UINT_MAX will be returned if the object has not been found
+     */
     size_t (*fetch) (void *obj, void *priv);
     
     /**
@@ -71,7 +78,7 @@ void arc_destroy(arc_t *cache);
  *
  * @param cache  : A valid pointer to an initialized arc_t structure
  * @param key    : The key
- * @param len    : The length of the key
+ * @param klen   : The length of the key
  * @param valuep : a reference to the pointer where to copy the retrieved value
  * @return An opaque ARC resource which needs to be released using arc_release_resource()
  *
@@ -79,7 +86,7 @@ void arc_destroy(arc_t *cache);
  *       a cached object (which is contained in an ARC resource) it will be retained until
  *       the caller releases it using the arc_release_resource() function
  */
-arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async);
+arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t klen, void **valuep, int async);
 
 /**
  * @brief Release the resource previously alloc'd by arc_lookup()
@@ -92,10 +99,17 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res);
  * @brief Force eviction of an item
  * @param cache  : A valid pointer to an initialized arc_t structure
  * @param key    : The key
- * @param len    : The length of the key
+ * @param klen   : The length of the key
  */
-void arc_remove(arc_t *cache, const void *key, size_t len);
+void arc_remove(arc_t *cache, const void *key, size_t klen);
 
+/**
+ * @brief Update the size of a cached object (if any)
+ * @param cache  : A valid pointer to an initialized arc_t structure
+ * @param key    : The key
+ * @param klen   : The length of the key
+ * @param size   : The new size of the cached object
+ */
 void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size);
 
 /**
