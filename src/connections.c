@@ -3,7 +3,6 @@
  *
  * \brief Connection setup
  */
-
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -44,61 +43,51 @@ string2sockaddr(const char *host, int port, struct sockaddr_in *sockaddr)
 {
     u_int32_t ip = htonl(INADDR_LOOPBACK);
     errno = EINVAL;
+    int is_nbo = 0;
 
     if (host) {
         char host2[512];
         char *p;
-        char *pe;
 
         strncpy(host2, host, sizeof(host2)-1);
         p = strchr(host2, ':');
-
-        if (p) {                // check for <host>:<port>
-            *p = '\0';                // point to port part
+        if (p) {
+            *p = 0;
             p++;
-            port = strtol(p, &pe, 10);        // convert string to number
-            if (*pe != '\0') {            // did not match complete string? try as string
-#if (defined(__APPLE__) && defined(__MACH__))
-                struct servent *e = getservbyname(p, "tcp");
-#else
-                struct servent *e = NULL, ebuf;
-                char buf[1024];
-                getservbyname_r(p, "tcp", &ebuf, buf, sizeof(buf), &e);
-#endif
-                if (!e) {
-                    errno = ENOENT;        // to avoid errno == 0 in error case
-                    return -1;
-                }
-                port = ntohs(e->s_port);
-            }
         }
+
+        struct addrinfo *info;
+        struct addrinfo hints = {
+            .ai_family = AF_INET,
+            .ai_addrlen = sizeof(struct sockaddr_in),
+            .ai_flags = AI_NUMERICSERV
+        };
+        int rc = -1;
 
         if (strcmp(host2, "*") == 0) {
             ip = INADDR_ANY;
+            if (p)
+                rc = getaddrinfo(NULL, p, &hints, &info);
         } else {
-            if (!inet_aton(host2, (struct in_addr *)&ip)) {
-
-                struct hostent *e = NULL;
-#if (defined(__APPLE__) && defined(__MACH__))
-                e = gethostbyname(host2);
-#else
-                struct hostent ebuf;
-                char buf[1024];
-                int herrno;
-                gethostbyname_r(host2, &ebuf, buf, sizeof(buf), &e, &herrno);
-#endif
-                if (!e || e->h_addrtype != AF_INET) {
-                    errno = ENOENT;        // to avoid errno == 0 in error case
-                    return -1;
-                }
-                ip = ((unsigned long *) (e->h_addr_list[0]))[0];
-            }
+            rc = getaddrinfo(host2, p, &hints, &info);
         }
+        if (rc == 0) {
+            if (ip != INADDR_ANY)
+                ip = ((struct sockaddr_in *)info->ai_addr)->sin_addr.s_addr;
+            if (p) {
+                port = ((struct sockaddr_in *)info->ai_addr)->sin_port;
+                is_nbo = 1;
+            }
+            freeaddrinfo(info);
+        } else {
+            errno = ENOENT;
+            return -1;
+        }
+
     }
+
     if (port == 0)
         return -1;
-    else
-        port = htons(port);
 
     bzero(sockaddr, sizeof(struct sockaddr_in));
 #ifndef __linux
@@ -106,7 +95,7 @@ string2sockaddr(const char *host, int port, struct sockaddr_in *sockaddr)
 #endif
     sockaddr->sin_family = AF_INET;
     sockaddr->sin_addr.s_addr = ip;
-    sockaddr->sin_port = port;
+    sockaddr->sin_port = is_nbo ? port : htons(port);
 
     return 0;
 }
