@@ -143,5 +143,5 @@ int main(int argc, char **argv)
     shardcache_client_destroy(client2);
 
     t_summary();
-    exit(0);
+    exit(t_failed);
 }
