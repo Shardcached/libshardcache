@@ -19,6 +19,7 @@
 #include <chash.h>
 #include <hashtable.h>
 #include <iomux.h>
+#include <limits.h>
 
 #include "shardcache.h"
 #include "arc.h"
@@ -443,7 +444,6 @@ static size_t __op_fetch(void *item, void * priv)
         int done = 1;
         int ret = __op_fetch_from_peer(cache, obj, node_name);
         if (ret == -1) {
-            node_len = sizeof(node_name);
             int check = shardcache_test_migration_ownership(cache,
                                                             obj->key,
                                                             obj->klen,
@@ -461,7 +461,7 @@ static size_t __op_fetch(void *item, void * priv)
                 pthread_mutex_unlock(&obj->lock);
                 return dlen;
             }
-            return 0;
+            return UINT_MAX;
         }
     }
 
@@ -507,7 +507,7 @@ static size_t __op_fetch(void *item, void * priv)
         if (shardcache_log_level() >= LOG_DEBUG)
             SHC_DEBUG("Item not found for key %s", keystr);
         __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value, 1);
-        return 0;
+        return UINT_MAX;
     }
     gettimeofday(&obj->ts, NULL);
     pthread_mutex_unlock(&obj->lock);
@@ -979,6 +979,7 @@ typedef struct {
     size_t dlen;
     shardcache_get_async_callback_t cb;
     void *priv;
+    shardcache_t *cache;
 } shardcache_get_async_helper_arg_t;
 
 static int
@@ -994,8 +995,9 @@ shardcache_get_async_helper(void *key,
 
     int rc = arg->cb(key, klen, data, dlen, total_size, timestamp, arg->priv);
     if (rc != 0 || (!dlen && !total_size)) { // error
-        arg->stat = -1;
+        //arg->stat = -1;
         free(arg);
+        arc_remove(cache->arc, (const void *)key, klen);
         return -1;
     }
 
@@ -1041,6 +1043,7 @@ shardcache_get_async(shardcache_t *cache,
         shardcache_get_async_helper_arg_t *arg = calloc(1, sizeof(shardcache_get_async_helper_arg_t));
         arg->cb = cb;
         arg->priv = priv;
+        arg->cache = cache;
 
         shardcache_get_listener_t *listener = malloc(sizeof(shardcache_get_listener_t));
         listener->cb = shardcache_get_async_helper;

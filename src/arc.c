@@ -10,6 +10,7 @@
 #include <refcnt.h>
 
 #include <pthread.h>
+#include <limits.h>
 
 #ifdef __MACH__
 #include <libkern/OSAtomic.h>
@@ -247,7 +248,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             // unlock the mutex while the backend is fetching the data
             MUTEX_UNLOCK(&cache->lock);
             size_t size = cache->ops->fetch(obj->ptr, cache->ops->priv);
-            if (size == 0 && !obj->async) {
+            if (size == UINT_MAX || (size == 0 && !obj->async)) {
                 /* If the fetch fails we can drop the object without
                  * calling arc_balance() since we don't want a not-existing key
                  * to affect the cache.
