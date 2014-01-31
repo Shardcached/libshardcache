@@ -385,7 +385,6 @@ read_message_async(int fd,
         iomux_destroy(iomux);
 
         char state = ctx->state;
-        async_read_context_destroy(ctx);
 
         if (state == SHC_STATE_READING_ERR) {
             return -1;
