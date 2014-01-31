@@ -888,8 +888,6 @@ void shardcache_destroy(shardcache_t *cache)
         destroy_list(cache->evictor_jobs);
     }
 
-    shardcache_release_counters(cache->counters);
-
     if (cache->expirer_started) {
         __sync_add_and_fetch(&cache->expirer_quit, 1);
         pthread_join(cache->expirer_th, NULL);
@@ -903,6 +901,7 @@ void shardcache_destroy(shardcache_t *cache)
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
         shardcache_counter_remove(cache->counters, cache->cnt[i].name);
     }
+    shardcache_release_counters(cache->counters);
 
     ht_destroy(cache->volatile_storage);
 #ifndef __MACH__
