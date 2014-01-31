@@ -13,9 +13,6 @@
    a big number of delete requests for keys not owned by the
    receiving instance)
 
-* make fetch_from_peer_async()/read_message_async() able to run an existing iomux so that
-   serving.c can keep running its connections while a big data is being fetched from a peer node
-
  * parallelize migrations
 
  * refactor arc.c to get rid of the recursive lock
