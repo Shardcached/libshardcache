@@ -10,8 +10,9 @@
 void usage(char *prgname) {
     printf("Usage: %s <Command> <Key>\n"
            "   Commands: \n"
-           "        get        <Key>\n"
+           "        get       <Key>\n"
            "        get_async <Key>\n"
+           "        get_multi <Key> [ <Key> ... ]\n"
            "        offset    <Key> <Offset> <Length>\n"
            "        set       <Key> [ <Expire> ] (gets value on stdin)\n"
            "        add       <Key> [ <Expire> ] (gets value on stdin)\n"
@@ -111,6 +112,25 @@ int main (int argc, char **argv) {
         }
     } else if (strcasecmp(cmd, "geta") == 0 || strcasecmp(cmd, "get_async") == 0) {
         rc = shardcache_client_get_async(client, argv[2], strlen(argv[2]), print_chunk, NULL); 
+    } else if (strcasecmp(cmd, "get_multi") == 0) {
+        int num_keys = argc - 2;
+        void *values[num_keys];
+        size_t sizes[num_keys];
+
+        size_t klens[num_keys];
+        char **keys = &argv[2];
+        int i;
+        for (i = 0; i < num_keys; i++) {
+            klens[i] = strlen(keys[i]);
+        }
+        rc = shardcache_client_get_multi(client, (void **)keys, klens, values, sizes);
+
+        for (i = 0; i < num_keys; i++) {
+            printf("Value for key: %s\n", keys[i]);
+            print_chunk(NULL, NULL, 0, values[i], sizes[i], 0, NULL);
+            free(values[i]);
+            printf("\n");
+        }
     } else if (strcasecmp(cmd, "set") == 0 ||
                strcasecmp(cmd, "add") == 0)
     {
