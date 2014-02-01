@@ -135,6 +135,37 @@ int main(int argc, char **argv)
         t_success();
 
 
+    char *keys[10];
+    size_t klens[10];
+    char *values[10];
+    size_t vlens[10];
+    for (i = 0; i < 10; i++) {
+        keys[i] = malloc(32);
+        sprintf(keys[i], "test_key%d", 100+i);
+        klens[i] = strlen(keys[i]);
+    }
+
+    failed = 0;
+    t_testing("shardcache_client_get_multi(c, keys, klens, values, vlens)");
+    shardcache_client_get_multi(client, (void **)keys, klens, 10, (void **)values, vlens);
+
+    for (i = 0; i < 10; i++) {
+        char v[64];
+        if (!failed) {
+            sprintf(v, "test_value%d", 100+i);
+            if (!values[i] || strcmp(values[i], v) != 0) { 
+                t_failure("%s != %s", values[i], v);
+                failed = 1;
+                break;
+            }
+        }
+        free(keys[i]);
+        if (values[i])
+            free(values[i]);
+    }
+    if (!failed)
+        t_success();
+
     for (i = 0; i < num_nodes; i++) {
         shardcache_destroy(servers[i]);
     }
