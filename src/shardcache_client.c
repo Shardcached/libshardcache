@@ -10,7 +10,10 @@
 #include <fbuf.h>
 #include <rbuf.h>
 #include <linklist.h>
+#include <queue.h>
 #include <iomux.h>
+
+#include <pthread.h>
 
 #include "connections.h"
 #include "messaging.h"
@@ -481,4 +484,80 @@ int shardcache_client_get_async(shardcache_client_t *c,
     return fetch_from_peer_async(node, (char *)c->auth, SHC_HDR_CSIGNATURE_SIP, key, klen, data_cb, priv, fd, NULL);
 }
 
+typedef struct {
+    void *key;
+    size_t klen;
+    void *data;
+    size_t dlen;
+    shardcache_client_t *c;
+} shc_get_multi_ctx_t;
+
+static void *shc_get_multi(void *priv)
+{
+    linked_list_t *keys = (linked_list_t *)priv;
+
+    int i;
+    for (i = 0; i < list_count(keys); i ++) {
+        shc_get_multi_ctx_t *ctx = pick_value(keys, i);
+        ctx->dlen = shardcache_client_get(ctx->c, ctx->key, ctx->klen, &ctx->data);
+    }
+    return NULL;
+}
+
+int shardcache_client_get_multi(shardcache_client_t *c,
+                                void   **keys,
+                                size_t *klens,
+                                int    num_keys,
+                                void   **values,
+                                size_t *vlens)
+{
+    int i;
+
+    linked_list_t *pools = create_list();
+    queue_t *queue = queue_create();
+
+    for (i = 0; i < num_keys; i++) {
+        const char *node_name;
+        size_t name_len = 0;
+        chash_lookup(c->chash, keys[i], klens[i], &node_name, &name_len);
+
+        char name_string[name_len+1];
+        snprintf(name_string, name_len+1, "%s", node_name);
+
+        tagged_value_t *tval = get_tagged_value(pools, name_string);
+        if (!tval) {
+            linked_list_t *sublist = create_list();
+            set_free_value_callback(sublist, free);
+            tval = create_tagged_sublist(name_string, sublist);
+            push_tagged_value(pools, tval);
+        }
+
+        shc_get_multi_ctx_t *item = malloc(sizeof(shc_get_multi_ctx_t));
+        item->key = keys[i];
+        item->klen = klens[i];
+        item->c = c;
+        push_value((linked_list_t *)tval->value, item);
+        queue_push_right(queue, item);
+    }
+
+    pthread_t getters[list_count(pools)];
+    for (i = 0; i < list_count(pools); i++) {
+        pthread_create(&getters[i], NULL, shc_get_multi, pick_tagged_value(pools, i)->value);
+    }
+
+    for (i = 0; i < list_count(pools); i++) {
+        pthread_join(getters[i], NULL);
+    }
+
+    int cnt = 0;
+    shc_get_multi_ctx_t *item = queue_pop_left(queue);
+    while(item) {
+        values[cnt] = item->data;
+        vlens[cnt]  = item->dlen;
+        cnt++;
+        item = queue_pop_left(queue);
+    }
+    destroy_list(pools);
+    return 0;
+}
 

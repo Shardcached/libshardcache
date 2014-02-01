@@ -268,4 +268,10 @@ char *shardcache_client_errstr(shardcache_client_t *c);
  */
 void shardcache_client_destroy(shardcache_client_t *c);
 
+int shardcache_client_get_multi(shardcache_client_t *c,
+                                void   **keys,
+                                size_t *klens,
+                                int    num_keys,
+                                void   **values,
+                                size_t *vlens);
 #endif
