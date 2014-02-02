@@ -144,7 +144,7 @@ int main(int argc, char **argv)
     items[10] = NULL; // null-terminate it
 
     failed = 0;
-    t_testing("shardcache_client_get_multi(c, keys, klens, values, vlens)");
+    t_testing("shardcache_client_get_multi(c, items)");
     shardcache_client_get_multi(client, items);
 
     for (i = 0; i < 10; i++) {
@@ -159,6 +159,44 @@ int main(int argc, char **argv)
             }
         }
         shc_multi_item_destroy(items[i]);
+    }
+    if (!failed)
+        t_success();
+
+    for (i = 0; i < 10; i++) {
+        char key[32];
+        char value[32];
+        snprintf(key, sizeof(key), "test_key%d", 200+i);
+        snprintf(key, sizeof(key), "test_value%d", 200+i);
+        items[i] = shc_multi_item_create(client, key, strlen(key), value, strlen(value));
+    }
+
+    t_testing("shardcache_client_set_multi(c, items)");
+    shardcache_client_set_multi(client, items);
+
+    failed = 0;
+    for (i = 0; i < 10; i++) {
+        void *value;
+        char key[32];
+        snprintf(key, sizeof(key), "test_key%d", 200+i);
+        if (items[i]->status != 0) {
+            t_failure("satus for key %s != 0", key);
+            failed = 1;
+            break;
+        }
+        size_t size = shardcache_client_get(client, items[i]->key, items[i]->klen, &value);
+        if (size != items[i]->dlen) {
+            t_failure("size != items[%d]->dlen (%zu != %zu)", i, size, items[i]->dlen);
+            failed = 1;
+            break;
+        }
+        if (strncmp(value, items[i]->data, items[i]->dlen) != 0) {
+            t_failure("%s != %s", items[i]->data, value);
+            failed = 1;
+            break;
+        }
+        shc_multi_item_destroy(items[i]);
+        free(value);
     }
     if (!failed)
         t_success();
