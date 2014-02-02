@@ -268,10 +268,33 @@ char *shardcache_client_errstr(shardcache_client_t *c);
  */
 void shardcache_client_destroy(shardcache_client_t *c);
 
+typedef struct {
+    void *key;
+    size_t klen;
+    void *data;
+    size_t dlen;
+    int status;
+    uint32_t expire;
+    shardcache_client_t *c;
+} shc_multi_item_t;
+
+shc_multi_item_t *shc_multi_item_create(shardcache_client_t *c,
+                                        void  *key,
+                                        size_t klen,
+                                        void  *data,
+                                        size_t dlen);
+
+void shc_multi_item_destroy(shc_multi_item_t *item);
+
+
+/**
+ * @brief get multiple keys at once
+ *
+ * @param c          A valid pointer to a shardcache_client_t structure to release
+ * @param items      A NULL-terminated array of shc_multi_item_t structures
+ *
+ * @note the operation will per parallelized among multiple nodes if possible
+ */
 int shardcache_client_get_multi(shardcache_client_t *c,
-                                void   **keys,
-                                size_t *klens,
-                                int    num_keys,
-                                void   **values,
-                                size_t *vlens);
+                                shc_multi_item_t **items);
 #endif
