@@ -297,4 +297,14 @@ void shc_multi_item_destroy(shc_multi_item_t *item);
  */
 int shardcache_client_get_multi(shardcache_client_t *c,
                                 shc_multi_item_t **items);
+/**
+ * @brief get multiple keys at once
+ *
+ * @param c          A valid pointer to a shardcache_client_t structure to release
+ * @param items      A NULL-terminated array of shc_multi_item_t structures
+ *
+ * @note the operation will per parallelized among multiple nodes if possible
+ */
+int shardcache_client_set_multi(shardcache_client_t *c,
+                                shc_multi_item_t **items);
 #endif
