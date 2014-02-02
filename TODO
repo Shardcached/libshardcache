@@ -1,8 +1,5 @@
  * support message compression
 
- * expose a get_multi() and set_multi() api in shardcache_client and implement it 
-   so that operations can be parallelized among different servers when possible
-
  * extend the expire interface in set() commands to allow the use of some flag to 
    control if the expiry time should be renewed when the key is accessed or not
    (and let it honor the initial expiration time)
