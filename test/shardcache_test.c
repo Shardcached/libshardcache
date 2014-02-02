@@ -135,33 +135,30 @@ int main(int argc, char **argv)
         t_success();
 
 
-    char *keys[10];
-    size_t klens[10];
-    char *values[10];
-    size_t vlens[10];
+    shc_multi_item_t *items[11];
     for (i = 0; i < 10; i++) {
-        keys[i] = malloc(32);
-        sprintf(keys[i], "test_key%d", 100+i);
-        klens[i] = strlen(keys[i]);
+        char key[32];
+        snprintf(key, sizeof(key), "test_key%d", 100+i);
+        items[i] = shc_multi_item_create(client, key, strlen(key), NULL, 0);
     }
+    items[10] = NULL; // null-terminate it
 
     failed = 0;
     t_testing("shardcache_client_get_multi(c, keys, klens, values, vlens)");
-    shardcache_client_get_multi(client, (void **)keys, klens, 10, (void **)values, vlens);
+    shardcache_client_get_multi(client, items);
 
     for (i = 0; i < 10; i++) {
         char v[64];
         if (!failed) {
             sprintf(v, "test_value%d", 100+i);
-            if (!values[i] || strcmp(values[i], v) != 0) { 
-                t_failure("%s != %s", values[i], v);
+            if (!items[i]->data || strncmp(items[i]->data, v, items[i]->dlen) != 0)
+            { 
+                t_failure("%s != %s", items[i]->data, v);
                 failed = 1;
                 break;
             }
         }
-        free(keys[i]);
-        if (values[i])
-            free(values[i]);
+        shc_multi_item_destroy(items[i]);
     }
     if (!failed)
         t_success();
