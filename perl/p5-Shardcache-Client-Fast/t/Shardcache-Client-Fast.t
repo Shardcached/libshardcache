@@ -42,9 +42,24 @@ is($c->get("test_key1"), "test_value1", "get(test_key1) == test_value1");
 is($c->get("test_key2"), "test_value2", "get(test_key2) == test_value2");
 is($c->get("test_key3"), "test_value3", "get(test_key3) == test_value3");
 
-my @vals = $c->get_multi(["test_key1", "test_key2", "test_key3"]);
-is_deeply(\@vals, ["test_value1", "test_value2", "test_value3"],
-         "get_multi(test_key1, test_key2, test_key3) == (test_value1, test_value2, test_value3)"); 
+my %results = $c->set_multi({"test_key101" => "test_value101",
+                             "test_key102" => "test_value102",
+                             "test_key103" => "test_value103"});
+is_deeply(\%results,
+          {
+            "test_key101" => 0,
+            "test_key102" => 0,
+            "test_key103" => 0
+          },
+          "set_multi({
+             test_key101 => test_value101,
+             test_key102 => test_value102,
+             test_key103 => test_value103,
+          })");
+
+my @vals = $c->get_multi(["test_key101", "test_key102", "test_key103"]);
+is_deeply(\@vals, ["test_value101", "test_value102", "test_value103"],
+         "get_multi(test_key101, test_key102, test_key103)");
 
 foreach my $i (4..24) { $c->set("test_key$i", "test_value$i"); }
 
