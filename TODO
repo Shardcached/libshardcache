@@ -26,7 +26,4 @@
    we still need a way to serialize access to the storage for the same key , while still allowing parallel 
    access to different keys
 
- * assign a thread (or a pool of threads) to handle the asynchronous i/o and act as a 
-   data-provider/communication-manager for the shardcache node. So that the serving threads
-   would be never blocked when communicating with other peers.
-
+* server-side get_multi() and set_multi() implementation
