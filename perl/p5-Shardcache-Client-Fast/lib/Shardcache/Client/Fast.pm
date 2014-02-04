@@ -135,6 +135,12 @@ sub get {
     return $val;
 }
 
+sub get_multi {
+    my ($self, $keys) = @_;
+    my $res = shardcache_client_get_multi($self->{_client}, $keys);
+    wantarray ? @$res : $res;
+}
+
 sub offset {
     my ($self, $key, $offset, $length) = @_;
     my $val =  shardcache_client_offset($self->{_client}, $key, $offset, $length);
