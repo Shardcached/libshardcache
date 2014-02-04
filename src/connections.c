@@ -56,12 +56,13 @@ string2sockaddr(const char *host, int port, struct sockaddr_in *sockaddr)
             p++;
         }
 
-        struct addrinfo *info;
+        struct addrinfo *info = NULL;
         struct addrinfo hints = {
             .ai_family = AF_INET,
+            .ai_socktype = SOCK_STREAM,
             .ai_addrlen = sizeof(struct sockaddr_in),
-            .ai_flags = AI_NUMERICSERV
         };
+
         int rc = -1;
 
         if (strcmp(host2, "*") == 0) {
