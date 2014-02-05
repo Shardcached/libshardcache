@@ -515,11 +515,18 @@ static void *shc_get_multi(void *priv)
 {
     linked_list_t *items = (linked_list_t *)priv;
 
+    shardcache_client_t *client = NULL;
+
     int i;
     for (i = 0; i < list_count(items); i++) {
         shc_multi_item_t *item = pick_value(items, i);
-        item->dlen = shardcache_client_get(item->c, item->key, item->klen, &item->data);
+        if (!client)
+            client = shardcache_client_create(item->c->shards, item->c->num_shards, (char *)item->c->auth);
+        item->dlen = shardcache_client_get(client, item->key, item->klen, &item->data);
     }
+    if (client)
+        shardcache_client_destroy(client);
+
     return NULL;
 }
 
@@ -527,15 +534,22 @@ static void *shc_set_multi(void *priv)
 {
     linked_list_t *items = (linked_list_t *)priv;
 
+    shardcache_client_t *client = NULL;
+
     int i;
     for (i = 0; i < list_count(items); i++) {
         shc_multi_item_t *item = pick_value(items, i);
+        if (!client)
+            client = shardcache_client_create(item->c->shards, item->c->num_shards, (char *)item->c->auth);
         if (item->data && item->dlen)
-            item->status = shardcache_client_set(item->c, item->key, item->klen, item->data, item->dlen, item->expire);
+            item->status = shardcache_client_set(client, item->key, item->klen, item->data, item->dlen, item->expire);
         else
-            item->status = shardcache_client_del(item->c, item->key, item->klen);
+            item->status = shardcache_client_del(client, item->key, item->klen);
 
     }
+    if (client)
+        shardcache_client_destroy(client);
+
     return NULL;
 }
 
