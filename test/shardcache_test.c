@@ -1,10 +1,10 @@
-
 #include <shardcache_client.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
 #include <ut.h>
+#include <libgen.h>
 
 int main(int argc, char **argv)
 {
@@ -16,7 +16,7 @@ int main(int argc, char **argv)
     shardcache_log_init("shardcached", LOG_WARNING);
 
 
-    ut_init();
+    ut_init(basename(argv[0]));
 
 
     for (i = 0; i < num_nodes; i++) {
