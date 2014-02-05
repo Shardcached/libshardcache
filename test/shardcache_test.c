@@ -130,7 +130,9 @@ int main(int argc, char **argv)
             failed = 1;
         }
         free(vv);
-        ut_progress(i - 100);
+        int count = i - 100;
+        if (count%10 == 0)
+            ut_progress(count);
     }
     if (!failed)
         ut_success();
