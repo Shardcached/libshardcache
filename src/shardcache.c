@@ -126,7 +126,6 @@ struct __shardcache_s {
     int tcp_timeout;
     pthread_t async_io_th;
     iomux_t *async_mux;
-    pthread_mutex_t async_lock;
     int async_leave;
 };
 
@@ -402,7 +401,6 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
 
     int fd = shardcache_get_connection_for_peer(cache, peer_addr);
     if (obj->async) {
-        pthread_mutex_lock(&cache->async_lock);
         shc_fetch_async_arg_t *arg = malloc(sizeof(shc_fetch_async_arg_t));
         arg->obj = obj;
         arg->cache = cache;
@@ -417,7 +415,6 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
                                    arg,
                                    fd,
                                    cache->async_mux);
-        pthread_mutex_unlock(&cache->async_lock);
         if (rc != 0) {
             foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_error, obj);
             arc_remove(cache->arc, obj->key, obj->klen);
@@ -750,9 +747,7 @@ void *shardcache_run_async(void *priv)
     struct timeval timeout = { 0, 20000 };
     shardcache_t *cache = (shardcache_t *)priv;
     while (!__sync_fetch_and_add(&cache->async_leave, 0)) {
-        pthread_mutex_lock(&cache->async_lock);
         iomux_run(cache->async_mux, &timeout);
-        pthread_mutex_unlock(&cache->async_lock);
     }
     return NULL;
 }
@@ -865,7 +860,8 @@ shardcache_t *shardcache_create(char *me,
     cache->connections_pool = connections_pool_create(cache->tcp_timeout);
 
     cache->async_mux = iomux_create();
-    pthread_mutex_init(&cache->async_lock, NULL);
+    iomux_set_threadsafe(cache->async_mux, 1);
+
     if (pthread_create(&cache->async_io_th, NULL, shardcache_run_async, cache) != 0) {
         fprintf(stderr, "Can't create the async i/o thread: %s\n", strerror(errno));
         shardcache_destroy(cache);
@@ -923,7 +919,6 @@ void shardcache_destroy(shardcache_t *cache)
     __sync_add_and_fetch(&cache->async_leave, 1);
     pthread_join(cache->async_io_th, NULL);
     iomux_destroy(cache->async_mux);
-    pthread_mutex_destroy(&cache->async_lock);
 
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
         shardcache_counter_remove(cache->counters, cache->cnt[i].name);
