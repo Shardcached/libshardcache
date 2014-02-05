@@ -1012,8 +1012,10 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
 void stop_serving(shardcache_serving_t *s) {
     int i;
 
+    // first stop the listener thread, so we won't get new connections
     pthread_cancel(s->listener);
     pthread_join(s->listener, NULL);
+
     SHC_NOTICE("Collecting worker threads (might have to wait until i/o is finished)");
     for (i = 0; i < s->num_workers; i++) {
 
