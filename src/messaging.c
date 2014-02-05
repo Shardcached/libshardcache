@@ -344,11 +344,10 @@ read_async_input_eof(iomux_t *iomux, int fd, void *priv)
     else
         ctx->cb(NULL, 0, -2, ctx->cb_priv);
 
-    if (ctx->blocking) {
-        async_read_context_destroy(ctx);
-    } else {
+    if (!ctx->blocking)
         iomux_end_loop(iomux);
-    }
+
+    async_read_context_destroy(ctx);
 }
 
 int
@@ -426,6 +425,7 @@ fetch_from_peer_helper(void *data,
     if (idx < 0) {
         if (arg->fd >= 0)
             close(arg->fd);
+        free(arg->key);
         free(arg);
     }
 
