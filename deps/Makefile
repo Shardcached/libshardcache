@@ -12,7 +12,8 @@ endif
 DEPS=https://github.com/dgryski/libchash \
      https://github.com/xant/libhl \
      https://github.com/xant/libiomux \
-     https://github.com/xant/siphash-c
+     https://github.com/xant/siphash-c \
+     https://github.com/xant/libut.git
 
 .PHONY: all clean
 

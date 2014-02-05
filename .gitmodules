@@ -13,3 +13,6 @@
 [submodule "external/go-shardcache"]
 	path = external/go-shardcache
 	url = https://github.com/dgryski/go-shardcache.git
+[submodule "deps/libut"]
+	path = deps/libut
+	url = https://github.com/xant/libut.git

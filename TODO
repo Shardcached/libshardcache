@@ -1,5 +1,14 @@
  * support message compression
 
+ * extend the protocol to support get_multi and set_multi messages.
+   This will allow clients without knowledge of the complete shard (or always communicating
+   with a single node) to still commence set_multi/get_multi commands letting the server
+   to take care of parallelizing the operation if possible.
+
+ * server-side get_multi() and set_multi() implementation, as for the client implementation
+   server nodes can take care of parallelizing (when possible) batch set/get commands which involve
+   keys not owned by the current server.
+
  * extend the expire interface in set() commands to allow the use of some flag to 
    control if the expiry time should be renewed when the key is accessed or not
    (and let it honor the initial expiration time)
@@ -26,11 +35,4 @@
    If this won't be the case anymore we still need a way to serialize access to the
    storage for the same key, while still allowing parallel access to different keys
 
- * server-side get_multi() and set_multi() implementation, as for the client implementation
-   server nodes can take care of parallelizing (when possible) batch set/get commands which involve
-   keys not owned by the current server.
 
- * extend the protocol to support get_multi and set_multi messages.
-   This will allow clients without knowledge of the complete shard (or always communicating
-   with a single node) to still commence set_multi/get_multi commands letting the server
-   to take care of parallelizing the operation if possible.

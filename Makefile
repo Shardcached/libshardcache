@@ -98,20 +98,15 @@ clean:
 	rm -f test/*_test
 	rm -f libshardcache.a
 	rm -f libshardcache.$(SHAREDEXT)
-	rm -f support/testing.o
 	make -C deps clean
 	make -C utils clean
 
-support/testing.o:
-	$(CC) $(CFLAGS) -Isrc -c support/testing.c -o support/testing.o
-
-
 .PHONY: buld_tests
-build_tests: CFLAGS += -Isrc -Ideps/.incs -Isupport -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
-build_tests: support/testing.o static
+build_tests: CFLAGS += -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
+build_tests: static
 	@for i in $(TESTS); do\
-	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(LDFLAGS) $(DEPS) -lm";\
-	  $(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(DEPS) support/testing.o $(LDFLAGS) -lm;\
+	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(LDFLAGS) $(DEPS)  deps/.libs/libut.a -lm";\
+	  $(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(DEPS) deps/.libs/libut.a $(LDFLAGS) -lm;\
 	done;\
 
 .PHONY: test
