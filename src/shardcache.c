@@ -351,6 +351,8 @@ shardcache_fetch_from_peer_async_cb(char *peer,
     shardcache_t *cache = arg->cache;
     char *peer_addr = arg->peer_addr;
     int fd = arg->fd;
+    int complete = 0;
+    int total_len = 0;
 
     pthread_mutex_lock(&obj->lock);
     if (error) {
@@ -371,14 +373,19 @@ shardcache_fetch_from_peer_async_cb(char *peer,
     } else {
         foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_complete, obj);
         obj->complete = 1;
-        if (obj->dlen)
-            arc_update_size(obj->arc, obj->key, obj->klen, obj->dlen);
-        else
-            arc_remove(obj->arc, obj->key, obj->klen);
+        complete = 1;
+        total_len = obj->dlen;
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
     }
     pthread_mutex_unlock(&obj->lock);
+
+    if (complete) {
+        if (total_len)
+            arc_update_size(cache->arc, key, klen, total_len);
+        else
+            arc_remove(cache->arc, key, klen);
+    }
     return !error ? 0 : -1;
 }
 
