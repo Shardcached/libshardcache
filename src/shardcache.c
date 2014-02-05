@@ -361,6 +361,10 @@ shardcache_fetch_from_peer_async_cb(char *peer,
     int total_len = 0;
 
     pthread_mutex_lock(&obj->lock);
+    if (!obj->listeners) {
+        pthread_mutex_unlock(&obj->lock);
+        return -1;
+    }
     if (error) {
         foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_error, obj);
         arc_remove(obj->arc, obj->key, obj->klen);
@@ -1012,6 +1016,8 @@ shardcache_get_offset(shardcache_t *cache,
 typedef struct {
     int stat;
     size_t dlen;
+    arc_t *arc;
+    arc_resource_t *res;
     shardcache_get_async_callback_t cb;
     void *priv;
 } shardcache_get_async_helper_arg_t;
@@ -1030,6 +1036,7 @@ shardcache_get_async_helper(void *key,
     int rc = arg->cb(key, klen, data, dlen, total_size, timestamp, arg->priv);
     if (rc != 0 || (!dlen && !total_size)) { // error
         //arg->stat = -1;
+        arc_release_resource(arg->arc, arg->res);
         free(arg);
         return -1;
     }
@@ -1037,6 +1044,7 @@ shardcache_get_async_helper(void *key,
     arg->dlen += dlen;
 
     if (total_size) {
+        arc_release_resource(arg->arc, arg->res);
         free(arg);
     }
 
@@ -1069,6 +1077,7 @@ shardcache_get_async(shardcache_t *cache,
     pthread_mutex_lock(&obj->lock);
     if (obj->complete) {
         cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
+        arc_release_resource(cache->arc, res);
     } else {
         if (obj->dlen) // let's send what we have so far
             cb(key, klen, obj->data, obj->dlen, 0, NULL, priv);
@@ -1076,6 +1085,8 @@ shardcache_get_async(shardcache_t *cache,
         shardcache_get_async_helper_arg_t *arg = calloc(1, sizeof(shardcache_get_async_helper_arg_t));
         arg->cb = cb;
         arg->priv = priv;
+        arg->arc = cache->arc;
+        arg->res = res;
 
         shardcache_get_listener_t *listener = malloc(sizeof(shardcache_get_listener_t));
         listener->cb = shardcache_get_async_helper;
@@ -1084,7 +1095,6 @@ shardcache_get_async(shardcache_t *cache,
    }
 
     pthread_mutex_unlock(&obj->lock);
-    arc_release_resource(cache->arc, res);
 
 
     uint32_t size = (uint32_t)arc_size(cache->arc);
