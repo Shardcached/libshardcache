@@ -307,8 +307,12 @@ shardcache_fetch_from_peer_notify_listener (void *item, uint32_t idx, void *user
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
     shardcache_fetch_from_peer_notify_arg *arg = (shardcache_fetch_from_peer_notify_arg *)user;
     cache_object_t *obj = arg->obj;
-    int rc = listener->cb(obj->key, obj->klen, arg->data, arg->len, 0, NULL, listener->priv);
-    return (rc == 0) ? 1 : -1;
+    int rc = (listener->cb(obj->key, obj->klen, arg->data, arg->len, 0, NULL, listener->priv) == 0);
+    if (!rc) {
+        free(listener);
+        return -1;
+    }
+    return 1;
 }
 
 static int
@@ -317,6 +321,7 @@ shardcache_fetch_from_peer_notify_listener_complete(void *item, uint32_t idx, vo
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
     cache_object_t *obj = (cache_object_t *)user;
     listener->cb(obj->key, obj->klen, NULL, 0, obj->dlen, &obj->ts, listener->priv);
+    free(listener);
     return -1;
 }
 
@@ -326,6 +331,7 @@ shardcache_fetch_from_peer_notify_listener_error(void *item, uint32_t idx, void 
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
     cache_object_t *obj = (cache_object_t *)user;
     listener->cb(obj->key, obj->klen, NULL, 0, 0, NULL, listener->priv);
+    free(listener);
     return -1;
 }
 
