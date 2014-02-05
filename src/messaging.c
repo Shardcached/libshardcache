@@ -262,16 +262,19 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             uint64_t received_digest;
             rbuf_read(ctx->buf, (char *)&received_digest, sizeof(digest));
 
+            int match = (memcmp(&digest, &received_digest, sizeof(digest)) == 0);
+
             if (shardcache_log_level() >= LOG_DEBUG) {
                 SHC_DEBUG("computed digest for received data: %s",
                           shardcache_hex_escape((char *)&digest, sizeof(digest), 0));
 
                 uint8_t *remote = (uint8_t *)&received_digest;
-                SHC_DEBUG("digest from received data: %s",
-                          shardcache_hex_escape(remote, sizeof(digest), 0));
+                SHC_DEBUG("digest from received data: %s (%s)",
+                          shardcache_hex_escape(remote, sizeof(digest), 0),
+                          match ? "MATCH" : "MISMATCH");
             }
 
-            if (memcmp(&digest, &received_digest, sizeof(digest)) != 0) {
+            if (!match) {
                 ctx->state = SHC_STATE_AUTH_ERR;
                 return -1;
             }
@@ -483,14 +486,17 @@ read_and_check_siphash_signature(int fd, sip_hash *shash)
         return -1;
     }
 
+    int match = (memcmp(&digest, &received_digest, sizeof(digest)) == 0);
+
     SHC_DEBUG("computed digest for received data: %s",
             shardcache_hex_escape((unsigned char *)&digest, sizeof(digest), 0));
 
-    SHC_DEBUG("digest from received data: %s",
-              shardcache_hex_escape((unsigned char *)&received_digest, sizeof(digest), 0));
+    SHC_DEBUG("digest from received data: %s (%s)",
+              shardcache_hex_escape((unsigned char *)&received_digest, sizeof(digest), 0),
+              match ? "MATCH" : "MISMATCH");
 
 
-    return (memcmp(&digest, &received_digest, sizeof(digest)) == 0);
+    return match;
 }
 
 // synchronous (blocking)  message reading
