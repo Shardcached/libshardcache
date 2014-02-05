@@ -583,43 +583,54 @@ static linked_list_t *shc_split_buckets(shardcache_client_t *c,
     return pools;
 }
 
-int shardcache_client_get_multi(shardcache_client_t *c,
-                                shc_multi_item_t **items)
+typedef void *(*thread_function_t) (void *);
+
+#define SHC_CLIENT_MULTI_GET 0
+#define SHC_CLIENT_MULTI_SET 1
+static int _shardcache_client_multi(shardcache_client_t *c,
+                                    shc_multi_item_t **items,
+                                    char cmd)
 {
+
+    thread_function_t fn;
+    switch(cmd) {
+        case SHC_CLIENT_MULTI_GET:
+            fn = shc_get_multi;
+            break;
+        case SHC_CLIENT_MULTI_SET:
+            fn = shc_set_multi;
+            break;
+        default:
+            SHC_ERROR("Unkown multi-action %d", cmd);
+            return -1;
+    }
+
     linked_list_t *pools = shc_split_buckets(c, items);
 
-    pthread_t getters[list_count(pools)];
+    uint32_t count = list_count(pools);
+    pthread_t getters[count];
 
     int i;
-    for (i = 0; i < list_count(pools); i++) {
-        pthread_create(&getters[i], NULL, shc_get_multi, pick_tagged_value(pools, i)->value);
-    }
+    for (i = 0; i < count; i++)
+        pthread_create(&getters[i], NULL, fn, pick_tagged_value(pools, i)->value);
 
-    for (i = 0; i < list_count(pools); i++) {
+    for (i = 0; i < count; i++)
         pthread_join(getters[i], NULL);
-    }
 
     destroy_list(pools);
     return 0;
+}
+
+int shardcache_client_get_multi(shardcache_client_t *c,
+                                shc_multi_item_t **items)
+
+{
+    return _shardcache_client_multi(c, items, SHC_CLIENT_MULTI_GET);
 }
 
 int shardcache_client_set_multi(shardcache_client_t *c,
                                 shc_multi_item_t **items)
 
 {
-    linked_list_t *pools = shc_split_buckets(c, items);
-
-    pthread_t setters[list_count(pools)];
-
-    int i;
-    for (i = 0; i < list_count(pools); i++) {
-        pthread_create(&setters[i], NULL, shc_set_multi, pick_tagged_value(pools, i)->value);
-    }
-
-    for (i = 0; i < list_count(pools); i++) {
-        pthread_join(setters[i], NULL);
-    }
-
-    destroy_list(pools);
-    return 0;
+    return _shardcache_client_multi(c, items, SHC_CLIENT_MULTI_SET);
 }
