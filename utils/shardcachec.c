@@ -113,23 +113,21 @@ int main (int argc, char **argv) {
     } else if (strcasecmp(cmd, "geta") == 0 || strcasecmp(cmd, "get_async") == 0) {
         rc = shardcache_client_get_async(client, argv[2], strlen(argv[2]), print_chunk, NULL); 
     } else if (strcasecmp(cmd, "get_multi") == 0) {
-        int num_keys = argc - 2;
-        void *values[num_keys];
-        size_t sizes[num_keys];
-
-        size_t klens[num_keys];
         char **keys = &argv[2];
+        int num_keys = argc - 2;
+        shc_multi_item_t *items[num_keys];
         int i;
         for (i = 0; i < num_keys; i++) {
-            klens[i] = strlen(keys[i]);
+            items[i] = shc_multi_item_create(client, keys[i], strlen(keys[i]), NULL, 0);
         }
-        rc = shardcache_client_get_multi(client, (void **)keys, klens, values, sizes);
+
+        rc = shardcache_client_get_multi(client, items);
 
         for (i = 0; i < num_keys; i++) {
-            printf("Value for key: %s\n", keys[i]);
-            print_chunk(NULL, NULL, 0, values[i], sizes[i], 0, NULL);
-            free(values[i]);
+            printf("Value for key: %s\n", items[i]->key);
+            print_chunk(NULL, NULL, 0, items[i]->data, items[i]->dlen, 0, NULL);
             printf("\n");
+            shc_multi_item_destroy(items[i]);
         }
     } else if (strcasecmp(cmd, "set") == 0 ||
                strcasecmp(cmd, "add") == 0)
