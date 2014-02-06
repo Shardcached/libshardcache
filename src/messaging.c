@@ -367,6 +367,9 @@ read_message_async(int fd,
     };
 
     if (!iomux) {
+        // if no iomux has been passed, we need to create
+        // one, in which case we will block until the whole
+        // message has been read
         iomux= iomux_create();
         if (!iomux) {
             async_read_context_destroy(ctx);
@@ -378,6 +381,8 @@ read_message_async(int fd,
     iomux_add(iomux, fd, &cbs);
 
     if (ctx->blocking) {
+        // we are in blocking mode, let's wait for the job
+        // to be completed
         for (;;) {
             iomux_run(iomux, &iomux_timeout);
             if (iomux_isempty(iomux))
@@ -424,6 +429,9 @@ fetch_from_peer_helper(void *data,
         ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx != -1), arg->priv);
 
     if (idx < 0) {
+        // if the reading is finished or there was an error
+        // we need to release the helper_arg structure
+        // and eventually close the filedescriptor
         if (arg->fd >= 0)
             close(arg->fd);
         free(arg->key);
