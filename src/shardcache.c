@@ -735,9 +735,10 @@ void *shardcache_expire_volatile_keys(void *priv)
 
             expire_volatile_item_t *item = shift_value(arg.list);
             while (item) {
-                volatile_object_t *prev = NULL;
-                ht_delete(cache->volatile_storage, item->key, item->klen, (void **)&prev, NULL);
-                if (prev) {
+                void *prev_ptr = NULL;
+                ht_delete(cache->volatile_storage, item->key, item->klen, &prev_ptr, NULL);
+                if (prev_ptr) {
+                    volatile_object_t *prev = (volatile_object_t *)prev_ptr;
                     __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
                                          prev->dlen);
                     destroy_volatile(prev);
@@ -921,7 +922,7 @@ void shardcache_destroy(shardcache_t *cache)
 #endif
 
     if (__sync_fetch_and_add(&cache->evict_on_delete, 0)) {
-        __sync_add_and_fetch(&cache->evictor_quit, 1);
+        (void)__sync_add_and_fetch(&cache->evictor_quit, 1);
         pthread_join(cache->evictor_th, NULL);
         pthread_mutex_destroy(&cache->evictor_lock);
         pthread_cond_destroy(&cache->evictor_cond);
@@ -929,11 +930,11 @@ void shardcache_destroy(shardcache_t *cache)
     }
 
     if (cache->expirer_started) {
-        __sync_add_and_fetch(&cache->expirer_quit, 1);
+        (void)__sync_add_and_fetch(&cache->expirer_quit, 1);
         pthread_join(cache->expirer_th, NULL);
     }
 
-    __sync_add_and_fetch(&cache->async_leave, 1);
+    (void)__sync_add_and_fetch(&cache->async_leave, 1);
     pthread_join(cache->async_io_th, NULL);
     iomux_destroy(cache->async_mux);
 
@@ -981,12 +982,13 @@ shardcache_get_offset(shardcache_t *cache,
     if (offset == 0)
         __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_GETS].value, 1);
 
-    cache_object_t *obj = NULL;
-    arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, (void **)&obj, 0);
+    void *obj_ptr = NULL;
+    arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 0);
     if (!res)
         return 0;
 
-    if (obj) {
+    if (obj_ptr) {
+        cache_object_t *obj = (cache_object_t *)obj_ptr;
         pthread_mutex_lock(&obj->lock);
         if (obj->data) {
             if (dlen && data) {
@@ -1063,17 +1065,18 @@ shardcache_get_async(shardcache_t *cache,
 
     __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_GETS].value, 1);
 
-    cache_object_t *obj = NULL;
-    arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, (void **)&obj, 1);
+    void *obj_ptr;
+    arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 1);
 
     if (!res)
         return -1;
 
-    if (!obj) {
+    if (!obj_ptr) {
         arc_release_resource(cache->arc, res);
         return -1;
     }
 
+    cache_object_t *obj = (cache_object_t *)obj_ptr;
     pthread_mutex_lock(&obj->lock);
     if (obj->complete) {
         cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
@@ -1280,9 +1283,10 @@ shardcache_touch(shardcache_t *cache, void *key, size_t klen)
 
     if (is_mine == 1)
     {
-        cache_object_t *obj = NULL;
-        arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, (void **)&obj, 0);
+        void *obj_ptr = NULL;
+        arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 0);
         if (res) {
+            cache_object_t *obj = (cache_object_t *)obj_ptr;
             pthread_mutex_lock(&obj->lock);
             gettimeofday(&obj->ts, NULL);
             pthread_mutex_unlock(&obj->lock);
@@ -1377,16 +1381,18 @@ _shardcache_set_internal(shardcache_t *cache,
             SHC_DEBUG("Setting volatile item %s to expire %d (now: %d)", 
                 keystr, obj->expire, (int)time(NULL));
 
+            void *prev_ptr = NULL;
             if (inx) {
                 rc = ht_set(cache->volatile_storage, key, klen,
                              obj, sizeof(volatile_object_t));
             } else {
                 rc = ht_get_and_set(cache->volatile_storage, key, klen,
                                      obj, sizeof(volatile_object_t),
-                                     (void **)&prev, NULL);
+                                     &prev_ptr, NULL);
             }
 
-            if (prev) {
+            if (prev_ptr) {
+                prev = (volatile_object_t *)prev_ptr;
                 if (vlen > prev->dlen) {
                     __sync_add_and_fetch(counter, vlen - prev->dlen);
                 } else {
@@ -1408,6 +1414,7 @@ _shardcache_set_internal(shardcache_t *cache,
         }
         else if (cache->use_persistent_storage && cache->storage.store)
         {
+            void *prev_ptr = NULL;
             if (inx) {
                 if (ht_exists(cache->volatile_storage, key, klen) == 1) {
                     SHC_DEBUG("A volatile value already exists for key %s", keystr);
@@ -1416,10 +1423,11 @@ _shardcache_set_internal(shardcache_t *cache,
             } else {
                 // remove this key from the volatile storage (if present)
                 // it's going to be eventually persistent now (depending on the storage type)
-                ht_delete(cache->volatile_storage, key, klen, (void **)&prev, NULL);
+                ht_delete(cache->volatile_storage, key, klen, prev_ptr, NULL);
             }
 
-            if (prev) {
+            if (prev_ptr) {
+                prev = (volatile_object_t *)prev_ptr;
                 __sync_sub_and_fetch(counter, prev->dlen);
                 destroy_volatile(prev);
             }
@@ -1527,13 +1535,14 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
 
     if (is_mine == 1)
     {
-        volatile_object_t *prev_item = NULL;
-        int rc = ht_delete(cache->volatile_storage, key, klen, (void **)&prev_item, NULL);
+        void *prev_ptr;
+        int rc = ht_delete(cache->volatile_storage, key, klen, &prev_ptr, NULL);
 
         if (rc != 0) {
             if (cache->use_persistent_storage && cache->storage.remove)
                 cache->storage.remove(key, klen, cache->storage.priv);
-        } else if (prev_item) {
+        } else if (prev_ptr) {
+            volatile_object_t *prev_item = (volatile_object_t *)prev_ptr;
             __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
                                  prev_item->dlen);
             destroy_volatile(prev_item);
