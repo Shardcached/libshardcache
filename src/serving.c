@@ -28,9 +28,9 @@
 
 #define ATOMIC_READ(__v) __sync_fetch_and_add(&(__v), 0)
 
-#define ATOMIC_INCREMENT(__v) __sync_add_and_fetch(&(__v), 1)
+#define ATOMIC_INCREMENT(__v) (void)__sync_add_and_fetch(&(__v), 1)
 
-#define ATOMIC_DECREMENT(__v) __sync_sub_and_fetch(&(__v), 1)
+#define ATOMIC_DECREMENT(__v) (void)__sync_sub_and_fetch(&(__v), 1)
 
 #define ATOMIC_CAS(__v, __o, __n) __sync_bool_compare_and_swap(&(__v), __o, __n)
 
@@ -210,8 +210,8 @@ static int get_async_data_handler(void *key,
 
     if (dlen == 0 && total_size == 0) {
         // error
-        __sync_fetch_and_add(&ctx->fetch_error, 1);
-        __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+        ATOMIC_INCREMENT(ctx->fetch_error);
+        ATOMIC_SET(ctx->fetching, 0);
         if (ctx->fetch_shash) {
             sip_hash_free(ctx->fetch_shash);
             ctx->fetch_shash = NULL;
@@ -253,8 +253,8 @@ static int get_async_data_handler(void *key,
                 sip_hash_free(ctx->fetch_shash);
                 ctx->fetch_shash = NULL;
                 pthread_mutex_unlock(&ctx->output_lock);
-                __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
-                __sync_fetch_and_add(&ctx->fetch_error, 1);
+                ATOMIC_SET(ctx->fetching, 0);
+                ATOMIC_INCREMENT(ctx->fetch_error);
                 return -1;
             }
             fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
@@ -293,8 +293,8 @@ static int get_async_data_handler(void *key,
                         sip_hash_free(ctx->fetch_shash);
                         ctx->fetch_shash = NULL;
                         pthread_mutex_unlock(&ctx->output_lock);
-                        __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
-                        __sync_fetch_and_add(&ctx->fetch_error, 1);
+                        ATOMIC_SET(ctx->fetching, 0);
+                        ATOMIC_INCREMENT(ctx->fetch_error);
                         return -1;
                     }
                     fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
@@ -311,13 +311,13 @@ static int get_async_data_handler(void *key,
                 fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
             } else {
                 SHC_ERROR("Can't compute the siphash digest!\n");
-                __sync_fetch_and_add(&ctx->fetch_error, 1);
+                ATOMIC_INCREMENT(ctx->fetch_error);
             }
             sip_hash_free(ctx->fetch_shash);
             ctx->fetch_shash = NULL;
         }
 
-        __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+        ATOMIC_SET(ctx->fetching, 0);
         pthread_mutex_unlock(&ctx->output_lock);
     }
 
@@ -330,7 +330,7 @@ static void get_async_data(shardcache_t *cache,
                             shardcache_get_async_callback_t cb,
                             shardcache_connection_context_t *ctx)
 {
-    __sync_bool_compare_and_swap(&ctx->fetching, 0, 1);
+    ATOMIC_SET(ctx->fetching, 1);
     int rc = shardcache_get_async(cache, key, klen, cb, ctx);
     if (rc != 0) {
         uint16_t eor = 0;
@@ -346,7 +346,7 @@ static void get_async_data(shardcache_t *cache,
                 fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
             } else {
                 SHC_ERROR("Can't compute the siphash digest!\n");
-                __sync_fetch_and_add(&ctx->fetch_error, 1);
+                ATOMIC_INCREMENT(ctx->fetch_error);
                 sip_hash_free(ctx->fetch_shash);
                 ctx->fetch_shash = NULL;
             }
@@ -354,7 +354,7 @@ static void get_async_data(shardcache_t *cache,
             ctx->fetch_shash = NULL;
         }
         pthread_mutex_unlock(&ctx->output_lock);
-        __sync_bool_compare_and_swap(&ctx->fetching, 1, 0);
+        ATOMIC_SET(ctx->fetching, 0);
     }
 }
 
@@ -372,7 +372,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
         fbuf_remove(ctx->output, wb);
     }
 
-    if (!fbuf_used(ctx->output) && !__sync_fetch_and_add(&ctx->fetching, 0)) {
+    if (!fbuf_used(ctx->output) && !ATOMIC_READ(ctx->fetching)) {
         iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
         cbs->mux_output = NULL;
     }
@@ -730,7 +730,7 @@ shardcache_input_handler(iomux_t *iomux,
     if (!ctx)
         return;
 
-    if (__sync_fetch_and_add(&ctx->fetching, 0) != 0)
+    if (ATOMIC_READ(ctx->fetching) != 0)
         return;
 
     // new data arrived so we want to run the asyncrhonous reader to update
@@ -744,14 +744,14 @@ shardcache_input_handler(iomux_t *iomux,
     int state = async_read_context_state(ctx->reader_ctx);
     while (state == SHC_STATE_READING_DONE) {
         shardcache_worker_context_t *wrkctx = ctx->worker_ctx;
-        ATOMIC_CAS(wrkctx->busy, 0, 1);
+        ATOMIC_SET(wrkctx->busy, 1);
 
         ctx->hdr = async_read_context_hdr(ctx->reader_ctx);
         ctx->sig_hdr = async_read_context_sig_hdr(ctx->reader_ctx);
 
         process_request(ctx);
         pthread_mutex_lock(&ctx->output_lock);
-        if (__sync_fetch_and_add(&ctx->fetching, 0)) {
+        if (ATOMIC_READ(ctx->fetching)) {
                 iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
                 cbs->mux_output = shardcache_output_handler;
             pthread_mutex_unlock(&ctx->output_lock);
@@ -777,7 +777,7 @@ shardcache_input_handler(iomux_t *iomux,
         for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++)
             fbuf_clear(&ctx->records[i]);
 
-        ATOMIC_CAS(wrkctx->busy, 1, 0);
+        ATOMIC_SET(wrkctx->busy, 0);
 
         // we might have received already data for the next command,
         // so let's run the asynchronous reader again to update
