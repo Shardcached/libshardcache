@@ -76,7 +76,7 @@ shared: $(DEPS) objects
 	$(CC) src/*.o $(LDFLAGS) $(DEPS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
 
 dynamic: LDFLAGS += -lhl -lchash -liomux -lsiphash
-dynamic: $(DEPS) objects
+dynamic: objects
 	 $(CC) src/*.o $(LDFLAGS) $(SHAREDFLAGS) -o libshardcache.$(SHAREDEXT)
 
 $(DEPS): build_deps
