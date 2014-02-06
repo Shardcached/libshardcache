@@ -47,9 +47,9 @@ my %results = $c->set_multi({"test_key101" => "test_value101",
                              "test_key103" => "test_value103"});
 is_deeply(\%results,
           {
-            "test_key101" => 0,
-            "test_key102" => 0,
-            "test_key103" => 0
+            "test_key101" => 1,
+            "test_key102" => 1,
+            "test_key103" => 1
           },
           "set_multi({
              test_key101 => test_value101,
