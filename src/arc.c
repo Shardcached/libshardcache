@@ -1,26 +1,22 @@
-
-#include "arc.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
+
+#define __USE_UNIX98
+#include <pthread.h>
 
 #include <memory.h>
 #include <stddef.h>
 #include <hashtable.h>
 #include <refcnt.h>
 
-#include <pthread.h>
 #include <limits.h>
 
 #ifdef __MACH__
 #include <libkern/OSAtomic.h>
 #endif
 
-#ifndef PTHREAD_MUTEX_RECURSIVE
-#ifdef PTHREAD_MUTEX_RECURSIVE_NP
-#define PTHREAD_MUTEX_RECURSIVE PTHREAD_MUTEX_RECURSIVE_NP
-#endif
-#endif
+#include "arc.h"
 
 #define MUTEX_LOCK(__mutex) pthread_mutex_lock(__mutex) 
 #define MUTEX_UNLOCK(__mutex) pthread_mutex_unlock(__mutex) 
