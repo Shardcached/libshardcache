@@ -2,7 +2,10 @@ UNAME := $(shell uname)
 
 EXTRA_CFLAGS += -DHAVE_UINT64_T
 ifeq ($(UNAME), Linux)
+EPOLL_CHECK := $(shell ls /usr/include/sys/timerfd.h)
+ifdef EPOLL_CHECK
 EXTRA_CFLAGS += -DHAVE_EPOLL
+endif
 else
 ifeq ($(UNAME), Darwin)
 EXTRA_CFLAGS += -DHAVE_KQUEUE
