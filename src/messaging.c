@@ -417,10 +417,11 @@ fetch_from_peer_helper(void *data,
     // idx == -2 means error
     // any idx >= 0 refers to the record index
     
+    int ret;
     if (idx == 0)
-        return arg->cb(arg->peer, arg->key, arg->klen, data, len, 0, arg->priv);
+        ret = arg->cb(arg->peer, arg->key, arg->klen, data, len, 0, arg->priv);
     else
-        return arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx != -1), arg->priv);
+        ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx != -1), arg->priv);
 
     if (idx < 0) {
         if (arg->fd >= 0)
@@ -429,7 +430,7 @@ fetch_from_peer_helper(void *data,
         free(arg);
     }
 
-    return (idx >= -1) ? 0 : -1;
+    return ret;
 }
 
 int
