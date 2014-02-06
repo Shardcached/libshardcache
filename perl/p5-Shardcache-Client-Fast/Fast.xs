@@ -419,7 +419,7 @@ shardcache_client_set_multi(c, items)
                 if (rc == 0) {
                     HV *out_hash = newHV();
                     for (i = 0; i < num_items; i++) {
-                        SV *item_sv = newSViv(items_array[i]->status);
+                        SV *item_sv = newSViv((items_array[i]->status == 0));
                         SV **ref = hv_store(out_hash, (const char *)items_array[i]->key,
                                             items_array[i]->klen, item_sv, 0);
                         if (!ref)
