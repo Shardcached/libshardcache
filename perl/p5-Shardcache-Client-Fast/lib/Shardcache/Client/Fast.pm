@@ -41,7 +41,7 @@ our @EXPORT = qw(
 	
 );
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -240,10 +240,10 @@ sub evi {
 }
 
 sub stats {
-    my ($self, $peer) = @_;
+    my ($self, $node) = @_;
     
-    if ($peer) {
-        return shardcache_client_stats($self->{_client}, $peer);
+    if ($node) {
+        return shardcache_client_stats($self->{_client}, $node);
     }
 
     my $out;
@@ -261,9 +261,9 @@ sub sts {
 }
 
 sub check {
-    my ($self, $peer) = @_;
-    return unless $peer;
-    return (shardcache_client_check($self->{_client}, $peer) == 0);
+    my ($self, $node) = @_;
+    return unless $node;
+    return (shardcache_client_check($self->{_client}, $node) == 0);
 }
 
 # XXX - deprecated
@@ -273,9 +273,9 @@ sub chk {
 }
 
 sub index {
-    my ($self, $peer) = @_;
-    if ($peer) {
-        return shardcache_client_index($self->{_client}, $peer);
+    my ($self, $node) = @_;
+    if ($node) {
+        return shardcache_client_index($self->{_client}, $node);
     }
 
     my $out;
@@ -446,38 +446,60 @@ None by default.
 
 =item * exists ( $key )
 
-    Check existance of the key on the node responsible for it
+    Check existance of the key on the node responsible for it.
     Returns 1 if the key exists, 0 if doesn't exist, -1 on errors
 
 =item * touch ( $key )
 
     Fore loading of a key into the cache if not loaded already,
-    otherwise updates the loaded-timestamp for the cached key
+    otherwise updates the loaded-timestamp for the cached key.
 
-    Returns 0 on succes, -1 on errors
+    Returns 0 on succes, -1 on errors.
 
 =item * set ( $key, $value, [ $expire ] )
 
-    Set a new value for $key in the underlying storage
+    Set a new value for $key in the underlying storage.
 
 =item * add ( $key, $value, [ $expire ] )
 
-    Set a new value for $key in the underlying storage if it doesn't exists
-    Returns 0 if successfully stored, 1 if already existsing, -1 in case of errors
+    Set a new value for $key in the underlying storage if it doesn't exists.
+    Returns 0 if successfully stored, 1 if already existsing, -1 in case of errors.
 
 =item * del ( $key )
 
-    Remove the value associated to $key from the underlying storage (note the cache of all nodes will be evicted as well)
+    Remove the value associated to $key from the underlying storage (note the cache of all nodes will be evicted as well).
 
 =item * evict ( $key )
 
-    Evict the value associated to $key from the cache (note this will not remove the value from the underlying storage)
+    Evict the value associated to $key from the cache (note this will not remove the value from the underlying storage).
 
-=item * stats ( [ $peer ] )
+=item * stats ( [ $node ] )
 
-=item * index ( [ $peer ] )
+    Retrieve the stats for a given node (or all nodes if none is provided as parameter).
 
-=item * check ( $peer )
+=item * index ( [ $node ] )
+
+    Retrieve the index for a given node (or all nodes if none is provided as parameter).
+
+=item * check ( $node )
+
+    Checks the status of a given node (or all nodes if none is provided as parameter).
+
+=item * get_multi ( @$keys )
+
+    Get multiple keys at once. The @$keys parameter is expected to be an ARRAYREF containing the keys to retrieve.
+    Returns an arrayref containing the values for the requested keys. Values are stored at the same index of the
+    corresponding key in the input array. Empty or unretrieved values will be returned as undef.
+
+    Note that multi commands are not all‐or‐nothing, some operations may succeed, while others may fail.
+
+=item * set_multi ( %$pairs )
+
+    Get multiple keys at once. The %$pairs parameter is expected to be an HASHREF containing the key/value pairs to set.
+    Returns an hashref containing the same keys of the imput hashref as keys and the status of the operation as values
+    (1 if successfully set, 0 otherwise).
+
+    Note that multi commands are not all‐or‐nothing, some operations may succeed, while others may fail.
 
 =back
 
@@ -493,9 +515,9 @@ None by default.
   int shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen)
   int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
   int shardcache_client_add(shardcache_client_t *c, void *key, size_t klen)
-  int shardcache_client_stats(shardcache_client_t *c, char *peer, char **buf, size_t *len);
-  int shardcache_client_check(shardcache_client_t *c, char *peer);
-  shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *peer);
+  int shardcache_client_stats(shardcache_client_t *c, char *node, char **buf, size_t *len);
+  int shardcache_client_check(shardcache_client_t *c, char *node);
+  shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *node);
   int shardcache_client_errno(shardcache_client_t *c)
   char *shardcache_client_errstr(shardcache_client_t *c)
 
