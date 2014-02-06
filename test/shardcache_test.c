@@ -116,12 +116,14 @@ int main(int argc, char **argv)
     for (i = 100; i < 200; i++) {
         char k[64];
         char v[64];
-        char *vv;
+        char *vv = NULL;;
 
         sprintf(k, "test_key%d", i);
         sprintf(v, "test_value%d", i);
         shardcache_client_set(client1, k, strlen(k), v, strlen(v), 0);
-        size_t s = shardcache_client_get(client2, k, strlen(k), (void **)&vv);
+        void *vptr = NULL;
+        size_t s = shardcache_client_get(client2, k, strlen(k), &vptr);
+        vv = (char *)vptr;
         if (s == 0) {
             ut_failure("no data for key %s", k);
             failed = 1;
@@ -129,7 +131,8 @@ int main(int argc, char **argv)
             ut_failure("%s != %s", vv, v);
             failed = 1;
         }
-        free(vv);
+        if (vv)
+            free(vv);
         int count = i - 100;
         if (count%10 == 0)
             ut_progress(count);
