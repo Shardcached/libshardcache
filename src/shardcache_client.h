@@ -278,12 +278,31 @@ typedef struct {
     shardcache_client_t *c;
 } shc_multi_item_t;
 
+/**
+ * @brief Helper to create item-descriptors provided as parameter
+ *        to shardcache_client_get_multi() and shardcache_client_set_multi()
+ * @param c      A valid pointer to a shardcache_client_t structure to release
+ * @param key    A valid pointer to the key
+ * @param klen   The length of the key
+ * @param data   A valid pointer to the value
+ * @param dlen   The length of the value
+ * @return A pointer to newly initialized shc_multi_item_t structure which can be
+ *         included in the array provided as parameter to shardcache_client_get_multi()
+ *         or shardcache_client_get_multi()
+ * @note the caller MUST release the resources allocated for the item descriptor by using
+ *       shc_multi_item_destroy() when done with it
+ *
+ */
 shc_multi_item_t *shc_multi_item_create(shardcache_client_t *c,
                                         void  *key,
                                         size_t klen,
                                         void  *data,
                                         size_t dlen);
 
+/**
+ * @brief Release all the resources allocad for the shc_multi_item_t structure
+ * @param A valid pointer to an initialized shc_multi_item_t structure
+ */
 void shc_multi_item_destroy(shc_multi_item_t *item);
 
 
@@ -307,4 +326,5 @@ int shardcache_client_get_multi(shardcache_client_t *c,
  */
 int shardcache_client_set_multi(shardcache_client_t *c,
                                 shc_multi_item_t **items);
+
 #endif
