@@ -572,10 +572,10 @@ static void __op_evict(void *item, void *priv)
         obj->data = NULL;
         obj->dlen = 0;
         obj->complete = 0;
-        obj->async = 0;
-        clear_list(obj->listeners);
         __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_EVICTS].value, 1);
     }
+    obj->async = 0;
+    clear_list(obj->listeners);
     pthread_mutex_unlock(&obj->lock);
 }
 
