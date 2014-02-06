@@ -1,17 +1,3 @@
-UNAME := $(shell uname)
-
-EXTRA_CFLAGS += -DHAVE_UINT64_T
-ifeq ($(UNAME), Linux)
-EPOLL_CHECK := $(shell ls /usr/include/sys/timerfd.h)
-ifdef EPOLL_CHECK
-EXTRA_CFLAGS += -DHAVE_EPOLL
-endif
-else
-ifeq ($(UNAME), Darwin)
-EXTRA_CFLAGS += -DHAVE_KQUEUE
-endif
-endif
-
 DEPS=https://github.com/dgryski/libchash \
      https://github.com/xant/libhl \
      https://github.com/xant/libiomux \
@@ -23,6 +9,19 @@ DEPS=https://github.com/dgryski/libchash \
 all:
 	@mkdir -p .libs; \
 	mkdir -p .incs; \
+	UNAME=`uname`; \
+	if [ "$$UNAME" = "Darwin" ]; then \
+	    PLATFORM_CFLAGS="-DHAVE_KQUEUE"; \
+	elif [ "$$UNAME" = "Linux" ]; then \
+	    KERNEL_VERSION=`uname -r | cut -d- -f1`; \
+	    MIN_VERSION=2.6.27; \
+	    if [ $$KERNEL_VERSION > $$MIN_VERSION ]; then \
+		PLATFORM_CFLAGS="-DHAVE_EPOLL"; \
+	    elif [ $$KERNEL_VERSION == $$MIN_VERSION ]; then \
+		PLATFORM_CFLAGS="-DHAVE_EPOLL"; \
+	    fi; \
+	fi; \
+	echo "$$PLATFORM_CFLAGS";\
 	for i in $(DEPS); do \
 	    name=`echo $$i | sed 's,.*/,,;s/.git$$//' `; \
 	    if [ ! -f $$name/Makefile ]; then \
@@ -33,7 +32,7 @@ all:
 	    fi;\
 	    export LIBDIR="$(shell pwd)/.libs"; \
 	    export INCDIR="$(shell pwd)/.incs"; \
-	    export CFLAGS="$(CFLAGS) $(EXTRA_CFLAGS)"; \
+	    export CFLAGS="$(CFLAGS) -DHAVE_UINT64_T $$PLATFORM_CFLAGS"; \
 	    make -eC $$name; \
 	    if [ $$? -ne 0 ] ; then exit $$?; fi; \
 	    make -eC $$name install; \
