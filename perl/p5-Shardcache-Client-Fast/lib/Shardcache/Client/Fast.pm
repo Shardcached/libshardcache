@@ -220,7 +220,7 @@ sub del {
     return ($ret == 0);
 }
 
-sub evi {
+sub evict {
     my ($self, $key) = @_;
     my $ret = shardcache_client_evict($self->{_client}, $key);
     if ($ret == 0) {
@@ -233,7 +233,13 @@ sub evi {
     return ($ret == 0);
 }
 
-sub sts {
+# XXX - deprecated
+sub evi {
+    my $self = shift;
+    return $self->evict(@_);
+}
+
+sub stats {
     my ($self, $peer) = @_;
     
     if ($peer) {
@@ -248,13 +254,25 @@ sub sts {
     return $out;
 }
 
-sub chk {
+# XXX - deprecated
+sub sts {
+    my $self = shift;
+    return $self->stats(@_);
+}
+
+sub check {
     my ($self, $peer) = @_;
     return unless $peer;
     return (shardcache_client_check($self->{_client}, $peer) == 0);
 }
 
-sub idx {
+# XXX - deprecated
+sub chk {
+    my $self = shift;
+    return $self->check(@_);
+}
+
+sub index {
     my ($self, $peer) = @_;
     if ($peer) {
         return shardcache_client_index($self->{_client}, $peer);
@@ -270,6 +288,12 @@ sub idx {
          }
     }
     return $out;
+}
+
+# XXX - deprecated
+sub idx {
+    my $self = shift;
+    return $self->index(@_);
 }
 
 sub get_multi {
