@@ -1105,7 +1105,7 @@ shardcache_get_async(shardcache_t *cache,
     if (!key)
         return -1;
 
-    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_GETS].value, 1);
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_GETS].value);
 
     void *obj_ptr;
     arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 1);
@@ -1141,12 +1141,8 @@ shardcache_get_async(shardcache_t *cache,
 
     pthread_mutex_unlock(&obj->lock);
 
-
-    uint32_t size = (uint32_t)arc_size(cache->arc);
-    uint32_t prev = __sync_fetch_and_add(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value, 0);
-    __sync_bool_compare_and_swap(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-                                 prev,
-                                 size);
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+               (uint32_t)arc_size(cache->arc));
 
     return 0;
 }
@@ -1261,7 +1257,7 @@ shardcache_head(shardcache_t *cache,
     if (!key)
         return 0;
 
-    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_HEADS].value, 1);
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_HEADS].value);
 
     size_t rlen = hlen;
     size_t remainder =  shardcache_get_offset(cache, key, len, head, &rlen, 0, timestamp);
@@ -1384,7 +1380,7 @@ _shardcache_set_internal(shardcache_t *cache,
 
     char keystr[1024];
     KEY2STR(key, klen, keystr, sizeof(keystr));
-    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_SETS].value, 1);
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_SETS].value);
 
     char node_name[1024];
     size_t node_len = sizeof(node_name);
@@ -1402,7 +1398,6 @@ _shardcache_set_internal(shardcache_t *cache,
                   (int)vlen, keystr);
 
         volatile_object_t *prev = NULL;
-        uint32_t *counter = &cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value;
         if (!cache->use_persistent_storage || expire)
         {
             // ensure removing this key from the persistent storage (if present)
@@ -1437,15 +1432,17 @@ _shardcache_set_internal(shardcache_t *cache,
             if (prev_ptr) {
                 prev = (volatile_object_t *)prev_ptr;
                 if (vlen > prev->dlen) {
-                    __sync_add_and_fetch(counter, vlen - prev->dlen);
+                    ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
+                                    vlen - prev->dlen);
                 } else {
-                    __sync_sub_and_fetch(counter, prev->dlen - vlen);
+                    ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
+                                    prev->dlen - vlen);
                 }
                 destroy_volatile(prev); 
                 arc_remove(cache->arc, (const void *)key, klen);
                 _shardcache_commence_eviction(cache, key, klen);
             } else {
-                __sync_add_and_fetch(counter, vlen);
+                ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, vlen);
             }
 
             SPIN_LOCK(&cache->next_expire_lock);
@@ -1471,7 +1468,7 @@ _shardcache_set_internal(shardcache_t *cache,
 
             if (prev_ptr) {
                 prev = (volatile_object_t *)prev_ptr;
-                __sync_sub_and_fetch(counter, prev->dlen);
+                ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, prev->dlen);
                 destroy_volatile(prev);
             }
 
@@ -1591,23 +1588,20 @@ shardcache_del(shardcache_t *cache, void *key, size_t klen)
                 cache->storage.remove(key, klen, cache->storage.priv);
         } else if (prev_ptr) {
             volatile_object_t *prev_item = (volatile_object_t *)prev_ptr;
-            __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
-                                 prev_item->dlen);
+            ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
+                            prev_item->dlen);
             destroy_volatile(prev_item);
         }
 
-        if (__sync_fetch_and_add(&cache->evict_on_delete, 0))
+        if (ATOMIC_READ(cache->evict_on_delete))
         {
             arc_remove(cache->arc, (const void *)key, klen);
 
             _shardcache_commence_eviction(cache, key, klen);
         }
 
-        uint32_t size = (uint32_t)arc_size(cache->arc);
-        uint32_t prev = __sync_fetch_and_add(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value, 0);
-        __sync_bool_compare_and_swap(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-                                     prev,
-                                     size);
+        ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+                   (uint32_t)arc_size(cache->arc));
 
         return 0;
     } else {
@@ -1632,12 +1626,10 @@ shardcache_evict(shardcache_t *cache, void *key, size_t klen)
         return -1;
 
     arc_remove(cache->arc, (const void *)key, klen);
-    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_EVICTS].value, 1);
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
 
-    uint32_t size = (uint32_t)arc_size(cache->arc);
-    uint32_t *counter = &cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value;
-    uint32_t prev = __sync_fetch_and_add(counter, 0);
-    __sync_bool_compare_and_swap(counter, prev, size);
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+               (uint32_t)arc_size(cache->arc));
 
     return 0;
 }
@@ -1665,24 +1657,12 @@ shardcache_get_counters(shardcache_t *cache, shardcache_counter_t **counters)
     return shardcache_get_all_counters(cache->counters, counters); 
 }
 
-static void
-reset_stat_figure(uint32_t *figure_ptr)
-{
-    int done = 0;
-    do {
-        uint32_t old_val = __sync_fetch_and_add(figure_ptr, 0);
-        done = __sync_bool_compare_and_swap(figure_ptr, old_val, 0);
-    } while (!done);
-}
-
 void
 shardcache_clear_counters(shardcache_t *cache)
 {
-    if (cache) { }
     int i;
-    for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i++) {
-        reset_stat_figure(&cache->cnt[i].value);
-    }
+    for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i++)
+        ATOMIC_SET(cache->cnt[i].value, 0);
 }
 
 shardcache_storage_index_t *
@@ -1788,7 +1768,7 @@ migrate(void *priv)
             
             if (is_mine == -1) {
                 fprintf(stderr, "Migrator running while no migration continuum present ... aborting\n");
-                __sync_add_and_fetch(&errors, 1);
+                ATOMIC_INCREMENT(errors);
                 aborted = 1;
                 break;
             } else if (!is_mine) {
@@ -1806,19 +1786,19 @@ migrate(void *priv)
                         int rc = send_to_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, 0, fd);
                         shardcache_release_connection_for_peer(cache, peer, fd);
                         if (rc == 0) {
-                            __sync_add_and_fetch(&migrated_items, 1);
+                            ATOMIC_INCREMENT(migrated_items);
                             push_value(to_delete, &index->items[i]);
                         } else {
                             fprintf(stderr, "Errors copying %s to peer %s (%s)\n", keystr, node_name, peer);
-                            __sync_add_and_fetch(&errors, 1);
+                            ATOMIC_INCREMENT(errors);
                         }
                     } else {
                         fprintf(stderr, "Can't find address for peer %s (me : %s)\n", node_name, cache->me);
-                        __sync_add_and_fetch(&errors, 1);
+                        ATOMIC_INCREMENT(errors);
                     }
                 }
             }
-            __sync_add_and_fetch(&scanned_items, 1);
+            ATOMIC_INCREMENT(scanned_items);
         }
 
         shardcache_counter_remove(cache->counters, "migrated_items");
@@ -2003,8 +1983,8 @@ shardcache_use_persistent_connections(shardcache_t *cache, int new_value)
 {
     int old_value = 0;
     do {
-        old_value = __sync_fetch_and_add(&cache->use_persistent_connections, 0);
-    } while (!__sync_bool_compare_and_swap(&cache->use_persistent_connections, old_value, new_value));
+        old_value = ATOMIC_READ(cache->use_persistent_connections);
+    } while (!ATOMIC_CAS(cache->use_persistent_connections, old_value, new_value));
     return old_value;
 }
 
@@ -2013,8 +1993,8 @@ shardcache_evict_on_delete(shardcache_t *cache, int new_value)
 {
     int old_value = 0;
     do {
-        old_value = __sync_fetch_and_add(&cache->evict_on_delete, 0);
-    } while (!__sync_bool_compare_and_swap(&cache->evict_on_delete, old_value, new_value));
+        old_value = ATOMIC_READ(cache->evict_on_delete);
+    } while (!ATOMIC_CAS(cache->evict_on_delete, old_value, new_value));
     return old_value;
 }
 
