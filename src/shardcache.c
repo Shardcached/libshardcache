@@ -789,7 +789,7 @@ void *shardcache_run_async(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     while (!__sync_fetch_and_add(&cache->async_leave, 0)) {
-	struct timeval timeout = { 0, 20000 };
+        struct timeval timeout = { 0, 20000 };
         iomux_run(cache->async_mux, &timeout);
     }
     return NULL;
