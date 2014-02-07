@@ -922,21 +922,27 @@ void shardcache_destroy(shardcache_t *cache)
 #endif
 
     if (__sync_fetch_and_add(&cache->evict_on_delete, 0)) {
+        SHC_DEBUG2("Stopping evictor thread");
         (void)__sync_add_and_fetch(&cache->evictor_quit, 1);
         pthread_join(cache->evictor_th, NULL);
         pthread_mutex_destroy(&cache->evictor_lock);
         pthread_cond_destroy(&cache->evictor_cond);
         destroy_list(cache->evictor_jobs);
+        SHC_DEBUG2("Evictor thread stopped");
     }
 
     if (cache->expirer_started) {
+        SHC_DEBUG2("Stopping expirer thread");
         (void)__sync_add_and_fetch(&cache->expirer_quit, 1);
         pthread_join(cache->expirer_th, NULL);
+        SHC_DEBUG2("Expirer thread stopped");
     }
 
+    SHC_DEBUG2("Stopping the async i/o thread");
     (void)__sync_add_and_fetch(&cache->async_leave, 1);
     pthread_join(cache->async_io_th, NULL);
     iomux_destroy(cache->async_mux);
+    SHC_DEBUG2("Async i/o thread stopped");
 
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
         shardcache_counter_remove(cache->counters, cache->cnt[i].name);
@@ -963,6 +969,7 @@ void shardcache_destroy(shardcache_t *cache)
     connections_pool_destroy(cache->connections_pool);
 
     free(cache);
+    SHC_DEBUG("Shardcache node stopped");
 }
 
 size_t

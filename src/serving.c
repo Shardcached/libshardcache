@@ -1018,7 +1018,6 @@ void stop_serving(shardcache_serving_t *s) {
 
     SHC_NOTICE("Collecting worker threads (might have to wait until i/o is finished)");
     for (i = 0; i < s->num_workers; i++) {
-
         if (s->counters) {
             char varname[256];
             snprintf(varname, sizeof(varname), "worker%d::numfds", i);
@@ -1040,7 +1039,9 @@ void stop_serving(shardcache_serving_t *s) {
 
         pthread_mutex_destroy(&s->workers[i].wakeup_lock);
         pthread_cond_destroy(&s->workers[i].wakeup_cond);
+        SHC_DEBUG3("Worker thread %d exited", i);
     }
+    SHC_DEBUG2("All worker threads have been collected");
     free(s->workers);
     close(s->sock);
     free(s);
