@@ -124,7 +124,7 @@ int main (int argc, char **argv) {
         rc = shardcache_client_get_multi(client, items);
 
         for (i = 0; i < num_keys; i++) {
-            printf("Value for key: %s\n", items[i]->key);
+            printf("Value for key: %s\n", (char *)items[i]->key);
             print_chunk(NULL, NULL, 0, items[i]->data, items[i]->dlen, 0, NULL);
             printf("\n");
             shc_multi_item_destroy(items[i]);
