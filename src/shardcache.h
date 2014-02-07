@@ -19,6 +19,7 @@
 #define SHARDCACHE_PORT_DEFAULT 9874
 #define SHARDCACHE_TCP_TIMEOUT_DEFAULT 30
 
+extern const char *LIBSHARDCACHE_VERSION;
 
 /*
  *******************************************************************************

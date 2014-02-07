@@ -50,6 +50,8 @@
     __o[__s] = 0; \
 }
 
+const char *LIBSHARDCACHE_VERSION = "0.9.7";
+
 typedef struct chash_t chash_t;
 
 extern int shardcache_log_initialized;
