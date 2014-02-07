@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include <pthread.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -28,18 +27,7 @@
 #include "messaging.h"
 #include "serving.h"
 #include "counters.h"
-
-#ifdef __MACH__
-#include <libkern/OSAtomic.h>
-#endif
-
-#ifdef __MACH__
-#define SPIN_LOCK(__mutex) OSSpinLockLock(__mutex)
-#define SPIN_UNLOCK(__mutex) OSSpinLockUnlock(__mutex)
-#else
-#define SPIN_LOCK(__mutex) pthread_spin_lock(__mutex)
-#define SPIN_UNLOCK(__mutex) pthread_spin_unlock(__mutex)
-#endif
+#include "atomic.h"
 
 #define DEBUG_DUMP_MAXSIZE 128
 
@@ -165,7 +153,8 @@ typedef struct {
  * * Here are the operations implemented
  * */
 
-static void *__op_create(const void *key, size_t len, int async, void *priv)
+static void *
+__op_create(const void *key, size_t len, int async, void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     cache_object_t *obj = calloc(1, sizeof(cache_object_t));
@@ -186,7 +175,9 @@ static void *__op_create(const void *key, size_t len, int async, void *priv)
     return obj;
 }
 
-static char *shardcache_get_node_address(shardcache_t *cache, char *label) {
+static char *
+shardcache_get_node_address(shardcache_t *cache, char *label)
+{
     char *addr = NULL;
     int i;
     for (i = 0; i < cache->num_shards; i++ ){
@@ -208,12 +199,13 @@ static char *shardcache_get_node_address(shardcache_t *cache, char *label) {
     return addr;
 }
 
-static int _shardcache_test_ownership(shardcache_t *cache,
-                                      void *key,
-                                      size_t klen,
-                                      char *owner,
-                                      size_t *len,
-                                      int  migration)
+static int
+_shardcache_test_ownership(shardcache_t *cache,
+                           void *key,
+                           size_t klen,
+                           char *owner,
+                           size_t *len,
+                           int  migration)
 {
     const char *node_name;
     size_t name_len = 0;
@@ -267,16 +259,18 @@ shardcache_test_migration_ownership(shardcache_t *cache,
     return ret;
 }
 
-int shardcache_test_ownership(shardcache_t *cache,
-                              void *key,
-                              size_t klen,
-                              char *owner,
-                              size_t *len)
+int
+shardcache_test_ownership(shardcache_t *cache,
+                          void *key,
+                          size_t klen,
+                          char *owner,
+                          size_t *len)
 {
     return _shardcache_test_ownership(cache, key, klen, owner, len, 0);
 }
 
-int shardcache_get_connection_for_peer(shardcache_t *cache, char *peer)
+int
+shardcache_get_connection_for_peer(shardcache_t *cache, char *peer)
 {
     if (!cache->use_persistent_connections)
         return connect_to_peer(peer, cache->tcp_timeout);
@@ -286,7 +280,8 @@ int shardcache_get_connection_for_peer(shardcache_t *cache, char *peer)
     return connections_pool_get(cache->connections_pool, peer);
 }
 
-void shardcache_release_connection_for_peer(shardcache_t *cache, char *peer, int fd)
+void
+shardcache_release_connection_for_peer(shardcache_t *cache, char *peer, int fd)
 {
     if (fd < 0)
         return;
@@ -351,7 +346,7 @@ shardcache_evict_object(shardcache_t *cache, cache_object_t *obj)
         obj->data = NULL;
         obj->dlen = 0;
         obj->complete = 0;
-        __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_EVICTS].value, 1);
+        ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
     }
     obj->async = 0;
     obj->evict = 0;
@@ -426,7 +421,8 @@ shardcache_fetch_from_peer_async_cb(char *peer,
     return !error ? 0 : -1;
 }
 
-static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
+static int
+__op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
 {
     int rc = -1;
     if (shardcache_log_level() >= LOG_DEBUG) {
@@ -459,21 +455,22 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
                                    arg,
                                    fd,
                                    cache->async_mux);
-        if (rc != 0) {
+        if (rc == 0) {
+            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
+        } else {
             foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_error, obj);
             arc_remove(cache->arc, obj->key, obj->klen);
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
             if (obj->evict)
                 shardcache_evict_object(cache, obj);
         }
-        __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
     } else { 
         fbuf_t value = FBUF_STATIC_INITIALIZER;
         rc = fetch_from_peer(peer_addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, obj->key, obj->klen, &value, fd);
         if (rc == 0 && fbuf_used(&value)) {
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
-            __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
+            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
             obj->complete = 1;
         }
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
@@ -483,7 +480,8 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
     return rc;
 }
 
-static void * copy_volatile_object_cb(void *ptr, size_t len)
+static void *
+copy_volatile_object_cb(void *ptr, size_t len)
 {
     volatile_object_t *item = (volatile_object_t *)ptr;
     volatile_object_t *copy = malloc(sizeof(volatile_object_t));
@@ -494,7 +492,8 @@ static void * copy_volatile_object_cb(void *ptr, size_t len)
     return copy;
 }
 
-static size_t __op_fetch(void *item, void * priv)
+static size_t
+__op_fetch(void *item, void * priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
@@ -576,7 +575,7 @@ static size_t __op_fetch(void *item, void * priv)
         pthread_mutex_unlock(&obj->lock);
         if (shardcache_log_level() >= LOG_DEBUG)
             SHC_DEBUG("Item not found for key %s", keystr);
-        __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value, 1);
+        ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value);
         return UINT_MAX;
     }
     gettimeofday(&obj->ts, NULL);
@@ -592,12 +591,13 @@ static size_t __op_fetch(void *item, void * priv)
     size_t dlen = obj->dlen;
 
     pthread_mutex_unlock(&obj->lock);
-    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
 
     return dlen;
 }
 
-static void __op_evict(void *item, void *priv)
+static void
+__op_evict(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
@@ -606,7 +606,8 @@ static void __op_evict(void *item, void *priv)
     pthread_mutex_unlock(&obj->lock);
 }
 
-static void __op_destroy(void *item, void *priv)
+static void
+__op_destroy(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
 
@@ -625,7 +626,8 @@ static void __op_destroy(void *item, void *priv)
     free(obj);
 }
 
-static void shardcache_do_nothing(int sig)
+static void
+shardcache_do_nothing(int sig)
 {
     // do_nothing
 }
@@ -637,13 +639,15 @@ typedef struct {
 
 typedef shardcache_key_t shardcache_evictor_job_t;
 
-static void destroy_evictor_job(shardcache_evictor_job_t *job)
+static void
+destroy_evictor_job(shardcache_evictor_job_t *job)
 {
     free(job->key);
     free(job);
 }
 
-static shardcache_evictor_job_t *create_evictor_job(void *key, size_t klen)
+static
+shardcache_evictor_job_t *create_evictor_job(void *key, size_t klen)
 {
     shardcache_evictor_job_t *job = malloc(sizeof(shardcache_evictor_job_t)); 
     job->key = malloc(klen);
@@ -652,12 +656,13 @@ static shardcache_evictor_job_t *create_evictor_job(void *key, size_t klen)
     return job;
 }
 
-static void *evictor(void *priv)
+static void *
+evictor(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     linked_list_t *jobs = cache->evictor_jobs;
 
-    while (!__sync_fetch_and_add(&cache->evictor_quit, 0))
+    while (!ATOMIC_READ(cache->evictor_quit))
     {
         shardcache_evictor_job_t *job = (shardcache_evictor_job_t *)shift_value(jobs);
         while (job) {
@@ -698,7 +703,8 @@ static void *evictor(void *priv)
     return NULL;
 }
 
-static void destroy_volatile(volatile_object_t *obj)
+static void
+destroy_volatile(volatile_object_t *obj)
 {
     if (obj->data)
         free(obj->data);
@@ -713,7 +719,8 @@ typedef struct {
 
 typedef shardcache_key_t expire_volatile_item_t;
 
-static int expire_volatile(hashtable_t *table, void *key, size_t klen, void *value, size_t vlen, void *user)
+static int
+expire_volatile(hashtable_t *table, void *key, size_t klen, void *value, size_t vlen, void *user)
 {
     expire_volatile_arg_t *arg = (expire_volatile_arg_t *)user;
     volatile_object_t *v = (volatile_object_t *)value;
@@ -732,10 +739,11 @@ static int expire_volatile(hashtable_t *table, void *key, size_t klen, void *val
     return 1;
 }
 
-void *shardcache_expire_volatile_keys(void *priv)
+void *
+shardcache_expire_volatile_keys(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
-    while (!__sync_fetch_and_add(&cache->expirer_quit, 0))
+    while (ATOMIC_READ(cache->expirer_quit))
     {
         time_t now = time(NULL);
 
@@ -766,8 +774,8 @@ void *shardcache_expire_volatile_keys(void *priv)
                 ht_delete(cache->volatile_storage, item->key, item->klen, &prev_ptr, NULL);
                 if (prev_ptr) {
                     volatile_object_t *prev = (volatile_object_t *)prev_ptr;
-                    __sync_sub_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
-                                         prev->dlen);
+                    ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
+                                    prev->dlen);
                     destroy_volatile(prev);
                 }
                 arc_remove(cache->arc, (const void *)item->key, item->klen);
@@ -787,23 +795,25 @@ void *shardcache_expire_volatile_keys(void *priv)
     return NULL;
 }
 
-void *shardcache_run_async(void *priv)
+void *
+shardcache_run_async(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
-    while (!__sync_fetch_and_add(&cache->async_leave, 0)) {
+    while (!ATOMIC_READ(cache->async_leave)) {
         struct timeval timeout = { 0, 20000 };
         iomux_run(cache->async_mux, &timeout);
     }
     return NULL;
 }
 
-shardcache_t *shardcache_create(char *me,
-                                shardcache_node_t *nodes,
-                                int nnodes,
-                                shardcache_storage_t *st,
-                                char *secret,
-                                int num_workers,
-                                size_t cache_size)
+shardcache_t *
+shardcache_create(char *me,
+                  shardcache_node_t *nodes,
+                  int nnodes,
+                  shardcache_storage_t *st,
+                  char *secret,
+                  int num_workers,
+                  size_t cache_size)
 {
     int i;
     size_t shard_lens[nnodes];
@@ -884,7 +894,7 @@ shardcache_t *shardcache_create(char *me,
         shardcache_counter_add(cache->counters, cache->cnt[i].name, &cache->cnt[i].value); 
     }
 
-    if (__sync_fetch_and_add(&cache->evict_on_delete, 0)) {
+    if (ATOMIC_READ(cache->evict_on_delete)) {
         pthread_mutex_init(&cache->evictor_lock, NULL);
         pthread_cond_init(&cache->evictor_cond, NULL);
         cache->evictor_jobs = create_list();
@@ -932,7 +942,8 @@ shardcache_t *shardcache_create(char *me,
     return cache;
 }
 
-void shardcache_destroy(shardcache_t *cache)
+void
+shardcache_destroy(shardcache_t *cache)
 {
     int i;
 
@@ -948,9 +959,9 @@ void shardcache_destroy(shardcache_t *cache)
     pthread_spin_destroy(&cache->migration_lock);
 #endif
 
-    if (__sync_fetch_and_add(&cache->evict_on_delete, 0)) {
+    if (ATOMIC_READ(cache->evict_on_delete)) {
         SHC_DEBUG2("Stopping evictor thread");
-        (void)__sync_add_and_fetch(&cache->evictor_quit, 1);
+        ATOMIC_INCREMENT(cache->evictor_quit);
         pthread_join(cache->evictor_th, NULL);
         pthread_mutex_destroy(&cache->evictor_lock);
         pthread_cond_destroy(&cache->evictor_cond);
@@ -960,13 +971,13 @@ void shardcache_destroy(shardcache_t *cache)
 
     if (cache->expirer_started) {
         SHC_DEBUG2("Stopping expirer thread");
-        (void)__sync_add_and_fetch(&cache->expirer_quit, 1);
+        ATOMIC_INCREMENT(cache->expirer_quit);
         pthread_join(cache->expirer_th, NULL);
         SHC_DEBUG2("Expirer thread stopped");
     }
 
     SHC_DEBUG2("Stopping the async i/o thread");
-    (void)__sync_add_and_fetch(&cache->async_leave, 1);
+    ATOMIC_INCREMENT(cache->async_leave);
     pthread_join(cache->async_io_th, NULL);
     iomux_destroy(cache->async_mux);
     SHC_DEBUG2("Async i/o thread stopped");
@@ -1014,7 +1025,7 @@ shardcache_get_offset(shardcache_t *cache,
         return 0;
 
     if (offset == 0)
-        __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_GETS].value, 1);
+        ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_GETS].value);
 
     void *obj_ptr = NULL;
     arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 0);
@@ -1040,11 +1051,8 @@ shardcache_get_offset(shardcache_t *cache,
         pthread_mutex_unlock(&obj->lock);
     }
     arc_release_resource(cache->arc, res);
-    uint32_t size = (uint32_t)arc_size(cache->arc);
-    uint32_t prev = __sync_fetch_and_add(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value, 0);
-    __sync_bool_compare_and_swap(&cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-                                 prev,
-                                 size);
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+              (uint32_t)arc_size(cache->arc));
     return (offset < vlen + copied) ? (vlen - offset - copied) : 0;
 }
 
@@ -1186,11 +1194,12 @@ shardcache_get_helper(void *key,
     return 0;
 }
 
-void *shardcache_get(shardcache_t *cache,
-                     void *key,
-                     size_t klen,
-                     size_t *vlen,
-                     struct timeval *timestamp)
+void *
+shardcache_get(shardcache_t *cache,
+               void *key,
+               size_t klen,
+               size_t *vlen,
+               struct timeval *timestamp)
 {
     if (!key)
         return NULL;
@@ -1513,46 +1522,51 @@ _shardcache_set_internal(shardcache_t *cache,
     return -1;
 }
 
-int shardcache_set_volatile(shardcache_t *cache,
-                            void *key,
-                            size_t klen,
-                            void *value,
-                            size_t vlen,
-                            time_t expire)
+int
+shardcache_set_volatile(shardcache_t *cache,
+                        void *key,
+                        size_t klen,
+                        void *value,
+                        size_t vlen,
+                        time_t expire)
 {
     return _shardcache_set_internal(cache, key, klen, value, vlen, expire, 0);
 }
 
-int shardcache_add_volatile(shardcache_t *cache,
-                            void *key,
-                            size_t klen,
-                            void *value,
-                            size_t vlen,
-                            time_t expire)
+int
+shardcache_add_volatile(shardcache_t *cache,
+                        void *key,
+                        size_t klen,
+                        void *value,
+                        size_t vlen,
+                        time_t expire)
 {
     return _shardcache_set_internal(cache, key, klen, value, vlen, expire, 1);
 }
 
-int shardcache_set(shardcache_t *cache,
-                   void *key,
-                   size_t klen,
-                   void *value,
-                   size_t vlen)
+int
+shardcache_set(shardcache_t *cache,
+               void *key,
+               size_t klen,
+               void *value,
+               size_t vlen)
 {
     return _shardcache_set_internal(cache, key, klen, value, vlen, 0, 0);
 }
 
-int shardcache_add(shardcache_t *cache,
-                   void *key,
-                   size_t klen,
-                   void *value,
-                   size_t vlen)
+int
+shardcache_add(shardcache_t *cache,
+               void *key,
+               size_t klen,
+               void *value,
+               size_t vlen)
 {
     return _shardcache_set_internal(cache, key, klen, value, vlen, 0, 1);
 }
 
-int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
-
+int
+shardcache_del(shardcache_t *cache, void *key, size_t klen)
+{
     if (!key)
         return -1;
 
@@ -1611,7 +1625,9 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen) {
     return -1;
 }
 
-int shardcache_evict(shardcache_t *cache, void *key, size_t klen) {
+int
+shardcache_evict(shardcache_t *cache, void *key, size_t klen)
+{
     if (!key || !klen)
         return -1;
 
@@ -1626,7 +1642,9 @@ int shardcache_evict(shardcache_t *cache, void *key, size_t klen) {
     return 0;
 }
 
-shardcache_node_t *shardcache_get_nodes(shardcache_t *cache, int *num_nodes) {
+shardcache_node_t *
+shardcache_get_nodes(shardcache_t *cache, int *num_nodes)
+{
     int i;
     int num = 0;
     SPIN_LOCK(&cache->migration_lock);
@@ -1641,11 +1659,15 @@ shardcache_node_t *shardcache_get_nodes(shardcache_t *cache, int *num_nodes) {
     return list;
 }
 
-int shardcache_get_counters(shardcache_t *cache, shardcache_counter_t **counters) {
+int
+shardcache_get_counters(shardcache_t *cache, shardcache_counter_t **counters)
+{
     return shardcache_get_all_counters(cache->counters, counters); 
 }
 
-static void reset_stat_figure(uint32_t *figure_ptr) {
+static void
+reset_stat_figure(uint32_t *figure_ptr)
+{
     int done = 0;
     do {
         uint32_t old_val = __sync_fetch_and_add(figure_ptr, 0);
@@ -1653,7 +1675,9 @@ static void reset_stat_figure(uint32_t *figure_ptr) {
     } while (!done);
 }
 
-void shardcache_clear_counters(shardcache_t *cache) {
+void
+shardcache_clear_counters(shardcache_t *cache)
+{
     if (cache) { }
     int i;
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i++) {
@@ -1661,7 +1685,8 @@ void shardcache_clear_counters(shardcache_t *cache) {
     }
 }
 
-shardcache_storage_index_t *shardcache_get_index(shardcache_t *cache)
+shardcache_storage_index_t *
+shardcache_get_index(shardcache_t *cache)
 {
     shardcache_storage_index_t *index = NULL;
 
@@ -1683,7 +1708,8 @@ shardcache_storage_index_t *shardcache_get_index(shardcache_t *cache)
     return index;
 }
 
-void shardcache_free_index(shardcache_storage_index_t *index)
+void
+shardcache_free_index(shardcache_storage_index_t *index)
 {
     if (index->items) {
         int i;
@@ -1696,7 +1722,8 @@ void shardcache_free_index(shardcache_storage_index_t *index)
     free(index);
 }
 
-static int expire_migrated(hashtable_t *table, void *key, size_t klen, void *value, size_t vlen, void *user)
+static int
+expire_migrated(hashtable_t *table, void *key, size_t klen, void *value, size_t vlen, void *user)
 {
     shardcache_t *cache = (shardcache_t *)user;
     volatile_object_t *v = (volatile_object_t *)value;
@@ -1719,7 +1746,8 @@ static int expire_migrated(hashtable_t *table, void *key, size_t klen, void *val
 }
 
 
-void *migrate(void *priv)
+void *
+migrate(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
 
@@ -1837,10 +1865,11 @@ void *migrate(void *priv)
     return NULL;
 }
 
-int shardcache_migration_begin(shardcache_t *cache,
-                               shardcache_node_t *nodes,
-                               int num_nodes,
-                               int forward)
+int
+shardcache_migration_begin(shardcache_t *cache,
+                           shardcache_node_t *nodes,
+                           int num_nodes,
+                           int forward)
 {
     int i, n;
 
@@ -1926,7 +1955,8 @@ int shardcache_migration_begin(shardcache_t *cache,
     return 0;
 }
 
-int shardcache_migration_abort(shardcache_t *cache)
+int
+shardcache_migration_abort(shardcache_t *cache)
 {
     int ret = -1;
     SPIN_LOCK(&cache->migration_lock);
@@ -1945,7 +1975,8 @@ int shardcache_migration_abort(shardcache_t *cache)
     return ret;
 }
 
-int shardcache_migration_end(shardcache_t *cache)
+int
+shardcache_migration_end(shardcache_t *cache)
 {
     int ret = -1;
     SPIN_LOCK(&cache->migration_lock);
@@ -1967,7 +1998,9 @@ int shardcache_migration_end(shardcache_t *cache)
     return ret;
 }
 
-int shardcache_use_persistent_connections(shardcache_t *cache, int new_value) {
+int
+shardcache_use_persistent_connections(shardcache_t *cache, int new_value)
+{
     int old_value = 0;
     do {
         old_value = __sync_fetch_and_add(&cache->use_persistent_connections, 0);
@@ -1975,7 +2008,9 @@ int shardcache_use_persistent_connections(shardcache_t *cache, int new_value) {
     return old_value;
 }
 
-int shardcache_evict_on_delete(shardcache_t *cache, int new_value) {
+int
+shardcache_evict_on_delete(shardcache_t *cache, int new_value)
+{
     int old_value = 0;
     do {
         old_value = __sync_fetch_and_add(&cache->evict_on_delete, 0);
@@ -1983,7 +2018,9 @@ int shardcache_evict_on_delete(shardcache_t *cache, int new_value) {
     return old_value;
 }
 
-int shardcache_tcp_timeout(shardcache_t *cache, int new_value) {
+int
+shardcache_tcp_timeout(shardcache_t *cache, int new_value)
+{
     return connections_pool_tcp_timeout(cache->connections_pool, new_value);
 }
 

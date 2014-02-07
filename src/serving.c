@@ -9,7 +9,6 @@
 #include <sys/time.h>
 #include <sys/socket.h>
 #include <errno.h>
-#include <pthread.h>
 #include <iomux.h>
 #include <queue.h>
 
@@ -21,25 +20,12 @@
 
 #include "serving.h"
 
+#include "atomic.h"
+
 #ifndef HAVE_UINT64_T
 #define HAVE_UINT64_T
 #endif
 #include <siphash.h>
-
-#define ATOMIC_READ(__v) __sync_fetch_and_add(&(__v), 0)
-
-#define ATOMIC_INCREMENT(__v) (void)__sync_add_and_fetch(&(__v), 1)
-
-#define ATOMIC_DECREMENT(__v) (void)__sync_sub_and_fetch(&(__v), 1)
-
-#define ATOMIC_CAS(__v, __o, __n) __sync_bool_compare_and_swap(&(__v), __o, __n)
-
-#define ATOMIC_SET(__v, __n) {\
-    int __b = 0;\
-    do {\
-        __b = __sync_bool_compare_and_swap(&__v, ATOMIC_READ(__v), __n);\
-    } while (!__b);\
-}
 
 typedef struct {
     pthread_t thread;

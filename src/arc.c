@@ -1,25 +1,16 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
-
-#define __USE_UNIX98
-#include <pthread.h>
-
+#include <limits.h>
 #include <memory.h>
 #include <stddef.h>
+
 #include <hashtable.h>
 #include <refcnt.h>
 
-#include <limits.h>
-
-#ifdef __MACH__
-#include <libkern/OSAtomic.h>
-#endif
-
 #include "arc.h"
 
-#define MUTEX_LOCK(__mutex) pthread_mutex_lock(__mutex) 
-#define MUTEX_UNLOCK(__mutex) pthread_mutex_unlock(__mutex) 
+#include "atomic.h"
 
 /**********************************************************************
  * Simple double-linked list, inspired by the implementation used in the
