@@ -147,6 +147,7 @@ typedef struct {
     int async;
     linked_list_t *listeners;
     int complete;
+    int evict;
     // we want a mutex here because the object might be locked
     // for long time if involved in a fetch or store operation
     pthread_mutex_t lock;
@@ -253,11 +254,12 @@ static int _shardcache_test_ownership(shardcache_t *cache,
     return (strcmp(owner, cache->me) == 0);
 }
 
-static int shardcache_test_migration_ownership(shardcache_t *cache,
-                                               void *key,
-                                               size_t klen,
-                                               char *owner,
-                                               size_t *len)
+static int
+shardcache_test_migration_ownership(shardcache_t *cache,
+                                    void *key,
+                                    size_t klen,
+                                    char *owner,
+                                    size_t *len)
 {
     int ret = _shardcache_test_ownership(cache, key, klen, owner, len, 1);
     return ret;
@@ -335,6 +337,25 @@ shardcache_fetch_from_peer_notify_listener_error(void *item, uint32_t idx, void 
     return -1;
 }
 
+static void
+shardcache_evict_object(shardcache_t *cache, cache_object_t *obj)
+{
+    if (list_count(obj->listeners)) {
+        obj->evict = 1;
+        return;
+    }
+    if (obj->data) {
+        free(obj->data);
+        obj->data = NULL;
+        obj->dlen = 0;
+        obj->complete = 0;
+        __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_EVICTS].value, 1);
+    }
+    obj->async = 0;
+    obj->evict = 0;
+    clear_list(obj->listeners);
+}
+
 typedef struct
 {
     cache_object_t *obj;
@@ -370,6 +391,8 @@ shardcache_fetch_from_peer_async_cb(char *peer,
         arc_remove(obj->arc, obj->key, obj->klen);
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
+        if (obj->evict)
+            shardcache_evict_object(cache, obj);
     } else if (len) {
         obj->data = realloc(obj->data, obj->dlen + len);
         memcpy(obj->data + obj->dlen, data, len);
@@ -387,6 +410,8 @@ shardcache_fetch_from_peer_async_cb(char *peer,
         total_len = obj->dlen;
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
+        if (obj->evict)
+            shardcache_evict_object(cache, obj);
     }
     pthread_mutex_unlock(&obj->lock);
 
@@ -436,6 +461,8 @@ static int __op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *
             foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_error, obj);
             arc_remove(cache->arc, obj->key, obj->klen);
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
+            if (obj->evict)
+                shardcache_evict_object(cache, obj);
         }
         __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
     } else { 
@@ -551,15 +578,21 @@ static size_t __op_fetch(void *item, void * priv)
         return UINT_MAX;
     }
     gettimeofday(&obj->ts, NULL);
-    pthread_mutex_unlock(&obj->lock);
-    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
 
     obj->complete = 1;
 
-    if (obj->async)
+    if (obj->async) {
         foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_complete, obj);
+        if (obj->evict)
+            shardcache_evict_object(cache, obj);
+    }
 
-    return obj->dlen;
+    size_t dlen = obj->dlen;
+
+    pthread_mutex_unlock(&obj->lock);
+    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value, 1);
+
+    return dlen;
 }
 
 static void __op_evict(void *item, void *priv)
@@ -567,15 +600,7 @@ static void __op_evict(void *item, void *priv)
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
     pthread_mutex_lock(&obj->lock);
-    if (obj->data) {
-        free(obj->data);
-        obj->data = NULL;
-        obj->dlen = 0;
-        obj->complete = 0;
-        __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_EVICTS].value, 1);
-    }
-    obj->async = 0;
-    clear_list(obj->listeners);
+    shardcache_evict_object(cache, obj);
     pthread_mutex_unlock(&obj->lock);
 }
 
