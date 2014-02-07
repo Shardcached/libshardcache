@@ -320,7 +320,8 @@ sub errstr {
 
 sub DESTROY {
     my $self = shift;
-    shardcache_client_destroy($self->{_client});
+    shardcache_client_destroy($self->{_client})
+        if ($self->{_client})
 }
 
 
