@@ -206,6 +206,24 @@ int main(int argc, char **argv)
     if (!failed)
         ut_success();
 
+    char *volatile_key = "volatile_key";
+    char *volatile_value = "volatile_value";
+
+    ut_testing("setting volatile key");
+    int rc = shardcache_client_set(client, volatile_key, strlen(volatile_key), volatile_value, strlen(volatile_value), 1);
+    ut_validate_int(rc, 0);
+
+    ut_testing("volatile key exists");
+    size = shardcache_client_get(client, volatile_key, strlen(volatile_key), (void **)&value);
+    ut_validate_buffer(value, size, volatile_value, strlen(volatile_value));
+    free(value);
+
+    sleep(2);
+
+    ut_testing("volatile expired");
+    size = shardcache_client_get(client, volatile_key, strlen(volatile_key), (void **)&value);
+    ut_validate_int(size, 0);
+
     for (i = 0; i < num_nodes; i++) {
         shardcache_destroy(servers[i]);
     }
