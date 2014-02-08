@@ -268,12 +268,8 @@ shardcache_expire_volatile_keys(void *priv)
     {
         time_t now = time(NULL);
 
-        SPIN_LOCK(&cache->next_expire_lock);
-
-        if (cache->next_expire && now >= cache->next_expire && ht_count(cache->volatile_storage)) {
-            int prev_expire = cache->next_expire;
-            SPIN_UNLOCK(&cache->next_expire_lock);
-
+        uint32_t next_expire = ATOMIC_READ(cache->next_expire);
+        if (next_expire && now >= next_expire && ht_count(cache->volatile_storage)) {
             expire_volatile_arg_t arg = {
                 .list = create_list(),
                 .now = time(NULL),
@@ -282,12 +278,11 @@ shardcache_expire_volatile_keys(void *priv)
 
             ht_foreach_pair(cache->volatile_storage, expire_volatile, &arg);
 
-            SPIN_LOCK(&cache->next_expire_lock);
-            if (cache->next_expire == prev_expire) // nobody advanced the next_expire yet
-                cache->next_expire = arg.next;
-            else if (cache->next_expire && arg.next)
-                cache->next_expire = cache->next_expire < arg.next ? cache->next_expire : arg.next;
-            SPIN_UNLOCK(&cache->next_expire_lock);
+            do {
+                next_expire = ATOMIC_READ(cache->next_expire);
+                if (next_expire < arg.next)
+                    break;
+            } while (!ATOMIC_CAS(cache->next_expire, next_expire, arg.next));
 
             expire_volatile_item_t *item = shift_value(arg.list);
             while (item) {
@@ -307,10 +302,7 @@ shardcache_expire_volatile_keys(void *priv)
 
             destroy_list(arg.list);
 
-        } else {
-            SPIN_UNLOCK(&cache->next_expire_lock);
         }
-
         sleep(1);
     }
     return NULL;
@@ -451,9 +443,6 @@ shardcache_create(char *me,
         return NULL;
     }
 
-#ifndef __MACH__
-    pthread_spin_init(&cache->next_expire_lock, 0);
-#endif
     pthread_create(&cache->expirer_th, NULL, shardcache_expire_volatile_keys, cache);
     cache->expirer_started = 1;
 
@@ -509,9 +498,6 @@ shardcache_destroy(shardcache_t *cache)
     shardcache_release_counters(cache->counters);
 
     ht_destroy(cache->volatile_storage);
-#ifndef __MACH__
-    pthread_spin_destroy(&cache->next_expire_lock);
-#endif
 
     if (cache->auth)
         free((void *)cache->auth);
@@ -966,12 +952,8 @@ shardcache_set_internal(shardcache_t *cache,
                 ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, vlen);
             }
 
-            SPIN_LOCK(&cache->next_expire_lock);
-            if (obj->expire && (!cache->next_expire || obj->expire < cache->next_expire))
-                cache->next_expire = obj->expire;
-
-            SPIN_UNLOCK(&cache->next_expire_lock);
-
+            if (obj->expire)
+                ATOMIC_SET_IF(cache->next_expire, >, obj->expire, uint32_t)
         }
         else if (cache->use_persistent_storage && cache->storage.store)
         {
@@ -1344,10 +1326,7 @@ migrate(void *priv)
 
         // and now let's expire all the volatile keys that don't belong to us anymore
         ht_foreach_pair(cache->volatile_storage, expire_migrated, cache);
-        SPIN_LOCK(&cache->next_expire_lock);
-        cache->next_expire = 0;
-        SPIN_UNLOCK(&cache->next_expire_lock);
-
+        //ATOMIC_SET(cache->next_expire, 0);
     }
 
     destroy_list(to_delete);

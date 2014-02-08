@@ -1,4 +1,3 @@
-#include <fbuf.h>
 #include <linklist.h>
 #include <chash.h>
 #include <hashtable.h>
@@ -7,6 +6,15 @@
 #include "connections_pool.h"
 #include "serving.h"
 #include "counters.h"
+
+/* shardcache_t Definition and Internals
+ * NOTE: this file is not intended to be distributed in the binary package
+ * In theory the only source files including this header should be shardcache.c
+ * and arc_ops.c . The shardcache_t structure is not intended to be accessed
+ * directly outside of the logic residing in these two source files.
+ * So, if you are not working on one of those and you are looking here for
+ * details, close this header file and forget you've ever seen it
+ */
 
 #define DEBUG_DUMP_MAXSIZE 128
 
@@ -20,58 +28,75 @@
 typedef struct chash_t chash_t;
 
 struct __shardcache_s {
-    char *me;
+    char *me; // a copy of the label for this node
+              // it won't be changed until destruction
 
-    shardcache_node_t *shards;
-    int num_shards;
+    shardcache_node_t *shards; // a copy of the shards array provided
+                               // at construction time
 
-    arc_t *arc;
-    arc_ops_t ops;
-    size_t arc_size;
+    int num_shards;   // the number of shards in the array
 
+    arc_t *arc;       // the internal arc instance
+    arc_ops_t ops;    // the structure holding the arc operations callbacks
+    size_t arc_size;  // the actual size of the arc cache
+                      // NOTE: arc_size is updated using the atomic builtins,
+                      // don't access it directly but use ATOMIC_READ() instead
+                      // (see atomic.h)
+
+    // lock used internally during the migration procedures
+    // and when selecting the node owner for a key
 #ifdef __MACH__
     OSSpinLock migration_lock;
 #else
     pthread_spinlock_t migration_lock;
 #endif
-    chash_t *chash;
 
-    chash_t *migration;
-    shardcache_node_t *migration_shards;
-    int num_migration_shards;
-    int migration_done;
+    chash_t *chash;   // the internal chash instance
 
-    int use_persistent_storage;
-    shardcache_storage_t storage;
+    chash_t *migration;                  // the migration continuum
+    shardcache_node_t *migration_shards; // the new shards array after the migration
+    int num_migration_shards;            // the new number of shards in the migration_shards array
+    int migration_done;                  // boolean value indicating that the migration is complete
+                                         // (to be accessed using ATOMIC_READ())
 
-    hashtable_t *volatile_storage;
-    uint32_t next_expire;
-#ifdef __MACH__
-    OSSpinLock next_expire_lock;
-#else
-    pthread_spinlock_t next_expire_lock;
-#endif
-    pthread_t expirer_th;
-    int expirer_started;
-    int expirer_quit;
+    int use_persistent_storage;    // boolean flag indicating if a persistent storage should be used  
 
-    int evict_on_delete;
+    shardcache_storage_t storage;  // the structure holding the callbacks for the persistent storage 
 
-    int use_persistent_connections;
+    hashtable_t *volatile_storage; // an hashtable used as volatile storage
 
-    shardcache_serving_t *serv;
+    uint32_t next_expire; // the expiration time of the volatile item (if any).
+                          // in seconds (epoch)
+    pthread_t expirer_th; // the thread taking care of propagating expiration commands
+    int expirer_started;  // flag indicating the the expirer thread has started
+    int expirer_quit;     // controls the expirer thread, if true the expirer thread will quit
 
-    const char *auth;
+    int evict_on_delete;  // boolean flag indicating if eviction will be automatically
+                          // triggered when deleting an existing key 
 
-    pthread_t migrate_th;
+    int use_persistent_connections; // boolean flag indicating if connections should be persistent
+                                    // instead of being closed after serving/sending one complete message
 
-    pthread_t evictor_th;
-    pthread_mutex_t evictor_lock;
-    pthread_cond_t evictor_cond;
-    linked_list_t *evictor_jobs;
-    int evictor_quit;
+    shardcache_serving_t *serv;     // the serving-subsystem instance
 
-    shardcache_counters_t *counters;
+    const char *auth;     // the secret to use for signing messages
+                          // (NULL if messages are expected to be unsigned)
+
+    pthread_t migrate_th; // the migration thread
+
+    pthread_t evictor_th; // the evictor thread
+
+    pthread_cond_t evictor_cond;  // condition variable used by the evictor thread
+                                  // when waiting for new jobs (instead of actively
+                                  // polling on the linked list used as queue)
+    pthread_mutex_t evictor_lock; // mutex to use when accessing the evictor_cond
+                                  //condition variable
+    linked_list_t *evictor_jobs;  // linked list used as queue for eviction jobs
+    int evictor_quit;             // boolean flag to tell the evictor thread to quit
+                                  // (accessed using the atomic builtins)
+
+    shardcache_counters_t *counters; // the internal counters instance
+
 #define SHARDCACHE_COUNTER_GETS         0
 #define SHARDCACHE_COUNTER_SETS         1
 #define SHARDCACHE_COUNTER_DELS         2
@@ -83,15 +108,23 @@ struct __shardcache_s {
 #define SHARDCACHE_COUNTER_CACHE_SIZE   8
 #define SHARDCACHE_NUM_COUNTERS 9
     struct {
-        const char *name;
-        uint32_t value;
-    } cnt[SHARDCACHE_NUM_COUNTERS];
+        const char *name; // the exported label of the counter
+        uint32_t value;   // the actual value (accessed using the atomic builtins)
+    } cnt[SHARDCACHE_NUM_COUNTERS]; // array holding the storage for the counters
+                                    // exported as stats
 
-    connections_pool_t *connections_pool;
-    int tcp_timeout;
-    pthread_t async_io_th;
-    iomux_t *async_mux;
-    int async_leave;
+    connections_pool_t *connections_pool; // the connections_pool instance which
+                                          // holds/distribute the available
+                                          // filedescriptors // when using persistent
+                                          // connections
+
+    int tcp_timeout;        // the tcp timeout to use when setting up new connections
+    pthread_t async_io_th;  // the thread taking care of spooling the asynchronous
+                            // i/o operations
+    iomux_t *async_mux;     // the iomux instance used for the asynchronous i/o;
+                            // operations
+    int async_leave;        // boolean flag used to thell the async_io thread to quit
+                            // (accessed using the atomic builtins)
 };
 
 typedef struct {
