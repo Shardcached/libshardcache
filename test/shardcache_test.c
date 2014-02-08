@@ -218,7 +218,7 @@ int main(int argc, char **argv)
     ut_validate_buffer(value, size, volatile_value, strlen(volatile_value));
     free(value);
 
-    sleep(2);
+    sleep(3);
 
     ut_testing("volatile expired");
     size = shardcache_client_get(client, volatile_key, strlen(volatile_key), (void **)&value);
