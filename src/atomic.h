@@ -66,8 +66,18 @@
 #define ATOMIC_SET(__v, __n) {\
     int __b = 0;\
     do {\
-        __b = __sync_bool_compare_and_swap(&(__v), ATOMIC_READ(__v), (__n));\
+        __b = ATOMIC_CAS(__v, ATOMIC_READ(__v), (__n));\
     } while (!__b);\
+}
+#endif
+
+#ifndef ATOMIC_SET_IF
+#define ATOMIC_SET_IF(__v, __c, __n, __t) {\
+    __t __o = ATOMIC_READ(__v); \
+    while (__o __c __n && !ATOMIC_CAS(__v, __o, (__n)))\
+    {\
+        __o = ATOMIC_READ(__v);\
+    };\
 }
 #endif
 
