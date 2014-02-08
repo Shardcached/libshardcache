@@ -312,7 +312,7 @@ void *
 shardcache_run_async(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
-    while (!ATOMIC_READ(cache->async_leave)) {
+    while (!ATOMIC_READ(cache->async_quit)) {
         struct timeval timeout = { 0, 20000 };
         iomux_run(cache->async_mux, &timeout);
     }
@@ -487,7 +487,7 @@ shardcache_destroy(shardcache_t *cache)
     }
 
     SHC_DEBUG2("Stopping the async i/o thread");
-    ATOMIC_INCREMENT(cache->async_leave);
+    ATOMIC_INCREMENT(cache->async_quit);
     pthread_join(cache->async_io_th, NULL);
     iomux_destroy(cache->async_mux);
     SHC_DEBUG2("Async i/o thread stopped");

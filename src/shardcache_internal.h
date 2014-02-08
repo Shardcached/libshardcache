@@ -123,7 +123,7 @@ struct __shardcache_s {
                             // i/o operations
     iomux_t *async_mux;     // the iomux instance used for the asynchronous i/o;
                             // operations
-    int async_leave;        // boolean flag used to thell the async_io thread to quit
+    int async_quit;         // boolean flag used to thell the async_io thread to quit
                             // (accessed using the atomic builtins)
 };
 
