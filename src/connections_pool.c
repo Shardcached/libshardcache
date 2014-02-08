@@ -9,6 +9,8 @@
 #include "connections_pool.h"
 #include "messaging.h"
 
+#include "atomic.h"
+
 struct __connections_pool_s {
     hashtable_t *table;
     int tcp_timeout;
@@ -90,7 +92,7 @@ int connections_pool_get(connections_pool_t *cc, char *addr)
         fd = queue_pop_left(connection_queue);
     }
 
-    int new_fd = connect_to_peer(addr, __sync_fetch_and_add(&cc->tcp_timeout, 0));
+    int new_fd = connect_to_peer(addr, ATOMIC_READ(cc->tcp_timeout));
 
     return new_fd; 
 }
@@ -108,9 +110,10 @@ void connections_pool_add(connections_pool_t *cc, char *addr, int fd)
 
 int connections_pool_tcp_timeout(connections_pool_t *cc, int new_value)
 {
-    int old_value = 0;
-    do {
-        old_value = __sync_fetch_and_add(&cc->tcp_timeout, 0);
-    } while (!__sync_bool_compare_and_swap(&cc->tcp_timeout, old_value, new_value));
+    int old_value = ATOMIC_READ(cc->tcp_timeout);
+
+    if (new_value >= 0)
+        ATOMIC_SET(cc->tcp_timeout, new_value);
+
     return old_value;
 }

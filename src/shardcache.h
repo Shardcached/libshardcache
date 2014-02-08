@@ -334,7 +334,10 @@ shardcache_t *shardcache_create(char *me,
  * @brief Allows to switch between using persistent connections, or making a new connection for
  *        each message sent to a peer
  * @param cache       A valid pointer to a shardcache_t structure
- * @param new_value   1 if persistent connections should be used, 0 otherwise
+ * @param new_value   1 if persistent connections should be used, 0 otherwise.
+ *                    If -1 is provided as new_value, no change will be applied
+ *                    but the actual value will still be returned
+ *                    (effectively querying the actual status).
  * @return the previous value for the use_persistent_connections setting
  * @note when evict-on-delete is true, an evict command is sent to all nodes if an item
  *       is removed from the storage
@@ -346,6 +349,9 @@ int shardcache_use_persistent_connections(shardcache_t *cache, int new_value);
  * @brief Allows to change the evict_on_delete behaviour at runtime
  * @param cache       A valid pointer to a shardcache_t structure
  * @param new_value   1 if evict_on_delete is desired, 0 otherwise
+ *                    If -1 is provided as new_value, no change will be applied
+ *                    but the actual value will still be returned
+ *                    (effectively querying the actual status).
  * @return the previous value for the evict_on_delete setting
  * @note defaults to 1
  */
@@ -355,6 +361,9 @@ int shardcache_evict_on_delete(shardcache_t *cache, int new_value);
  * @brief Allows to change the timeout used when creating tcp connections
  * @param cache       A valid pointer to a shardcache_t structure
  * @param new_value   the amount of seconds to use as timeout
+ *                    If -1 is provided as new_value, no change will be applied
+ *                    but the actual value will still be returned
+ *                    (effectively querying the actual status).
  * @return the previous value for the tcp_timeout setting
  * @note defaults to SHARDCACHE_TCP_TIMEOUT_DEFAULT
  */
@@ -687,6 +696,7 @@ int shardcache_migration_abort(shardcache_t *cache);
  */
 int shardcache_migration_end(shardcache_t *cache);
 
+char *shardcache_get_node_address(shardcache_t *cache, char *label);
 
 /*
  *******************************************************************************

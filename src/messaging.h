@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <iomux.h>
+#include <fbuf.h>
 #include "shardcache.h"
 
 /* For the protocol specification check the 'docs/protocol.txt' file

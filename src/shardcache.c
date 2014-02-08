@@ -12,170 +12,23 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <fbuf.h>
-#include <linklist.h>
 #include <siphash.h>
-#include <chash.h>
-#include <hashtable.h>
-#include <iomux.h>
 #include <limits.h>
 
 #include "shardcache.h"
 #include "arc.h"
 #include "connections.h"
-#include "connections_pool.h"
 #include "messaging.h"
-#include "serving.h"
-#include "counters.h"
 #include "atomic.h"
+#include "arc_ops.h"
 
-#define DEBUG_DUMP_MAXSIZE 128
-
-#define KEY2STR(__k, __l, __o, __ol) \
-{ \
-    size_t __s = (__l < __ol) ? __l : __ol; \
-    memcpy(__o, __k, __s); \
-    __o[__s] = 0; \
-}
+#include "shardcache_internal.h"
 
 const char *LIBSHARDCACHE_VERSION = "0.9.7";
 
-typedef struct chash_t chash_t;
-
 extern int shardcache_log_initialized;
 
-struct __shardcache_s {
-    char *me;
-
-    shardcache_node_t *shards;
-    int num_shards;
-
-    arc_t *arc;
-    arc_ops_t ops;
-    size_t arc_size;
-
-#ifdef __MACH__
-    OSSpinLock migration_lock;
-#else
-    pthread_spinlock_t migration_lock;
-#endif
-    chash_t *chash;
-
-    chash_t *migration;
-    shardcache_node_t *migration_shards;
-    int num_migration_shards;
-    int migration_done;
-
-    int use_persistent_storage;
-    shardcache_storage_t storage;
-
-    hashtable_t *volatile_storage;
-    uint32_t next_expire;
-#ifdef __MACH__
-    OSSpinLock next_expire_lock;
-#else
-    pthread_spinlock_t next_expire_lock;
-#endif
-    pthread_t expirer_th;
-    int expirer_started;
-    int expirer_quit;
-
-    int evict_on_delete;
-
-    int use_persistent_connections;
-
-    shardcache_serving_t *serv;
-
-    const char *auth;
-
-    pthread_t migrate_th;
-
-    pthread_t evictor_th;
-    pthread_mutex_t evictor_lock;
-    pthread_cond_t evictor_cond;
-    linked_list_t *evictor_jobs;
-    int evictor_quit;
-
-    shardcache_counters_t *counters;
-#define SHARDCACHE_COUNTER_GETS         0
-#define SHARDCACHE_COUNTER_SETS         1
-#define SHARDCACHE_COUNTER_DELS         2
-#define SHARDCACHE_COUNTER_HEADS        3
-#define SHARDCACHE_COUNTER_EVICTS       4
-#define SHARDCACHE_COUNTER_CACHE_MISSES 5
-#define SHARDCACHE_COUNTER_NOT_FOUND    6
-#define SHARDCACHE_COUNTER_TABLE_SIZE   7
-#define SHARDCACHE_COUNTER_CACHE_SIZE   8
-#define SHARDCACHE_NUM_COUNTERS 9
-    struct {
-        const char *name;
-        uint32_t value;
-    } cnt[SHARDCACHE_NUM_COUNTERS];
-
-    connections_pool_t *connections_pool;
-    int tcp_timeout;
-    pthread_t async_io_th;
-    iomux_t *async_mux;
-    int async_leave;
-};
-
-typedef struct {
-    shardcache_get_async_callback_t cb;
-    void *priv;
-} shardcache_get_listener_t;
-
-/* This is the object we're managing. It has a key
- * and some data. This data will be loaded when ARC instruct
- * us to do so. */
-typedef struct {
-    arc_t *arc;
-    void *key;
-    size_t klen;
-    void *data;
-    size_t dlen;
-    struct timeval ts;
-    int async;
-    linked_list_t *listeners;
-    int complete;
-    int evict;
-    // we want a mutex here because the object might be locked
-    // for long time if involved in a fetch or store operation
-    pthread_mutex_t lock;
-} cache_object_t;
-
-typedef struct {
-    void *data;
-    size_t dlen;
-    uint32_t expire;
-} volatile_object_t;
-
-/**
- * * Here are the operations implemented
- * */
-
-static void *
-__op_create(const void *key, size_t len, int async, void *priv)
-{
-    shardcache_t *cache = (shardcache_t *)priv;
-    cache_object_t *obj = calloc(1, sizeof(cache_object_t));
-
-    obj->klen = len;
-    obj->key = malloc(len);
-    memcpy(obj->key, key, len);
-    obj->data = NULL;
-    obj->complete = 0;
-    if (async) {
-        obj->async = async;
-        obj->listeners = create_list();
-        set_free_value_callback(obj->listeners, free);
-    }
-    pthread_mutex_init(&obj->lock, NULL);
-    obj->arc = cache->arc;
-
-    return obj;
-}
-
-static char *
+char *
 shardcache_get_node_address(shardcache_t *cache, char *label)
 {
     char *addr = NULL;
@@ -200,12 +53,12 @@ shardcache_get_node_address(shardcache_t *cache, char *label)
 }
 
 static int
-_shardcache_test_ownership(shardcache_t *cache,
-                           void *key,
-                           size_t klen,
-                           char *owner,
-                           size_t *len,
-                           int  migration)
+shardcache_test_ownership_internal(shardcache_t *cache,
+                                   void *key,
+                                   size_t klen,
+                                   char *owner,
+                                   size_t *len,
+                                   int  migration)
 {
     const char *node_name;
     size_t name_len = 0;
@@ -248,14 +101,14 @@ _shardcache_test_ownership(shardcache_t *cache,
     return (strcmp(owner, cache->me) == 0);
 }
 
-static int
+int
 shardcache_test_migration_ownership(shardcache_t *cache,
                                     void *key,
                                     size_t klen,
                                     char *owner,
                                     size_t *len)
 {
-    int ret = _shardcache_test_ownership(cache, key, klen, owner, len, 1);
+    int ret = shardcache_test_ownership_internal(cache, key, klen, owner, len, 1);
     return ret;
 }
 
@@ -266,7 +119,7 @@ shardcache_test_ownership(shardcache_t *cache,
                           char *owner,
                           size_t *len)
 {
-    return _shardcache_test_ownership(cache, key, klen, owner, len, 0);
+    return shardcache_test_ownership_internal(cache, key, klen, owner, len, 0);
 }
 
 int
@@ -292,338 +145,6 @@ shardcache_release_connection_for_peer(shardcache_t *cache, char *peer, int fd)
     }
     // put back the fildescriptor into the connection cache
     connections_pool_add(cache->connections_pool, peer, fd);
-}
-
-typedef struct {
-    cache_object_t *obj;
-    void *data;
-    size_t len;
-} shardcache_fetch_from_peer_notify_arg;
-
-static int
-shardcache_fetch_from_peer_notify_listener (void *item, uint32_t idx, void *user)
-{
-    shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
-    shardcache_fetch_from_peer_notify_arg *arg = (shardcache_fetch_from_peer_notify_arg *)user;
-    cache_object_t *obj = arg->obj;
-    int rc = (listener->cb(obj->key, obj->klen, arg->data, arg->len, 0, NULL, listener->priv) == 0);
-    if (!rc) {
-        free(listener);
-        return -1;
-    }
-    return 1;
-}
-
-static int
-shardcache_fetch_from_peer_notify_listener_complete(void *item, uint32_t idx, void *user)
-{
-    shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
-    cache_object_t *obj = (cache_object_t *)user;
-    listener->cb(obj->key, obj->klen, NULL, 0, obj->dlen, &obj->ts, listener->priv);
-    free(listener);
-    return -1;
-}
-
-static int
-shardcache_fetch_from_peer_notify_listener_error(void *item, uint32_t idx, void *user)
-{
-    shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
-    cache_object_t *obj = (cache_object_t *)user;
-    listener->cb(obj->key, obj->klen, NULL, 0, 0, NULL, listener->priv);
-    free(listener);
-    return -1;
-}
-
-static void
-shardcache_evict_object(shardcache_t *cache, cache_object_t *obj)
-{
-    if (list_count(obj->listeners)) {
-        obj->evict = 1;
-        return;
-    }
-    if (obj->data) {
-        free(obj->data);
-        obj->data = NULL;
-        obj->dlen = 0;
-        obj->complete = 0;
-        ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
-    }
-    obj->async = 0;
-    obj->evict = 0;
-    clear_list(obj->listeners);
-}
-
-typedef struct
-{
-    cache_object_t *obj;
-    shardcache_t *cache;
-    char *peer_addr;
-    int fd;
-} shc_fetch_async_arg_t;
-
-static int
-shardcache_fetch_from_peer_async_cb(char *peer,
-                                    void *key,
-                                    size_t klen,
-                                    void *data,
-                                    size_t len,
-                                    int error,
-                                    void *priv)
-{
-    shc_fetch_async_arg_t *arg = (shc_fetch_async_arg_t *)priv;
-    cache_object_t *obj = arg->obj;
-    shardcache_t *cache = arg->cache;
-    char *peer_addr = arg->peer_addr;
-    int fd = arg->fd;
-    int complete = 0;
-    int total_len = 0;
-
-    pthread_mutex_lock(&obj->lock);
-    if (!obj->listeners) {
-        pthread_mutex_unlock(&obj->lock);
-        return -1;
-    }
-    if (error) {
-        foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_error, obj);
-        arc_remove(obj->arc, obj->key, obj->klen);
-        shardcache_release_connection_for_peer(cache, peer_addr, fd);
-        free(arg);
-        if (obj->evict)
-            shardcache_evict_object(cache, obj);
-    } else if (len) {
-        obj->data = realloc(obj->data, obj->dlen + len);
-        memcpy(obj->data + obj->dlen, data, len);
-        obj->dlen += len;
-        shardcache_fetch_from_peer_notify_arg arg = {
-            .obj = obj,
-            .data = data,
-            .len = len
-        };
-        foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener, &arg);
-    } else {
-        foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_complete, obj);
-        obj->complete = 1;
-        complete = 1;
-        total_len = obj->dlen;
-        shardcache_release_connection_for_peer(cache, peer_addr, fd);
-        free(arg);
-        if (obj->evict)
-            shardcache_evict_object(cache, obj);
-    }
-    pthread_mutex_unlock(&obj->lock);
-
-    if (complete) {
-        if (total_len)
-            arc_update_size(cache->arc, key, klen, total_len);
-        else
-            arc_remove(cache->arc, key, klen);
-    }
-    return !error ? 0 : -1;
-}
-
-static int
-__op_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
-{
-    int rc = -1;
-    if (shardcache_log_level() >= LOG_DEBUG) {
-        char keystr[1024];
-        KEY2STR(obj->key, obj->klen, keystr, sizeof(keystr));
-        SHC_DEBUG("Fetching data for key %s from peer %s", keystr, peer); 
-    }
-
-    char *peer_addr = shardcache_get_node_address(cache, peer);
-    if (!peer_addr) {
-        SHC_ERROR("Can't find address for node %s\n", peer);
-        return rc;
-    }
-
-    // another peer is responsible for this item, let's get the value from there
-
-    int fd = shardcache_get_connection_for_peer(cache, peer_addr);
-    if (obj->async) {
-        shc_fetch_async_arg_t *arg = malloc(sizeof(shc_fetch_async_arg_t));
-        arg->obj = obj;
-        arg->cache = cache;
-        arg->peer_addr = peer_addr;
-        arg->fd = fd;
-        rc = fetch_from_peer_async(peer_addr,
-                                   (char *)cache->auth,
-                                   SHC_HDR_CSIGNATURE_SIP,
-                                   obj->key,
-                                   obj->klen,
-                                   shardcache_fetch_from_peer_async_cb,
-                                   arg,
-                                   fd,
-                                   cache->async_mux);
-        if (rc == 0) {
-            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
-        } else {
-            foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_error, obj);
-            arc_remove(cache->arc, obj->key, obj->klen);
-            shardcache_release_connection_for_peer(cache, peer_addr, fd);
-            if (obj->evict)
-                shardcache_evict_object(cache, obj);
-        }
-    } else { 
-        fbuf_t value = FBUF_STATIC_INITIALIZER;
-        rc = fetch_from_peer(peer_addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, obj->key, obj->klen, &value, fd);
-        if (rc == 0 && fbuf_used(&value)) {
-            obj->data = fbuf_data(&value);
-            obj->dlen = fbuf_used(&value);
-            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
-            obj->complete = 1;
-        }
-        shardcache_release_connection_for_peer(cache, peer_addr, fd);
-        fbuf_destroy(&value);
-    }
-
-    return rc;
-}
-
-static void *
-copy_volatile_object_cb(void *ptr, size_t len)
-{
-    volatile_object_t *item = (volatile_object_t *)ptr;
-    volatile_object_t *copy = malloc(sizeof(volatile_object_t));
-    copy->data = malloc(item->dlen);
-    memcpy(copy->data, item->data, item->dlen);
-    copy->dlen = item->dlen;
-    copy->expire = item->expire;
-    return copy;
-}
-
-static size_t
-__op_fetch(void *item, void * priv)
-{
-    cache_object_t *obj = (cache_object_t *)item;
-    shardcache_t *cache = (shardcache_t *)priv;
-
-    pthread_mutex_lock(&obj->lock);
-    if (obj->data) { // the value is already loaded, we don't need to fetch
-        pthread_mutex_unlock(&obj->lock);
-        return obj->dlen;
-    }
-
-    char node_name[1024];
-    size_t node_len = sizeof(node_name);
-    memset(node_name, 0, node_len);
-    // if we are not the owner try asking to the peer responsible for this data
-    if (!shardcache_test_ownership(cache, obj->key, obj->klen, node_name, &node_len))
-    {
-        int done = 1;
-        int ret = __op_fetch_from_peer(cache, obj, node_name);
-        if (ret == -1) {
-            int check = shardcache_test_migration_ownership(cache,
-                                                            obj->key,
-                                                            obj->klen,
-                                                            node_name,
-                                                            &node_len);
-            if (check == 0)
-                ret = __op_fetch_from_peer(cache, obj, node_name);
-            else if (check == 1 || cache->storage.shared)
-                done = 0;
-        }
-        if (done) {
-            if (ret == 0) {
-                gettimeofday(&obj->ts, NULL);
-                size_t dlen = obj->dlen;
-                pthread_mutex_unlock(&obj->lock);
-                return dlen;
-            }
-            return UINT_MAX;
-        }
-    }
-
-    char keystr[1024];
-    if (shardcache_log_level() >= LOG_DEBUG)
-        KEY2STR(obj->key, obj->klen, keystr, sizeof(keystr));
-
-    // we are responsible for this item ... 
-    // let's first check if it's among the volatile keys otherwise
-    // fetch it from the storage
-    volatile_object_t *vobj = ht_get_deep_copy(cache->volatile_storage,
-                                               obj->key,
-                                               obj->klen,
-                                               NULL,
-                                               copy_volatile_object_cb);
-    if (vobj) {
-        obj->data = vobj->data; 
-        obj->dlen = vobj->dlen;
-        free(vobj);
-        if (shardcache_log_level() >= LOG_DEBUG) {
-            if (obj->data && obj->dlen) {
-                SHC_DEBUG2("Found volatile value %s (%lu) for key %s",
-                       shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
-                       (unsigned long)obj->dlen, keystr);
-            }
-        }
-    } else if (cache->use_persistent_storage && cache->storage.fetch) {
-        obj->data = cache->storage.fetch(obj->key, obj->klen, &obj->dlen, cache->storage.priv);
-
-        if (shardcache_log_level() >= LOG_DEBUG) {
-            if (obj->data && obj->dlen) {
-                SHC_DEBUG2("Fetch storage callback returned value %s (%lu) for key %s",
-                       shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
-                       (unsigned long)obj->dlen, keystr);
-            } else {
-                SHC_DEBUG2("Fetch storage callback returned an empty value for key %s", keystr);
-            }
-        }
-    }
-
-    if (!obj->data) {
-        pthread_mutex_unlock(&obj->lock);
-        if (shardcache_log_level() >= LOG_DEBUG)
-            SHC_DEBUG("Item not found for key %s", keystr);
-        ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value);
-        return UINT_MAX;
-    }
-    gettimeofday(&obj->ts, NULL);
-
-    obj->complete = 1;
-
-    if (obj->async) {
-        foreach_list_value(obj->listeners, shardcache_fetch_from_peer_notify_listener_complete, obj);
-        if (obj->evict)
-            shardcache_evict_object(cache, obj);
-    }
-
-    size_t dlen = obj->dlen;
-
-    pthread_mutex_unlock(&obj->lock);
-    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
-
-    return dlen;
-}
-
-static void
-__op_evict(void *item, void *priv)
-{
-    cache_object_t *obj = (cache_object_t *)item;
-    shardcache_t *cache = (shardcache_t *)priv;
-    pthread_mutex_lock(&obj->lock);
-    shardcache_evict_object(cache, obj);
-    pthread_mutex_unlock(&obj->lock);
-}
-
-static void
-__op_destroy(void *item, void *priv)
-{
-    cache_object_t *obj = (cache_object_t *)item;
-
-    // no lock is necessary here ... if we are here
-    // nobody is referencing us anymore
-    if (obj->data) {
-        free(obj->data);
-    }
-    if (obj->key)
-        free(obj->key);
-
-    if (obj->listeners)
-        destroy_list(obj->listeners);
-
-    pthread_mutex_destroy(&obj->lock);
-    free(obj);
 }
 
 static void
@@ -841,10 +362,10 @@ shardcache_create(char *me,
 
     cache->me = strdup(me);
 
-    cache->ops.create  = __op_create;
-    cache->ops.fetch   = __op_fetch;
-    cache->ops.evict   = __op_evict;
-    cache->ops.destroy = __op_destroy;
+    cache->ops.create  = arc_ops_create;
+    cache->ops.fetch   = arc_ops_fetch;
+    cache->ops.evict   = arc_ops_evict;
+    cache->ops.destroy = arc_ops_destroy;
 
     cache->ops.priv = cache;
     cache->shards = malloc(sizeof(shardcache_node_t) * nnodes);
@@ -1349,7 +870,7 @@ shardcache_touch(shardcache_t *cache, void *key, size_t klen)
 
 
 static void
-_shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
+shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
 {
     shardcache_evictor_job_t *job = create_evictor_job(key, klen);
 
@@ -1365,7 +886,7 @@ _shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
 
 
 static int
-_shardcache_set_internal(shardcache_t *cache,
+shardcache_set_internal(shardcache_t *cache,
                          void *key,
                          size_t klen,
                          void *value,
@@ -1440,7 +961,7 @@ _shardcache_set_internal(shardcache_t *cache,
                 }
                 destroy_volatile(prev); 
                 arc_remove(cache->arc, (const void *)key, klen);
-                _shardcache_commence_eviction(cache, key, klen);
+                shardcache_commence_eviction(cache, key, klen);
             } else {
                 ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, vlen);
             }
@@ -1482,7 +1003,7 @@ _shardcache_set_internal(shardcache_t *cache,
             rc = cache->storage.store(key, klen, value, vlen, cache->storage.priv);
 
             arc_remove(cache->arc, (const void *)key, klen);
-            _shardcache_commence_eviction(cache, key, klen);
+            shardcache_commence_eviction(cache, key, klen);
         }
         return rc;
     }
@@ -1511,7 +1032,7 @@ _shardcache_set_internal(shardcache_t *cache,
         if (rc == 0) {
             arc_remove(cache->arc, (const void *)key, klen);
 
-            _shardcache_commence_eviction(cache, key, klen);
+            shardcache_commence_eviction(cache, key, klen);
         }
         return rc;
     }
@@ -1527,7 +1048,7 @@ shardcache_set_volatile(shardcache_t *cache,
                         size_t vlen,
                         time_t expire)
 {
-    return _shardcache_set_internal(cache, key, klen, value, vlen, expire, 0);
+    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 0);
 }
 
 int
@@ -1538,7 +1059,7 @@ shardcache_add_volatile(shardcache_t *cache,
                         size_t vlen,
                         time_t expire)
 {
-    return _shardcache_set_internal(cache, key, klen, value, vlen, expire, 1);
+    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 1);
 }
 
 int
@@ -1548,7 +1069,7 @@ shardcache_set(shardcache_t *cache,
                void *value,
                size_t vlen)
 {
-    return _shardcache_set_internal(cache, key, klen, value, vlen, 0, 0);
+    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0);
 }
 
 int
@@ -1558,7 +1079,7 @@ shardcache_add(shardcache_t *cache,
                void *value,
                size_t vlen)
 {
-    return _shardcache_set_internal(cache, key, klen, value, vlen, 0, 1);
+    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 1);
 }
 
 int
@@ -1567,7 +1088,7 @@ shardcache_del(shardcache_t *cache, void *key, size_t klen)
     if (!key)
         return -1;
 
-    __sync_add_and_fetch(&cache->cnt[SHARDCACHE_COUNTER_DELS].value, 1);
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_DELS].value);
 
     // if we are not the owner try propagating the command to the responsible peer
     char node_name[1024];
@@ -1597,7 +1118,7 @@ shardcache_del(shardcache_t *cache, void *key, size_t klen)
         {
             arc_remove(cache->arc, (const void *)key, klen);
 
-            _shardcache_commence_eviction(cache, key, klen);
+            shardcache_commence_eviction(cache, key, klen);
         }
 
         ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
@@ -1981,20 +1502,22 @@ shardcache_migration_end(shardcache_t *cache)
 int
 shardcache_use_persistent_connections(shardcache_t *cache, int new_value)
 {
-    int old_value = 0;
-    do {
-        old_value = ATOMIC_READ(cache->use_persistent_connections);
-    } while (!ATOMIC_CAS(cache->use_persistent_connections, old_value, new_value));
+    int old_value = ATOMIC_READ(cache->use_persistent_connections);
+
+    if (new_value >= 0)
+        ATOMIC_SET(cache->use_persistent_connections, new_value);
+
     return old_value;
 }
 
 int
 shardcache_evict_on_delete(shardcache_t *cache, int new_value)
 {
-    int old_value = 0;
-    do {
-        old_value = ATOMIC_READ(cache->evict_on_delete);
-    } while (!ATOMIC_CAS(cache->evict_on_delete, old_value, new_value));
+    int old_value = ATOMIC_READ(cache->evict_on_delete);
+
+    if (new_value >= 0)
+        ATOMIC_SET(cache->evict_on_delete, new_value);
+
     return old_value;
 }
 
