@@ -78,7 +78,7 @@ sub new {
 
     my $self = {
         _nodes  => [],
-        _secret => $secret,
+        (defined $secret ? (_secret => $secret) : ()),
     };
 
     if (ref($nodes) && ref($nodes) eq "ARRAY") {
@@ -111,9 +111,7 @@ sub new {
         push(@{$self->{_nodes}}, [ $label, $addr ]);
     }
 
-    $secret = '' unless defined $secret;
-
-    $self->{_client} = shardcache_client_create($self->{_nodes}, $secret);
+    $self->{_client} = shardcache_client_create($self->{_nodes}, $secret // '');
 
     return undef unless ($self->{_client});
 
@@ -388,7 +386,7 @@ None by default.
 =back
 
 =head3 REQUIRED PARAMS
-    
+
 =over 4
 
 =item me
@@ -447,15 +445,15 @@ None by default.
 
 =item * exists ( $key )
 
-    Check existance of the key on the node responsible for it.
+    Check existence of the key on the node responsible for it.
     Returns 1 if the key exists, 0 if doesn't exist, -1 on errors
 
 =item * touch ( $key )
 
-    Fore loading of a key into the cache if not loaded already,
+    For loading of a key into the cache if not loaded already,
     otherwise updates the loaded-timestamp for the cached key.
 
-    Returns 0 on succes, -1 on errors.
+    Returns 0 on success, -1 on errors.
 
 =item * set ( $key, $value, [ $expire ] )
 
@@ -497,7 +495,7 @@ None by default.
 =item * set_multi ( %$pairs )
 
     Get multiple keys at once. The %$pairs parameter is expected to be an HASHREF containing the key/value pairs to set.
-    Returns an hashref containing the same keys of the imput hashref as keys and the status of the operation as values
+    Returns an hashref containing the same keys of the input hashref as keys and the status of the operation as values
     (1 if successfully set, 0 otherwise).
 
     Note that multi commands are not all‐or‐nothing, some operations may succeed, while others may fail.
