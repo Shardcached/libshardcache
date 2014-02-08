@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 
 #include <chash.h>
 #include <shardcache_client.h>
@@ -10,19 +11,19 @@
 void usage(char *prgname) {
     printf("Usage: %s <Command> <Key>\n"
            "   Commands: \n"
-           "        get       <Key>\n"
-           "        get_async <Key>\n"
-           "        get_multi <Key> [ <Key> ... ]\n"
-           "        offset    <Key> <Offset> <Length>\n"
-           "        set       <Key> [ <Expire> ] (gets value on stdin)\n"
-           "        add       <Key> [ <Expire> ] (gets value on stdin)\n"
-           "        exists    <Key>\n"
-           "        touch     <Key>\n"
-           "        del       <Key>\n"
-           "        evict     <Key>\n"
-           "        index     [ <node> ]\n"
-           "        stats     [ <node> ]\n"
-           "        check     [ <node> ]\n\n", prgname);
+           "        get       <key> [ <output_file> (defaults to stdout) ]\n"
+           "        get_async <key> [ <output_file> (defaults to stdout) ]\n"
+           "        get_multi <key> [ <key> ... ] [ -o <output_dir>   (defaults to stdout) ]\n"
+           "        offset    <key> <offset> <kength> [ <output_file> (defaults to stdout)\n"
+           "        set       <key> [ -e <expire> ] [ -i <input_file> (defaults to stdin) ]\n"
+           "        add       <key> [ -e <expire> ] [ -i <input_file> (defaults to stdin) ]\n"
+           "        exists    <key>\n"
+           "        touch     <key>\n"
+           "        del       <key>\n"
+           "        evict     <key>\n"
+           "        index   [ <node> ]\n"
+           "        stats   [ <node> ]\n"
+           "        check   [ <node> ]\n\n", prgname);
     exit(-2);
 }
 
@@ -62,8 +63,9 @@ int print_chunk(char *peer,
                  int error,
                  void *priv)
 {
+    FILE *out = (FILE *)priv;
     if (data && len)
-        fwrite(data, 1, len, stdout);
+        fwrite(data, 1, len, out ? out : stdout);
     return error;
 }
 
@@ -93,12 +95,22 @@ int main (int argc, char **argv) {
     int rc = 0;
     int is_boolean = 0;
 
+    FILE *output_file = NULL;
+
     char *cmd = argv[1];
     if (strcasecmp(cmd, "get") == 0) {
         void *out = NULL;
         size_t len = shardcache_client_get(client, argv[2], strlen(argv[2]), &out); 
         if (len && out) {
-            print_chunk(NULL, NULL, 0, out, len, 0, NULL);
+            if (argc > 3) {
+                output_file = fopen(argv[3], "w");
+                if (!output_file) {
+                    fprintf(stderr, "Can't open file %s for writing : %s\n",
+                            argv[3], strerror(errno));
+                    exit(-1);
+                }
+            }
+            print_chunk(NULL, NULL, 0, out, len, 0, output_file);
         }
     } else if (strcasecmp(cmd, "offset") == 0) {
         if (argc < 5)
@@ -107,31 +119,131 @@ int main (int argc, char **argv) {
         int size = strtol(argv[4], NULL, 10);
         char out[size];
         size_t len = shardcache_client_offset(client, argv[2], strlen(argv[2]), offset, out, size); 
+
+        if (argc > 5) {
+            output_file = fopen(argv[5], "w");
+            if (!output_file) {
+                fprintf(stderr, "Can't open file %s for writing : %s\n",
+                        argv[5], strerror(errno));
+                exit(-1);
+            }
+        }
+
         if (len) {
-            print_chunk(NULL, NULL, 0, out, len, 0, NULL);
+            print_chunk(NULL, NULL, 0, out, len, 0, output_file);
         }
     } else if (strcasecmp(cmd, "geta") == 0 || strcasecmp(cmd, "get_async") == 0) {
-        rc = shardcache_client_get_async(client, argv[2], strlen(argv[2]), print_chunk, NULL); 
+        if (argc > 3) {
+            output_file = fopen(argv[3], "w");
+            if (!output_file) {
+                fprintf(stderr, "Can't open file %s for writing : %s\n",
+                        argv[3], strerror(errno));
+                exit(-1);
+            }
+        }
+        rc = shardcache_client_get_async(client, argv[2], strlen(argv[2]), print_chunk, output_file); 
     } else if (strcasecmp(cmd, "get_multi") == 0) {
         char **keys = &argv[2];
         int num_keys = argc - 2;
-        shc_multi_item_t *items[num_keys];
+
+        char *outdir = NULL;
+        if (argc > 3) {
+            if (strncmp(argv[argc-1], "-o", 2) == 0) {
+                char *dir = argv[argc-1] + 2;
+                if (*dir) {
+                    outdir = dir;
+                    num_keys--;
+                }
+            } else if (strncmp(argv[argc-2], "-o", 2) == 0) {
+                outdir = argv[argc-1];
+                num_keys -= 2;
+            }
+            if (outdir) {
+                int olen = strlen(outdir) -1;
+                while (olen >= 0 && outdir[olen] == '/')
+                    outdir[olen--] = 0;
+            }
+        }
+
+        shc_multi_item_t *items[num_keys+1];
         int i;
         for (i = 0; i < num_keys; i++) {
             items[i] = shc_multi_item_create(client, keys[i], strlen(keys[i]), NULL, 0);
         }
+        items[num_keys] = NULL;
 
         rc = shardcache_client_get_multi(client, items);
 
         for (i = 0; i < num_keys; i++) {
-            printf("Value for key: %s\n", (char *)items[i]->key);
-            print_chunk(NULL, NULL, 0, items[i]->data, items[i]->dlen, 0, NULL);
+            size_t klen = items[i]->klen;
+            char *keystr = malloc(klen+1);
+            memcpy(keystr, items[i]->key, klen);
+            keystr[klen] = 0;
+            FILE *out = NULL;
+            char *outname = NULL;
+            if (outdir) {
+                int len = strlen(outdir) + klen + 2;
+                outname = malloc(len);
+                snprintf(outname, len, "%s/%s", outdir, keystr);
+                out = fopen(outname, "w");
+                if (!out) {
+                    fprintf(stderr, "Can't open file %s for writing : %s\n",
+                            outname, strerror(errno));
+                    exit(-1);
+                }
+            }
+            if (out)
+                printf("Saving key %s to file %s\n", keystr, outname);
+            else
+                printf("Value for key: %s\n", keystr);
+
+            print_chunk(NULL, NULL, 0, items[i]->data, items[i]->dlen, 0, out);
             printf("\n");
             shc_multi_item_destroy(items[i]);
+            if (out)
+                fclose(out);
+            if (outname)
+                free(outname);
         }
     } else if (strcasecmp(cmd, "set") == 0 ||
                strcasecmp(cmd, "add") == 0)
     {
+        FILE *infile = NULL;
+        uint32_t expire = 0;
+        char *inpath;
+        while (argc > 3) {
+            if (strncmp(argv[argc-1], "-i", 2) == 0) {
+                char *dir = argv[argc-1] + 2;
+                if (*dir) {
+                    inpath = dir;
+                    argc--;
+                }
+            } else if (strncmp(argv[argc-1], "-e", 2) == 0) {
+                char *expire_str = argv[argc-1] + 2;
+                if (*expire_str) {
+                    expire = strtol(expire_str, NULL, 10);
+                    argc--;
+                }
+            } else if (strncmp(argv[argc-2], "-i", 2) == 0) {
+                inpath = argv[argc-1];
+                argc -= 2;
+            } else if (strncmp(argv[argc-2], "-e", 2) == 0) {
+                expire = strtol(argv[argc-1], NULL, 10);
+                argc -= 2;
+            } else {
+                fprintf(stderr, "Unknown option %s\n", argv[3]);
+                exit(-1);
+            }
+        }
+
+        if (inpath) {
+            infile = fopen(inpath, "r");
+            if (!infile) {
+                fprintf(stderr, "Can't open file for %s reading: %s\n",
+                        inpath, strerror(errno));
+                exit(-1);
+            }
+        }
         char *in = NULL;
         size_t s = 0;
         char buf[1024];
@@ -140,15 +252,18 @@ int main (int argc, char **argv) {
             in = realloc(in, s+rb);
             memcpy(in + s, buf, rb);
             s += rb;
-            rb = fread(buf, 1, 1024, stdin);
+            rb = fread(buf, 1, 1024, infile ? infile : stdin);
         }
+
         if (strcasecmp(cmd, "set") == 0) {
-            rc = shardcache_client_set(client, argv[2], strlen(argv[2]), in, s, argc > 3 ? strtol(argv[3], NULL, 10) : 0);
+            rc = shardcache_client_set(client, argv[2], strlen(argv[2]), in, s, expire);
         } else {
-            rc = shardcache_client_add(client, argv[2], strlen(argv[2]), in, s, argc > 3 ? strtol(argv[3], NULL, 10) : 0);
+            rc = shardcache_client_add(client, argv[2], strlen(argv[2]), in, s, expire);
             if (rc == 1)
                 printf("Already exists!\n");
         }
+        if (infile)
+            fclose(infile);
     } else if (strcasecmp(cmd, "del") == 0 || strcasecmp(cmd, "delete") == 0) {
         rc = shardcache_client_del(client, argv[2], strlen(argv[2]));
     } else if (strcasecmp(cmd, "evict") == 0) {
@@ -234,6 +349,9 @@ int main (int argc, char **argv) {
     } else {
         usage(argv[0]);
     }
+
+    if (output_file)
+        fclose(output_file);
 
     if (strncasecmp(cmd, "get", 3) != 0 &&
         strncasecmp(cmd, "offset", 6) != 0)
