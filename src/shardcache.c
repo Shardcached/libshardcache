@@ -264,7 +264,7 @@ void *
 shardcache_expire_volatile_keys(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
-    while (ATOMIC_READ(cache->expirer_quit))
+    while (!ATOMIC_READ(cache->expirer_quit))
     {
         time_t now = time(NULL);
 
@@ -952,7 +952,7 @@ shardcache_set_internal(shardcache_t *cache,
                 ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, vlen);
             }
 
-            if (obj->expire)
+            if (obj->expire && !ATOMIC_CAS(cache->next_expire, 0, obj->expire))
                 ATOMIC_SET_IF(cache->next_expire, >, obj->expire, uint32_t)
         }
         else if (cache->use_persistent_storage && cache->storage.store)
