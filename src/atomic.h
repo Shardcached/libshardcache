@@ -11,14 +11,14 @@
 #ifndef __MACH__
 #define SPIN_INIT(__mutex) pthread_spin_init(__mutex, 0)
 #else
-#endif
 #define SPIN_INIT(__mutex)
+#endif
 
 #ifndef __MACH__
 #define SPIN_DESTROY(__mutex) pthread_spin_destroy(__mutex)
 #else
-#endif
 #define SPIN_DESTROY(__mutex)
+#endif
 
 #ifndef __MACH__
 #define SPIN_LOCK(__mutex) pthread_spin_lock(__mutex)
