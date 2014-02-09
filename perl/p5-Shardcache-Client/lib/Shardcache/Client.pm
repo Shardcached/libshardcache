@@ -43,20 +43,21 @@ sub new {
 
     if (ref($host) && ref($host) eq "ARRAY") {
         foreach my $h (@$host) {
-            if ($h !~ /^[a-zA-Z0-9_\.]+:[a-zA-Z0-9_\.]+(?:[:][0-9]+)?$/) {
+            if ($h !~ /^[a-zA-Z0-9_\.\-]+:[a-zA-Z0-9_\.\-]+(?:[:][0-9]+)?$/) {
                 die "Invalid host string $h";
             }
             my ($label, $addr, $port) = split(':', $h);
             push(@{$self->{_nodes}}, {
                     label => $label,
                     addr  => $addr,
-                    port => $port });
+                    port => $port
+                });
         }
         $self->{_chash} = Algorithm::ConsistentHash::CHash->new(
                       ids      => [map { $_->{label} } @{$self->{_nodes}} ],
                       replicas => 200);
     } else {
-        if ($host !~ /^[a-zA-Z0-9_\.]+:[a-zA-Z0-9_\.]+(?:[:][0-9]+)?$/) {
+        if ($host !~ /^[a-zA-Z0-9_\.\-]+(?:[:][0-9]+)?$/) {
             die "Invalid host string $host";
         }
         my ($addr, $port) = split(':', $host);
