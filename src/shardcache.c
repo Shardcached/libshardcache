@@ -278,11 +278,7 @@ shardcache_expire_volatile_keys(void *priv)
 
             ht_foreach_pair(cache->volatile_storage, expire_volatile, &arg);
 
-            do {
-                next_expire = ATOMIC_READ(cache->next_expire);
-                if (next_expire < arg.next)
-                    break;
-            } while (!ATOMIC_CAS(cache->next_expire, next_expire, arg.next));
+            ATOMIC_SET_IF(cache->next_expire, >, arg.next, uint32_t);
 
             expire_volatile_item_t *item = shift_value(arg.list);
             while (item) {
