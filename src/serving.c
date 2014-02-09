@@ -120,7 +120,7 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
         fbuf_destroy(&ctx->records[i]);
     async_read_context_destroy(ctx->reader_ctx);
     rbuf_destroy(ctx->fetch_accumulator);
-    pthread_mutex_destroy(&ctx->output_lock);
+    MUTEX_DESTROY(&ctx->output_lock);
     free(ctx);
 }
 
@@ -1016,8 +1016,8 @@ void stop_serving(shardcache_serving_t *s) {
 
         queue_destroy(s->workers[i].jobs);
 
-        pthread_mutex_destroy(&s->workers[i].wakeup_lock);
-        pthread_cond_destroy(&s->workers[i].wakeup_cond);
+        MUTEX_DESTROY(&s->workers[i].wakeup_lock);
+        CONDITION_DESTROY(&s->workers[i].wakeup_cond);
         SHC_DEBUG3("Worker thread %d exited", i);
     }
     SHC_DEBUG2("All worker threads have been collected");

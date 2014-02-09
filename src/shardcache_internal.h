@@ -1,12 +1,3 @@
-#include <linklist.h>
-#include <chash.h>
-#include <hashtable.h>
-#include <iomux.h>
-
-#include "connections_pool.h"
-#include "serving.h"
-#include "counters.h"
-
 /* shardcache_t Definition and Internals
  * NOTE: this file is not intended to be distributed in the binary package
  * In theory the only source files including this header should be shardcache.c
@@ -15,6 +6,17 @@
  * So, if you are not working on one of those and you are looking here for
  * details, close this header file and forget you've ever seen it
  */
+
+#include <linklist.h>
+#include <chash.h>
+#include <hashtable.h>
+#include <iomux.h>
+
+#include "connections_pool.h"
+#include "arc.h"
+#include "serving.h"
+#include "counters.h"
+#include "atomic.h"
 
 #define DEBUG_DUMP_MAXSIZE 128
 

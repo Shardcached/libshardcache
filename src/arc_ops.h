@@ -1,8 +1,3 @@
-#include <linklist.h>
-#include "arc.h"
-#include "atomic.h"
-
-
 /* This is the object we're managing. It has a key
  * and some data. This data will be loaded when ARC instruct
  * us to do so. */

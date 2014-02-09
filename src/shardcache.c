@@ -16,13 +16,10 @@
 #include <limits.h>
 
 #include "shardcache.h"
-#include "arc.h"
+#include "shardcache_internal.h"
+#include "arc_ops.h"
 #include "connections.h"
 #include "messaging.h"
-#include "atomic.h"
-#include "arc_ops.h"
-
-#include "shardcache_internal.h"
 
 const char *LIBSHARDCACHE_VERSION = "0.9.7";
 

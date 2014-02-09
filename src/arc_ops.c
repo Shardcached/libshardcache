@@ -4,9 +4,9 @@
 #include <limits.h>
 
 #include "shardcache.h"
-#include "messaging.h"
-#include "arc_ops.h"
 #include "shardcache_internal.h"
+#include "arc_ops.h"
+#include "messaging.h"
 
 /**
  * * Here are the operations implemented
@@ -97,9 +97,9 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     int complete = 0;
     int total_len = 0;
 
-    pthread_mutex_lock(&obj->lock);
+    MUTEX_LOCK(&obj->lock);
     if (!obj->listeners) {
-        pthread_mutex_unlock(&obj->lock);
+        MUTEX_UNLOCK(&obj->lock);
         return -1;
     }
     if (error) {
@@ -129,7 +129,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         if (obj->evict)
             arc_ops_evict_object(cache, obj);
     }
-    pthread_mutex_unlock(&obj->lock);
+    MUTEX_UNLOCK(&obj->lock);
 
     if (complete) {
         if (total_len)
@@ -216,7 +216,7 @@ arc_ops_create(const void *key, size_t len, int async, void *priv)
         obj->listeners = create_list();
         set_free_value_callback(obj->listeners, free);
     }
-    pthread_mutex_init(&obj->lock, NULL);
+    MUTEX_INIT(&obj->lock);
     obj->arc = cache->arc;
 
     return obj;
@@ -240,9 +240,9 @@ arc_ops_fetch(void *item, void * priv)
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
 
-    pthread_mutex_lock(&obj->lock);
+    MUTEX_LOCK(&obj->lock);
     if (obj->data) { // the value is already loaded, we don't need to fetch
-        pthread_mutex_unlock(&obj->lock);
+        MUTEX_UNLOCK(&obj->lock);
         return obj->dlen;
     }
 
@@ -269,7 +269,7 @@ arc_ops_fetch(void *item, void * priv)
             if (ret == 0) {
                 gettimeofday(&obj->ts, NULL);
                 size_t dlen = obj->dlen;
-                pthread_mutex_unlock(&obj->lock);
+                MUTEX_UNLOCK(&obj->lock);
                 return dlen;
             }
             return UINT_MAX;
@@ -314,7 +314,7 @@ arc_ops_fetch(void *item, void * priv)
     }
 
     if (!obj->data) {
-        pthread_mutex_unlock(&obj->lock);
+        MUTEX_UNLOCK(&obj->lock);
         if (shardcache_log_level() >= LOG_DEBUG)
             SHC_DEBUG("Item not found for key %s", keystr);
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value);
@@ -332,7 +332,7 @@ arc_ops_fetch(void *item, void * priv)
 
     size_t dlen = obj->dlen;
 
-    pthread_mutex_unlock(&obj->lock);
+    MUTEX_UNLOCK(&obj->lock);
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
 
     return dlen;
@@ -343,9 +343,9 @@ arc_ops_evict(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
-    pthread_mutex_lock(&obj->lock);
+    MUTEX_LOCK(&obj->lock);
     arc_ops_evict_object(cache, obj);
-    pthread_mutex_unlock(&obj->lock);
+    MUTEX_UNLOCK(&obj->lock);
 }
 
 void
@@ -364,7 +364,7 @@ arc_ops_destroy(void *item, void *priv)
     if (obj->listeners)
         destroy_list(obj->listeners);
 
-    pthread_mutex_destroy(&obj->lock);
+    MUTEX_DESTROY(&obj->lock);
     free(obj);
 }
 
