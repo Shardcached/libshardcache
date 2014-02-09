@@ -334,9 +334,7 @@ shardcache_create(char *me,
     cache->use_persistent_connections = 1;
     cache->tcp_timeout = SHARDCACHE_TCP_TIMEOUT_DEFAULT;
 
-#ifndef __MACH__
-    pthread_spin_init(&cache->migration_lock, 0);
-#endif
+    SPIN_INIT(&cache->migration_lock);
 
     if (st) {
         memcpy(&cache->storage, st, sizeof(cache->storage));
@@ -404,8 +402,8 @@ shardcache_create(char *me,
     }
 
     if (ATOMIC_READ(cache->evict_on_delete)) {
-        pthread_mutex_init(&cache->evictor_lock, NULL);
-        pthread_cond_init(&cache->evictor_cond, NULL);
+        MUTEX_INIT(&cache->evictor_lock);
+        CONDITION_INIT(&cache->evictor_cond);
         cache->evictor_jobs = create_list();
         set_free_value_callback(cache->evictor_jobs,
                                 (free_value_callback_t)destroy_evictor_job);
@@ -461,16 +459,14 @@ shardcache_destroy(shardcache_t *cache)
         shardcache_migration_abort(cache);    
     }
     SPIN_UNLOCK(&cache->migration_lock);
-#ifndef __MACH__
-    pthread_spin_destroy(&cache->migration_lock);
-#endif
+    SPIN_DESTROY(&cache->migration_lock);
 
     if (ATOMIC_READ(cache->evict_on_delete)) {
         SHC_DEBUG2("Stopping evictor thread");
         ATOMIC_INCREMENT(cache->evictor_quit);
         pthread_join(cache->evictor_th, NULL);
-        pthread_mutex_destroy(&cache->evictor_lock);
-        pthread_cond_destroy(&cache->evictor_cond);
+        MUTEX_DESTROY(&cache->evictor_lock);
+        CONDITION_DESTROY(&cache->evictor_cond);
         destroy_list(cache->evictor_jobs);
         SHC_DEBUG2("Evictor thread stopped");
     }
@@ -722,10 +718,7 @@ shardcache_get(shardcache_t *cache,
     int rc = shardcache_get_async(cache, key, klen, shardcache_get_helper, &arg);
 
     if (rc == 0) {
-        pthread_mutex_lock(&arg.lock);
-        if (!arg.complete)
-            pthread_cond_wait(&arg.cond, &arg.lock);
-        pthread_mutex_unlock(&arg.lock);
+        CONDITION_WAIT_IF(&arg.cond, &arg.lock, !arg.complete);
 
         if (arg.stat != 0) {
             fbuf_destroy(&arg.data);

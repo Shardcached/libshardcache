@@ -121,11 +121,7 @@ static arc_object_t *arc_object_create(arc_t *cache, void *ptr, const void *key,
 
     arc_list_init(&obj->head);
 
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutex_init(&obj->lock, &attr);
-    pthread_mutexattr_destroy(&attr);
+    MUTEX_INIT_RECURSIVE(&obj->lock);
 
     obj->node = new_node(cache->refcnt, obj);
     obj->key = malloc(len);
@@ -311,7 +307,7 @@ static void free_node_ptr_callback(void *node) {
     if (obj->key)
         free(obj->key);
 
-    pthread_mutex_destroy(&obj->lock);
+    MUTEX_DESTROY(&obj->lock);
 
     free(obj);
 }
@@ -348,11 +344,7 @@ arc_t *arc_create(arc_ops_t *ops, size_t c)
     arc_list_init(&cache->mfu.head);
     arc_list_init(&cache->mfug.head);
     
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutex_init(&cache->lock, &attr);
-    pthread_mutexattr_destroy(&attr);
+    MUTEX_INIT_RECURSIVE(&cache->lock);
 
     cache->refcnt = refcnt_create(MIN(c/2, 1<<16), terminate_node_callback, free_node_ptr_callback);
     return cache;
@@ -378,6 +370,7 @@ void arc_destroy(arc_t *cache)
     arc_list_destroy(cache, &cache->mfug.head);
     ht_destroy(cache->hash);
     refcnt_destroy(cache->refcnt); 
+    MUTEX_DESTROY(&cache->lock);
     free(cache);
 }
 

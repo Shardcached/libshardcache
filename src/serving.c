@@ -106,7 +106,7 @@ shardcache_connection_context_create(shardcache_t *cache,
     ctx->reader_ctx = async_read_context_create((char *)auth,
                                                     async_read_handler,
                                                     ctx);
-    pthread_mutex_init(&ctx->output_lock, NULL);
+    MUTEX_INIT(&ctx->output_lock);
     ctx->fetch_accumulator = rbuf_create(1<<16);
     return ctx;
 }
@@ -847,13 +847,10 @@ worker(void *priv)
                 abstime.tv_sec = now.tv_sec + 1;
                 abstime.tv_nsec = now.tv_usec * 1000;
 
-                pthread_mutex_lock(&wrk_ctx->wakeup_lock);
+                CONDITION_TIMEDWAIT(&wrk_ctx->wakeup_cond,
+                                    &wrk_ctx->wakeup_lock,
+                                    &abstime);
 
-                pthread_cond_timedwait(&wrk_ctx->wakeup_cond,
-                                       &wrk_ctx->wakeup_lock,
-                                       &abstime);
-
-                pthread_mutex_unlock(&wrk_ctx->wakeup_lock);
             } else {
                 // TODO - Error messsages
             }
@@ -922,9 +919,7 @@ serve_cache(void *priv)
                 shardcache_connection_context_create(serv->cache, serv->auth, fd);
 
             queue_push_right(wrkctx->jobs, ctx);
-            pthread_mutex_lock(&wrkctx->wakeup_lock);
-            pthread_cond_signal(&wrkctx->wakeup_cond);
-            pthread_mutex_unlock(&wrkctx->wakeup_lock);
+            CONDITION_SIGNAL(&wrkctx->wakeup_cond, &wrkctx->wakeup_lock);
         }
     }
 
@@ -979,8 +974,8 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
             shardcache_counter_add(s->counters, varname, &s->workers[i].busy);
         }
 
-        pthread_mutex_init(&s->workers[i].wakeup_lock, NULL);
-        pthread_cond_init(&s->workers[i].wakeup_cond, NULL);
+        MUTEX_INIT(&s->workers[i].wakeup_lock);
+        CONDITION_INIT(&s->workers[i].wakeup_cond);
         pthread_create(&s->workers[i].thread, NULL, worker, &s->workers[i]);
     }
 
@@ -1015,9 +1010,7 @@ void stop_serving(shardcache_serving_t *s) {
         ATOMIC_INCREMENT(s->workers[i].leave);
 
         // wake up the worker if slacking
-        pthread_mutex_lock(&s->workers[i].wakeup_lock);
-        pthread_cond_signal(&s->workers[i].wakeup_cond);
-        pthread_mutex_unlock(&s->workers[i].wakeup_lock);
+        CONDITION_SIGNAL(&s->workers[i].wakeup_cond, &s->workers[i].wakeup_lock);
 
         pthread_join(s->workers[i].thread, NULL);
 
