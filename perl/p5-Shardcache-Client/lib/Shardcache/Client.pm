@@ -7,6 +7,26 @@ use Algorithm::ConsistentHash::CHash;
 
 our $VERSION = "0.03";
 
+sub _read_bytes {
+    my ($sock, $len) = @_;
+    my $to_read = $len;
+    my $read;
+    my $data;
+    do {
+        my $buffer;
+        my $rb = read($sock, $buffer, $to_read); 
+        if ($rb > 0) {
+            $data .= $buffer;
+            $read += $rb;
+            $to_read -= $rb;
+        } else {
+            last;
+        }
+    } while ($read != $len);
+
+    return ($read == $len) ? $data : undef;
+}
+
 sub new {
     my ($class, $host, $secret) = @_;
 
@@ -151,35 +171,36 @@ sub send_msg {
     
     # read the response
     my $in;
-    my $data;
 
    # read the magic
-    my $magic;
-    if (read($sock, $magic, 4) != 4) {
-        delete $self->{_sock}->{"$addr:$port"};
+    my $magic = _read_bytes($sock, 4);
+    if (!$magic) {
+        delete $self->{_sock}->{"$addr:$port"} if ($addr);
         return undef;
     }
 
     # read the signature if necessary
     if ($self->{_secret}) {
-        my $rb = read($sock, $data, 1);
-        if ($rb != 1) {
-            delete $self->{_sock}->{"$addr:$port"};
+        my $byte = _read_bytes($sock, 1);
+        if (!$byte) {
+            delete $self->{_sock}->{"$addr:$port"} if ($addr);
             return undef;
         }
 
-        if (unpack("C", $data) != 0xF0) {
+        if (unpack("C", $byte) != 0xF0) {
             return undef;
         }
     }
  
     # read the header
-    if (read($sock, $data, 1) != 1) {
-        delete $self->{_sock}->{"$addr:$port"};
+    my $data = _read_bytes($sock, 1);
+    if (!$data) {
+        delete $self->{_sock}->{"$addr:$port"} if ($addr);
         return undef;
     }
 
     if (unpack("C", $data) == 0xF0) {
+        delete $self->{_sock}->{"$addr:$port"} if ($addr);
         return undef;
     }
 
@@ -190,29 +211,30 @@ sub send_msg {
 
     # read the records
     while (!$stop) {
-        if (read($sock, $data, 2) != 2) {
+        unless ($data = _read_bytes($sock, 2)) {
+            delete $self->{_sock}->{"$addr:$port"} if ($addr);
             return undef;
         }
         my ($len) = unpack("n", $data);
-        $in .= $data;
         while ($len) {
-            my $rb = read($sock, $data, $len);
-            if ($rb <= 0) {
+            $in .= $data;
+            unless ($data = _read_bytes($sock, $len)) {
+                delete $self->{_sock}->{"$addr:$port"} if ($addr);
                 return undef;
             }
             $in .= $data;
             $out .= $data;
-            $len -= $rb;
-            if ($len == 0) {
-                if (read($sock, $data, 2) != 2) {
-                    return undef;
-                }
-                ($len) = unpack("n", $data);
-                $in .= $data;
+            $len = 0;
+            unless ($data = _read_bytes($sock, 2)) {
+                delete $self->{_sock}->{"$addr:$port"} if ($addr);
+                return undef;
             }
+            ($len) = unpack("n", $data);
+            $in .= $data;
         }
         
-        if (read($sock, $data, 1) != 1) {
+        unless ($data = _read_bytes($sock, 1)) {
+            delete $self->{_sock}->{"$addr:$port"} if ($addr);
             return undef;
         }
         $in .= $data;
@@ -228,13 +250,13 @@ sub send_msg {
 
         my $csig = pack("Q", $signature);
 
-        my $rb = read($sock, $data, 8);
-        if ($rb != 8) {
+        unless ($data = _read_bytes($sock, 8)) {
+            delete $self->{_sock}->{"$addr:$port"} if ($addr);
             return undef;
         }
 
-        # $chunk now points at the signature
         if ($csig ne $data) {
+            delete $self->{_sock}->{"$addr:$port"} if ($addr);
             return undef;
         }
     }
@@ -311,7 +333,7 @@ sub migration_abort {
     return $self->mga(@_);
 }
 
-sub _get_sock_for_peer {
+sub _get_sock_key_for_peer {
     my ($self, $peer) = @_;
     my $addr;
     my $port;
@@ -328,12 +350,33 @@ sub _get_sock_for_peer {
             return undef;
         }
     }
-    if (!$self->{_sock}->{"$addr:$port"} || !$self->{_sock}->{"$addr:$port"}->connected) {
-        $self->{_sock}->{"$addr:$port"} = IO::Socket::INET->new(PeerAddr => $addr,
+    return "$addr:$port";
+}
+
+sub _get_sock_for_peer {
+    my ($self, $peer) = @_;
+
+    my $sock_key = $self->_get_sock_key_for_peer($peer);
+
+    if (!$self->{_sock}->{$sock_key} || !$self->{_sock}->{$sock_key}->connected ||
+        $self->{_sock}->{$sock_key}->write(pack("C1", 0x90)) != 1)
+    {
+        my ($addr, $port) = split(':', $sock_key);
+        $self->{_sock}->{$sock_key} = IO::Socket::INET->new(
+                                             PeerAddr => $addr,
                                              PeerPort => $port,
                                              Proto    => 'tcp');
     }
-    return $self->{_sock}->{"$addr:$port"};
+
+    return $self->{_sock}->{$sock_key};
+}
+
+sub _delete_sock_for_peer {
+    my ($self, $peer) = @_;
+
+    my $sock_key = $self->_get_sock_key_for_peer($peer);
+
+    delete $self->{_sock}->{$sock_key};
 }
 
 sub chk {
@@ -343,7 +386,9 @@ sub chk {
     return unless $sock;
 
     my $resp = $self->send_msg(0x31, undef, undef, undef, $sock);
-    return (unpack("C", $resp) == 0x00);
+    $self->_delete_sock_for_peer($peer) unless $resp;
+
+    return $resp ? (unpack("C", $resp) == 0x00) : undef;
 }
 
 sub sts {
@@ -354,6 +399,8 @@ sub sts {
     return unless $sock;
 
     my $resp = $self->send_msg(0x32, undef, undef, undef, $sock);
+    $self->_delete_sock_for_peer($peer) unless $resp;
+
     return $resp;
 }
 
