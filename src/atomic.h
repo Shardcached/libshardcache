@@ -99,7 +99,7 @@
 
 #define ATOMIC_SET_IF(__v, __c, __n, __t) {\
     __t __o = ATOMIC_READ(__v); \
-    while (__o __c __n && !ATOMIC_CAS(__v, __o, __n))\
+    while ((__o __c (__n)) && !ATOMIC_CAS(__v, __o, __n))\
         __o = ATOMIC_READ(__v);\
 }
 
