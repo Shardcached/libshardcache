@@ -210,7 +210,7 @@ int main (int argc, char **argv) {
     {
         FILE *infile = NULL;
         uint32_t expire = 0;
-        char *inpath;
+        char *inpath = NULL;
         while (argc > 3) {
             if (strncmp(argv[argc-1], "-i", 2) == 0) {
                 char *dir = argv[argc-1] + 2;
@@ -247,7 +247,7 @@ int main (int argc, char **argv) {
         char *in = NULL;
         size_t s = 0;
         char buf[1024];
-        int rb = fread(buf, 1, 1024, stdin);
+        int rb = fread(buf, 1, 1024, infile ? infile : stdin);
         while (rb > 0) {
             in = realloc(in, s+rb);
             memcpy(in + s, buf, rb);
