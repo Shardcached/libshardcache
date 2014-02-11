@@ -1,3 +1,14 @@
+ * extend arc.c to allow a fetch routing to instruct the cache subsystem on whether to cache
+   the retrieved object or discard it after dowloading
+
+ * weight items distinguishing between not owned (but fetched from a peer) and owned to decide 
+   if the value needs to be cached or not. 
+   The idea is that not-owned items would be cached locally only if 'hot'. 
+   For the strategy to use it might be worth to look at how groupcache does 
+   or use a Count-Min Sketch based approach
+
+ * support replicas
+
  * support message compression
 
  * extend the protocol to support get_multi and set_multi messages.
