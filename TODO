@@ -1,4 +1,4 @@
- * extend arc.c to allow a fetch routing to instruct the cache subsystem on whether to cache
+ * extend arc.c to allow the fetch routine to instruct the cache subsystem on whether to cache
    the retrieved object or discard it after dowloading
 
  * weight items distinguishing between not owned (but fetched from a peer) and owned to decide 
