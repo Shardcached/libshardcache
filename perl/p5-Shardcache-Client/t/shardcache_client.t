@@ -39,6 +39,13 @@ is($c->get("test_key1"), "test_value1");
 is($c->get("test_key2"), "test_value2");
 is($c->get("test_key3"), "test_value3");
 
+my %index = $c->index();
+
+cmp_ok(scalar(keys %index), '>', 3);
+is ($index{test_key1}, 11);
+is ($index{test_key2}, 11);
+is ($index{test_key3}, 11);
+
 foreach my $i (4..24) {
     $c->set("test_key$i", "test_value$i");
 }
