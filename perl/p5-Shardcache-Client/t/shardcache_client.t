@@ -56,4 +56,6 @@ foreach my $h (@nodes) {
     is($c->chk($label), 1, "check $label");
 }
 
+is($c->offset("test_key1", 5, 6), "value1");
+
 done_testing();
