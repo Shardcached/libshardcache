@@ -62,6 +62,7 @@ sub new {
         }
         my ($addr, $port) = split(':', $host);
         push(@{$self->{_nodes}}, {
+                label => "$addr:$port",
                 addr => $addr,
                 port => $port
             });
@@ -159,8 +160,8 @@ sub send_msg {
             $self->{_sock}->{"$addr:$port"}->write(pack("C1", 0x90)) != 1)
         {
             $self->{_sock}->{"$addr:$port"} = IO::Socket::INET->new(PeerAddr => $addr,
-                                                 PeerPort => $port,
-                                                 Proto    => 'tcp');
+                                                                    PeerPort => $port,
+                                                                    Proto    => 'tcp');
         }
 
         $sock = $self->{_sock}->{"$addr:$port"};
@@ -296,6 +297,18 @@ sub set {
     return (defined $resp && unpack("C", $resp) == 0x00);
 }
 
+sub add {
+    my ($self, $key, $value, $expire) = @_;
+    return unless $key && defined $value;
+    my @records = ($key, $value);
+
+    push(@records, pack("N", $expire))
+        if ($expire);
+
+    my $resp = $self->send_msg(0x07, \@records);
+    return (defined $resp && unpack("C", $resp) == 0x00);
+}
+
 sub del {
     my ($self, $key) = @_;
     return unless $key;
@@ -352,8 +365,8 @@ sub migration_abort {
     return $self->mga(@_);
 }
 
-sub _get_sock_key_for_peer {
-    my ($self, $peer) = @_;
+sub _get_sock_key_for_node {
+    my ($self, $node) = @_;
     my $addr;
     my $port;
 
@@ -361,7 +374,7 @@ sub _get_sock_key_for_peer {
             $addr = $self->{_nodes}->[0]->{addr};
             $port = $self->{_nodes}->[0]->{port};
     } else {
-        my ($node) = grep { $_->{label} eq $peer } @{$self->{_nodes}};
+        my ($node) = grep { $_->{label} eq $node } @{$self->{_nodes}};
         if ($node) {
             $addr = $node->{addr};
             $port = $node->{port};
@@ -372,10 +385,10 @@ sub _get_sock_key_for_peer {
     return "$addr:$port";
 }
 
-sub _get_sock_for_peer {
-    my ($self, $peer) = @_;
+sub _get_sock_for_node {
+    my ($self, $node) = @_;
 
-    my $sock_key = $self->_get_sock_key_for_peer($peer);
+    my $sock_key = $self->_get_sock_key_for_node($node);
 
     if (!$self->{_sock}->{$sock_key} || !$self->{_sock}->{$sock_key}->connected ||
         $self->{_sock}->{$sock_key}->write(pack("C1", 0x90)) != 1)
@@ -390,37 +403,79 @@ sub _get_sock_for_peer {
     return $self->{_sock}->{$sock_key};
 }
 
-sub _delete_sock_for_peer {
-    my ($self, $peer) = @_;
+sub _delete_sock_for_node {
+    my ($self, $node) = @_;
 
-    my $sock_key = $self->_get_sock_key_for_peer($peer);
+    my $sock_key = $self->_get_sock_key_for_node($node);
 
     delete $self->{_sock}->{$sock_key};
 }
 
-sub chk {
-    my ($self, $peer) = @_;
-    my $sock = $self->_get_sock_for_peer($peer);
+sub index {
+    my ($self, $node) = @_;
+
+    my %index;
+
+    my @nodes = $node
+              ? ($node)
+              : map { $_->{label} } @{$self->{_nodes}};
+
+    foreach my $n (@nodes) {
+        my $sock = $self->_get_sock_for_node($n);
+
+        return unless $sock;
+
+
+        my $resp = $self->send_msg(0x41, undef, $sock);
+        while (length($resp)) {
+            my $ksize = unpack("N", $resp);
+            $resp = substr($resp, 4);
+            my $kdata = unpack("a$ksize", $resp);
+            $resp = substr($resp, $ksize);
+            my $vlen = unpack("N", $resp); 
+            $resp = substr($resp, 4);
+            $index{$kdata} = $vlen
+                if ($ksize && $kdata);
+        }
+    }
+    return wantarray ? %index : \%index;
+}
+
+sub check {
+    my ($self, $node) = @_;
+    my $sock = $self->_get_sock_for_node($node);
 
     return unless $sock;
 
     my $resp = $self->send_msg(0x31, undef, $sock);
-    $self->_delete_sock_for_peer($peer) unless $resp;
+    $self->_delete_sock_for_node($node) unless $resp;
 
     return $resp ? (unpack("C", $resp) == 0x00) : undef;
 }
 
-sub sts {
-    my ($self, $peer) = @_;
+sub chk {
+    my $self = shift;
+    # XXX - deprecated
+    return $self->check(@_);
+}
 
-    my $sock = $self->_get_sock_for_peer($peer);
+sub status {
+    my ($self, $node) = @_;
+
+    my $sock = $self->_get_sock_for_node($node);
 
     return unless $sock;
 
     my $resp = $self->send_msg(0x32, undef, $sock);
-    $self->_delete_sock_for_peer($peer) unless $resp;
+    $self->_delete_sock_for_node($node) unless $resp;
 
     return $resp;
+}
+
+sub sts {
+    my $self = shift;
+    # XXX - deprecated
+    return $self->status(@_);
 }
 
 1;
