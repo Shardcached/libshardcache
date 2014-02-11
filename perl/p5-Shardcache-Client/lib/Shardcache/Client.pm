@@ -93,32 +93,36 @@ sub _chunkize_var {
 }
 
 sub send_msg {
-    my ($self, $hdr, $key, $value, $expire, $sock) = @_;
+    my ($self, $hdr, $records, $sock) = @_;
 
     my $templ = "C";
     my @vars = ($hdr);
 
-    if ($key) {
-        my $kbuf = _chunkize_var($key);
-        $templ .= sprintf "a%dCC", length($kbuf);
-        push @vars, $kbuf, 0x00, 0x00;
-    } else {
-        $templ .= "CC";
-        push @vars, 0x00, 0x00;
+    my $key;
+
+    my $cnt = 0;
+    $records = [ $records ] unless (ref($records) && ref($records) eq "ARRAY");
+    foreach my $record (@$records) {
+        if ($cnt++) {
+            $templ .= "C";
+            push @vars, 0x80;
+        } else {
+            $key = $record;
+        }
+
+        if ($record) {
+            my $buf = _chunkize_var($record);
+            $templ .= sprintf "a%dCC", length($buf);
+            push @vars, $buf, 0x00, 0x00;
+        } else {
+            $templ .= "CC";
+            push(@vars, 0x00, 0x00);
+        }
     }
 
-    if ($value) {
-        $templ .= "C";
-        push @vars, 0x80;
-
-        my $vbuf = _chunkize_var($value);
-
-        $templ .= sprintf "a%dCC", length($vbuf);
-        push @vars, $vbuf, 0x00, 0x00;
-        if ($expire) {
-            $templ .= "CCCNCC";
-            push @vars, 0x80, 0x00, 0x04, $expire, 0x00, 0x00;
-        }
+    if (!$cnt) {
+        $templ .= "CC";
+        push @vars, 0x00, 0x00;
     }
 
     $templ .= "C";
@@ -211,6 +215,7 @@ sub send_msg {
     my $out; 
 
     # read the records
+    my @output_records;
     while (!$stop) {
         unless ($data = _read_bytes($sock, 2)) {
             delete $self->{_sock}->{"$addr:$port"} if ($addr);
@@ -240,8 +245,10 @@ sub send_msg {
         }
         $in .= $data;
         my ($sep) = unpack("C", $data);
-        $stop = 1 if ($sep == 0);
         # TODO - should check if it's a correct rsep (0x80)
+        $stop = 1 if ($sep == 0);
+        push(@output_records, $out);
+        undef($out);
     }
 
     if ($self->{_secret}) {
@@ -262,7 +269,7 @@ sub send_msg {
         }
     }
 
-    return $out;
+    return wantarray ? @output_records : $output_records[0];
 }
 
 sub get {
@@ -271,10 +278,21 @@ sub get {
     return $self->send_msg(0x01, $key);
 }
 
+sub offset {
+    my ($self, $key, $offset, $len) = @_;
+    return unless $key;
+    return $self->send_msg(0x06, [$key, pack("N", $offset), pack("N", $len)]);
+}
+
 sub set {
     my ($self, $key, $value, $expire) = @_;
     return unless $key && defined $value;
-    my $resp = $self->send_msg(0x02, $key, $value, $expire);
+    my @records = ($key, $value);
+
+    push(@records, pack("N", $expire))
+        if ($expire);
+
+    my $resp = $self->send_msg(0x02, \@records);
     return (defined $resp && unpack("C", $resp) == 0x00);
 }
 
@@ -386,7 +404,7 @@ sub chk {
 
     return unless $sock;
 
-    my $resp = $self->send_msg(0x31, undef, undef, undef, $sock);
+    my $resp = $self->send_msg(0x31, undef, $sock);
     $self->_delete_sock_for_peer($peer) unless $resp;
 
     return $resp ? (unpack("C", $resp) == 0x00) : undef;
@@ -399,7 +417,7 @@ sub sts {
 
     return unless $sock;
 
-    my $resp = $self->send_msg(0x32, undef, undef, undef, $sock);
+    my $resp = $self->send_msg(0x32, undef, $sock);
     $self->_delete_sock_for_peer($peer) unless $resp;
 
     return $resp;
