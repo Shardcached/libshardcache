@@ -211,9 +211,9 @@ evictor(void *priv)
         rc = gettimeofday(&now, NULL);
         if (rc == 0) {
             struct timespec abstime = { now.tv_sec + 1, now.tv_usec * 1000 };
-            pthread_mutex_lock(&cache->evictor_lock);
+            MUTEX_LOCK(&cache->evictor_lock);
             pthread_cond_timedwait(&cache->evictor_cond, &cache->evictor_lock, &abstime);
-            pthread_mutex_unlock(&cache->evictor_lock);
+            MUTEX_UNLOCK(&cache->evictor_lock);
         } else {
             // TODO - Error messsages
         }
@@ -532,7 +532,7 @@ shardcache_get_offset(shardcache_t *cache,
 
     if (obj_ptr) {
         cache_object_t *obj = (cache_object_t *)obj_ptr;
-        pthread_mutex_lock(&obj->lock);
+        MUTEX_LOCK(&obj->lock);
         if (obj->data) {
             if (dlen && data) {
                 if (offset < obj->dlen) {
@@ -546,7 +546,7 @@ shardcache_get_offset(shardcache_t *cache,
                 memcpy(timestamp, &obj->ts, sizeof(struct timeval));
         }
         vlen = obj->dlen;
-        pthread_mutex_unlock(&obj->lock);
+        MUTEX_UNLOCK(&obj->lock);
     }
     arc_release_resource(cache->arc, res);
     ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
@@ -617,7 +617,7 @@ shardcache_get_async(shardcache_t *cache,
     }
 
     cache_object_t *obj = (cache_object_t *)obj_ptr;
-    pthread_mutex_lock(&obj->lock);
+    MUTEX_LOCK(&obj->lock);
     if (obj->complete) {
         cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
         arc_release_resource(cache->arc, res);
@@ -637,7 +637,7 @@ shardcache_get_async(shardcache_t *cache,
         push_value(obj->listeners, listener);
    }
 
-    pthread_mutex_unlock(&obj->lock);
+    MUTEX_UNLOCK(&obj->lock);
 
     ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
                (uint32_t)arc_size(cache->arc));
@@ -649,7 +649,7 @@ typedef struct {
     pthread_mutex_t lock;
     pthread_cond_t cond;
     fbuf_t data;
-    size_t stat;
+    int stat;
     struct timeval ts;
     int complete;
 } shardcache_get_helper_arg_t;
@@ -664,14 +664,15 @@ shardcache_get_helper(void *key,
                       void *priv)
 {
     shardcache_get_helper_arg_t *arg = (shardcache_get_helper_arg_t *)priv;
-    pthread_mutex_lock(&arg->lock);
+    MUTEX_LOCK(&arg->lock);
     if (dlen) {
         fbuf_add_binary(&arg->data, data, dlen);
     } else if (!total_size) {
         // error notified (dlen == 0 && total_size == 0)
+	arg->complete = 1;
         arg->stat = -1;
         pthread_cond_signal(&arg->cond);
-        pthread_mutex_unlock(&arg->lock);
+        MUTEX_UNLOCK(&arg->lock);
         return -1;
     }
 
@@ -684,7 +685,7 @@ shardcache_get_helper(void *key,
         }
         pthread_cond_signal(&arg->cond);
     }
-    pthread_mutex_unlock(&arg->lock);
+    MUTEX_UNLOCK(&arg->lock);
     return 0;
 }
 
@@ -717,25 +718,25 @@ shardcache_get(shardcache_t *cache,
     int rc = shardcache_get_async(cache, key, klen, shardcache_get_helper, &arg);
 
     if (rc == 0) {
-        CONDITION_WAIT_IF(&arg.cond, &arg.lock, !arg.complete && arg.stat == 0);
+        CONDITION_WAIT_WHILE(&arg.cond, &arg.lock, !arg.complete && arg.stat == 0);
 
-        if (arg.stat != 0) {
-            fbuf_destroy(&arg.data);
-            SHC_DEBUG("Error trying to get key: %s", keystr);
-            return NULL;
-        }
+         if (arg.stat != 0) {
+             fbuf_destroy(&arg.data);
+             SHC_DEBUG("Error trying to get key: %s", keystr);
+             return NULL;
+         }
 
-        char *value = fbuf_data(&arg.data);
-        if (vlen)
-            *vlen = fbuf_used(&arg.data);
+         char *value = fbuf_data(&arg.data);
+         if (vlen)
+             *vlen = fbuf_used(&arg.data);
 
-        if (timestamp)
-            memcpy(timestamp, &arg.ts, sizeof(struct timeval));
+         if (timestamp)
+             memcpy(timestamp, &arg.ts, sizeof(struct timeval));
 
-        if (!value)
-            SHC_DEBUG("No value for key: %s", keystr);
+         if (!value)
+             SHC_DEBUG("No value for key: %s", keystr);
 
-        return value;
+         return value;
     }
     fbuf_destroy(&arg.data);
     return NULL;
@@ -821,9 +822,9 @@ shardcache_touch(shardcache_t *cache, void *key, size_t klen)
         arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 0);
         if (res) {
             cache_object_t *obj = (cache_object_t *)obj_ptr;
-            pthread_mutex_lock(&obj->lock);
+            MUTEX_LOCK(&obj->lock);
             gettimeofday(&obj->ts, NULL);
-            pthread_mutex_unlock(&obj->lock);
+            MUTEX_UNLOCK(&obj->lock);
             arc_release_resource(cache->arc, res);
             return obj ? 0 : -1;
         }
@@ -853,9 +854,9 @@ shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
     SHC_INFO("Adding evictor job for key %s", keystr);
 
     push_value(cache->evictor_jobs, job);
-    pthread_mutex_lock(&cache->evictor_lock);
+    MUTEX_LOCK(&cache->evictor_lock);
     pthread_cond_signal(&cache->evictor_cond);
-    pthread_mutex_unlock(&cache->evictor_lock);
+    MUTEX_UNLOCK(&cache->evictor_lock);
 }
 
 

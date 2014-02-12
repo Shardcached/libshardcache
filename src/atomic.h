@@ -72,6 +72,13 @@
     MUTEX_UNLOCK(__m); \
 }
 
+#define CONDITION_WAIT_WHILE(__c, __m, __e) {\
+    MUTEX_LOCK(__m); \
+    while (__e) \
+        pthread_cond_wait(__c, __m); \
+    MUTEX_UNLOCK(__m); \
+}
+
 #define CONDITION_SIGNAL(__c, __m) {\
     pthread_mutex_lock(__m); \
     pthread_cond_signal(__c); \
