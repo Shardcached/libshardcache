@@ -12,6 +12,7 @@ typedef struct {
     linked_list_t *listeners;
     int complete;
     int evict;
+    int drop;
     // we want a mutex here because the object might be locked
     // for long time if involved in a fetch or store operation
     pthread_mutex_t lock;

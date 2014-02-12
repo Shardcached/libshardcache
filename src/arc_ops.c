@@ -69,6 +69,7 @@ arc_ops_evict_object(shardcache_t *cache, cache_object_t *obj)
     }
     obj->async = 0;
     obj->evict = 0;
+    obj->drop = 0;
     clear_list(obj->listeners);
 }
 
@@ -96,6 +97,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     int fd = arg->fd;
     int complete = 0;
     int total_len = 0;
+    int drop = 0;
 
     MUTEX_LOCK(&obj->lock);
     if (!obj->listeners) {
@@ -104,7 +106,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     }
     if (error) {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-        arc_remove(obj->arc, obj->key, obj->klen);
+        drop = 1;
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
         if (obj->evict)
@@ -126,16 +128,22 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         total_len = obj->dlen;
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
+
+        if (obj->drop)
+            drop = 1;
+
         if (obj->evict)
             arc_ops_evict_object(cache, obj);
     }
+
     MUTEX_UNLOCK(&obj->lock);
 
     if (complete) {
-        if (total_len)
+        if (total_len && !drop) {
             arc_update_size(cache->arc, key, klen, total_len);
-        else
+        } else {
             arc_remove(cache->arc, key, klen);
+        }
     }
     return !error ? 0 : -1;
 }
@@ -183,7 +191,9 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
             // This is the same logic applied by groupcache to determine hot keys.
             // Better approaches are possible but maybe unnecessary.
             if (rand() % 10 != 0)
-                obj->evict = 1;
+                obj->drop = 1;
+            else
+                obj->drop = 0;
 
         } else {
             foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
