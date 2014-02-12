@@ -179,9 +179,11 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
 
-            // TODO - here we have to determine if we want to keep the retrieved object
-            //        into the local cache or evict it immediately after it has been
-            //        downloaded and served back to the listeners
+            // Keep the remote object in the cache only 10% of the time.
+            // This is the same logic applied by groupcache to determine hot keys.
+            // Better approaches are possible but maybe unnecessary.
+            if (rand() % 10 != 0)
+                obj->evict = 1;
 
         } else {
             foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);

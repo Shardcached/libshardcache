@@ -415,6 +415,7 @@ shardcache_create(char *me,
         return NULL;
     }
 
+    srand(time(NULL));
     cache->volatile_storage = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)destroy_volatile);
 
     cache->connections_pool = connections_pool_create(cache->tcp_timeout);
