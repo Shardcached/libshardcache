@@ -717,7 +717,7 @@ shardcache_get(shardcache_t *cache,
     int rc = shardcache_get_async(cache, key, klen, shardcache_get_helper, &arg);
 
     if (rc == 0) {
-        CONDITION_WAIT_IF(&arg.cond, &arg.lock, !arg.complete);
+        CONDITION_WAIT_IF(&arg.cond, &arg.lock, !arg.complete && arg.stat == 0);
 
         if (arg.stat != 0) {
             fbuf_destroy(&arg.data);
