@@ -66,7 +66,7 @@ shardcache_client_create(nodes, auth=NULL)
     CODE:
         int i;
 	int	num_nodes = 0;
-        shardcache_node_t *shards = NULL;
+        shardcache_node_t **shards = NULL;
 
         if (SvOK(nodes)) {
             if (!SvROK(nodes) || SvTYPE(SvRV(nodes)) != SVt_PVAV)
@@ -76,7 +76,7 @@ shardcache_client_create(nodes, auth=NULL)
 
             num_nodes = av_len(nodes_array) + 1;
             if (num_nodes > 0) {
-                Newx(shards, sizeof(shardcache_node_t) * num_nodes + 1, shardcache_node_t);
+                shards = malloc(sizeof(shardcache_node_t *) * num_nodes);
                 for (i = 0; i < num_nodes; i++) {
                     STRLEN len = 0, alen = 0;
                     char *node = NULL, *addr = NULL;
@@ -101,12 +101,8 @@ shardcache_client_create(nodes, auth=NULL)
                         }
                     }
                     if (node && addr) {
-                        int l = MIN(len, sizeof(shards[i].label)-1);
-                        memcpy(shards[i].label, node, l);
-                        shards[i].label[l] = 0;
-                        int l2 = MIN(alen, sizeof(shards[i].address)-1);
-                        memcpy(shards[i].address, addr, l2);
-                        shards[i].address[l2] = 0;
+                        char *addr_list[1] = { addr };
+                        shards[i] = shardcache_node_create(node, addr_list, 1);
                     } else {
                         croak("Can't parse the 'nodes' array");
                     }
@@ -117,7 +113,13 @@ shardcache_client_create(nodes, auth=NULL)
         } else {
             croak("No nodes configured");
         }
-        RETVAL = shardcache_client_create(shards, num_nodes, auth);
+
+        if (shards) {
+            RETVAL = shardcache_client_create(shards, num_nodes, auth);
+            shardcache_free_nodes(shards, num_nodes);
+        } else {
+            RETVAL = NULL;
+        }
 
     OUTPUT:
         RETVAL
