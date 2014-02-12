@@ -381,7 +381,7 @@ void arc_remove(arc_t *cache, const void *key, size_t len)
         MUTEX_LOCK(&obj->lock);
         if (obj && obj->state) {
             MUTEX_UNLOCK(&obj->lock);
-            arc_move(cache, obj, &cache->mrug);
+            arc_move(cache, obj, NULL);
         } else {
             MUTEX_UNLOCK(&obj->lock);
         }
