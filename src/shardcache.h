@@ -200,7 +200,15 @@ typedef struct __shardcache_storage_s {
      *        can access the same keys on the storage (for example a shared database,
      *        or a shared filesystem))
      */
+    int                                    global;
+
+    /**
+     * @brief If set to a non zero value, shardcache will assume that all the replicas
+     *        of a given peer can access the same storage son set commands won't be propagated
+     *        to all the replicas by a receiving node
+     */
     int                                    shared;
+
     /**
      * @brief Pointer to private data which will passed to all the callbacks
      * @note The implementation can use this pointer to keep its internal data/status/handlers/whatever
@@ -288,18 +296,37 @@ void shardcache_clear_counters(shardcache_t *cache);
  *******************************************************************************
  */
 
-#define SHARDCACHE_NODE_LABEL_MAXLEN 256
-#define SHARDCACHE_NODE_ADDRESS_MAXLEN 256
-
 /**
  * @brief Structure representing a node taking part in the shard cache
  * @see shardcache_create()
  * @see shardcache_get_nodes()
  */
-typedef struct shardcache_node_s {
-    char label[SHARDCACHE_NODE_LABEL_MAXLEN];
-    char address[SHARDCACHE_NODE_ADDRESS_MAXLEN];
-} shardcache_node_t;
+typedef struct __shardcache_node_s shardcache_node_t;
+
+shardcache_node_t *shardcache_node_create(char *label, char **addresses, int num_addresses);
+shardcache_node_t *shardcache_node_copy(shardcache_node_t *node);
+void shardcache_node_destroy(shardcache_node_t *node);
+
+char *shardcache_node_get_label(shardcache_node_t *node);
+char *shardcache_node_get_string(shardcache_node_t *node);
+char *shardcache_node_get_address(shardcache_node_t *node);
+
+
+shardcache_node_t * shardcache_node_select(shardcache_t *cache, char *label);
+
+/**
+ * @brief Get the list of all nodes (including this node itself)
+ *        taking part to the shardcache 'cloud'
+ * @param cache   A valid pointer to a shardcache_t structure
+ * @param num_nodes   If provided the number of nodes in the returned array
+ *                  will be will be stored at the location pointed by num_nodes
+ * @return A list containing all the nodes <address:port> strings
+ * @note the caller MUST release the returned pointer once done with it
+ */
+shardcache_node_t **shardcache_get_nodes(shardcache_t *cache, int *num_nodes);
+
+
+void shardcache_free_nodes(shardcache_node_t **nodes, int num_nodes);
 
 /**
  * @brief Create a new shardcache instance
@@ -323,7 +350,7 @@ typedef struct shardcache_node_s {
  *       passed as argument can be safely released after calling shardcache_create()
  */
 shardcache_t *shardcache_create(char *me, 
-                        shardcache_node_t *nodes,
+                        shardcache_node_t **nodes,
                         int num_nodes,
                         shardcache_storage_t *storage,
                         char *secret,
@@ -617,18 +644,6 @@ int shardcache_del(shardcache_t *cache, void *key, size_t klen);
 int shardcache_evict(shardcache_t *cache, void *key, size_t klen);
 
 /**
- * @brief Get the list of all nodes (including this node itself)
- *        taking part to the shardcache 'cloud'
- * @param cache   A valid pointer to a shardcache_t structure
- * @param num_nodes   If provided the number of nodes in the returned array
- *                  will be will be stored at the location pointed by num_nodes
- * @return A list containing all the nodes <address:port> strings
- * @note the caller MUST release the returned pointer once done with it
- */
-shardcache_node_t *
-shardcache_get_nodes(shardcache_t *cache, int *num_nodes);
-
-/**
  * @brief Get the node owning a specific key
  * @param cache   A valid pointer to a shardcache_t structure
  * @param key   A valid pointer to the key
@@ -673,7 +688,7 @@ void shardcache_free_index(shardcache_storage_index_t *index);
  * @return 0 on success, -1 otherwise
  */
 int shardcache_migration_begin(shardcache_t *cache,
-                               shardcache_node_t *nodes,
+                               shardcache_node_t **nodes,
                                int num_nodes,
                                int forward);
 
@@ -695,8 +710,6 @@ int shardcache_migration_abort(shardcache_t *cache);
  *         when this function is called)
  */
 int shardcache_migration_end(shardcache_t *cache);
-
-char *shardcache_get_node_address(shardcache_t *cache, char *label);
 
 /*
  *******************************************************************************

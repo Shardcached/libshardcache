@@ -23,7 +23,7 @@ typedef struct shardcache_client_s shardcache_client_t;
  * @return A newly initialized shardcache client descriptor
  * @note The returned shardcache_client_t structure MUST be disposed using shardcache_client_destroy()
  */
-shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_nodes, char *auth);
+shardcache_client_t *shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth);
 
 /**
  * @brief Get and/or set the timeout used when establishing new tcp connections or
@@ -233,7 +233,7 @@ int shardcache_client_check(shardcache_client_t *c, char *node_name);
  * @see shardcache_client_errno()
  * @see shardcache_client_errstr()
  */
-int shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t *nodes, int num_nodes);
+int shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t **nodes, int num_nodes);
 
 /**
  * @brief Abort the current migration (if any)

@@ -562,25 +562,26 @@ process_request(void *priv)
         case SHC_HDR_MIGRATION_BEGIN:
         {
             int num_shards = 0;
-            shardcache_node_t *nodes = NULL;
+            shardcache_node_t **nodes = NULL;
             char *s = (char *)fbuf_data(&ctx->records[0]);
             while (s && *s) {
                 char *tok = strsep(&s, ",");
                 if(tok) {
                     char *label = strsep(&tok, ":");
                     char *addr = tok;
-                    num_shards++;
-                    size_t size = num_shards * sizeof(shardcache_node_t);
+                    size_t size = (num_shards + 1) * sizeof(shardcache_node_t *);
                     nodes = realloc(nodes, size);
-                    shardcache_node_t *node = &nodes[num_shards-1];
-                    snprintf(node->label, sizeof(node->label), "%s", label);
-                    snprintf(node->address, sizeof(node->address), "%s", addr);
+                    shardcache_node_t *node = shardcache_node_create(label, &addr, 1);
+                    nodes[num_shards++] = node;
                 } 
             }
             rc = shardcache_migration_begin(cache, nodes, num_shards, 0);
             if (rc != 0) {
                 // TODO - Error messages
             }
+            int i;
+            for (i = 0; i < num_shards; i++)
+                shardcache_node_destroy(nodes[i]);
             free(nodes);
             write_status(ctx, 0, WRITE_STATUS_MODE_SIMPLE);
             break;
@@ -609,18 +610,19 @@ process_request(void *priv)
             shardcache_counter_t *counters = NULL;
             int i, num_nodes;
 
-            shardcache_node_t *nodes = shardcache_get_nodes(cache, &num_nodes);
+            shardcache_node_t **nodes = shardcache_get_nodes(cache, &num_nodes);
             if (nodes) {
                 fbuf_printf(&buf, "num_nodes;%d\r\nnodes;", num_nodes);
                 for (i = 0; i < num_nodes; i++) {
                     if (i > 0)
                         fbuf_add(&buf, ",");
-                    fbuf_printf(&buf, "%s:%s",
-                                nodes[i].label, nodes[i].address);
+                    fbuf_printf(&buf, "%s", shardcache_node_get_string(nodes[i]));
                 }
                 fbuf_add(&buf, "\r\n");
                 free(nodes);
             }
+
+            shardcache_free_nodes(nodes, num_nodes);
 
             int ncounters = shardcache_get_counters(cache, &counters);
             if (counters) {

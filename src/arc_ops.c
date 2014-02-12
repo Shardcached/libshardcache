@@ -161,11 +161,12 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
         SHC_DEBUG("Fetching data for key %s from peer %s", keystr, peer); 
     }
 
-    char *peer_addr = shardcache_get_node_address(cache, peer);
-    if (!peer_addr) {
+    shardcache_node_t *node = shardcache_node_select(cache, peer);
+    if (!peer) {
         SHC_ERROR("Can't find address for node %s\n", peer);
         return rc;
     }
+    char *peer_addr = shardcache_node_get_address(node);
 
     // another peer is responsible for this item, let's get the value from there
 
@@ -294,7 +295,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                                                             &node_len);
             if (check == 0)
                 ret = arc_ops_fetch_from_peer(cache, obj, node_name);
-            else if (check == 1 || cache->storage.shared)
+            else if (check == 1 || cache->storage.global)
                 done = 0;
         }
         if (done) {

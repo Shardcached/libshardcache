@@ -8,7 +8,7 @@ int main(int argc, char **argv)
 {
     int i;
     int num_nodes = 2;
-    shardcache_node_t nodes[num_nodes];
+    shardcache_node_t **nodes = NULL;
     shardcache_t *servers[num_nodes];
 
     shardcache_log_init("shardcached", LOG_WARNING);
@@ -17,15 +17,20 @@ int main(int argc, char **argv)
     ut_init(basename(argv[0]));
 
 
+    nodes = malloc(sizeof(shardcache_node_t *) * num_nodes);
     for (i = 0; i < num_nodes; i++) {
-        sprintf(nodes[i].label, "peer%d", i);
-        sprintf(nodes[i].address, "127.0.0.1:975%d", i);
+        char label[32];
+        sprintf(label, "peer%d", i);
+        char address[32];
+        sprintf(address, "127.0.0.1:975%d", i);
+        char *address_array[1] = { address };
+        nodes[i] = shardcache_node_create(label, address_array, 1);
     }
 
     // create a set of servers
     for (i = 0; i < num_nodes; i++) {
         ut_testing("shardcache_create(nodes[%d].label, nodes, num_nodes, NULL, NULL, 5, 1<<29", i);
-        servers[i] = shardcache_create(nodes[i].label,
+        servers[i] = shardcache_create(shardcache_node_get_label(nodes[i]),
                                        nodes,
                                        num_nodes,
                                        NULL,
@@ -231,8 +236,10 @@ int main(int argc, char **argv)
     shardcache_client_destroy(client2);
 
     for (i = 0; i < num_nodes; i++) {
-        shardcache_destroy(servers[i]);
+        shardcache_destroy(nodes[i]);
     }
+
+    free(nodes);
 
     ut_summary();
     exit(ut_failed);

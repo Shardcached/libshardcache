@@ -14,6 +14,7 @@
 #include <limits.h>
 #include <siphash.h>
 #include <limits.h>
+#include <regex.h>
 
 #include "shardcache.h"
 #include "shardcache_internal.h"
@@ -25,28 +26,155 @@ const char *LIBSHARDCACHE_VERSION = "0.9.9";
 
 extern int shardcache_log_initialized;
 
-char *
-shardcache_get_node_address(shardcache_t *cache, char *label)
+#define ADDR_REGEXP "^[a-z0-9_\\.\\-]+(:[0-9]+)?$"
+static int
+shardcache_check_address_string(char *str)
 {
+    regex_t addr_regexp;
+    int rc = regcomp(&addr_regexp, ADDR_REGEXP, REG_EXTENDED|REG_ICASE);
+    if (rc != 0) {
+        char errbuf[1024];
+        regerror(rc, &addr_regexp, errbuf, sizeof(errbuf));
+        fprintf(stderr, "Can't compile regexp %s: %s\n", ADDR_REGEXP, errbuf);
+        return -1;
+    }
+
+    int matched = regexec(&addr_regexp, str, 0, NULL, 0);
+    regfree(&addr_regexp);
+
+    if (matched != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+
+shardcache_node_t *
+shardcache_node_create_from_string(char *str)
+{
+    char *copy = strdup(str);
+    char *string = copy;
+    char *label = strsep(&string, ":");
+    char *addrstring = string;
     char *addr = NULL;
+    char **addrlist = NULL;
+    int num_addresses = 0;
+
+    while ((addr = strsep(&addrstring, ";")) != NULL) {
+        if (!addr || shardcache_check_address_string(addr) != 0) {
+            SHC_ERROR("Bad address format for peer: '%s'", addr);
+            int i;
+            for (i = 0; i < num_addresses; i++)
+                free(addrlist[i]);
+            free(addrlist);
+            free(copy);
+            return NULL;
+        }
+        addrlist = realloc(addrlist, num_addresses + 1);
+        addrlist[num_addresses] = strdup(addr);
+        num_addresses++;
+    }
+
+    shardcache_node_t *node = malloc(sizeof(shardcache_node_t));
+    node->label = strdup(label);
+    node->address = addrlist;
+    node->string = strdup(str);
+    node->num_replicas = num_addresses;
+
+    free(copy);
+    return node;
+}
+
+shardcache_node_t *
+shardcache_node_create(char *label, char **addresses, int num_addresses)
+{
+    int i;
+    shardcache_node_t *node = calloc(1, sizeof(shardcache_node_t));
+    node->label = strdup(label);
+    node->num_replicas = num_addresses;
+    node->address = calloc(num_addresses, sizeof(char *));
+    int slen = strlen(node->label) + 3;
+    char *node_string = malloc(slen);
+    snprintf(node_string, slen, "%s:", node->label);
+    for (i = 0; i < num_addresses; i++) {
+        if (i > 0)
+            strcat(node_string, ";");
+        slen += strlen(addresses[i]) + 1;
+        node_string = realloc(node_string, slen);
+        strcat(node_string, addresses[i]);
+        node->address[i] = strdup(addresses[i]);
+    }
+    node->string = node_string;
+    return node;
+}
+
+shardcache_node_t *
+shardcache_node_copy(shardcache_node_t *node)
+{
+    int i;
+
+    shardcache_node_t *copy = malloc(sizeof(shardcache_node_t));
+    copy->label = strdup(node->label);
+    copy->address = malloc(sizeof(char *) * node->num_replicas);
+    for (i = 0; i < node->num_replicas; i++)
+        copy->address[i] = strdup(node->address[i]);
+    copy->num_replicas = node->num_replicas;
+    copy->string = strdup(node->string);
+    return copy;
+}
+
+void
+shardcache_node_destroy(shardcache_node_t *node)
+{
+    int i;
+    free(node->label);
+    for (i = 0; i < node->num_replicas; i++)
+        free(node->address[i]);
+    free(node->string);
+    free(node);
+}
+
+char *
+shardcache_node_get_string(shardcache_node_t *node)
+{
+    return node->string;
+}
+
+char *
+shardcache_node_get_label(shardcache_node_t *node)
+{
+    return node->label;
+}
+
+char *
+shardcache_node_get_address(shardcache_node_t *node)
+{
+    return node->address[rand() % node->num_replicas];
+}
+
+shardcache_node_t *
+shardcache_node_select(shardcache_t *cache, char *label)
+{
+    shardcache_node_t *node = NULL;
     int i;
     for (i = 0; i < cache->num_shards; i++ ){
-        if (strcmp(cache->shards[i].label, label) == 0) {
-            addr = cache->shards[i].address;
+        if (strcmp(cache->shards[i]->label, label) == 0) {
+            node = cache->shards[i];
             break;
         }
     }
     SPIN_LOCK(&cache->migration_lock);
-    if (cache->migration && !addr) {
+    if (cache->migration && !node) {
         for (i = 0; i < cache->num_migration_shards; i++) {
-            if (strcmp(cache->migration_shards[i].label, label) == 0) {
-                addr = cache->migration_shards[i].address;
+            if (strcmp(cache->migration_shards[i]->label, label) == 0) {
+                node = cache->migration_shards[i];
                 break;
             }
         }
     }
     SPIN_UNLOCK(&cache->migration_lock);
-    return addr;
+    return node;
 }
 
 static int
@@ -190,14 +318,15 @@ evictor(void *priv)
 
             int i;
             for (i = 0; i < cache->num_shards; i++) {
-                char *peer = cache->shards[i].label;
+                char *peer = cache->shards[i]->label;
                 if (strcmp(peer, cache->me) != 0) {
                     SHC_DEBUG3("Sending Eviction command to %s", peer);
-                    int fd = shardcache_get_connection_for_peer(cache, cache->shards[i].address);
-                    int rc = evict_from_peer(cache->shards[i].address, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd);
+                    int rindex = rand()%cache->shards[i]->num_replicas;
+                    int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
+                    int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd);
                     if (rc != 0)
                         SHC_WARNING("evict_from_peer return %d for peer %s", rc, peer);
-                    shardcache_release_connection_for_peer(cache, cache->shards[i].address, fd);
+                    shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
                 }
             }
             destroy_evictor_job(job);
@@ -314,14 +443,14 @@ shardcache_run_async(void *priv)
 
 shardcache_t *
 shardcache_create(char *me,
-                  shardcache_node_t *nodes,
+                  shardcache_node_t **nodes,
                   int nnodes,
                   shardcache_storage_t *st,
                   char *secret,
                   int num_workers,
                   size_t cache_size)
 {
-    int i;
+    int i, n;
     size_t shard_lens[nnodes];
     char *shard_names[nnodes];
 
@@ -351,11 +480,28 @@ shardcache_create(char *me,
     cache->ops.destroy = arc_ops_destroy;
 
     cache->ops.priv = cache;
-    cache->shards = malloc(sizeof(shardcache_node_t) * nnodes);
-    memcpy(cache->shards, nodes, sizeof(shardcache_node_t) * nnodes);
+    cache->shards = malloc(sizeof(shardcache_node_t *) * nnodes);
     for (i = 0; i < nnodes; i++) {
-        shard_names[i] = cache->shards[i].label;
+        shard_names[i] = nodes[i]->label;
         shard_lens[i] = strlen(shard_names[i]);
+        cache->shards[i] = shardcache_node_create(nodes[i]->label,
+                                                  nodes[i]->address,
+                                                  nodes[i]->num_replicas);
+        if (!cache->addr && strcmp(nodes[i]->label, me) == 0) {
+            for (n = 0; n < nodes[i]->num_replicas; n++) {
+                int fd = open_socket(nodes[i]->address[n], 0);
+                if (fd >= 0) {
+                    cache->addr = strdup(nodes[i]->address[n]);
+                }
+               close(fd); 
+            }
+        }
+    }
+
+    if (!cache->addr) {
+        fprintf(stderr, "Can't find my address (%s) among the configured nodes\n", cache->me);
+        shardcache_destroy(cache);
+        return NULL;
     }
 
     cache->num_shards = nnodes;
@@ -408,13 +554,6 @@ shardcache_create(char *me,
         pthread_create(&cache->evictor_th, NULL, evictor, cache);
     }
 
-    char *addr = shardcache_get_node_address(cache, cache->me);
-    if (!addr) {
-        fprintf(stderr, "Can't find my address (%s) among the configured nodes\n", cache->me);
-        shardcache_destroy(cache);
-        return NULL;
-    }
-
     srand(time(NULL));
     cache->volatile_storage = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)destroy_volatile);
 
@@ -429,7 +568,7 @@ shardcache_create(char *me,
         return NULL;
     }
 
-    cache->serv = start_serving(cache, cache->auth, addr, num_workers, cache->counters); 
+    cache->serv = start_serving(cache, cache->auth, cache->addr, num_workers, cache->counters); 
     if (!cache->serv) {
         fprintf(stderr, "Can't start the communication engine\n");
         shardcache_destroy(cache);
@@ -500,7 +639,9 @@ shardcache_destroy(shardcache_t *cache)
         chash_free(cache->chash);
 
     free(cache->me);
-    free(cache->shards);
+    if (cache->addr)
+        free(cache->addr);
+    shardcache_free_nodes(cache->shards, cache->num_shards);
 
     connections_pool_destroy(cache->connections_pool);
 
@@ -792,14 +933,15 @@ shardcache_exists(shardcache_t *cache, void *key, size_t klen)
         }
         return 1;
     } else {
-        char *peer = shardcache_get_node_address(cache, (char *)node_name);
+        shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name); 
         if (!peer) {
             SHC_ERROR("Can't find address for node %s\n", peer);
             return -1;
         }
-        int fd = shardcache_get_connection_for_peer(cache, peer);
-        int rc = exists_on_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
-        shardcache_release_connection_for_peer(cache, peer, fd);
+        char *addr = shardcache_node_get_address(peer);
+        int fd = shardcache_get_connection_for_peer(cache, addr);
+        int rc = exists_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
+        shardcache_release_connection_for_peer(cache, addr, fd);
         return rc;
     }
 
@@ -834,14 +976,15 @@ shardcache_touch(shardcache_t *cache, void *key, size_t klen)
             return obj ? 0 : -1;
         }
     } else {
-        char *peer = shardcache_get_node_address(cache, (char *)node_name);
+        shardcache_node_t *peer = shardcache_node_select(cache, node_name);
         if (!peer) {
             SHC_ERROR("Can't find address for node %s\n", peer);
             return -1;
         }
-        int fd = shardcache_get_connection_for_peer(cache, peer);
-        int rc = touch_on_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
-        shardcache_release_connection_for_peer(cache, peer, fd);
+        char *addr = shardcache_node_get_address(peer);
+        int fd = shardcache_get_connection_for_peer(cache, addr);
+        int rc = touch_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
+        shardcache_release_connection_for_peer(cache, addr, fd);
         return rc;
     }
 
@@ -989,21 +1132,22 @@ shardcache_set_internal(shardcache_t *cache,
                 keystr, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
                 (int)vlen, node_name);
 
-        char *peer = shardcache_get_node_address(cache, (char *)node_name);
+        shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
         if (!peer) {
             SHC_ERROR("Can't find address for node %s\n", peer);
             return -1;
         }
+        char *addr = shardcache_node_get_address(peer);
 
-        int fd = shardcache_get_connection_for_peer(cache, peer);
+        int fd = shardcache_get_connection_for_peer(cache, addr);
 
         int rc = -1;
         if (inx)
-            rc = add_to_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
+            rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
         else
-            rc = send_to_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
+            rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
 
-        shardcache_release_connection_for_peer(cache, peer, fd);
+        shardcache_release_connection_for_peer(cache, addr, fd);
 
         if (rc == 0) {
             arc_remove(cache->arc, (const void *)key, klen);
@@ -1102,14 +1246,15 @@ shardcache_del(shardcache_t *cache, void *key, size_t klen)
 
         return 0;
     } else {
-        char *peer = shardcache_get_node_address(cache, (char *)node_name);
+        shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
         if (!peer) {
             SHC_ERROR("Can't find address for node %s\n", peer);
             return -1;
         }
-        int fd = shardcache_get_connection_for_peer(cache, peer);
-        int rc = delete_from_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
-        shardcache_release_connection_for_peer(cache, peer, fd);
+        char *addr = shardcache_node_get_address(peer);
+        int fd = shardcache_get_connection_for_peer(cache, addr);
+        int rc = delete_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
+        shardcache_release_connection_for_peer(cache, addr, fd);
         return rc;
     }
 
@@ -1131,7 +1276,7 @@ shardcache_evict(shardcache_t *cache, void *key, size_t klen)
     return 0;
 }
 
-shardcache_node_t *
+shardcache_node_t **
 shardcache_get_nodes(shardcache_t *cache, int *num_nodes)
 {
     int i;
@@ -1140,12 +1285,22 @@ shardcache_get_nodes(shardcache_t *cache, int *num_nodes)
     num = cache->num_shards;
     if (num_nodes)
         *num_nodes = num;
-    shardcache_node_t *list = malloc(sizeof(shardcache_node_t) * num);
+    shardcache_node_t **list = malloc(sizeof(shardcache_node_t *) * num);
     for (i = 0; i < num; i++) {
-        memcpy(&list[i], &cache->shards[i], sizeof(shardcache_node_t));
+        shardcache_node_t *orig = cache->shards[i];
+        list[i] = shardcache_node_create(orig->label, orig->address, orig->num_replicas);
     }
     SPIN_UNLOCK(&cache->migration_lock);
     return list;
+}
+
+void
+shardcache_free_nodes(shardcache_node_t **nodes, int num_nodes)
+{
+    int i;
+    for (i = 0; i < num_nodes; i++)
+        shardcache_node_destroy(nodes[i]);
+    free(nodes);
 }
 
 int
@@ -1276,17 +1431,18 @@ migrate(void *priv)
                     value = cache->storage.fetch(key, klen, &vlen, cache->storage.priv);
                 }
                 if (value) {
-                    char *peer = shardcache_get_node_address(cache, (char *)node_name);
+                    shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
                     if (peer) {
-                        SHC_DEBUG("Migrator copying %s to peer %s (%s)", keystr, node_name, peer);
-                        int fd = shardcache_get_connection_for_peer(cache, peer);
-                        int rc = send_to_peer(peer, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, 0, fd);
-                        shardcache_release_connection_for_peer(cache, peer, fd);
+                        char *addr = shardcache_node_get_address(peer);
+                        SHC_DEBUG("Migrator copying %s to peer %s (%s)", keystr, node_name, addr);
+                        int fd = shardcache_get_connection_for_peer(cache, addr);
+                        int rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, 0, fd);
+                        shardcache_release_connection_for_peer(cache, addr, fd);
                         if (rc == 0) {
                             ATOMIC_INCREMENT(migrated_items);
                             push_value(to_delete, &index->items[i]);
                         } else {
-                            fprintf(stderr, "Errors copying %s to peer %s (%s)\n", keystr, node_name, peer);
+                            fprintf(stderr, "Errors copying %s to peer %s (%s)\n", keystr, node_name, addr);
                             ATOMIC_INCREMENT(errors);
                         }
                     } else {
@@ -1341,7 +1497,7 @@ migrate(void *priv)
 
 int
 shardcache_migration_begin(shardcache_t *cache,
-                           shardcache_node_t *nodes,
+                           shardcache_node_t **nodes,
                            int num_nodes,
                            int forward)
 {
@@ -1362,11 +1518,12 @@ shardcache_migration_begin(shardcache_t *cache,
     fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
 
     for (i = 0; i < num_nodes; i++) {
-        shard_names[i] = nodes[i].label;
+        shard_names[i] = nodes[i]->label;
         shard_lens[i] = strlen(shard_names[i]);
         if (i > 0) 
             fbuf_add(&mgb_message, ",");
-        fbuf_printf(&mgb_message, "%s:%s", nodes[i].label, nodes[i].address);
+        int rindex = rand()%nodes[i]->num_replicas;
+        fbuf_printf(&mgb_message, "%s:%s", nodes[i]->label, nodes[i]->address[rindex]);
     }
 
 
@@ -1379,7 +1536,7 @@ shardcache_migration_begin(shardcache_t *cache,
         for (i = 0 ; i < num_nodes; i++) {
             int found = 0;
             for (n = 0; n < num_nodes; n++) {
-                if (strcmp(nodes[i].label, cache->shards[n].label) == 0) {
+                if (strcmp(nodes[i]->label, cache->shards[n]->label) == 0) {
                     found = 1;
                     break;
                 }
@@ -1394,9 +1551,13 @@ shardcache_migration_begin(shardcache_t *cache,
 
     if (!ignore) {
         cache->migration_done = 0;
-        cache->migration_shards = malloc(sizeof(shardcache_node_t) * num_nodes);
-        memcpy(cache->migration_shards, nodes, sizeof(shardcache_node_t) * num_nodes);
+        cache->migration_shards = malloc(sizeof(shardcache_node_t *) * num_nodes);
         cache->num_migration_shards = num_nodes;
+        for (i = 0; i < cache->num_migration_shards; i++) {
+            shardcache_node_t *node = nodes[i];
+            cache->migration_shards[i] = shardcache_node_create(node->label, node->address, node->num_replicas);
+        }
+
         cache->migration = chash_create((const char **)shard_names,
                                         shard_lens,
                                         num_nodes,
@@ -1409,17 +1570,18 @@ shardcache_migration_begin(shardcache_t *cache,
 
     if (forward) {
         for (i = 0; i < cache->num_shards; i++) {
-            if (strcmp(cache->shards[i].label, cache->me) != 0) {
-                int fd = shardcache_get_connection_for_peer(cache, cache->shards[i].address);
-                int rc = migrate_peer(cache->shards[i].address,
+            if (strcmp(cache->shards[i]->label, cache->me) != 0) {
+                int rindex = rand()%cache->shards[i]->num_replicas;
+                int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
+                int rc = migrate_peer(cache->shards[i]->address[rindex],
                                       (char *)cache->auth,
                                       SHC_HDR_SIGNATURE_SIP,
                                       fbuf_data(&mgb_message),
                                       fbuf_used(&mgb_message), fd);
-                shardcache_release_connection_for_peer(cache, cache->shards[i].address, fd);
+                shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
                 if (rc != 0) {
                     fprintf(stderr, "Node %s (%s) didn't aknowledge the migration\n",
-                            cache->shards[i].label, cache->shards[i].address);
+                            cache->shards[i]->label, cache->shards[i]->address[rindex]);
                 }
             }
         }
@@ -1456,7 +1618,7 @@ shardcache_migration_end(shardcache_t *cache)
     SPIN_LOCK(&cache->migration_lock);
     if (cache->migration) {
         chash_free(cache->chash);
-        free(cache->shards);
+        shardcache_free_nodes(cache->shards, cache->num_shards);
         cache->chash = cache->migration;
         cache->shards = cache->migration_shards;
         cache->num_shards = cache->num_migration_shards;

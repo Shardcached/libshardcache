@@ -29,11 +29,19 @@
 
 typedef struct chash_t chash_t;
 
-struct __shardcache_s {
-    char *me; // a copy of the label for this node
-              // it won't be changed until destruction
+struct __shardcache_node_s {
+    char *label;
+    char **address;
+    int num_replicas;
+    char *string;
+}; 
 
-    shardcache_node_t *shards; // a copy of the shards array provided
+struct __shardcache_s {
+    char *me;   // a copy of the label for this node
+                // it won't be changed until destruction
+    char *addr; // a copy of the local address used for shardcache communication
+
+    shardcache_node_t **shards; // a copy of the shards array provided
                                // at construction time
 
     int num_shards;   // the number of shards in the array
@@ -56,7 +64,7 @@ struct __shardcache_s {
     chash_t *chash;   // the internal chash instance
 
     chash_t *migration;                  // the migration continuum
-    shardcache_node_t *migration_shards; // the new shards array after the migration
+    shardcache_node_t **migration_shards; // the new shards array after the migration
     int num_migration_shards;            // the new number of shards in the migration_shards array
     int migration_done;                  // boolean value indicating that the migration is complete
                                          // (to be accessed using ATOMIC_READ())

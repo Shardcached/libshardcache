@@ -118,22 +118,23 @@ open_socket(const char *host, int port)
     struct linger ling = {0, 0};
 
     errno = EINVAL;
-    if (host == NULL || !*host || port == 0)
-    return -1;
+    if ((host == NULL || !*host) && port == 0)
+        return -1;
 
     sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == -1)
-    return -1;
+        return -1;
 
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &val,  sizeof(val));
     setsockopt(sock, SOL_SOCKET, SO_LINGER, (void *)&ling, sizeof(ling));
 
     if (string2sockaddr(host, port, &sockaddr) == -1
-    || bind(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1) {
-    shutdown(sock, SHUT_RDWR);
-    close(sock);
-    return -1;
+        || bind(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) == -1)
+    {
+        shutdown(sock, SHUT_RDWR);
+        close(sock);
+        return -1;
     }
 
     listen(sock, -1);
