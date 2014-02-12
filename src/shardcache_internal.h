@@ -105,10 +105,12 @@ struct __shardcache_s {
 #define SHARDCACHE_COUNTER_HEADS        3
 #define SHARDCACHE_COUNTER_EVICTS       4
 #define SHARDCACHE_COUNTER_CACHE_MISSES 5
-#define SHARDCACHE_COUNTER_NOT_FOUND    6
-#define SHARDCACHE_COUNTER_TABLE_SIZE   7
-#define SHARDCACHE_COUNTER_CACHE_SIZE   8
-#define SHARDCACHE_NUM_COUNTERS 9
+#define SHARDCACHE_COUNTER_FETCH_REMOTE 6
+#define SHARDCACHE_COUNTER_FETCH_LOCAL  7
+#define SHARDCACHE_COUNTER_NOT_FOUND    8
+#define SHARDCACHE_COUNTER_TABLE_SIZE   9
+#define SHARDCACHE_COUNTER_CACHE_SIZE   10
+#define SHARDCACHE_NUM_COUNTERS 11
     struct {
         const char *name; // the exported label of the counter
         uint32_t value;   // the actual value (accessed using the atomic builtins)

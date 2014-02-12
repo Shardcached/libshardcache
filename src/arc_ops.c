@@ -177,6 +177,12 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
                                    cache->async_mux);
         if (rc == 0) {
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
+            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
+
+            // TODO - here we have to determine if we want to keep the retrieved object
+            //        into the local cache or evict it immediately after it has been
+            //        downloaded and served back to the listeners
+
         } else {
             foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
             arc_remove(cache->arc, obj->key, obj->klen);
@@ -191,6 +197,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
+            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
             obj->complete = 1;
         }
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
@@ -334,6 +341,7 @@ arc_ops_fetch(void *item, void * priv)
 
     MUTEX_UNLOCK(&obj->lock);
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_LOCAL].value);
 
     return dlen;
 }
