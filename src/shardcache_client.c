@@ -333,7 +333,7 @@ int shardcache_client_check(shardcache_client_t *c, char *node_name) {
 void shardcache_client_destroy(shardcache_client_t *c)
 {
     chash_free(c->chash);
-    free(c->shards);
+    shardcache_free_nodes(c->shards, c->num_shards);
     if (c->auth)
         free((void *)c->auth);
     connections_pool_destroy(c->connections);
