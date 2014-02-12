@@ -136,6 +136,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             drop = 1;
     }
 
+    MUTEX_UNLOCK(&obj->lock);
 
     if (complete) {
         if (total_len && !drop) {
@@ -145,7 +146,6 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         }
     }
 
-    MUTEX_UNLOCK(&obj->lock);
     return !error ? 0 : -1;
 }
 
@@ -198,7 +198,9 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
 
         } else {
             foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-            arc_remove(cache->arc, obj->key, obj->klen);
+            // NOTE: there is no need to explicitly call arc_remove() here because we are going
+            //       to return immediately with an error code. The item will not be cached but
+            //       instead will be automatically removed before returning from arc_lookup()
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
             if (obj->evict)
                 arc_ops_evict_object(cache, obj);
@@ -236,7 +238,7 @@ arc_ops_create(const void *key, size_t len, int async, void *priv)
         obj->listeners = create_list();
         set_free_value_callback(obj->listeners, free);
     }
-    MUTEX_INIT_RECURSIVE(&obj->lock);
+    MUTEX_INIT(&obj->lock);
     obj->arc = cache->arc;
 
     return obj;
