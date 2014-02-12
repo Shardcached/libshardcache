@@ -106,11 +106,12 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     }
     if (error) {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-        drop = 1;
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
         if (obj->evict)
             arc_ops_evict_object(cache, obj);
+        else
+            drop = 1;
     } else if (len) {
         obj->data = realloc(obj->data, obj->dlen + len);
         memcpy(obj->data + obj->dlen, data, len);
@@ -129,11 +130,10 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
 
-        if (obj->drop)
-            drop = 1;
-
         if (obj->evict)
             arc_ops_evict_object(cache, obj);
+        else if (obj->drop)
+            drop = 1;
     }
 
     MUTEX_UNLOCK(&obj->lock);
@@ -141,7 +141,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     if (complete) {
         if (total_len && !drop) {
             arc_update_size(cache->arc, key, klen, total_len);
-        } else {
+        } else if (error || drop) {
             arc_remove(cache->arc, key, klen);
         }
     }
