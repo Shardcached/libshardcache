@@ -214,9 +214,16 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
             obj->complete = 1;
+            if (rand() % 10 != 0)
+                obj->drop = 1;
+            else
+                obj->drop = 0;
+        } else {
+            // if succeded the fbuf buffer has been moved to the obj structure
+            // but otherwise we have to release it
+            fbuf_destroy(&value);
         }
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
-        fbuf_destroy(&value);
     }
 
     return rc;
@@ -256,8 +263,8 @@ arc_ops_fetch_copy_volatile_object_cb(void *ptr, size_t len)
     return copy;
 }
 
-size_t
-arc_ops_fetch(void *item, void * priv)
+int
+arc_ops_fetch(void *item, size_t *size, void * priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
@@ -265,7 +272,8 @@ arc_ops_fetch(void *item, void * priv)
     MUTEX_LOCK(&obj->lock);
     if (obj->data) { // the value is already loaded, we don't need to fetch
         MUTEX_UNLOCK(&obj->lock);
-        return obj->dlen;
+        *size = obj->dlen;
+        return 0;
     }
 
     char node_name[1024];
@@ -290,11 +298,11 @@ arc_ops_fetch(void *item, void * priv)
         if (done) {
             if (ret == 0) {
                 gettimeofday(&obj->ts, NULL);
-                size_t dlen = obj->dlen;
+                *size = obj->dlen;
                 MUTEX_UNLOCK(&obj->lock);
-                return dlen;
+                return (obj->drop && !obj->async) ? 1 : 0;
             }
-            return UINT_MAX;
+            return -1;
         }
     }
 
@@ -340,7 +348,7 @@ arc_ops_fetch(void *item, void * priv)
         if (shardcache_log_level() >= LOG_DEBUG)
             SHC_DEBUG("Item not found for key %s", keystr);
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value);
-        return UINT_MAX;
+        return -1;
     }
     gettimeofday(&obj->ts, NULL);
 
@@ -352,13 +360,13 @@ arc_ops_fetch(void *item, void * priv)
             arc_ops_evict_object(cache, obj);
     }
 
-    size_t dlen = obj->dlen;
+    *size = obj->dlen;
 
     MUTEX_UNLOCK(&obj->lock);
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_LOCAL].value);
 
-    return dlen;
+    return 0;
 }
 
 void

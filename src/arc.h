@@ -20,18 +20,17 @@ typedef struct __arc_ops {
      * The size of the new object must be know at
      * this time. Use the arc_object_init() function to initialize
      * the arc_object structure.
-     * */
+     */
     void *(*create) (const void *key, size_t klen, int async, void *priv);
     
     /**
      * @brief Fetch the data associated with the object.
-     * @return If the object is not async a 0 return value will indicate
-     *         that the object has not been found.\n
-     *         If the object is async 0 will be returned in case the operation
-     *         is successful and data will follow asynchronously, 
-     *         UINT_MAX will be returned if the object has not been found
+     * @return 0 on success and *size is set to the actual object size.
+     *         1 if the object was retrieved successfully but it shouldn't be
+     *           kept in the cache, *size is set to the actual object size.
+     *        -1 in case of errors, *size will not be modified
      */
-    size_t (*fetch) (void *obj, void *priv);
+    int (*fetch) (void *obj, size_t *size, void *priv);
     
     /**
      * @brief This function is called when the cache is full and we need to evict
@@ -40,7 +39,7 @@ typedef struct __arc_ops {
      * The callback CAN free all data associated with the object but MUST keep the
      * object itself alive and DO NOT free it now. the destroy() callback will be
      * called when the object can be fully released
-     * */
+     */
     void (*evict) (void *obj, void *priv);
     
     /** 
@@ -48,7 +47,7 @@ typedef struct __arc_ops {
      * the cache directory.
      *
      * The callback CAN free the object data and the object itself.
-     * */
+     */
     void (*destroy) (void *obj, void *priv);
 
     //! Pointer to private data which will provided to all callbacks

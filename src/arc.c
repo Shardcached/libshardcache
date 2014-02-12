@@ -247,9 +247,17 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             
             // unlock the mutex while the backend is fetching the data
             MUTEX_UNLOCK(&cache->lock);
-            size_t size = cache->ops->fetch(obj->ptr, cache->ops->priv);
+            size_t size = 0;
+            int rc = cache->ops->fetch(obj->ptr, &size, cache->ops->priv);
 
-            if (size == UINT_MAX || (size == 0 && !obj->async)) {
+            if (rc == 1) {
+                // don't cache the object which has been retrieved
+                // using the fetch callback
+                ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
+                MUTEX_UNLOCK(&obj->lock);
+                release_ref(cache->refcnt, obj->node);
+                return 0;
+            } else if (rc == -1) {
                 /* If the fetch fails we can drop the object without
                  * calling arc_balance() since we don't want a not-existing key
                  * to affect the cache.
@@ -263,13 +271,10 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                  * and we want to balance the cache accordingly, it's just easier
                  * (and still safe) to postpone it until next cache-related operation
                  */
-                if (obj_state && obj->state != obj_state) {
+                if (obj_state) {
                     /* The object is being removed from the cache, destroy it. */
                     ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-                    MUTEX_UNLOCK(&obj->lock);
                     release_ref(cache->refcnt, obj->node);
-
-                    return -1;
                 }
                 MUTEX_UNLOCK(&obj->lock);
                 return -1;
