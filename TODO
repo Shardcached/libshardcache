@@ -1,12 +1,3 @@
- * extend arc.c to allow the fetch routine to instruct the cache subsystem on whether to cache
-   the retrieved object or discard it after dowloading
-
- * weight items distinguishing between not owned (but fetched from a peer) and owned to decide 
-   if the value needs to be cached or not. 
-   The idea is that not-owned items would be cached locally only if 'hot'. 
-   For the strategy to use it might be worth to look at how groupcache does 
-   or use a Count-Min Sketch based approach
-
  * support replicas
 
  * support message compression
@@ -22,13 +13,13 @@
 
  * extend the expire interface in set() commands to allow the use of some flag to 
    control if the expiry time should be renewed when the key is accessed or not
-   (and let it honor the initial expiration time)
+   (and let it honor the initial expiration time).
 
  * parallelize eviction
    evict commands are very small and can be handled quickly but now it's
    only one thread making this job and it might be not enough in case of
    a big number of delete requests for keys not owned by the
-   receiving instance)
+   receiving instance).
 
  * parallelize migrations
 
@@ -44,6 +35,12 @@
    At the moment this is ensured by locking the actual object (which is inserted immediately
    when a new key is requested , so further threads will lock on that same object).
    If this won't be the case anymore we still need a way to serialize access to the
-   storage for the same key, while still allowing parallel access to different keys
+   storage for the same key, while still allowing parallel access to different keys.
+
+* weight items distinguishing between not owned (but fetched from a peer) and owned to decide 
+   if the value needs to be cached or not. 
+   At the moment a simple/dumb logic is implemented which basically keep the remote items only
+   10% of times (by calling  rand() % 10). Better approaches are possible but it's still unclear
+   if they are worth implementing or not.
 
 
