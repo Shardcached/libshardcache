@@ -1,4 +1,5 @@
 #include <sys/types.h>
+#include <fcntl.h>
 #include <fbuf.h>
 #include <rbuf.h>
 #include <stdint.h>
@@ -520,6 +521,8 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
     sip_hash *shash = NULL;
     char version = 0;
 
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) & ~O_NONBLOCK);
+
     if (auth)
         shash = sip_hash_new(auth, 2, 4);
 
@@ -874,6 +877,8 @@ write_message(int fd,
         SHC_DEBUG("computed digest: %s",
                   shardcache_hex_escape(fbuf_end(&msg)-dlen, dlen, 0));
     }
+
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) & ~O_NONBLOCK);
 
     while(fbuf_used(&msg) > 0) {
         int wb = fbuf_write(&msg, fd, 0);
