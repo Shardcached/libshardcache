@@ -303,15 +303,61 @@ void shardcache_clear_counters(shardcache_t *cache);
  */
 typedef struct __shardcache_node_s shardcache_node_t;
 
+/**
+ * @brief Create a new shardcache_node_t structure
+ * @param label The label of the node
+ * @param addresses Array containing the addresses for all the replicas representing the node
+ * @param num_addresses The number of items in the addresses array
+ * @return A newly initialized shardcache_node_t structure
+ * @note The caller MUST release the resources used to represent the node by calling
+ *       shardcache_node_destroy() on the returned pointer
+ */
 shardcache_node_t *shardcache_node_create(char *label, char **addresses, int num_addresses);
+
+/**
+ * @brief Create a copy of an existing shardcache_node_t structure
+ * @param node A previously initialized and valid shardcache_node_t structure
+ * @return A newly initialized shardcache_node_t structure identical to the original one
+ * @note The caller MUST release the resources used to represent the node by calling
+ *       shardcache_node_destroy() on the returned pointer
+ */
 shardcache_node_t *shardcache_node_copy(shardcache_node_t *node);
+
+/**
+ * @brief Release all the resources used by a shardcache_node_t structure
+ * @param node A previously initialized and valid shardcache_node_t structure
+ */
 void shardcache_node_destroy(shardcache_node_t *node);
 
+/**
+ * @brief Get the label for a given node
+ * @param node A previously initialized and valid shardcache_node_t structure
+ * @return The label for the node passed as argument
+ */
 char *shardcache_node_get_label(shardcache_node_t *node);
+/**
+ * @brief Get the node-string representing a given node
+ * @param node A previously initialized and valid shardcache_node_t structure
+ * @return The node-string for the node passed as argument
+ */
 char *shardcache_node_get_string(shardcache_node_t *node);
+/**
+ * @brief Get a valid address for a given node (from any of the replicas)
+ * @param node A previously initialized and valid shardcache_node_t structure
+ * @return One of the valid addresses for the node passed as argument
+ * @note If replicas are used this function may return a different value
+ *       (among the configured replicas) each time it's called
+ */
 char *shardcache_node_get_address(shardcache_node_t *node);
 
 
+/**
+ * @brief Select a node by its label
+ * @param cache   A valid pointer to a shardcache_t structure
+ * @param label   The label of the node to select
+ * @return A valid shardcache_node_t structure representing the requested node,
+ *         NULL if no node has been found matching the label passed as argument
+ */
 shardcache_node_t * shardcache_node_select(shardcache_t *cache, char *label);
 
 /**
@@ -326,6 +372,12 @@ shardcache_node_t * shardcache_node_select(shardcache_t *cache, char *label);
 shardcache_node_t **shardcache_get_nodes(shardcache_t *cache, int *num_nodes);
 
 
+/**
+ * @brief Release resources for a list of nodes
+ * @param nodes A valid list of shardcache_node_t structures
+ *              (as returned by shardcache_get_nodes())
+ * @param num_nodes The number of nodes in the array
+ */
 void shardcache_free_nodes(shardcache_node_t **nodes, int num_nodes);
 
 /**
