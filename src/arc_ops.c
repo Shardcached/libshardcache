@@ -136,7 +136,6 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             drop = 1;
     }
 
-    MUTEX_UNLOCK(&obj->lock);
 
     if (complete) {
         if (total_len && !drop) {
@@ -145,6 +144,8 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             arc_remove(cache->arc, key, klen);
         }
     }
+
+    MUTEX_UNLOCK(&obj->lock);
     return !error ? 0 : -1;
 }
 
@@ -235,7 +236,7 @@ arc_ops_create(const void *key, size_t len, int async, void *priv)
         obj->listeners = create_list();
         set_free_value_callback(obj->listeners, free);
     }
-    MUTEX_INIT(&obj->lock);
+    MUTEX_INIT_RECURSIVE(&obj->lock);
     obj->arc = cache->arc;
 
     return obj;
