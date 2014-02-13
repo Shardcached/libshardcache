@@ -619,10 +619,8 @@ process_request(void *priv)
                     fbuf_printf(&buf, "%s", shardcache_node_get_string(nodes[i]));
                 }
                 fbuf_add(&buf, "\r\n");
-                free(nodes);
+                shardcache_free_nodes(nodes, num_nodes);
             }
-
-            shardcache_free_nodes(nodes, num_nodes);
 
             int ncounters = shardcache_get_counters(cache, &counters);
             if (counters) {
