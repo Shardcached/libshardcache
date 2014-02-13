@@ -23,8 +23,8 @@ replicator(void *priv)
     while(!ATOMIC_READ(replica->quit)) {
         shardcache_replica_command_t *cmd = queue_pop_left(replica->cmd_queue);
         while (cmd) {
-
-            shardcache_replica_command_t *cmd = queue_pop_left(replica->cmd_queue);
+            // do something with cmd
+            cmd = queue_pop_left(replica->cmd_queue);
         }
     }
     return NULL;
