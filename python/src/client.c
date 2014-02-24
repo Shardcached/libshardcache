@@ -91,8 +91,9 @@ static PyObject * Client_set(PyObject * self, PyObject * args) {
     Client   * client       = (Client *)self;
     PyObject * key_string   = NULL;
     PyObject * value_string = NULL;
+    unsigned int expire = 0;
 
-    if (!PyArg_ParseTuple(args, "OO", &key_string, &value_string))
+    if (!PyArg_ParseTuple(args, "OO|I", &key_string, &value_string, &expire))
         return NULL;
 
     int response = shardcache_client_set(client->shardcache,
@@ -100,7 +101,7 @@ static PyObject * Client_set(PyObject * self, PyObject * args) {
                                          PyString_Size(key_string),
                                          PyString_AsString(value_string),
                                          PyString_Size(value_string),
-                                         5 * 60); // Hardcoded for now
+                                         expire); // Hardcoded for now
 
     return Py_BuildValue("i", response);
 }
