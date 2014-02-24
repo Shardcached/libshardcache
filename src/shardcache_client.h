@@ -150,7 +150,8 @@ int shardcache_client_add(shardcache_client_t *c, void *key, size_t klen, void *
  * @param klen   The length of the key
  * @param data   A valid pointer to the value
  * @param dlen   The length of the value
- * @param expire The number of seconds after which the value should expire
+ * @param expire The number of seconds after which the value should expire,
+ *               0 If the value is persistent and shouldn't expire.
  * @return 0 on success, -1 otherwise and the internal errno is set
  * @note On success the internal errno will be set to SHARDCACHE_CLIENT_OK
  * @see shardcache_client_errno()
