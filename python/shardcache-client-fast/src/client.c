@@ -17,8 +17,7 @@ static PyObject * Client_new(PyTypeObject * type, PyObject * args, PyObject * kw
     PyObject * secret    = NULL;
     char     * auth      = NULL;
 
-    int        node_list_nr = 0;
-    int        i;
+    Py_ssize_t node_list_nr = 0;
     if (!PyArg_ParseTuple(args, "Os", &node_list, &auth))
         goto fail;
 
@@ -31,6 +30,8 @@ static PyObject * Client_new(PyTypeObject * type, PyObject * args, PyObject * kw
         goto fail;
 
     shardcache_node_t **nodes = malloc(node_list_nr * sizeof(shardcache_node_t *));
+
+    int i;
     for (i = 0; i < node_list_nr; i++) {
         PyObject * node_object = PySequence_GetItem(node_list, i);
 
@@ -42,8 +43,8 @@ static PyObject * Client_new(PyTypeObject * type, PyObject * args, PyObject * kw
         nodes[i] = shardcache_node_create(node_label, &node_address, 1);
     }
 
-    client->shardcache = shardcache_client_create(nodes, node_list_nr, auth);
-    shardcache_free_nodes(nodes, node_list_nr);
+    client->shardcache = shardcache_client_create(nodes, (int)node_list_nr, auth);
+    shardcache_free_nodes(nodes, (int)node_list_nr);
 
     return self;
 
