@@ -350,6 +350,11 @@ char *shardcache_node_get_string(shardcache_node_t *node);
  */
 char *shardcache_node_get_address(shardcache_node_t *node);
 
+int shardcache_node_num_addresses(shardcache_node_t *node);
+
+int shardcache_node_get_all_addresses(shardcache_node_t *node, char **addresses, int num_addresses);
+
+char *shardcache_node_get_address_at_index(shardcache_node_t *node, int index);
 
 /**
  * @brief Select a node by its label

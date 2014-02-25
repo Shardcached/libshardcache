@@ -177,6 +177,28 @@ shardcache_node_select(shardcache_t *cache, char *label)
     return node;
 }
 
+int shardcache_node_num_addresses(shardcache_node_t *node)
+{
+    return node->num_replicas;
+
+}
+
+int shardcache_node_get_all_addresses(shardcache_node_t *node, char **addresses, int num_addresses)
+{
+    int i;
+    for (i = 0; i < node->num_replicas; i++)
+        addresses[i] = node->address[i];
+    return node->num_replicas;
+}
+
+char *shardcache_node_get_address_at_index(shardcache_node_t *node, int index)
+{
+    if (index < node->num_replicas)
+        return node->address[index];
+    return NULL;
+}
+
+
 static int
 shardcache_test_ownership_internal(shardcache_t *cache,
                                    void *key,
