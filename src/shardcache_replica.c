@@ -169,7 +169,7 @@ shardcache_replica_destroy(shardcache_replica_t *replica)
     ht_destroy(replica->status);
     shardcache_node_destroy(replica->node);
     free(replica->me);
-    SPIN_DESTROY(replica->view_lock);
+    SPIN_DESTROY(&replica->view_lock);
     if (replica->current_view) {
         free(replica->current_view->addresses);
         free(replica->current_view);
