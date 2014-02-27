@@ -24,6 +24,7 @@ int main(int argc, char **argv)
         sprintf(nodes[i].address, "127.0.0.1:975%d", i);
     }
 
+    // create a set of servers
     for (i = 0; i < num_nodes; i++) {
         ut_testing("shardcache_create(nodes[%d].label, nodes, num_nodes, NULL, NULL, 5, 1<<29", i);
         servers[i] = shardcache_create(nodes[i].label,
@@ -39,8 +40,9 @@ int main(int argc, char **argv)
             ut_failure("Errors creating the shardcache instance");
     }
 
-    sleep(1);
+    sleep(1); // let the servers complete their startup
 
+    // now create a client to communicate with the servers
     ut_testing("shardcache_client_create(nodes, num_nodes, NULL)");
     shardcache_client_t *client = shardcache_client_create(nodes, num_nodes, NULL);
     ut_validate_int((client != NULL), 1);
@@ -104,6 +106,8 @@ int main(int argc, char **argv)
     size = shardcache_client_offset(client, "test_key2", 9, 5, &partial, 5);
     ut_validate_buffer(partial, 5, "value", 5);
 
+    // create now two clients each knowing exclusively about 1 server
+    // (different among the two clients)
     shardcache_client_t *client1 = shardcache_client_create(&nodes[0], 1, NULL);
     shardcache_client_t *client2 = shardcache_client_create(&nodes[1], 1, NULL);
 
