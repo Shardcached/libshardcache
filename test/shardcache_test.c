@@ -1,8 +1,6 @@
 #include <shardcache_client.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/wait.h>
-#include <signal.h>
 #include <ut.h>
 #include <libgen.h>
 
@@ -228,12 +226,13 @@ int main(int argc, char **argv)
     size = shardcache_client_get(client, volatile_key, strlen(volatile_key), (void **)&value);
     ut_validate_int(size, 0);
 
-    for (i = 0; i < num_nodes; i++) {
-        shardcache_destroy(servers[i]);
-    }
     shardcache_client_destroy(client);
     shardcache_client_destroy(client1);
     shardcache_client_destroy(client2);
+
+    for (i = 0; i < num_nodes; i++) {
+        shardcache_destroy(servers[i]);
+    }
 
     ut_summary();
     exit(ut_failed);
