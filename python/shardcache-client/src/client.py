@@ -6,6 +6,7 @@
 import select
 import socket
 import struct
+import sys
 from siphash import SipHash
 
 MSG_GET = 0x01
@@ -49,7 +50,10 @@ class ShardcacheClient:
     def get(self, key):
         records = self._send_message(message = MSG_GET,
                                      records = [key])
-        return ''.join(records[0])
+        if records:
+            return ''.join(records[0])
+
+        return None
   
 
     def set(self, key, value):
@@ -100,7 +104,7 @@ class ShardcacheClient:
             if readable[0] == self.socket:
                 data = self.socket.recv(1024)
                 records = self._process_input(data)
-                if records:
+                if records != None:
                     break
             readable = select.select([self.socket], [], [], 0.5)
             print readable
@@ -121,8 +125,12 @@ class ShardcacheClient:
 
         offset = 3
 
-        pversion = data[offset]
+        pversion = ord(data[offset])
         offset += 1
+
+        if pversion > 1:
+            print >>sys.stderr, "Unsupported protocol version ", pversion
+            return []
 
         signed = ''
 
@@ -156,6 +164,7 @@ class ShardcacheClient:
                 break
             if sep != '\x80':
                 print >>sys.stderr, 'Bad separator ', sep, 'from ', s.getpeername()
+                return []
 
 
         if signed:
