@@ -9,25 +9,27 @@ import struct
 import sys
 from siphash import SipHash
 
-MSG_GET = chr(0x01)
-MSG_SET = chr(0x02)
-MSG_DEL = chr(0x03)
-MSG_EVI = chr(0x04)
-MSG_OFX = chr(0x06)
-MSG_ADD = chr(0x07)
-MSG_EXI = chr(0x08)
+MSG_GET    = chr(0x01)
+MSG_SET    = chr(0x02)
+MSG_DEL    = chr(0x03)
+MSG_EVI    = chr(0x04)
+MSG_OFX    = chr(0x06)
+MSG_ADD    = chr(0x07)
+MSG_EXI    = chr(0x08)
 
-MSG_CHK = chr(0x31)
-MSG_STS = chr(0x32)
+MSG_CHK    = chr(0x31)
+MSG_STS    = chr(0x32)
 
-MSG_SIG  = chr(0xF0)
-MSG_CSIG = chr(0xF1)
+MSG_SIG    = chr(0xF0)
+MSG_CSIG   = chr(0xF1)
 
 RES_OK     = chr(0x00)
 RES_YES    = chr(0x01)
 RES_EXISTS = chr(0x02)
 RES_NO     = chr(0xFE)
 RES_ERR    = chr(0xFF)
+
+PROTOCOL_VERSION = chr(0x01)
 
 
 MESSAGE_TERMINATOR = chr(0x00)
@@ -113,7 +115,7 @@ class ShardcacheClient:
         # signing
         content = ''.join(packet)
 
-        packetbuf = 'shc\x01' # magic + protocol version
+        packetbuf = 'shc'+PROTOCOL_VERSION # magic + protocol version
         if self.secret: 
             siphash = SipHash(c=2, d=4)
             signature = siphash.auth(struct.unpack('<QQ', self.secret)[0], content)
@@ -160,10 +162,10 @@ class ShardcacheClient:
 
         offset = 3
 
-        pversion = ord(data[offset])
+        pversion = data[offset]
         offset += 1
 
-        if pversion > 1:
+        if pversion > PROTOCOL_VERSION:
             print >>sys.stderr, "Unsupported protocol version ", pversion
             return []
 
@@ -197,7 +199,7 @@ class ShardcacheClient:
             offset += 1
             if sep == MESSAGE_TERMINATOR:
                 break
-            if sep != RECORD_SEPARATOR:
+            elif sep != RECORD_SEPARATOR:
                 print >>sys.stderr, 'Bad separator ', sep, 'from ', s.getpeername()
                 return []
 
