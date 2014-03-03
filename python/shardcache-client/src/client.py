@@ -119,18 +119,18 @@ class ShardcacheClient:
 
         #print 'packet', repr(packetbuf)
 
-        # response
+        self.socket.setblocking(1)
         self.socket.sendall(packetbuf)
         self.socket.setblocking(0)
 
+        # response
         retcords = None
-
         # read until we have a full message
         readable, writable, exceptional = select.select([self.socket], [], [], 0.5)
         while readable:
             if readable[0] == self.socket:
                 data = self.socket.recv(1024)
-                # _process_input will returns an array if it was able to process
+                # _process_input() will returns an array if it was able to process
                 # a full message, otherwise None will be returned and more data
                 # needs to be accumulated
                 records = self._process_input(data)
