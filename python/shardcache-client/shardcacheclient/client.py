@@ -69,6 +69,18 @@ class ShardcacheClient:
             return ''.join(records[0])
 
         return None
+
+    def offset(self, key, offset=0, length=0):
+        input_records = [key, struct.pack('!L', offset)]
+        if length > 0:
+            input_records.append(struct.pack('!L', length))
+        records = self._send_message(message = MSG_OFX,
+                                     records = input_records)
+        if records:
+            return ''.join(records[0])
+
+        return None
+
   
     def stats(self):
         records = self._send_message(message = MSG_STS)
@@ -156,7 +168,7 @@ class ShardcacheClient:
         # response
         retcords = None
         # read until we have a full message
-        readable, writable, exceptional = select.select([self.socket], [], [], 0.5)
+        readable, writable, exceptions = select.select([self.socket], [], [], 0.5)
         while readable:
             if readable[0] == self.socket:
                 data = self.socket.recv(1024)
@@ -167,8 +179,8 @@ class ShardcacheClient:
                 if records != None:
                     break # we got a full message
 
-            if exceptional and exceptional[0] == self.socket:
-                print >>sys.stderr, 'handling exceptional condition for', s.getpeername()
+            if exceptions and exceptions[0] == self.socket:
+                print >>sys.stderr, 'handling exception for', self.socket.getpeername()
                 break
 
             readable = select.select([self.socket], [], [], 0.5)
@@ -234,9 +246,9 @@ class ShardcacheClient:
             signature = data[offset:offset + 8]
             offset += 8
 
-        # we have a complete record let's send it back and flush the input accumulator
+        # we have parsed a complete message let's flush the input accumulator
+        # and send the records back to the caller
         self.input_buffer = self.input_buffer[offset:]
-
         return records
 
 
@@ -244,4 +256,5 @@ if __name__ == '__main__':
     shard = ShardcacheClient('ln.xant.net', 4443, 'default')
     print shard.get('b.o.txt')
     print shard.stats()
+    print shard.offset('b.o.txt', 12, 20)
 
