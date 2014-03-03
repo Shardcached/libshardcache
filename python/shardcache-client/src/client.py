@@ -20,18 +20,24 @@ MSG_EXI = 0x08
 MSG_CHK = 0x31
 MSG_STS = 0x32
 
+RES_OK  = 0x00
+RES_YES = 0x01
+RES_EXISTS = 0x02
+RES_NO  = 0xFE
+RES_ERR = 0xFF
+
 RECORD_SEPARATOR = 0x80
 RECORD_TERMINATOR = (0x00, 0x00)
 
-def chunkize(string):
-    while len(string) > 0xffff:
-        yield struct.pack('!H', len(string))
-        yield string[:0xffff]
-        string = string[0xffff:]
+def chunkize(buf):
+    while len(buf) > 0xffff:
+        yield struct.pack('!H', len(buf))
+        yield buf[:0xffff]
+        buf = buf[0xffff:]
 
-    if len(string):
-        yield struct.pack('!H', len(string))
-        yield string
+    if len(buf):
+        yield struct.pack('!H', len(buf))
+        yield buf
 
     yield chr(0)
     yield chr(0)
@@ -57,12 +63,22 @@ class ShardcacheClient:
   
 
     def set(self, key, value):
-        self._send_message(message = MSG_SET,
-                           records = [key, value])
+        records = self._send_message(message = MSG_SET,
+                                     records = [key, value])
+
+        if records and ord(records[0]) == RES_OK:
+            return 0;
+
+        return -1
 
     def delete(self, key):
-        self.__send_message(message = MSG_DEL,
-                            records = [key])
+        records = self.__send_message(message = MSG_DEL,
+                                      records = [key])
+
+        if records and ord(records[0]) == RES_OK:
+            return 0;
+
+        return -1
 
     def _send_message(self, message, records=None):
         # request
