@@ -20,14 +20,19 @@ MSG_EXI = 0x08
 MSG_CHK = 0x31
 MSG_STS = 0x32
 
+MSG_SIG  = 0xF0
+MSG_CSIG = 0xF1
+
 RES_OK  = 0x00
 RES_YES = 0x01
 RES_EXISTS = 0x02
 RES_NO  = 0xFE
 RES_ERR = 0xFF
 
-RECORD_SEPARATOR = 0x80
-RECORD_TERMINATOR = (0x00, 0x00)
+
+MESSAGE_TERMINATOR = chr(0x00)
+RECORD_SEPARATOR   = chr(0x80)
+RECORD_TERMINATOR  = (chr(0x00), chr(0x00))
 
 def chunkize(buf):
     while len(buf) > 0xffff:
@@ -61,7 +66,13 @@ class ShardcacheClient:
 
         return None
   
+    def sts(self):
+        records = self._send_message(message = MSG_STS)
+        if records:
+            return ''.join(records[0])
 
+        return None
+ 
     def set(self, key, value):
         records = self._send_message(message = MSG_SET,
                                      records = [key, value])
@@ -88,7 +99,7 @@ class ShardcacheClient:
         if records:
             for r in records:
                 if len(packet) > 1 :
-                    packet.append(0x80)
+                    packet.append(RECORD_SEPARATOR)
                 packet += list(chunkize(r))
         else :
             packet.extend(RECORD_TERMINATOR);
@@ -104,7 +115,7 @@ class ShardcacheClient:
         siphash = SipHash(c=2, d=4)
         signature = siphash.auth(struct.unpack('<QQ', self.secret)[0], packetbuf)
 
-        packetbuf = ''.join((chr(0x73), chr(0x68), chr(0x63), chr(0x01), chr(0xF0))) + packetbuf + struct.pack('<Q', signature);
+        packetbuf = ''.join((chr(0x73), chr(0x68), chr(0x63), chr(0x01), chr(MSG_SIG))) + packetbuf + struct.pack('<Q', signature);
 
         #print 'packet', repr(packetbuf)
 
@@ -152,7 +163,7 @@ class ShardcacheClient:
         header = data[offset]
         offset += 1
 
-        if header == '\xf0' or header == '\xf1':
+        if header == chr(MSG_SIG) or header == chr(MSG_CSIG):
             signed = header
             header = data[offset]
             offset += 1
@@ -175,9 +186,9 @@ class ShardcacheClient:
 
             sep = data[offset]
             offset += 1
-            if sep == '\x00':
+            if sep == MESSAGE_TERMINATOR:
                 break
-            if sep != '\x80':
+            if sep != RECORD_SEPARATOR:
                 print >>sys.stderr, 'Bad separator ', sep, 'from ', s.getpeername()
                 return []
 
@@ -196,5 +207,5 @@ class ShardcacheClient:
 
 if __name__ == '__main__':
     shard = ShardcacheClient('ln.xant.net', 4443, 'default')
-    print shard.get('b.o.txt')
+    print shard.sts()
 
