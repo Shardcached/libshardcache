@@ -31,7 +31,6 @@ RES_ERR    = chr(0xFF)
 
 PROTOCOL_VERSION = chr(0x01)
 
-
 MESSAGE_TERMINATOR = chr(0x00)
 RECORD_SEPARATOR   = chr(0x80)
 RECORD_TERMINATOR  = (chr(0x00), chr(0x00))
@@ -71,19 +70,34 @@ class ShardcacheClient:
 
         return None
   
-    def sts(self):
+    def stats(self):
         records = self._send_message(message = MSG_STS)
         if records:
             return ''.join(records[0])
 
         return None
  
-    def set(self, key, value):
+    def set(self, key, value, expire=None):
+        input_records = [key, value]
+        if expire:
+            input_records.append(expire)
         records = self._send_message(message = MSG_SET,
-                                     records = [key, value])
+                                     records = input_records)
 
-        if records and ord(records[0]) == RES_OK:
+        if records and records[0] == RES_OK:
             return 0;
+
+        return -1
+
+    def add(self, key, value, expire=None):
+        input_records = [key, value]
+        if expire:
+            input_records.append(expire)
+        records = self._send_message(message = MSG_ADD,
+                                     records = input_records)
+
+        if records:
+            return ord(records[0])
 
         return -1
 
@@ -91,10 +105,20 @@ class ShardcacheClient:
         records = self.__send_message(message = MSG_DEL,
                                       records = [key])
 
-        if records and ord(records[0]) == RES_OK:
+        if records and records[0] == RES_OK:
             return 0;
 
         return -1
+
+    def evict(self, key):
+        records = self.__send_message(message = MSG_EVI,
+                                      records = [key])
+
+        if records and records[0] == RES_OK:
+            return 0;
+
+        return -1
+
 
     def _send_message(self, message, records=None):
         # request
@@ -219,5 +243,5 @@ class ShardcacheClient:
 if __name__ == '__main__':
     shard = ShardcacheClient('ln.xant.net', 4443, 'default')
     print shard.get('b.o.txt')
-    print shard.sts()
+    print shard.stats()
 
