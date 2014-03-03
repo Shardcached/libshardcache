@@ -9,25 +9,25 @@ import struct
 import sys
 from siphash import SipHash
 
-MSG_GET = 0x01
-MSG_SET = 0x02
-MSG_DEL = 0x03
-MSG_EVI = 0x04
-MSG_OFX = 0x06
-MSG_ADD = 0x07
-MSG_EXI = 0x08
+MSG_GET = chr(0x01)
+MSG_SET = chr(0x02)
+MSG_DEL = chr(0x03)
+MSG_EVI = chr(0x04)
+MSG_OFX = chr(0x06)
+MSG_ADD = chr(0x07)
+MSG_EXI = chr(0x08)
 
-MSG_CHK = 0x31
-MSG_STS = 0x32
+MSG_CHK = chr(0x31)
+MSG_STS = chr(0x32)
 
-MSG_SIG  = 0xF0
-MSG_CSIG = 0xF1
+MSG_SIG  = chr(0xF0)
+MSG_CSIG = chr(0xF1)
 
-RES_OK  = 0x00
-RES_YES = 0x01
-RES_EXISTS = 0x02
-RES_NO  = 0xFE
-RES_ERR = 0xFF
+RES_OK     = chr(0x00)
+RES_YES    = chr(0x01)
+RES_EXISTS = chr(0x02)
+RES_NO     = chr(0xFE)
+RES_ERR    = chr(0xFF)
 
 
 MESSAGE_TERMINATOR = chr(0x00)
@@ -94,7 +94,7 @@ class ShardcacheClient:
     def _send_message(self, message, records=None):
         # request
         packet = []
-        packet.append(chr(message))
+        packet.append(message)
 
         if records:
             for r in records:
@@ -115,7 +115,7 @@ class ShardcacheClient:
         siphash = SipHash(c=2, d=4)
         signature = siphash.auth(struct.unpack('<QQ', self.secret)[0], packetbuf)
 
-        packetbuf = ''.join((chr(0x73), chr(0x68), chr(0x63), chr(0x01), chr(MSG_SIG))) + packetbuf + struct.pack('<Q', signature);
+        packetbuf = ''.join((chr(0x73), chr(0x68), chr(0x63), chr(0x01), MSG_SIG)) + packetbuf + struct.pack('<Q', signature);
 
         #print 'packet', repr(packetbuf)
 
@@ -163,7 +163,7 @@ class ShardcacheClient:
         header = data[offset]
         offset += 1
 
-        if header == chr(MSG_SIG) or header == chr(MSG_CSIG):
+        if header == MSG_SIG or header == MSG_CSIG:
             signed = header
             header = data[offset]
             offset += 1
@@ -207,5 +207,6 @@ class ShardcacheClient:
 
 if __name__ == '__main__':
     shard = ShardcacheClient('ln.xant.net', 4443, 'default')
+    print shard.get('b.o.txt')
     print shard.sts()
 
