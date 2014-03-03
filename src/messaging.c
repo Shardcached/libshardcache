@@ -476,7 +476,7 @@ fetch_from_peer_async(char *peer,
     }
 
     if (fd >= 0) {
-        message_record_t record = {
+        shardcache_record_t record = {
             .v = key,
             .l = klen
         };
@@ -794,7 +794,7 @@ _chunkize_buffer(sip_hash *shash,
 int build_message(char *auth,
                   unsigned char sig_hdr,
                   unsigned char hdr,
-                  message_record_t *records,
+                  shardcache_record_t *records,
                   int num_records,
                   fbuf_t *out)
 {
@@ -869,7 +869,7 @@ write_message(int fd,
               char *auth,
               unsigned char sig_hdr,
               unsigned char hdr,
-              message_record_t *records,
+              shardcache_record_t *records,
               int num_records)
 {
 
@@ -925,7 +925,7 @@ _delete_from_peer_internal(char *peer,
     SHC_DEBUG("Sending del command to peer %s (owner: %d)", peer, owner);
     if (fd >= 0) {
         unsigned char hdr = owner ? SHC_HDR_DELETE : SHC_HDR_EVICT;
-        message_record_t record = {
+        shardcache_record_t record = {
             .v = key,
             .l = klen
         };
@@ -1004,7 +1004,7 @@ _send_to_peer_internal(char *peer,
     }
 
     if (fd >= 0) {
-        message_record_t record[3] = {
+        shardcache_record_t record[3] = {
             {
                 .v = key,
                 .l = klen
@@ -1120,7 +1120,7 @@ fetch_from_peer(char *peer,
     }
 
     if (fd >= 0) {
-        message_record_t record = {
+        shardcache_record_t record = {
             .v = key,
             .l = len
         };
@@ -1170,7 +1170,7 @@ offset_from_peer(char *peer,
     size_t offset_nbo = htonl(offset);
     size_t dlen_nbo = htonl(dlen);
     if (fd >= 0) {
-        message_record_t record[3] = {
+        shardcache_record_t record[3] = {
             {
                 .v = key,
                 .l = len
@@ -1230,7 +1230,7 @@ exists_on_peer(char *peer,
     SHC_DEBUG("Sending exists command to peer %s", peer);
     if (fd >= 0) {
         unsigned char hdr = SHC_HDR_EXISTS;
-        message_record_t record = {
+        shardcache_record_t record = {
             .v = key,
             .l = klen
         };
@@ -1294,7 +1294,7 @@ touch_on_peer(char *peer,
     SHC_DEBUG("Sending touch command to peer %s", peer);
     if (fd >= 0) {
         unsigned char hdr = SHC_HDR_TOUCH;
-        message_record_t record = {
+        shardcache_record_t record = {
             .v = key,
             .l = klen
         };
@@ -1483,7 +1483,7 @@ migrate_peer(char *peer,
     SHC_NOTICE("Sending migration_begin command to peer %s", peer);
 
     if (fd >= 0) {
-        message_record_t record = {
+        shardcache_record_t record = {
             .v = msgdata,
             .l = len
         };

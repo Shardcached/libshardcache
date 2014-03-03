@@ -404,7 +404,7 @@ process_request(void *priv)
             uint32_t remainder = shardcache_get_offset(cache, key, klen, buf, &bsize, offset, NULL);
             if (size) {
                 uint32_t remainder_nbo = htonl(remainder);
-                message_record_t record[2] = {
+                shardcache_record_t record[2] = {
                     {
                         .v = buf,
                         .l = size
@@ -473,7 +473,7 @@ process_request(void *priv)
             fbuf_t out = FBUF_STATIC_INITIALIZER;
             size_t vlen = 0;
             void *v = shardcache_get(cache, key, klen, &vlen, NULL);
-            message_record_t record = {
+            shardcache_record_t record = {
                 .v = v,
                 .l = vlen
             };
@@ -630,7 +630,7 @@ process_request(void *priv)
                 }
 
                 fbuf_t out = FBUF_STATIC_INITIALIZER;
-                message_record_t record = {
+                shardcache_record_t record = {
                     .v = fbuf_data(&buf),
                     .l = fbuf_used(&buf)
                 };
@@ -675,7 +675,7 @@ process_request(void *priv)
             }
 
             // chunkize the data and build an actual message
-            message_record_t record = {
+            shardcache_record_t record = {
                 .v = fbuf_data(&buf),
                 .l = fbuf_used(&buf)
             };

@@ -74,11 +74,6 @@ typedef enum {
 
 // TODO - Document all exposed functions
 
-typedef struct {
-    void  *v;
-    size_t l;
-} message_record_t;
-
 int global_tcp_timeout(int tcp_timeout);
 
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr);
@@ -87,13 +82,13 @@ int write_message(int fd,
                   char *auth,
                   unsigned char sig_hdr,
                   unsigned char hdr,
-                  message_record_t *records,
+                  shardcache_record_t *records,
                   int num_records);
 
 int build_message(char *auth,
                   unsigned char sig_hdr,
                   unsigned char hdr,
-                  message_record_t *records,
+                  shardcache_record_t *records,
                   int num_records,
                   fbuf_t *out);
 
