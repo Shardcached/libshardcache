@@ -141,7 +141,7 @@ class ShardcacheClient:
 
             record = []
             while chunk_size:
-                if len(data) < offset + chunk_size:
+                if len(data) < offset + chunk_size + 3:
                     return None
                 record.extend(data[offset:offset+chunk_size])
                 offset += chunk_size
@@ -159,6 +159,8 @@ class ShardcacheClient:
 
 
         if signed:
+            if len(data) < offset + 8:
+                return None
             signature = data[offset:offset + 8]
             offset += 8
 
