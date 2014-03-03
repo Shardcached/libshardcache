@@ -3,6 +3,7 @@
 ##
 ###############
 
+import select
 import socket
 import struct
 from siphash import SipHash
@@ -43,10 +44,13 @@ class ShardcacheClient:
         self.secret = struct.pack('16c', *secret)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((host, port))
+        self.input_buffer = []
 
     def get(self, key):
-        self._send_message(message = MSG_GET,
-                           records = [key])
+        records = self._send_message(message = MSG_GET,
+                                     records = [key])
+        return ''.join(records[0])
+  
 
     def set(self, key, value):
         self._send_message(message = MSG_SET,
@@ -87,12 +91,84 @@ class ShardcacheClient:
 
         # response
         self.socket.sendall(packetbuf)
-        data = self.socket.recv(1024)
-        print 'x'
-        print repr(data)
+        self.socket.setblocking(0)
+
+        retcords = None
+
+        readable, writable, exceptional = select.select([self.socket], [], [], 0.5)
+        while readable:
+            if readable[0] == self.socket:
+                data = self.socket.recv(1024)
+                records = self._process_input(data)
+                if records:
+                    break
+            readable = select.select([self.socket], [], [], 0.5)
+            print readable
+            if exceptional and exceptional[0] == self.socket:
+                print >>sys.stderr, 'handling exceptional condition for', s.getpeername()
+                break
+
+        return records
+
+
+    def _process_input(self, data):
+        self.input_buffer.extend(data);
+        if len(self.input_buffer) < 8:
+            return None
+
+        if data[:3] != 'shc':
+            print "Bad magic " + repr(data[:3])
+
+        offset = 3
+
+        pversion = data[offset]
+        offset += 1
+
+        signed = ''
+
+        header = data[offset]
+        offset += 1
+
+        if header == '\xf0' or header == '\xf1':
+            signed = header
+            header = data[offset]
+            offset += 1
+
+        records = []
+        while True:
+            chunk_size = struct.unpack('>H', data[offset:offset+2])[0]
+            offset += 2
+
+            record = []
+            while chunk_size:
+                if len(data) < offset + chunk_size:
+                    return None
+                record.extend(data[offset:offset+chunk_size])
+                offset += chunk_size
+                chunk_size = struct.unpack('>H', data[offset:offset+2])[0]
+                offset += 2
+
+            records.append(record)
+
+            sep = data[offset]
+            offset += 1
+            if sep == '\x00':
+                break
+            if sep != '\x80':
+                print >>sys.stderr, 'Bad separator ', sep, 'from ', s.getpeername()
+
+
+        if signed:
+            signature = data[offset:offset + 8]
+            offset += 8
+
+        # we have a complete record let's send it back and flush the input accumulator
+        self.input_buffer = self.input_buffer[offset:]
+
+        return records
 
 
 if __name__ == '__main__':
     shard = ShardcacheClient('ln.xant.net', 4443, 'default')
-    shard.get('b.o.txt')
+    print shard.get('b.o.txt')
 
