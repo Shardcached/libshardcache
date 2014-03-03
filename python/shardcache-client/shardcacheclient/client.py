@@ -92,7 +92,7 @@ class ShardcacheClient:
     def set(self, key, value, expire=None):
         input_records = [key, value]
         if expire:
-            input_records.append(expire)
+            input_records.append(struct.pack('!L', expire))
         records = self._send_message(message = MSG_SET,
                                      records = input_records)
 
@@ -104,7 +104,7 @@ class ShardcacheClient:
     def add(self, key, value, expire=None):
         input_records = [key, value]
         if expire:
-            input_records.append(expire)
+            input_records.append(struct.pack('!L', expire))
         records = self._send_message(message = MSG_ADD,
                                      records = input_records)
 
