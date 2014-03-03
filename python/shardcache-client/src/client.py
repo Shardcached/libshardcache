@@ -113,13 +113,10 @@ class ShardcacheClient:
         # signing
         content = ''.join(packet)
 
-        #print repr(self.secret), len(self.secret)
-        #print repr(packetbuf), len(packetbuf)
-        siphash = SipHash(c=2, d=4)
-        signature = siphash.auth(struct.unpack('<QQ', self.secret)[0], content)
-
         packetbuf = 'shc\x01' # magic + protocol version
         if self.secret: 
+            siphash = SipHash(c=2, d=4)
+            signature = siphash.auth(struct.unpack('<QQ', self.secret)[0], content)
             packetbuf += MSG_SIG + content + struct.pack('<Q', signature)
         else:
             packetbuf += content
