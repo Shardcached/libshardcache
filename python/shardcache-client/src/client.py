@@ -125,18 +125,23 @@ class ShardcacheClient:
 
         retcords = None
 
+        # read until we have a full message
         readable, writable, exceptional = select.select([self.socket], [], [], 0.5)
         while readable:
             if readable[0] == self.socket:
                 data = self.socket.recv(1024)
+                # _process_input will returns an array if it was able to process
+                # a full message, otherwise None will be returned and more data
+                # needs to be accumulated
                 records = self._process_input(data)
                 if records != None:
-                    break
-            readable = select.select([self.socket], [], [], 0.5)
-            print readable
+                    break # we got a full message
+
             if exceptional and exceptional[0] == self.socket:
                 print >>sys.stderr, 'handling exceptional condition for', s.getpeername()
                 break
+
+            readable = select.select([self.socket], [], [], 0.5)
 
         return records
 
