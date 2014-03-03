@@ -50,10 +50,13 @@ def chunkize(buf):
 class ShardcacheClient:
     "Simple Python client for shardcache"
 
-    def __init__(self, host, port, secret):
-        secret = secret[:16]
-        secret += chr(0) * (16 - len(secret))
-        self.secret = struct.pack('16c', *secret)
+    def __init__(self, host, port, secret=None):
+        if secret:
+            secret = secret[:16]
+            secret += chr(0) * (16 - len(secret))
+            self.secret = struct.pack('16c', *secret)
+        else:
+            self.secret = None
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((host, port))
         self.input_buffer = []
@@ -108,14 +111,18 @@ class ShardcacheClient:
 
 
         # signing
-        packetbuf = ''.join(packet)
+        content = ''.join(packet)
 
         #print repr(self.secret), len(self.secret)
         #print repr(packetbuf), len(packetbuf)
         siphash = SipHash(c=2, d=4)
-        signature = siphash.auth(struct.unpack('<QQ', self.secret)[0], packetbuf)
+        signature = siphash.auth(struct.unpack('<QQ', self.secret)[0], content)
 
-        packetbuf = ''.join((chr(0x73), chr(0x68), chr(0x63), chr(0x01), MSG_SIG)) + packetbuf + struct.pack('<Q', signature);
+        packetbuf = 'shc\x01'
+        if self.secret: 
+            packetbuf += MSG_SIG + content + struct.pack('<Q', signature)
+        else:
+            packetbuf += content
 
         #print 'packet', repr(packetbuf)
 
