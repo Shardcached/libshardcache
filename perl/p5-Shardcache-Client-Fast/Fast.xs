@@ -101,8 +101,7 @@ shardcache_client_create(nodes, auth=NULL)
                         }
                     }
                     if (node && addr) {
-                        char *addr_list[1] = { addr };
-                        shards[i] = shardcache_node_create(node, addr_list, 1);
+                        shards[i] = shardcache_node_create(node, &addr, 1);
                     } else {
                         croak("Can't parse the 'nodes' array");
                     }

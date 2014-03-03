@@ -21,9 +21,10 @@ static PyObject * Client_new(PyTypeObject * type, PyObject * args, PyObject * kw
     if (!PyArg_ParseTuple(args, "Os", &node_list, &auth))
         goto fail;
 
-    if (!PySequence_Check(node_list))
+    if (!PySequence_Check(node_list)) {
         // TODO: throw exceptions
         goto fail;
+    }
 
     node_list_nr = PySequence_Size(node_list);
     if (node_list_nr <= 0)
