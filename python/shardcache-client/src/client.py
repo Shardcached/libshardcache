@@ -99,15 +99,14 @@ class ShardcacheClient:
         # signing
         packetbuf = ''.join(packet)
 
-        print repr(self.secret), len(self.secret)
-        print 'x'
-        print repr(packetbuf), len(packetbuf)
+        #print repr(self.secret), len(self.secret)
+        #print repr(packetbuf), len(packetbuf)
         siphash = SipHash(c=2, d=4)
         signature = siphash.auth(struct.unpack('<QQ', self.secret)[0], packetbuf)
 
         packetbuf = ''.join((chr(0x73), chr(0x68), chr(0x63), chr(0x01), chr(0xF0))) + packetbuf + struct.pack('<Q', signature);
 
-        print 'packet', repr(packetbuf)
+        #print 'packet', repr(packetbuf)
 
         # response
         self.socket.sendall(packetbuf)
