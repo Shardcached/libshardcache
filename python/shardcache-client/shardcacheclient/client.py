@@ -6,6 +6,7 @@
 import select
 import socket
 import struct
+import random
 import sys
 from siphash import SipHash
 
@@ -22,6 +23,8 @@ MSG_STS    = chr(0x32)
 
 MSG_SIG    = chr(0xF0)
 MSG_CSIG   = chr(0xF1)
+
+MSG_NOOP   = chr(0x90)
 
 RES_OK     = chr(0x00)
 RES_YES    = chr(0x01)
@@ -51,16 +54,20 @@ def chunkize(buf):
 class ShardcacheClient:
     "Simple Python client for shardcache"
 
-    def __init__(self, host, port, secret=None):
+    def __init__(self, nodes, secret=None):
         if secret:
             secret = secret[:16]
             secret += chr(0) * (16 - len(secret))
             self.secret = struct.pack('16c', *secret)
         else:
             self.secret = None
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((host, port))
+        self.connections = { }
         self.input_buffer = []
+        if not nodes:
+            print >>sys.stderr, 'No nodes provided to the ShardcacheClient constructor!'
+            return None
+        self.nodes = nodes
+        random.seed()
 
     def get(self, key):
         records = self._send_message(message = MSG_GET,
@@ -131,8 +138,27 @@ class ShardcacheClient:
 
         return -1
 
+    def _get_connection(self, host, port):
+        host_key = host + ":" + str(port)
+        fd = self.connections.get(host_key, None)
+        if fd:
+            fd.setblocking(1)
+            if fd.send(MSG_NOOP) != 1:
+                print >>sys.stderr, 'socket ' + str(fd) + ' is not valid anymore'
+                fd = None
 
-    def _send_message(self, message, records=None):
+
+        if not fd:
+            fd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                fd.connect((host, port))
+                self.connections[host_key] = fd
+            except Exception, e:
+                print >>sys.stderr, 'Can\'t connect to %s:%d. Exception type is %s' % (host, port, `e`)
+
+        return fd
+
+    def _send_message(self, message, records=None, node=None):
         # request
         packet = []
         packet.append(message)
@@ -161,17 +187,38 @@ class ShardcacheClient:
 
         #print 'packet', repr(packetbuf)
 
-        self.socket.setblocking(1)
-        self.socket.sendall(packetbuf)
-        self.socket.setblocking(0)
+        host = None
+        port = 0
+        if node:
+            for n in self.nodes:
+                if n['label'] == node:
+                    host = n['address']
+                    port = n['port']
+                    break
+        else:
+            index = 0
+            if len(self.nodes) > 1:
+                index = random.randint(0, len(self.nodes)-1)
+            host = self.nodes[index]['address']
+            port = self.nodes[index]['port']
+            
+        conn = self._get_connection(host, port)
+
+        if not conn:
+            print >>sys.stderr, 'Can\'t obtain a valid socket to ' + self.host + ':' + str(self.port)
+            return None
+
+        conn.setblocking(1)
+        conn.sendall(packetbuf)
+        conn.setblocking(0)
 
         # response
         retcords = None
         # read until we have a full message
-        readable, writable, exceptions = select.select([self.socket], [], [], 0.5)
+        readable, writable, exceptions = select.select([conn], [], [], 0.5)
         while readable:
-            if readable[0] == self.socket:
-                data = self.socket.recv(1024)
+            if readable[0] == conn:
+                data = conn.recv(1024)
                 # _process_input() will returns an array if it was able to process
                 # a full message, otherwise None will be returned and more data
                 # needs to be accumulated
@@ -179,11 +226,11 @@ class ShardcacheClient:
                 if records != None:
                     break # we got a full message
 
-            if exceptions and exceptions[0] == self.socket:
-                print >>sys.stderr, 'handling exception for', self.socket.getpeername()
+            if exceptions and exceptions[0] == conn:
+                print >>sys.stderr, 'handling exception for', conn.getpeername()
                 break
 
-            readable = select.select([self.socket], [], [], 0.5)
+            readable = select.select([conn], [], [], 0.5)
 
         return records
 
@@ -253,7 +300,7 @@ class ShardcacheClient:
 
 
 if __name__ == '__main__':
-    shard = ShardcacheClient('ln.xant.net', 4443, 'default')
+    shard = ShardcacheClient([{'label':'peer1', 'address':'ln.xant.net', 'port':4443}], 'default')
     print shard.get('b.o.txt')
     print shard.stats()
     print shard.offset('b.o.txt', 12, 20)
