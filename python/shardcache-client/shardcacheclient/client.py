@@ -54,7 +54,7 @@ def chunkize(buf):
 class ShardcacheClient:
     "Simple Python client for shardcache"
 
-    def __init__(self, nodes, secret=None):
+    def __init__(self, hosts, secret=None):
         if secret:
             secret = secret[:16]
             secret += chr(0) * (16 - len(secret))
@@ -63,11 +63,33 @@ class ShardcacheClient:
             self.secret = None
         self.connections = { }
         self.input_buffer = []
-        if not nodes:
-            print >>sys.stderr, 'No nodes provided to the ShardcacheClient constructor!'
-            return None
-        self.nodes = nodes
+        if type(hosts) == str:
+            self.nodes = self._parse_hosts_string(hosts)
+            if not self.nodes:
+                raise Exception('Can\'t parse the hosts string ' + hosts)
+        elif type(hosts) == list:
+            for node in hosts:
+                if type(node) != dict:
+                    raise Exception('Node records in the hosts array must be dictionaries!')
+                members = ['label', 'address', 'port']
+                for m in members:
+                    if not node.get(m, None):
+                        raise Exception('the \'' + m + '\' member is mandatory in the node structure')
+            self.nodes = hosts
         random.seed()
+
+    def _parse_hosts_string(self, hosts):
+        nodes = []
+        node_strings = hosts.split(',')
+        for ns in node_strings:
+            node_info = ns.split(':')
+            if len(node_info) < 3:
+                # bad node string
+                return None
+
+            nodes.append({ 'label': node_info[0], 'address':node_info[1], 'port':int(node_info[2]) })
+        
+        return nodes
 
     def get(self, key):
         records = self._send_message(message = MSG_GET,
@@ -143,6 +165,7 @@ class ShardcacheClient:
         fd = self.connections.get(host_key, None)
         if fd:
             fd.setblocking(1)
+            # test if the socket is still valid
             if fd.send(MSG_NOOP) != 1:
                 print >>sys.stderr, 'socket ' + str(fd) + ' is not valid anymore'
                 fd = None
@@ -151,10 +174,10 @@ class ShardcacheClient:
         if not fd:
             fd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
-                fd.connect((host, port))
+                fd.connect((host, int(port)))
                 self.connections[host_key] = fd
             except Exception, e:
-                print >>sys.stderr, 'Can\'t connect to %s:%d. Exception type is %s' % (host, port, `e`)
+                print >>sys.stderr, 'Can\'t connect to %s:%d. Exception type is %s' % (host, int(port), `e`)
 
         return fd
 
@@ -300,7 +323,8 @@ class ShardcacheClient:
 
 
 if __name__ == '__main__':
-    shard = ShardcacheClient([{'label':'peer1', 'address':'ln.xant.net', 'port':4443}], 'default')
+    #shard = ShardcacheClient('peer1:ln.xant.net:4443', 'default')
+    shard = ShardcacheClient([ { 'label':'peer1', 'address':'ln.xant.net', 'port':4443 } ], 'default')
     print shard.get('b.o.txt')
     print shard.stats()
     print shard.offset('b.o.txt', 12, 20)
