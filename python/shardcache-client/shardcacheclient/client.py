@@ -111,10 +111,20 @@ class ShardcacheClient:
         return None
 
   
-    def stats(self):
-        records = self._send_message(message = MSG_STS)
-        if records:
-            return ''.join(records[0])
+    def stats(self, node=None):
+        if node:
+            records = self._send_message(message = MSG_STS, node = node)
+            if records:
+                return ''.join(records[0])
+        else:
+            stats = []
+            for node in self.nodes:
+                node_stats = { }
+                records = self._send_message(message = MSG_STS, node = node['label'])
+                node_stats = { 'node': node['label'], 'stats': ''.join(records[0]) } if records else { }
+                stats.append(node_stats)
+
+            return stats
 
         return None
  
@@ -324,8 +334,13 @@ class ShardcacheClient:
 
 if __name__ == '__main__':
     #shard = ShardcacheClient('peer1:ln.xant.net:4443', 'default')
-    shard = ShardcacheClient([ { 'label':'peer1', 'address':'ln.xant.net', 'port':4443 } ], 'default')
+    shard = ShardcacheClient([ { 'label':'peer1', 'address':'ln.xant.net', 'port':4443 },
+                               { 'label':'peer3', 'address':'mail.xant.net', 'port':4446 },
+                             ], 'default')
     print shard.get('b.o.txt')
-    print shard.stats()
+    for n in shard.stats():
+        print '*** '+ n['node'] + ' ***'
+        print n['stats']
+
     print shard.offset('b.o.txt', 12, 20)
 
