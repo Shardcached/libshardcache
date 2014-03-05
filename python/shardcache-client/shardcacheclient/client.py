@@ -65,6 +65,15 @@ def parse_hosts_string(hosts):
     
     return nodes
 
+def validate_hosts_array(hosts):
+    for node in hosts:
+        if type(node) != dict:
+            raise Exception('Node records in the hosts array must be dictionaries!')
+        members = ['label', 'address', 'port']
+        for m in members:
+            if not node.get(m, None):
+                raise Exception('the \'' + m + '\' member is mandatory in the node structure ' + str(node))
+
 
 
 class ShardcacheClient:
@@ -84,16 +93,10 @@ class ShardcacheClient:
             if not self.nodes:
                 raise Exception('Can\'t parse the hosts string ' + hosts)
         elif type(hosts) == list:
-            for node in hosts:
-                if type(node) != dict:
-                    raise Exception('Node records in the hosts array must be dictionaries!')
-                members = ['label', 'address', 'port']
-                for m in members:
-                    if not node.get(m, None):
-                        raise Exception('the \'' + m + '\' member is mandatory in the node structure')
+            validate_hosts_array(hosts)
             self.nodes = hosts
 
-        self.chash = CHash([ node['label'] for node in self.nodes], 200)
+        self.chash = CHash([ node['label'] for node in self.nodes ], 200)
         random.seed()
 
     def get(self, key):
