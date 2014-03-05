@@ -8,6 +8,7 @@ import socket
 import struct
 import random
 import sys
+from chash import CHash
 from siphash import SipHash
 
 MSG_GET    = chr(0x01)
@@ -91,11 +92,17 @@ class ShardcacheClient:
                     if not node.get(m, None):
                         raise Exception('the \'' + m + '\' member is mandatory in the node structure')
             self.nodes = hosts
+
+        chash_nodes = []
+        for node in self.nodes:
+            chash_nodes.append(node['label'])
+        self.chash = CHash(chash_nodes, 200)
         random.seed()
 
     def get(self, key):
         records = self._send_message(message = MSG_GET,
-                                     records = [key])
+                                     records = [key],
+                                     node = self.chash.lookup(key))
         if records:
             return ''.join(records[0])
 
@@ -105,8 +112,10 @@ class ShardcacheClient:
         input_records = [key, struct.pack('!L', offset)]
         if length > 0:
             input_records.append(struct.pack('!L', length))
+
         records = self._send_message(message = MSG_OFX,
-                                     records = input_records)
+                                     records = input_records,
+                                     node = self.chash.lookup(key))
         if records:
             return ''.join(records[0])
 
@@ -135,7 +144,8 @@ class ShardcacheClient:
         if expire:
             input_records.append(struct.pack('!L', expire))
         records = self._send_message(message = MSG_SET,
-                                     records = input_records)
+                                     records = input_records,
+                                     node = self.chash.lookup(key))
 
         if records and records[0] == RES_OK:
             return 0;
@@ -147,7 +157,8 @@ class ShardcacheClient:
         if expire:
             input_records.append(struct.pack('!L', expire))
         records = self._send_message(message = MSG_ADD,
-                                     records = input_records)
+                                     records = input_records,
+                                     node = self.chash.lookup(key))
 
         if records:
             return ord(records[0])
@@ -156,7 +167,8 @@ class ShardcacheClient:
 
     def delete(self, key):
         records = self.__send_message(message = MSG_DEL,
-                                      records = [key])
+                                      records = [key],
+                                      node = self.chash.lookup(key))
 
         if records and records[0] == RES_OK:
             return 0;
@@ -165,7 +177,8 @@ class ShardcacheClient:
 
     def evict(self, key):
         records = self.__send_message(message = MSG_EVI,
-                                      records = [key])
+                                      records = [key],
+                                      node = self.chash.lookup(key))
 
         if records and records[0] == RES_OK:
             return 0;
