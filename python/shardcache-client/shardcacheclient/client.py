@@ -93,10 +93,7 @@ class ShardcacheClient:
                         raise Exception('the \'' + m + '\' member is mandatory in the node structure')
             self.nodes = hosts
 
-        chash_nodes = []
-        for node in self.nodes:
-            chash_nodes.append(node['label'])
-        self.chash = CHash(chash_nodes, 200)
+        self.chash = CHash([ node['label'] for node in self.nodes], 200)
         random.seed()
 
     def get(self, key):
