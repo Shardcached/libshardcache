@@ -51,6 +51,21 @@ def chunkize(buf):
     yield chr(0)
     yield chr(0)
 
+def parse_hosts_string(hosts):
+    nodes = []
+    node_strings = hosts.split(',')
+    for ns in node_strings:
+        node_info = ns.split(':')
+        if len(node_info) < 3:
+            # bad node string
+            return None
+
+        nodes.append({ 'label': node_info[0], 'address':node_info[1], 'port':int(node_info[2]) })
+    
+    return nodes
+
+
+
 class ShardcacheClient:
     "Simple Python client for shardcache"
 
@@ -77,19 +92,6 @@ class ShardcacheClient:
                         raise Exception('the \'' + m + '\' member is mandatory in the node structure')
             self.nodes = hosts
         random.seed()
-
-    def _parse_hosts_string(self, hosts):
-        nodes = []
-        node_strings = hosts.split(',')
-        for ns in node_strings:
-            node_info = ns.split(':')
-            if len(node_info) < 3:
-                # bad node string
-                return None
-
-            nodes.append({ 'label': node_info[0], 'address':node_info[1], 'port':int(node_info[2]) })
-        
-        return nodes
 
     def get(self, key):
         records = self._send_message(message = MSG_GET,

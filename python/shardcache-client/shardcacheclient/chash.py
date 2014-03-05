@@ -6,6 +6,8 @@ def leveldb_bloom_hash(key):
 
     b = [ ord(byte) for byte in bytes(key) ]
     size = len(key)
+    # XXX - masking to 0xFFFFFFFF is necessary to keep
+    #       the size integer size fixed to 32bits
     h = (seed ^ size * m) & 0xFFFFFFFF
 
     while size >= 4:
