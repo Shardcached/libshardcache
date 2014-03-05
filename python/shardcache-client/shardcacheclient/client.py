@@ -263,8 +263,8 @@ class ShardcacheClient:
         # response
         retcords = None
         # read until we have a full message
-        readable, writable, exceptions = select.select([conn], [], [], 0.5)
-        while readable:
+        while True:
+            readable, writable, exceptions = select.select([conn], [], [], 0.5)
             if readable[0] == conn:
                 data = conn.recv(1024)
                 # _process_input() will returns an array if it was able to process
@@ -278,7 +278,6 @@ class ShardcacheClient:
                 print >>sys.stderr, 'handling exception for', conn.getpeername()
                 break
 
-            readable = select.select([conn], [], [], 0.5)
 
         return records
 
@@ -348,8 +347,8 @@ class ShardcacheClient:
 
 
 if __name__ == '__main__':
-    #shard = ShardcacheClient('peer1:ln.xant.net:4443', 'default')
     shard = ShardcacheClient([ { 'label':'peer1', 'address':'ln.xant.net', 'port':4443 },
+                               { 'label':'peer2', 'address':'162.219.6.96', 'port':4445 },
                                { 'label':'peer3', 'address':'mail.xant.net', 'port':4446 },
                              ], 'default')
     print shard.get('b.o.txt')
