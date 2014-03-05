@@ -454,10 +454,10 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     ht_set(cache->hash, (void *)key, len, obj, sizeof(arc_object_t));
 
     /* New objects are always moved to the MRU list. */
+    MUTEX_UNLOCK(&cache->lock);
     if (arc_move(cache, obj, &cache->mru) == 0) {
         *valuep = obj->ptr;
         MUTEX_UNLOCK(&obj->lock);
-        MUTEX_UNLOCK(&cache->lock);
         // the object is retained, the caller must call
         // arc_release_resource(obj) to release it
         return obj;
@@ -465,13 +465,14 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
         release_ref(cache->refcnt, obj->node);
     }
 
+    MUTEX_LOCK(&cache->lock);
     // failed to add the object to the cache, probably the key doesn't
     // exist in the storage
     ht_delete(cache->hash, (void *)key, len, NULL, NULL);
     MUTEX_UNLOCK(&obj->lock);
+    MUTEX_UNLOCK(&cache->lock);
     release_ref(cache->refcnt, obj->node);
 
-    MUTEX_UNLOCK(&cache->lock);
 
     return NULL;
 }
