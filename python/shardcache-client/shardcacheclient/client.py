@@ -377,9 +377,12 @@ if __name__ == '__main__':
                              ], 'default')
     print shard.get('b.o.txt')
     for n in shard.stats():
-        if n.get('node', None):
+        node = n.get('node', None)
+        if node:
             print '*** '+ n['node'] + ' ***'
             print n['stats']
+        else:
+            print '*** Empty element in stats array ***'
 
     print shard.offset('b.o.txt', 12, 20)
 
