@@ -104,7 +104,7 @@ class ShardcacheClient:
                                      records = [key],
                                      node = self.chash.lookup(key))
         if records:
-            return ''.join(records[0])
+            return records[0]
 
         return None
 
@@ -117,7 +117,7 @@ class ShardcacheClient:
                                      records = input_records,
                                      node = self.chash.lookup(key))
         if records:
-            return ''.join(records[0])
+            return records[0]
 
         return None
 
@@ -126,18 +126,34 @@ class ShardcacheClient:
         if node:
             records = self._send_message(message = MSG_STS, node = node)
             if records:
-                return ''.join(records[0])
+                return records[0]
         else:
             stats = []
             for node in self.nodes:
                 node_stats = { }
                 records = self._send_message(message = MSG_STS, node = node['label'])
-                node_stats = { 'node': node['label'], 'stats': ''.join(records[0]) } if records else { }
+                node_stats = { 'node': node['label'], 'stats': records[0] } if records else { }
                 stats.append(node_stats)
 
             return stats
 
         return None
+
+    def check(self, node=None):
+        if node:
+            records = self._send_message(message = MSG_CHK, node = node)
+            if records and records[0] == RES_OK:
+                return True
+            return False
+
+        statuses = []
+        for node in self.nodes:
+            records = self._send_message(message = MSG_CHK, node = node['label'])
+            status = True
+            if not records or records[0] != RES_OK:
+                status = False
+            statuses.append({ 'node':node['label'], 'status':status })
+        return statuses
  
     def set(self, key, value, expire=None):
         input_records = [key, value]
@@ -148,9 +164,9 @@ class ShardcacheClient:
                                      node = self.chash.lookup(key))
 
         if records and records[0] == RES_OK:
-            return 0;
+            return True;
 
-        return -1
+        return False
 
     def add(self, key, value, expire=None):
         input_records = [key, value]
@@ -160,10 +176,10 @@ class ShardcacheClient:
                                      records = input_records,
                                      node = self.chash.lookup(key))
 
-        if records:
-            return ord(records[0])
+        if records and records[0] == RES_OK:
+            return True
 
-        return -1
+        return False 
 
     def delete(self, key):
         records = self.__send_message(message = MSG_DEL,
@@ -171,9 +187,9 @@ class ShardcacheClient:
                                       node = self.chash.lookup(key))
 
         if records and records[0] == RES_OK:
-            return 0;
+            return True;
 
-        return -1
+        return False
 
     def evict(self, key):
         records = self.__send_message(message = MSG_EVI,
@@ -181,9 +197,9 @@ class ShardcacheClient:
                                       node = self.chash.lookup(key))
 
         if records and records[0] == RES_OK:
-            return 0;
+            return True;
 
-        return -1
+        return False 
 
     def _get_connection(self, host, port):
         host_key = host + ":" + str(port)
@@ -253,11 +269,17 @@ class ShardcacheClient:
         conn = self._get_connection(host, port)
 
         if not conn:
-            print >>sys.stderr, 'Can\'t obtain a valid socket to ' + self.host + ':' + str(self.port)
+            print >>sys.stderr, 'Can\'t obtain a valid socket to ' + host + ':' + str(port)
             return None
 
         conn.setblocking(1)
-        conn.sendall(packetbuf)
+
+        try:
+            conn.sendall(packetbuf)
+        except Exception, e:
+            print >>sys.stderr, 'Can\'t send data to %s:%d. Exception type is %s' % (host, int(port), `e`)
+            return None
+
         conn.setblocking(0)
 
         # response
@@ -265,6 +287,8 @@ class ShardcacheClient:
         # read until we have a full message
         while True:
             readable, writable, exceptions = select.select([conn], [], [], 0.5)
+            if not readable:
+                break
             if readable[0] == conn:
                 data = conn.recv(1024)
                 # _process_input() will returns an array if it was able to process
@@ -323,7 +347,7 @@ class ShardcacheClient:
                 chunk_size = struct.unpack('>H', data[offset:offset+2])[0]
                 offset += 2
 
-            records.append(record)
+            records.append(''.join(record))
 
             sep = data[offset]
             offset += 1
@@ -353,8 +377,12 @@ if __name__ == '__main__':
                              ], 'default')
     print shard.get('b.o.txt')
     for n in shard.stats():
-        print '*** '+ n['node'] + ' ***'
-        print n['stats']
+        if n.get('node', None):
+            print '*** '+ n['node'] + ' ***'
+            print n['stats']
 
     print shard.offset('b.o.txt', 12, 20)
+
+    for s in shard.check():
+        print '*** '+ s['node'] + ' ' + ('OK' if s['status'] else 'NOT OK') + ' ***'
 
