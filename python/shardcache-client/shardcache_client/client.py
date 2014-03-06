@@ -89,7 +89,7 @@ class ShardcacheClient:
         self.connections = { }
         self.input_buffer = []
         if type(hosts) == str:
-            self.nodes = self._parse_hosts_string(hosts)
+            self.nodes = parse_hosts_string(hosts)
             if not self.nodes:
                 raise Exception('Can\'t parse the hosts string ' + hosts)
         elif type(hosts) == list:
