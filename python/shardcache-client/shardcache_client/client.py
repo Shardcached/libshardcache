@@ -8,6 +8,7 @@ import socket
 import struct
 import random
 import sys
+from chash import CHash
 from siphash import SipHash
 
 MSG_GET    = chr(0x01)
@@ -51,6 +52,30 @@ def chunkize(buf):
     yield chr(0)
     yield chr(0)
 
+def parse_hosts_string(hosts):
+    nodes = []
+    node_strings = hosts.split(',')
+    for ns in node_strings:
+        node_info = ns.split(':')
+        if len(node_info) < 3:
+            # bad node string
+            return None
+
+        nodes.append({ 'label': node_info[0], 'address':node_info[1], 'port':int(node_info[2]) })
+    
+    return nodes
+
+def validate_hosts_array(hosts):
+    for node in hosts:
+        if type(node) != dict:
+            raise Exception('Node records in the hosts array must be dictionaries!')
+        members = ['label', 'address', 'port']
+        for m in members:
+            if not node.get(m, None):
+                raise Exception('the \'' + m + '\' member is mandatory in the node structure ' + str(node))
+
+
+
 class ShardcacheClient:
     "Simple Python client for shardcache"
 
@@ -68,36 +93,18 @@ class ShardcacheClient:
             if not self.nodes:
                 raise Exception('Can\'t parse the hosts string ' + hosts)
         elif type(hosts) == list:
-            for node in hosts:
-                if type(node) != dict:
-                    raise Exception('Node records in the hosts array must be dictionaries!')
-                members = ['label', 'address', 'port']
-                for m in members:
-                    if not node.get(m, None):
-                        raise Exception('the \'' + m + '\' member is mandatory in the node structure')
+            validate_hosts_array(hosts)
             self.nodes = hosts
+
+        self.chash = CHash([ node['label'] for node in self.nodes ], 200)
         random.seed()
-
-    def _parse_hosts_string(self, hosts):
-        nodes = []
-        node_strings = hosts.split(',')
-        for ns in node_strings:
-            node_info = ns.split(':')
-            if len(node_info) < 3:
-                # bad node string
-                return None
-
-            nodes.append({ 'label': node_info[0],
-                           'address':node_info[1],
-                           'port':int(node_info[2]) })
-        
-        return nodes
 
     def get(self, key):
         records = self._send_message(message = MSG_GET,
-                                     records = [key])
+                                     records = [key],
+                                     node = self.chash.lookup(key))
         if records:
-            return ''.join(records[0])
+            return records[0]
 
         return None
 
@@ -105,10 +112,12 @@ class ShardcacheClient:
         input_records = [key, struct.pack('!L', offset)]
         if length > 0:
             input_records.append(struct.pack('!L', length))
+
         records = self._send_message(message = MSG_OFX,
-                                     records = input_records)
+                                     records = input_records,
+                                     node = self.chash.lookup(key))
         if records:
-            return ''.join(records[0])
+            return records[0]
 
         return None
 
@@ -117,60 +126,80 @@ class ShardcacheClient:
         if node:
             records = self._send_message(message = MSG_STS, node = node)
             if records:
-                return ''.join(records[0])
+                return records[0]
         else:
             stats = []
             for node in self.nodes:
                 node_stats = { }
                 records = self._send_message(message = MSG_STS, node = node['label'])
-                node_stats = { 'node': node['label'], 'stats': ''.join(records[0]) } if records else { }
+                node_stats = { 'node': node['label'], 'stats': records[0] } if records else { }
                 stats.append(node_stats)
 
             return stats
 
         return None
+
+    def check(self, node=None):
+        if node:
+            records = self._send_message(message = MSG_CHK, node = node)
+            if records and records[0] == RES_OK:
+                return True
+            return False
+
+        statuses = []
+        for node in self.nodes:
+            records = self._send_message(message = MSG_CHK, node = node['label'])
+            status = True
+            if not records or records[0] != RES_OK:
+                status = False
+            statuses.append({ 'node':node['label'], 'status':status })
+        return statuses
  
     def set(self, key, value, expire=None):
         input_records = [key, value]
         if expire:
             input_records.append(struct.pack('!L', expire))
         records = self._send_message(message = MSG_SET,
-                                     records = input_records)
+                                     records = input_records,
+                                     node = self.chash.lookup(key))
 
         if records and records[0] == RES_OK:
-            return 0;
+            return True;
 
-        return -1
+        return False
 
     def add(self, key, value, expire=None):
         input_records = [key, value]
         if expire:
             input_records.append(struct.pack('!L', expire))
         records = self._send_message(message = MSG_ADD,
-                                     records = input_records)
+                                     records = input_records,
+                                     node = self.chash.lookup(key))
 
-        if records:
-            return ord(records[0])
+        if records and records[0] == RES_OK:
+            return True
 
-        return -1
+        return False 
 
     def delete(self, key):
         records = self.__send_message(message = MSG_DEL,
-                                      records = [key])
+                                      records = [key],
+                                      node = self.chash.lookup(key))
 
         if records and records[0] == RES_OK:
-            return 0;
+            return True;
 
-        return -1
+        return False
 
     def evict(self, key):
         records = self.__send_message(message = MSG_EVI,
-                                      records = [key])
+                                      records = [key],
+                                      node = self.chash.lookup(key))
 
         if records and records[0] == RES_OK:
-            return 0;
+            return True;
 
-        return -1
+        return False 
 
     def _get_connection(self, host, port):
         host_key = host + ":" + str(port)
@@ -240,18 +269,26 @@ class ShardcacheClient:
         conn = self._get_connection(host, port)
 
         if not conn:
-            print >>sys.stderr, 'Can\'t obtain a valid socket to ' + self.host + ':' + str(self.port)
+            print >>sys.stderr, 'Can\'t obtain a valid socket to ' + host + ':' + str(port)
             return None
 
         conn.setblocking(1)
-        conn.sendall(packetbuf)
+
+        try:
+            conn.sendall(packetbuf)
+        except Exception, e:
+            print >>sys.stderr, 'Can\'t send data to %s:%d. Exception type is %s' % (host, int(port), `e`)
+            return None
+
         conn.setblocking(0)
 
         # response
         retcords = None
         # read until we have a full message
-        readable, writable, exceptions = select.select([conn], [], [], 0.5)
-        while readable:
+        while True:
+            readable, writable, exceptions = select.select([conn], [], [], 0.5)
+            if not readable:
+                break
             if readable[0] == conn:
                 data = conn.recv(1024)
                 # _process_input() will returns an array if it was able to process
@@ -265,16 +302,17 @@ class ShardcacheClient:
                 print >>sys.stderr, 'handling exception for', conn.getpeername()
                 break
 
-            readable = select.select([conn], [], [], 0.5)
 
         return records
 
 
-    def _process_input(self, data):
-        self.input_buffer.extend(data);
+    def _process_input(self, chunk):
+        self.input_buffer.extend(chunk);
         if len(self.input_buffer) < 8:
             return None
 
+        data = ''.join(self.input_buffer)
+        
         if data[:3] != 'shc':
             print "Bad magic " + repr(data[:3])
 
@@ -299,6 +337,8 @@ class ShardcacheClient:
 
         records = []
         while True:
+            if len(data) < 2:
+                return None
             chunk_size = struct.unpack('>H', data[offset:offset+2])[0]
             offset += 2
 
@@ -311,7 +351,7 @@ class ShardcacheClient:
                 chunk_size = struct.unpack('>H', data[offset:offset+2])[0]
                 offset += 2
 
-            records.append(record)
+            records.append(''.join(record))
 
             sep = data[offset]
             offset += 1
@@ -335,14 +375,18 @@ class ShardcacheClient:
 
 
 if __name__ == '__main__':
-    #shard = ShardcacheClient('peer1:ln.xant.net:4443', 'default')
-    shard = ShardcacheClient([ { 'label':'peer1', 'address':'ln.xant.net', 'port':4443 },
-                               { 'label':'peer3', 'address':'mail.xant.net', 'port':4446 },
-                             ], 'default')
+    shard = ShardcacheClient([ { 'label':'peer1', 'address':'localhost', 'port':4444 } ])
     print shard.get('b.o.txt')
     for n in shard.stats():
-        print '*** '+ n['node'] + ' ***'
-        print n['stats']
+        node = n.get('node', None)
+        if node:
+            print '*** '+ n['node'] + ' ***'
+            print n['stats']
+        else:
+            print '*** Empty element in stats array ***'
 
     print shard.offset('b.o.txt', 12, 20)
+
+    for s in shard.check():
+        print '*** '+ s['node'] + ' ' + ('OK' if s['status'] else 'NOT OK') + ' ***'
 
