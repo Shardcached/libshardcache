@@ -274,18 +274,15 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 if (obj_state) {
                     /* The object is being removed from the cache, destroy it. */
                     ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-                    MUTEX_UNLOCK(&obj->lock);
                     release_ref(cache->refcnt, obj->node);
-                } else {
-                    MUTEX_UNLOCK(&obj->lock);
                 }
+                MUTEX_UNLOCK(&obj->lock);
                 return -1;
             } else if (size >= cache->c) {
                 // the object doesn't fit in the cache, let's return it
                 // to the getter without (re)adding it to the cache 
-                MUTEX_UNLOCK(&obj->lock);
                 release_ref(cache->refcnt, obj->node);
-                return 0;
+                MUTEX_LOCK(&cache->lock);
             } else {
                 obj->size = sizeof(arc_object_t) + obj->klen + size;
                 MUTEX_LOCK(&cache->lock);
