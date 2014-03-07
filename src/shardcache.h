@@ -16,7 +16,7 @@
 #include <syslog.h>
 
 
-#define SHARDCACHE_PORT_DEFAULT 9874
+#define SHARDCACHE_PORT_DEFAULT 4444
 #define SHARDCACHE_TCP_TIMEOUT_DEFAULT 30000 // 30 secs
 
 extern const char *LIBSHARDCACHE_VERSION;
