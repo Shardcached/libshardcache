@@ -53,6 +53,12 @@ static int check_address_string(char *str)
     return 0;
 }
 
+int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value)
+{
+    return connections_pool_tcp_timeout(c->connections, new_value);
+}
+
+
 shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_nodes, char *auth)
 {
     int i;
@@ -61,12 +67,11 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_
         return NULL;
     }
     shardcache_client_t *c = calloc(1, sizeof(shardcache_client_t));
-
     size_t shard_lens[num_nodes];
     char *shard_names[num_nodes];
 
     c->shards = malloc(sizeof(shardcache_node_t) * num_nodes);
-    c->connections = connections_pool_create(30);
+    c->connections = connections_pool_create(SHARDCACHE_TCP_TIMEOUT_DEFAULT, 1);
     memcpy(c->shards, nodes, sizeof(shardcache_node_t) * num_nodes);
     for (i = 0; i < num_nodes; i++) {
         if (check_address_string(c->shards[i].address) != 0) {

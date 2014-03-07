@@ -26,6 +26,18 @@ typedef struct shardcache_client_s shardcache_client_t;
 shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_nodes, char *auth);
 
 /**
+ * @brief Get and/or set the timeout used when establishing new tcp connections or
+ *        reading/writing from/to existing ones
+ * @param c         A valid pointer to a shardcache_client_t structure
+ * @param new_value If greater or equal to 0 the new value will be set.
+ *                  Otherwise the old value will be queried but no new value
+ *                  will be set
+ * @return The previously configured tcp timeout
+ *         (still valid if no new value has been provided)
+ */
+int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value);
+
+/**
  * @brief Get the value for a key
  * @param c       A valid pointer to a shardcache_client_t structure
  * @param key     A valid pointer to the key
