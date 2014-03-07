@@ -17,6 +17,8 @@
 #include "messaging.h"
 #include "connections.h"
 #include "shardcache.h"
+#include "atomic.h"
+
 #include <iomux.h>
 
 #define DEBUG_DUMP_MAXSIZE 128
@@ -40,6 +42,19 @@ struct __async_read_ctx_s {
     sip_hash *shash;
     int blocking;
 };
+
+static int _tcp_timeout = SHARDCACHE_TCP_TIMEOUT_DEFAULT;
+
+int
+global_tcp_timeout(int timeout)
+{
+    int old_value = ATOMIC_READ(_tcp_timeout);
+
+    if (timeout >= 0)
+        ATOMIC_SET(_tcp_timeout, timeout);
+
+    return old_value;
+}
 
 int
 async_read_context_state(async_read_ctx_t *ctx)
@@ -456,7 +471,7 @@ fetch_from_peer_async(char *peer,
     int rc = -1;
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -903,7 +918,7 @@ _delete_from_peer_internal(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -984,7 +999,7 @@ _send_to_peer_internal(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -1100,7 +1115,7 @@ fetch_from_peer(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -1148,7 +1163,7 @@ offset_from_peer(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -1208,7 +1223,7 @@ exists_on_peer(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -1272,7 +1287,7 @@ touch_on_peer(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -1328,7 +1343,7 @@ stats_from_peer(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -1368,7 +1383,7 @@ check_peer(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -1404,7 +1419,7 @@ index_from_peer(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -1461,7 +1476,7 @@ migrate_peer(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
@@ -1507,7 +1522,7 @@ abort_migrate_peer(char *peer,
 {
     int should_close = 0;
     if (fd < 0) {
-        fd = connect_to_peer(peer, 30);
+        fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 

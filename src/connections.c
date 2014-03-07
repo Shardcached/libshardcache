@@ -192,7 +192,7 @@ int read_socket(int fd, char *buf, int len) {
  * \brief Open a TCP connection to a client.
  * \param host hostname
  * \param port port number
- * \param timeout timeout for connection (send and receive)
+ * \param timeout timeout in milliseconds for connection (send and receive)
  * \returns file handle on success, or -1 otherwise (errno is set).
  *
  * \note Examples for valid host and port combinations: ("test.com", 1099),
@@ -204,7 +204,9 @@ open_connection(const char *host, int port, unsigned int timeout)
     int val = 1;
     struct sockaddr_in sockaddr;
     int sock;
-    struct timeval tv = { timeout, 0 };
+    int secs = timeout/1000;
+    int msecs = (timeout%1000) * 1000; // struct timeval wants microsecs
+    struct timeval tv = { secs, msecs * 1000 };
 
     errno = EINVAL;
     if (host == NULL || !*host || port == 0)

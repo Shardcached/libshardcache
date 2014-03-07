@@ -72,6 +72,8 @@ typedef struct {
     size_t l;
 } message_record_t;
 
+int global_tcp_timeout(int tcp_timeout);
+
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr);
 
 int write_message(int fd,
