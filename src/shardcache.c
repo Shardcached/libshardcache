@@ -718,7 +718,7 @@ shardcache_get(shardcache_t *cache,
     if (shardcache_log_level() >= LOG_DEBUG)
         KEY2STR(key, klen, keystr, sizeof(keystr));
 
-    SHC_DEBUG("Getting value for key: %s", keystr);
+    SHC_DEBUG2("Getting value for key: %s", keystr);
 
     int rc = shardcache_get_async(cache, key, klen, shardcache_get_helper, &arg);
 
@@ -727,7 +727,7 @@ shardcache_get(shardcache_t *cache,
 
          if (arg.stat != 0) {
              fbuf_destroy(&arg.data);
-             SHC_DEBUG("Error trying to get key: %s", keystr);
+             SHC_ERROR("Error trying to get key: %s", keystr);
              return NULL;
          }
 
@@ -894,9 +894,9 @@ shardcache_set_internal(shardcache_t *cache,
     if (is_mine == 1)
     {
         int rc = -1;
-        SHC_DEBUG("Storing value %s (%d) for key %s",
-                  shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
-                  (int)vlen, keystr);
+        SHC_DEBUG2("Storing value %s (%d) for key %s",
+                   shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
+                   (int)vlen, keystr);
 
         volatile_object_t *prev = NULL;
         if (!cache->use_persistent_storage || expire)
@@ -917,7 +917,7 @@ shardcache_set_internal(shardcache_t *cache,
             obj->dlen = vlen;
             obj->expire = expire ? time(NULL) + expire : 0;
 
-            SHC_DEBUG("Setting volatile item %s to expire %d (now: %d)", 
+            SHC_DEBUG2("Setting volatile item %s to expire %d (now: %d)", 
                 keystr, obj->expire, (int)time(NULL));
 
             void *prev_ptr = NULL;
@@ -1313,7 +1313,7 @@ migrate(void *priv)
 
             char ikeystr[1024];
             KEY2STR(item->key, item->klen, ikeystr, sizeof(ikeystr));
-            SHC_DEBUG("removed item %s", ikeystr);
+            SHC_DEBUG2("removed item %s", ikeystr);
 
             item = shift_value(to_delete);
         }
