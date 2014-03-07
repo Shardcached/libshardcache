@@ -342,7 +342,7 @@ if found, an empty value otherwise
 Responses to 'SET', 'DEL' and 'EVI' requests will return either the
 <OK> response byte or the <ERR> one depending on the status of the operation
 
-The actual implementation serves only one request per connection, so
-implementing the protocol you should expect the peer to close its socket
-just after serving the response (and it may close
-its reading part of the socket just after reading exactly one complete request)
+The actual implementation will try reusing connections so they won't be closed
+after serving a response. This should be taken into account when implementing
+the protocol so that data is passed up to the application as soon as a complete
+response is read
