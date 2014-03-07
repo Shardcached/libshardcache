@@ -625,6 +625,7 @@ shardcache_get_async(shardcache_t *cache,
         return -1;
     } else if (obj->complete) {
         cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
+        MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, res);
     } else {
         if (obj->dlen) // let's send what we have so far
@@ -640,12 +641,11 @@ shardcache_get_async(shardcache_t *cache,
         listener->cb = shardcache_get_async_helper;
         listener->priv = arg;
         push_value(obj->listeners, listener);
-   }
-
-    MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(&obj->lock);
+    }
 
     ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-               (uint32_t)arc_size(cache->arc));
+              (uint32_t)arc_size(cache->arc));
 
     return 0;
 }
