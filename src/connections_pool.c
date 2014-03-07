@@ -14,14 +14,16 @@
 struct __connections_pool_s {
     hashtable_t *table;
     int tcp_timeout;
+    int max_spare;
 };
 
 connections_pool_t *
-connections_pool_create(int tcp_timeout)
+connections_pool_create(int tcp_timeout, int max_spare)
 {
     connections_pool_t *cc = calloc(1, sizeof(connections_pool_t));
     cc->table = ht_create(128, 65535, (ht_free_item_callback_t)queue_destroy);
     cc->tcp_timeout = tcp_timeout;
+    cc->max_spare = max_spare;
     return cc;
 }
 
@@ -62,7 +64,8 @@ get_connection_queue(connections_pool_t *cc, char *addr)
     return connection_queue;
 }
 
-int connections_pool_get(connections_pool_t *cc, char *addr)
+int
+connections_pool_get(connections_pool_t *cc, char *addr)
 {
     queue_t *connection_queue = get_connection_queue(cc, addr);
     if (!connection_queue)
@@ -98,17 +101,23 @@ int connections_pool_get(connections_pool_t *cc, char *addr)
 }
 
 
-void connections_pool_add(connections_pool_t *cc, char *addr, int fd)
+void
+connections_pool_add(connections_pool_t *cc, char *addr, int fd)
 {
     queue_t *connection_queue = get_connection_queue(cc, addr);
     if (!connection_queue)
         return;
-    int *fdp = malloc(sizeof(int));
-    *fdp = fd;
-    queue_push_right(connection_queue, fdp);
+    if (queue_count(connection_queue) < ATOMIC_READ(cc->max_spare)) {
+        int *fdp = malloc(sizeof(int));
+        *fdp = fd;
+        queue_push_right(connection_queue, fdp);
+    } else {
+        close(fd);
+    }
 }
 
-int connections_pool_tcp_timeout(connections_pool_t *cc, int new_value)
+int
+connections_pool_tcp_timeout(connections_pool_t *cc, int new_value)
 {
     int old_value = ATOMIC_READ(cc->tcp_timeout);
 
@@ -117,3 +126,15 @@ int connections_pool_tcp_timeout(connections_pool_t *cc, int new_value)
 
     return old_value;
 }
+
+int
+connections_pool_max_spare(connections_pool_t *cc, int new_value)
+{
+    int old_value = ATOMIC_READ(cc->max_spare);
+
+    if (new_value >= 0)
+        ATOMIC_SET(cc->max_spare, new_value);
+
+    return old_value;
+}
+
