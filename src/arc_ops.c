@@ -386,6 +386,19 @@ arc_ops_destroy(void *item, void *priv)
 {
     cache_object_t *obj = (cache_object_t *)item;
 
+    MUTEX_LOCK(&obj->lock); // XXX - this is not really necessary
+    if (obj->listeners) {
+        // safety belts, just to ensure not leaking listeners by notifying them an error
+        // before relasing the object completely
+        // NOTE: there shouldn't ever be listeners here if the object is being released,
+        //       but in case of race conditions or bugs which would end up registering
+        //       listeners when they shouldn't, at least we notify back an error instead
+        //       of making them wait forever
+        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+        destroy_list(obj->listeners);
+    }
+    MUTEX_UNLOCK(&obj->lock);
+
     // no lock is necessary here ... if we are here
     // nobody is referencing us anymore
     if (obj->data) {
@@ -393,9 +406,6 @@ arc_ops_destroy(void *item, void *priv)
     }
     if (obj->key)
         free(obj->key);
-
-    if (obj->listeners)
-        destroy_list(obj->listeners);
 
     MUTEX_DESTROY(&obj->lock);
     free(obj);
