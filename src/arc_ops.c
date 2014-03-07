@@ -70,6 +70,7 @@ arc_ops_evict_object(shardcache_t *cache, cache_object_t *obj)
     obj->async = 0;
     obj->evict = 0;
     obj->drop = 0;
+    obj->evicted = 1;
     clear_list(obj->listeners);
 }
 
@@ -276,6 +277,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         return 0;
     }
 
+    obj->evicted = 0; // this object is not evicted anymore (if it eventually was)
     char node_name[1024];
     size_t node_len = sizeof(node_name);
     memset(node_name, 0, node_len);

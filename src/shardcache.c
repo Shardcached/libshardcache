@@ -618,7 +618,12 @@ shardcache_get_async(shardcache_t *cache,
 
     cache_object_t *obj = (cache_object_t *)obj_ptr;
     MUTEX_LOCK(&obj->lock);
-    if (obj->complete) {
+    if (obj->evicted) {
+        // if marked for eviction we don't want to return this object
+        MUTEX_UNLOCK(&obj->lock);
+        arc_release_resource(cache->arc, res);
+        return -1;
+    } else if (obj->complete) {
         cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
         arc_release_resource(cache->arc, res);
     } else {
