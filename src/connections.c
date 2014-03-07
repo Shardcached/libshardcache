@@ -193,6 +193,7 @@ int read_socket(int fd, char *buf, int len) {
  * \param host hostname
  * \param port port number
  * \param timeout timeout in milliseconds for connection (send and receive)
+ *        0 to use the system default
  * \returns file handle on success, or -1 otherwise (errno is set).
  *
  * \note Examples for valid host and port combinations: ("test.com", 1099),
