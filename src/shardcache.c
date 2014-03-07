@@ -418,7 +418,7 @@ shardcache_create(char *me,
     srand(time(NULL));
     cache->volatile_storage = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)destroy_volatile);
 
-    cache->connections_pool = connections_pool_create(cache->tcp_timeout);
+    cache->connections_pool = connections_pool_create(cache->tcp_timeout, num_workers + 1);
 
     cache->async_mux = iomux_create();
     iomux_set_threadsafe(cache->async_mux, 1);
