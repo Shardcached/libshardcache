@@ -283,7 +283,7 @@ class ShardcacheClient:
         conn.setblocking(0)
 
         # response
-        retcords = None
+        records = None
         # read until we have a full message
         while True:
             readable, writable, exceptions = select.select([conn], [], [], 0.5)
