@@ -71,13 +71,13 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 === Replica R1 on receiving at least N/2 PRE_ACCEPT_OK responses:
 
 1:   *IF* SEQ > GET_SEQ(ALL_RESPONSES)
-1.1:     COMMIT(K, SEQ, CMD, DATA)
+1.1:     COMMIT(K, SEQ, CMD, DATA) -> Short path, jump to the Commit phase (Phase 3)
 2:   *ELSE*
 2.1:     SEQ = MAX(SEQ, GET_SEQ(ALL_RESPONSES))
 2.2:     *IF* COMMITTED(SEQ)
-2.2.1:       REQUEST_VALUE(REPLICA(SEQ), K)
+2.2.1:       REQUEST_VALUE(REPLICA(SEQ), K) -> We are outdated, fetch the most updated data for K
 2.3:     *ELSE*
-2.3.1:       RUN_ACCEPT_PHASE(K, SEQ)
+2.3.1:       RUN_ACCEPT_PHASE(K, SEQ) -> Long path, use the Paxos-like protocol to obtain consensus
 
 ============= Phase 2: Paxos-Accept ==================
 
@@ -98,7 +98,7 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 1: COMMIT(K, SEQ)
 
 
-============= Phase 2: Commit ==================
+============= Phase 3: Commit ==================
 
 === Command leader R1 for key K
 
