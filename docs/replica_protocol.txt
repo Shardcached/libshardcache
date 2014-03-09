@@ -1,0 +1,127 @@
+* Data structures involved *
+typedef enum {
+    CMD_TYPE_SET,
+    CMD_TYPE_DEL,
+    CMD_TYPE_EVICT
+} replica_cmd_type_t;
+
+typedef struct {
+    replica_cmd_type_t type;
+    uint32_t seq;
+    void *value;
+    size_t vlen;
+} replica_cmd_t;
+
+typedef struct {
+    uint32_t ballot;
+    hashtable_t *commands; // key => cmd
+} replica_node_t;
+
+typedef struct {
+    sqlite3 *log;
+    hashtable_t *nodes; // label => replica_node_t  *
+} replica_t;
+
+--------------------------------------------------------------------------------------
+
+* Replica protocol extensions *
+
+PRE_ACCEPT:  <BALLOT><KEY><SEQ><CMD>
+PRE_ACCEPT_OK: <BALLOT><KEY><SEQ><CMD>
+
+--------------------------------------------------------------------------------------
+* Local log implementation*
+
+Implemented using an sqlite database with the following table
+
+CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd int, PRIMARY KEY(keyhash1, keyhash2))
+
+--------------------------------------------------------------------------------------
+
+* Pseudo code  (Based on EPAXOS but adapted/simplified for the specific usage in libshardcache) *
+
+============= Phase 1: Pre-Accept ==================
+
+=== Replica R1 receives a new set/del/evict request for key K:
+
+1: SEQ := LOAD_FROM_LOG(K)
+-- CRITICAL SECTION  --
+2: INTERFERING_SEQ := RUNNING_COMMANDS[R1..RN]{K}->SEQ || 0
+3: SEQ = MAX(SEQ, INTERFERING_SEQ)
+4: RUNNING_COMMANDS[R1]{K} = { SEQ: SEQ, CMD: CMD, DATA: DATA, STATUS: PRE_ACCEPTED }
+-- END OF CRITICAL SECTION --
+4: SEND_PRE_ACCEPT([ R2..RN ], ++LOCAL_BALLOT, K, SEQ)
+
+=== Any replica R receiving a PRE_ACCEPT(K, SEQ) from R1:
+
+1:   LOCAL_SEQ := LOAD_FROM_LOG(K)
+-- CRITICAL SECTION --
+2:   INTERFERING_SEQ := RUNNING_COMMANDS{R1..RN}{K}->{SEQ} || 0
+3:   MAX_SEQ = MAX(SEQ, LOCAL_SEQ, INTERFERING_SEQ)
+4:   *IF* MAX_SEQ == SEQ
+4.1:     RUNNING_COMMANDS{R1}{K} = { SEQ: SEQ, CMD: CMD, STATUS: PRE_ACCEPTED }
+5:   COMMITTED := (MAX_SEQ == LOCAL_SEQ) ? TRUE : FALSE
+-- END OF CRITICAL SECTION --
+4:   RETURN_PRE_ACCEPT_OK(R1, ++LOCAL_BALLOT, K, MAX_SEQ, COMMITTED)
+
+=== Replica R1 on receiving at least N/2 PRE_ACCEPT_OK responses:
+
+1:   *IF* SEQ > GET_SEQ(ALL_RESPONSES)
+1.1:     COMMIT(K, SEQ, CMD, DATA)
+2:   *ELSE*
+2.1:     SEQ = MAX(SEQ, GET_SEQ(ALL_RESPONSES))
+2.2:     *IF* COMMITTED(SEQ)
+2.2.1:       REQUEST_VALUE(REPLICA(SEQ), K)
+2.3:     *ELSE*
+2.3.1:       RUN_ACCEPT_PHASE(K, SEQ)
+
+============= Phase 2: Paxos-Accept ==================
+
+=== Accept phase - Command leader R1
+
+1:   RUNNING_COMMANDS{R1}{K}->{SEQ} = SEQ
+2:   RUNNING_COMMANDS{R1}{K}->{STATUS} = ACCEPTED
+3:   SEND_ACCEPT([ SUBSET(R2..RN, N/2) ], K, SEQ)
+
+=== Any replica R receiving an ACCEPT(K, SEQ) from R1
+
+1:   RUNNING_COMMANDS{R1}{K}->{SEQ} = SEQ
+2:   RUNNING_COMMANDS{R1}{K}->{STATUS} = ACCEPTED
+3:   RETURN_ACCEPT_OK(R1, K, SEQ)
+
+=== Command leader R1 on receiving at least N/2 ACCEPT_OK responses:
+
+1: COMMIT(K, SEQ)
+
+
+============= Phase 2: Commit ==================
+
+=== Command leader R1 for key K
+
+-- CRITICAL SECTION --
+1: EXECUTE_COMMAND(CMD, K, DATA)
+2: WRITE_TO_LOG(K, SEQ)
+3: RUNNING_COMMANDS{R1}{K} = NULL
+-- END OF CRITICAL SECTION --
+4: SEND_STATUS(client)
+5: SEND_COMMIT([ R2..RN ], K, SEQ, CMD, DATA)
+
+=== Any replica R on receiving a COMMIT(K, SEQ, CMD, DATA) message
+1: EXECUTE_COMMAND(CMD, K, DATA)
+2: WRITE_TO_LOG(K, SEQ)
+3: RUNNING_COMMANDS{R1}{K} = NULL
+-- END OF CRITICAL SECTION --
+
+--------------------------------------------------------------------------------------
+
+Recovery procedure for a failed replica: 
+
+1   Check the ReplicaLog for the highest ballot we know about
+2   Asks all the other replicas about their ballot
+3   Collect answers from all the replicas (with a timeout)
+4   *If* a majority of replicas answered
+4.1 Select the replica reporting the highest ballot among the answers
+4.2     GOTO 6
+5   *Else*
+5.1     GOTO 2
+6   Ask the selected replica for the entire log from our known ballot to the one it reported
