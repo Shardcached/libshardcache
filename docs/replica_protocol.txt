@@ -88,13 +88,32 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 
 === Any replica R receiving an ACCEPT(K, SEQ) from R1
 
-1:   RUNNING_COMMANDS{R1}{K}->{STATUS} = ACCEPTED
-2:   RETURN_ACCEPT_OK(R1, K, SEQ)
+-- CRITICAL SECTION--
+1:   OK = FALSE
+1:   *IF* SEQ >= RUNNING_COMMANDS{R}{K}->{SEQ}
+1.1:     RUNNING_COMMANDS{R}{K}->{SEQ} = SEQ
+1.2:     RUNNING_COMMANDS{R}{K}->{STATUS} = ACCEPTED
+1.3:     OK = TRUE
+-- END OF CRITICAL SECTION --
+2:   *IF* OK
+2.1:     RETURN_ACCEPT_OK(R1, K, SEQ)
+3:   *ELSE*
+4:       RETURN_ACCEPT_FAIL(R1, K, RUNNING_COMMANDS{R}{K}->{SEQ})
 
 === Command leader R1 on receiving at least N/2 ACCEPT_OK responses:
 
 1: COMMIT(K, SEQ)
 
+=== Command leader R1 on receiving at least N/2 + 1 ACCEPT_FAIL responses:
+
+1: SEQ = MAX(SEQ, GET_SEQ(ALL_RESPONSES))
+-- CRITICAL SECTION--
+// check if our status has been invalidated in the meanwhile by some further set
+1:   *IF* RUNNING_COMMANDS{R1}{K}->{STATUS} === ACCEPTED 
+1.1:     RUNNING_COMMANDS{R1}{K}->{SEQ} = SEQ + 1
+1.2:     RUN_ACCEPT_PHASE(SEQ) -> run the Paxos-like protocol again incrementing the seq
+2:   *ELSE*
+2.1:     ABORT()
 
 ============= Phase 3: Commit ==================
 
@@ -111,9 +130,11 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 === Any replica R on receiving a COMMIT(K, SEQ, CMD, DATA) message
 
 -- CRITICAL SECTION --
-1: EXECUTE_COMMAND(CMD, K, DATA)
-2: WRITE_TO_LOG(K, SEQ)
-3: RUNNING_COMMANDS{R1}{K} = NULL
+1:   *IF* RUNNING_COMMANDS{R1}{K}->SEQ >= SEQ
+1.2:   EXECUTE_COMMAND(CMD, K, DATA)
+1.3:   WRITE_TO_LOG(K, SEQ)
+3:   *IF* RUNNING_COMMANDS{R1}{K}->SEQ == SEQ
+3.1:     RUNNING_COMMANDS{R1}{K} = NULL
 -- END OF CRITICAL SECTION --
 
 --------------------------------------------------------------------------------------
