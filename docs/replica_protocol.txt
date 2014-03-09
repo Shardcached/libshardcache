@@ -50,7 +50,7 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 3: SEQ = MAX(SEQ, INTERFERING_SEQ)
 4: RUNNING_COMMANDS[R1]{K} = { SEQ: SEQ, CMD: CMD, DATA: DATA, STATUS: PRE_ACCEPTED }
 -- END OF CRITICAL SECTION --
-4: SEND_PRE_ACCEPT([ R2..RN ], ++LOCAL_BALLOT, K, SEQ)
+5: SEND_PRE_ACCEPT([ R2..RN ], ++LOCAL_BALLOT, K, SEQ)
 
 === Any replica R receiving a PRE_ACCEPT(K, SEQ) from R1:
 
@@ -62,7 +62,7 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 4.1:     RUNNING_COMMANDS{R1}{K} = { SEQ: SEQ, CMD: CMD, STATUS: PRE_ACCEPTED }
 5:   COMMITTED := (MAX_SEQ == LOCAL_SEQ) ? TRUE : FALSE
 -- END OF CRITICAL SECTION --
-4:   RETURN_PRE_ACCEPT_OK(R1, ++LOCAL_BALLOT, K, MAX_SEQ, COMMITTED)
+6:   RETURN_PRE_ACCEPT_OK(R1, ++LOCAL_BALLOT, K, MAX_SEQ, COMMITTED)
 
 === Replica R1 on receiving at least N/2 PRE_ACCEPT_OK responses:
 
@@ -107,6 +107,7 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 5: SEND_COMMIT([ R2..RN ], K, SEQ, CMD, DATA)
 
 === Any replica R on receiving a COMMIT(K, SEQ, CMD, DATA) message
+
 1: EXECUTE_COMMAND(CMD, K, DATA)
 2: WRITE_TO_LOG(K, SEQ)
 3: RUNNING_COMMANDS{R1}{K} = NULL
