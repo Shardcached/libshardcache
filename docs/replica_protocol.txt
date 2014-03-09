@@ -127,10 +127,9 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 
 === Any replica R on receiving a COMMIT(BALLOT, K, SEQ, CMD, DATA) message
 
+1:   EXECUTE_COMMAND(CMD, K, DATA)
+2:   WRITE_TO_LOG(K, SEQ)
 -- CRITICAL SECTION --
-1:   *IF* RUNNING_COMMANDS->K->SEQ >= SEQ
-1.2:   EXECUTE_COMMAND(CMD, K, DATA)
-1.3:   WRITE_TO_LOG(K, SEQ)
 3:   *IF* RUNNING_COMMANDS->K->SEQ == SEQ
 3.1:     RUNNING_COMMANDS->K = NULL
 -- END OF CRITICAL SECTION --
