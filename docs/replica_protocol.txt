@@ -26,8 +26,12 @@ typedef struct {
 
 * Replica protocol extensions *
 
-PRE_ACCEPT:  <BALLOT><KEY><SEQ><CMD>
-PRE_ACCEPT_OK: <BALLOT><KEY><SEQ><CMD>
+PRE_ACCEPT:    <BALLOT><KEY><SEQ>
+PRE_ACCEPT_OK: <BALLOT><KEY><SEQ>
+ACCEPT:        <BALLOT><KEY><SEQ>
+ACCEPT_OK:     <BALLOT><KEY><SEQ>
+COMMIT:        <BALLOT><KEY><SEQ><CMD><DATA>
+COMMIT_OK:     <BALLOT><KEY><SEQ>
 
 --------------------------------------------------------------------------------------
 * Local log implementation*
