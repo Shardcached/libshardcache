@@ -50,7 +50,7 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 3: SEQ = MAX(SEQ, INTERFERING_SEQ)
 4: RUNNING_COMMANDS->K = { SEQ: SEQ, CMD: CMD, DATA: DATA, STATUS: PRE_ACCEPTED }
 -- END OF CRITICAL SECTION --
-5: SEND_PRE_ACCEPT([ R2..RN ], ++LOCAL_BALLOT, K, SEQ)
+5: SEND_PRE_ACCEPT([ R2..RN ], K, SEQ)
 
 === Any replica R receiving a PRE_ACCEPT(BALLOT, K, SEQ) from R1:
 
@@ -62,29 +62,29 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 4.1:     RUNNING_COMMANDS->K = { SEQ: SEQ, CMD: CMD, STATUS: PRE_ACCEPTED }
 5:   COMMITTED := (MAX_SEQ == LOCAL_SEQ) ? TRUE : FALSE
 -- END OF CRITICAL SECTION --
-6:   RETURN_PRE_ACCEPT_OK(R1, BALLOT, K, MAX_SEQ, COMMITTED)
+6:   RETURN_PRE_ACCEPT_OK(R1, K, MAX_SEQ, COMMITTED)
 
 === Replica R1 on receiving at least N/2 PRE_ACCEPT_OK responses:
 
 1:   *IF* SEQ > GET_SEQ(ALL_RESPONSES)
-1.1:     COMMIT(K, SEQ, CMD, DATA) -> Short path, jump to the Commit phase (Phase 3)
+1.1:     COMMIT(++LOCAL_BALLOT, K, SEQ, CMD, DATA) -> Short path, jump to the Commit phase (Phase 3)
 2:   *ELSE*
 2.1:     SEQ = MAX(SEQ, GET_SEQ(ALL_RESPONSES))
 2.2:     *IF* COMMITTED(SEQ)
 2.2.1:       REQUEST_VALUE(REPLICA(SEQ), K) -> We are outdated, fetch the most updated data for K
 2.3:     *ELSE*
-2.3.1:       RUN_ACCEPT_PHASE(BALLOT, K, SEQ) -> Long path, use the Paxos-like protocol to obtain consensus
+2.3.1:       RUN_ACCEPT_PHASE(K, SEQ) -> Long path, use the Paxos-like protocol to obtain consensus
 
 ============= Phase 2: Paxos-Accept ==================
 
 === Accept phase - Command leader R1
 
-1:   RESULTS = SEND_ACCEPT([ SUBSET(R2..RN, N/2) ], BALLOT, K, SEQ)
+1:   RESULTS = SEND_ACCEPT([ SUBSET(R2..RN, N/2) ], ++LOCAL_BALLOT, K, SEQ)
 2:   *IF* OK(RESULTS) >= N/2
 -- CRITICAL SECTION --
 2.1:     *IF* SEQ == RUNNING_COMMANDS->K->SEQ
 2.1.1:       RUNNING_COMMANDS->K->STATUS = ACCEPTED
-2.1.2:       RETURN COMMIT(K, SEQ, CMD, DATA)
+2.1.2:       RETURN COMMIT(LOCA_BALLOT, K, SEQ, CMD, DATA)
 2.2:     *ELSE* // a new command has been pushed, this invalidates the current one
 2.2.1:       IGNORE(K, SEQ)
 2.2.2:       RETURN
@@ -113,7 +113,7 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 3:   *ELSE*
 4:       RETURN_ACCEPT(R1, BALLOT, FAIL, K, RUNNING_COMMANDS->K->SEQ)
 
-============= Phase 3: Commit ==================
+============= Phase 3: Commit(BALLOT) ==================
 
 === Command leader R1 for key K and seq SEQ
 
