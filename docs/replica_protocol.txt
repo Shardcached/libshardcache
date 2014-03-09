@@ -48,6 +48,10 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 1: SEQ := LOAD_FROM_LOG(K)
 2: INTERFERING_SEQ := RUNNING_COMMANDS->K->SEQ || 0
 3: SEQ = MAX(SEQ, INTERFERING_SEQ)
+// an eventually uncommitted command for K would be overwritten here
+// hence it will be ignored and will fail silently
+// (NOTE: in libshardcache we only care about the most recent command for a key 
+//        and not about the entire sequence of commands)
 4: RUNNING_COMMANDS->K = { SEQ: SEQ, CMD: CMD, DATA: DATA, STATUS: PRE_ACCEPTED }
 -- END OF CRITICAL SECTION --
 5: SEND_PRE_ACCEPT([ R2..RN ], K, SEQ)
