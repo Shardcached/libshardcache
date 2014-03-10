@@ -66,9 +66,9 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 4.1:     RUNNING_COMMANDS->K = { SEQ: SEQ, CMD: CMD, STATUS: PRE_ACCEPTED }
 5:   COMMITTED := (MAX_SEQ == LOCAL_SEQ) ? TRUE : FALSE
 -- END OF CRITICAL SECTION --
-6:   RETURN_PRE_ACCEPT_OK(R1, K, MAX_SEQ, COMMITTED)
+6:   RETURN_PRE_ACCEPT(R1, K, MAX_SEQ, COMMITTED)
 
-=== Replica R1 on receiving at least N/2 PRE_ACCEPT_OK responses:
+=== Replica R1 on receiving at least N/2 PRE_ACCEPT responses:
 
 1:   IF SEQ > GET_SEQ(ALL_RESPONSES):
 1.1:     COMMIT(++LOCAL_BALLOT, K, SEQ, CMD, DATA) -> Short path, jump to the Commit phase (Phase 3)
@@ -131,11 +131,13 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 
 === Any replica R on receiving a COMMIT(BALLOT, K, SEQ, CMD, DATA) message
 
-1:   EXECUTE_COMMAND(CMD, K, DATA)
-2:   WRITE_TO_LOG(K, SEQ)
 -- CRITICAL SECTION --
-3:   IF RUNNING_COMMANDS->K->SEQ == SEQ:
-3.1:     RUNNING_COMMANDS->K = NULL
+1:   IF SEQ < RUNNING_COMMANDS->K->SEQ:
+1.1:     IGNORE(K, SEQ)
+1.2:     RETURN
+2:   EXECUTE_COMMAND(CMD, K, DATA)
+3:   WRITE_TO_LOG(K, SEQ)
+4:   RUNNING_COMMANDS->K = NULL
 -- END OF CRITICAL SECTION --
 
 --------------------------------------------------------------------------------------
