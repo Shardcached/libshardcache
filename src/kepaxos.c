@@ -2,6 +2,10 @@
 #include "sqlite3.h"
 #include "kepaxos.h"
 #include "atomic.h"
+#ifndef HAVE_UINT64_T
+#define HAVE_UINT64_T
+#endif
+#include <siphash.h>
 
 #include <stdio.h>
 #include <arpa/inet.h>
@@ -22,7 +26,6 @@ typedef enum {
     KEPAXOS_MSG_TYPE_ACCEPT,
     KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE,
     KEPAXOS_MSG_TYPE_COMMIT,
-    KEPAXOS_MSG_TYPE_COMMIT_RESPONSE
 } kepaxos_msg_type_t;
 
 typedef struct {
@@ -59,6 +62,7 @@ struct __kepaxos_s {
     pthread_mutex_t lock;
     uint32_t ballot;
     sqlite3_stmt *select_stmt;
+    sqlite3_stmt *insert_stmt;
 };
 
 static void kepaxos_command_destroy(kepaxos_cmd_t *c)
@@ -81,7 +85,7 @@ kepaxos_context_create(char *dbfile, char **peers, int num_peers, kepaxos_callba
         return NULL;
     }
 
-    const char *create_table_sql = "CREATE TABLE IF NOT EXISTS ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd int, PRIMARY KEY(keyhash1, keyhash2))";
+    const char *create_table_sql = "CREATE TABLE IF NOT EXISTS ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, PRIMARY KEY(keyhash1, keyhash2))";
     rc = sqlite3_exec(ke->log, create_table_sql, NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
         // TODO - Errors
@@ -93,6 +97,16 @@ kepaxos_context_create(char *dbfile, char **peers, int num_peers, kepaxos_callba
     snprintf(sql, sizeof(sql), "SELECT MAX(seq) FROM ReplicaLog WHERE keyhash1=? AND keyhash2=?");
     const char *tail = NULL;
     rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->select_stmt, &tail);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
+    snprintf(sql, sizeof(sql), "INSERT OR REPLACE INTO ReplicaLog VALUES(?, ?, ?, ?)");
+    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->insert_stmt, &tail);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
 
     ke->peers = malloc(sizeof(char *) * num_peers);
     int i;
@@ -113,6 +127,7 @@ void
 kepaxos_context_destroy(kepaxos_t *ke)
 {
     sqlite3_finalize(ke->select_stmt);
+    sqlite3_finalize(ke->insert_stmt);
     sqlite3_close(ke->log);
     int i;
     for (i = 0; i < ke->num_peers; i++)
@@ -123,16 +138,35 @@ kepaxos_context_destroy(kepaxos_t *ke)
     free(ke);
 }
 
+static void
+kepaxos_compute_key_hashes(void *key, size_t klen, uint64_t *hash1, uint64_t *hash2)
+{
+    unsigned char auth1[16] = "0123456789ABCDEF";
+    unsigned char auth2[16] = "ABCDEF0987654321";
+
+    *hash1 = sip_hash24(auth1, key, klen);
+    *hash2 = sip_hash24(auth2, key, klen);
+}
+
 static uint32_t
 last_seq_for_key(kepaxos_t *ke, void *key, size_t klen)
 {
+    uint64_t keyhash1, keyhash2;
     uint64_t seq = 0;
 
     int rc = sqlite3_reset(ke->select_stmt);
-    uint64_t keyhash1 = 0; // TODO : siphash(seed1, key)
-    uint64_t keyhash2 = 0; // TODO : siphash(seed2, key)
+
+    kepaxos_compute_key_hashes(key, klen, &keyhash1, &keyhash2);
+
     rc = sqlite3_bind_int64(ke->select_stmt, 1, keyhash1);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
     rc = sqlite3_bind_int64(ke->select_stmt, 2, keyhash2);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
 
     //int cnt = 0;
     rc = sqlite3_step(ke->select_stmt);
@@ -141,6 +175,47 @@ last_seq_for_key(kepaxos_t *ke, void *key, size_t klen)
 
     return seq;
 }
+
+static void
+set_last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint32_t ballot, uint32_t seq)
+{
+    uint64_t keyhash1, keyhash2;
+    uint64_t last_seq = 0;
+
+    int rc = sqlite3_reset(ke->insert_stmt);
+
+    kepaxos_compute_key_hashes(key, klen, &keyhash1, &keyhash2);
+
+    rc = sqlite3_bind_int(ke->insert_stmt, 1, ballot);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
+    rc = sqlite3_bind_int64(ke->insert_stmt, 2, keyhash1);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
+    rc = sqlite3_bind_int64(ke->insert_stmt, 3, keyhash2);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
+    rc = sqlite3_bind_int(ke->insert_stmt, 4, seq);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
+    rc = sqlite3_step(ke->insert_stmt);
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "Insert Failed! %d\n", rc);
+        return;
+    }
+
+
+ 
+}
+
 
 static size_t
 kepaxos_build_message(char **out,
@@ -251,11 +326,6 @@ kepaxos_send_pre_accept_response(kepaxos_t *ke,
     int rc = ke->callbacks.send(&peer, 1, (void *)msg, msglen);
     free(msg);
     return rc;
-}
-
-static void
-set_last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint32_t ballot, uint32_t seq)
-{
 }
 
 static int
@@ -551,3 +621,4 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
     }
     return 0;
 }
+
