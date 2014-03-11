@@ -40,105 +40,95 @@ CREATE TABLE ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, cmd in
 
 * Pseudo code  (Based on EPAXOS but adapted/simplified for the specific usage in libshardcache) *
 
+NOTE: Any access to the LOG and to RUNNING_COMMANDS must be serialized through a mutex
+      to ensure consistency (the same mutex should be used for access to both the datastructure)
+
 ============= Phase 1: Pre-Accept ==================
 
 === Replica R1 receives a new set/del/evict request for key K:
 
--- CRITICAL SECTION  --
-1: SEQ := LOAD_FROM_LOG(K)
-2: INTERFERING_SEQ := RUNNING_COMMANDS->K->SEQ || 0
-3: SEQ = MAX(SEQ, INTERFERING_SEQ)
+2: SEQ := LOAD_FROM_LOG(K)
+3: INTERFERING_SEQ := RUNNING_COMMANDS->K->SEQ || 0
+4: SEQ = MAX(SEQ, INTERFERING_SEQ)
 // an eventually uncommitted command for K would be overwritten here
 // hence it will be ignored and will fail silently
 // (NOTE: in libshardcache we only care about the most recent command for a key 
 //        and not about the entire sequence of commands)
-4: RUNNING_COMMANDS->K = { SEQ: SEQ, CMD: CMD, DATA: DATA, STATUS: PRE_ACCEPTED }
--- END OF CRITICAL SECTION --
-5: SEND_PRE_ACCEPT([ R2..RN ], K, SEQ)
+5: RUNNING_COMMANDS->K = { SEQ: SEQ, CMD: CMD, DATA: DATA, STATUS: PRE_ACCEPTED }
+7: SEND_PRE_ACCEPT([ R2..RN ], K, SEQ)
 
 === Any replica R receiving a PRE_ACCEPT(BALLOT, K, SEQ) from R1:
 
--- CRITICAL SECTION --
-1:   LOCAL_SEQ := LOAD_FROM_LOG(K)
-2:   INTERFERING_SEQ := MAX(RUNNING_COMMANDS->K->SEQ || 0)
-3:   MAX_SEQ = MAX(SEQ, LOCAL_SEQ, INTERFERING_SEQ)
-4:   IF MAX_SEQ == SEQ:
-4.1:     RUNNING_COMMANDS->K = { SEQ: SEQ, CMD: CMD, STATUS: PRE_ACCEPTED }
-5:   COMMITTED := (MAX_SEQ == LOCAL_SEQ) ? TRUE : FALSE
--- END OF CRITICAL SECTION --
-6:   RETURN_PRE_ACCEPT(R1, K, MAX_SEQ, COMMITTED)
+2:   LOCAL_SEQ := LOAD_FROM_LOG(K)
+3:   INTERFERING_SEQ := MAX(RUNNING_COMMANDS->K->SEQ || 0)
+4:   MAX_SEQ = MAX(SEQ, LOCAL_SEQ, INTERFERING_SEQ)
+5:   IF MAX_SEQ == SEQ:
+5.1:     RUNNING_COMMANDS->K = { SEQ: SEQ, CMD: CMD, STATUS: PRE_ACCEPTED }
+6:   COMMITTED := (MAX_SEQ == LOCAL_SEQ) ? TRUE : FALSE
+8:   RETURN_PRE_ACCEPT(R1, K, MAX_SEQ, COMMITTED)
 
 === Replica R1 on receiving at least N/2 PRE_ACCEPT responses:
 
-1:   IF SEQ > GET_SEQ(ALL_RESPONSES):
+1:   IF SEQ >= GET_SEQ(ALL_RESPONSES):
 1.1:     COMMIT(++LOCAL_BALLOT, K, SEQ, CMD, DATA) -> Short path, jump to the Commit phase (Phase 3)
 2:   ELSE:
 2.1:     SEQ = MAX(SEQ, GET_SEQ(ALL_RESPONSES))
 2.2:     IF COMMITTED(SEQ):
 2.2.1:       REQUEST_VALUE(REPLICA(SEQ), K) -> We are outdated, fetch the most updated data for K
 2.3:     ELSE:
-2.3.1:       RUN_ACCEPT_PHASE(K, SEQ) -> Long path, use the Paxos-like protocol to obtain consensus
+2.3.1:       RUN_ACCEPT_PHASE(++LOCAL_BALLOT, K, SEQ) -> Long path, use the Paxos-like protocol to obtain consensus
 
 ============= Phase 2: Paxos-Accept ==================
 
 === Accept phase - Command leader R1
 
-1:   RESULTS = SEND_ACCEPT([ SUBSET(R2..RN, N/2) ], ++LOCAL_BALLOT, K, SEQ)
-2:   IF OK(RESULTS) >= N/2:
--- CRITICAL SECTION --
-2.1:     IF SEQ == RUNNING_COMMANDS->K->SEQ:
-2.1.1:       RUNNING_COMMANDS->K->STATUS = ACCEPTED
-2.1.2:       RETURN COMMIT(LOCA_BALLOT, K, SEQ, CMD, DATA)
-2.2:     ELSE: // a new command has been pushed, this invalidates the current one
-2.2.1:       IGNORE(K, SEQ)
-2.2.2:       RETURN
--- END OF CRITICAL SECTION --
-3:   MAX_SEQ = MAX(SEQ, GET_SEQ(ALL_RESPONSES))
--- CRITICAL SECTION --
-// check if our status has been invalidated in the meanwhile by some further set
-4:   IF: RUNNING_COMMANDS->K->SEQ === SEQ 
-4.1:     RUNNING_COMMANDS->K->SEQ = MAX_SEQ + 1
-4.2:     GOTO 1 -> run the Paxos-like protocol again incrementing the seq
-5:   ELSE: // a new command has been pushed, this invalidates the current one
-5.1:     IGNORE(K, SEQ)
--- END OF CRITICAL SECTION --
+1:     SEND_ACCEPT([ SUBSET(R2..RN, N/2) ], ++LOCAL_BALLOT, K, SEQ)
 
 === Any replica R receiving an ACCEPT(BALLOT, K, SEQ) from R1
 
--- CRITICAL SECTION--
 1:   OK = FALSE
 1:   IF SEQ >= RUNNING_COMMANDS->K->SEQ:
 1.1:     RUNNING_COMMANDS->K->SEQ = SEQ
 1.2:     RUNNING_COMMANDS->K->STATUS = ACCEPTED
 1.3:     OK = TRUE
--- END OF CRITICAL SECTION --
 2:   IF OK:
 2.1:     RETURN_ACCEPT(R1, BALLOT, OK, K, SEQ)
 3:   ELSE:
 4:       RETURN_ACCEPT(R1, BALLOT, FAIL, K, RUNNING_COMMANDS->K->SEQ)
 
+=== Command leader R1 receives at least N/2 OK responses (accepting its seq and ballot)
+
+1:   RUNNING_COMMANDS->K->STATUS = ACCEPTED
+2:   COMMIT(LOCA_BALLOT, K, SEQ, CMD, DATA)
+
+=== Command leader R1 doesn't receive enough OK responses (too few or accepting an higher sequence or ballot)
+
+1:   MAX_SEQ = MAX(SEQ, GET_SEQ(ALL_RESPONSES))
+// check if our status has been invalidated in the meanwhile by some further set
+2:   IF: RUNNING_COMMANDS->K->SEQ <= MAX_SEQ 
+2.1:     RUNNING_COMMANDS->K->SEQ = MAX_SEQ + 1
+3:   RUN_ACCEPT_PHASE(++LOCAL_BALLOT, K, RUNNING_COMMANDS->K->SEQ) -> run the Paxos-like protocol again incrementing the seq
+
 ============= Phase 3: Commit(BALLOT) ==================
 
 === Command leader R1 for key K and seq SEQ
 
--- CRITICAL SECTION --
 1: EXECUTE_COMMAND(CMD, K, DATA)
 2: WRITE_TO_LOG(K, SEQ)
 3: RUNNING_COMMANDS->K = NULL
--- END OF CRITICAL SECTION --
 4: SEND_STATUS(client)
 5: SEND_COMMIT([ R2..RN ], BALLOT, K, SEQ, CMD, DATA)
 
 === Any replica R on receiving a COMMIT(BALLOT, K, SEQ, CMD, DATA) message
 
--- CRITICAL SECTION --
-1:   IF SEQ < RUNNING_COMMANDS->K->SEQ:
-1.1:     IGNORE(K, SEQ)
-1.2:     RETURN
-2:   EXECUTE_COMMAND(CMD, K, DATA)
-3:   WRITE_TO_LOG(K, SEQ)
-4:   RUNNING_COMMANDS->K = NULL
--- END OF CRITICAL SECTION --
+1:   LAST_RECORDED_SEQ := LOAD_FROM_LOG(K)
+2:   IF SEQ <= LAST_RECORDED_SEQ:
+2.1:     IGNORE(K, SEQ)
+2.2:     RETURN
+3:   EXECUTE_COMMAND(CMD, K, DATA)
+4:   WRITE_TO_LOG(K, SEQ)
+5:   IF SEQ == RUNNING_COMMANDS->K->SEQ:
+5.1:     RUNNING_COMMANDS->K = NULL
 
 --------------------------------------------------------------------------------------
 
