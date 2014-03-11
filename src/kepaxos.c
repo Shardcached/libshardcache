@@ -180,7 +180,7 @@ static void
 set_last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint32_t ballot, uint32_t seq)
 {
     uint64_t keyhash1, keyhash2;
-    uint64_t last_seq = 0;
+    //uint64_t last_seq = 0;
 
     int rc = sqlite3_reset(ke->insert_stmt);
 
