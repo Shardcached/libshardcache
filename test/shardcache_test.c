@@ -236,7 +236,7 @@ int main(int argc, char **argv)
     shardcache_client_destroy(client2);
 
     for (i = 0; i < num_nodes; i++) {
-        shardcache_destroy(nodes[i]);
+        shardcache_destroy(servers[i]);
     }
 
     free(nodes);
