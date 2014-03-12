@@ -83,8 +83,6 @@ shardcache_replica_create(shardcache_t *shc,
 
     replica->num_replicas = shardcache_node_num_addresses(node);
 
-    SPIN_INIT(&replica->view_lock);
-
     replica->shc = shc;
 
     // TODO - check wrkdir exists and is writeable
