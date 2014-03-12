@@ -17,6 +17,7 @@
 #include "serving.h"
 #include "counters.h"
 #include "atomic.h"
+#include "shardcache_replica.h"
 
 #define DEBUG_DUMP_MAXSIZE 128
 
@@ -40,6 +41,8 @@ struct __shardcache_s {
     char *me;   // a copy of the label for this node
                 // it won't be changed until destruction
     char *addr; // a copy of the local address used for shardcache communication
+
+    shardcache_replica_t *replica;
 
     shardcache_node_t **shards; // a copy of the shards array provided
                                // at construction time
@@ -151,4 +154,9 @@ int shardcache_test_migration_ownership(shardcache_t *cache,
 int shardcache_get_connection_for_peer(shardcache_t *cache, char *peer);
 
 void shardcache_release_connection_for_peer(shardcache_t *cache, char *peer, int fd);
+
+int shardcache_set_internal(shardcache_t *cache, void *key, size_t klen,
+        void *value, size_t vlen, time_t expire, int inx, int replica);
+
+int shardcache_del_internal(shardcache_t *cache, void *key, size_t klen, int replica);
 

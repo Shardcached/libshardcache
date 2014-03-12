@@ -6,6 +6,7 @@
 
 typedef enum {
     SHARDCACHE_REPLICA_OP_SET,
+    SHARDCACHE_REPLICA_OP_ADD,
     SHARDCACHE_REPLICA_OP_DELETE,
     SHARDCACHE_REPLICA_OP_EVICT,
     SHARDCACHE_REPLICA_OP_MIGRATION_BEGIN,
@@ -23,7 +24,13 @@ shardcache_replica_t *shardcache_replica_create(shardcache_t *shc,
                                                 char *wrkdir);
 
 void shardcache_replica_destroy(shardcache_replica_t *replica);
-int shardcache_replica_dispatch(shardcache_replica_operation_t op, void *key, size_t klen, void *data, size_t dlen);
+int shardcache_replica_dispatch(shardcache_replica_t *replica,
+                                shardcache_replica_operation_t op,
+                                void *key,
+                                size_t klen,
+                                void *data,
+                                size_t dlen,
+                                uint32_t expire);
 
 /*
 typedef enum {

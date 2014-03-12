@@ -6,6 +6,7 @@
 #define __CONSENSUS__H__
 
 #include <sys/types.h>
+#include <stdint.h>
 
 typedef struct __kepaxos_cmd_s kepaxos_cmd_t;
 typedef struct __kepaxos_s kepaxos_t;
@@ -27,12 +28,16 @@ typedef int (*kepaxos_commit_callback_t)(unsigned char type,
                                          size_t klen,
                                          void *data,
                                          size_t dlen,
+                                         uint32_t expire,
+                                         int leader,
                                          void *priv);
 
 
 typedef int (*kepaxos_recover_callback_t)(char *peer,
                                           void *key,
                                           size_t klen,
+                                          uint32_t seq,
+                                          int32_t prio,
                                           void *priv);
 
 typedef struct {
@@ -54,7 +59,9 @@ int kepaxos_run_command(kepaxos_t *ke,
                         unsigned char type,
                         void *key,
                         size_t klen,
-                        void *data);
+                        void *data,
+                        size_t dlen,
+                        uint32_t expire);
 
 int kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen);
 

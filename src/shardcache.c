@@ -21,6 +21,7 @@
 #include "arc_ops.h"
 #include "connections.h"
 #include "messaging.h"
+#include "shardcache_replica.h"
 
 const char *LIBSHARDCACHE_VERSION = "0.9.9";
 
@@ -509,7 +510,12 @@ shardcache_create(char *me,
         cache->shards[i] = shardcache_node_create(nodes[i]->label,
                                                   nodes[i]->address,
                                                   nodes[i]->num_replicas);
-        if (!cache->addr && strcmp(nodes[i]->label, me) == 0) {
+        if (strcmp(nodes[i]->label, me) == 0) {
+
+shardcache_replica_t *shardcache_replica_create(shardcache_t *shc,
+                                                shardcache_node_t *node,
+                                                char *me,
+                                                char *wrkdir);
             for (n = 0; n < nodes[i]->num_replicas; n++) {
                 int fd = open_socket(nodes[i]->address[n], 0);
                 if (fd >= 0) {
@@ -517,6 +523,8 @@ shardcache_create(char *me,
                 }
                close(fd); 
             }
+            if (nodes[i]->num_replicas > 1)
+                cache->replica = shardcache_replica_create(cache, cache->shards[i], cache->addr, NULL);
         }
     }
 
@@ -643,6 +651,9 @@ shardcache_destroy(shardcache_t *cache)
     pthread_join(cache->async_io_th, NULL);
     iomux_destroy(cache->async_mux);
     SHC_DEBUG2("Async i/o thread stopped");
+
+    if (cache->replica)
+        shardcache_replica_destroy(cache->replica);
 
     for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
         shardcache_counter_remove(cache->counters, cache->cnt[i].name);
@@ -1030,14 +1041,15 @@ shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
 }
 
 
-static int
+int
 shardcache_set_internal(shardcache_t *cache,
                          void *key,
                          size_t klen,
                          void *value,
                          size_t vlen,
                          time_t expire,
-                         int inx)
+                         int inx,
+                         int replica)
 {
     // if we are not the owner try propagating the command to the responsible peer
     
@@ -1080,7 +1092,7 @@ shardcache_set_internal(shardcache_t *cache,
             obj->data = malloc(vlen);
             memcpy(obj->data, value, vlen);
             obj->dlen = vlen;
-            obj->expire = expire ? time(NULL) + expire : 0;
+            obj->expire = expire;
 
             SHC_DEBUG2("Setting volatile item %s to expire %d (now: %d)", 
                 keystr, obj->expire, (int)time(NULL));
@@ -1106,7 +1118,8 @@ shardcache_set_internal(shardcache_t *cache,
                 }
                 destroy_volatile(prev); 
                 arc_remove(cache->arc, (const void *)key, klen);
-                shardcache_commence_eviction(cache, key, klen);
+                if (!replica)
+                    shardcache_commence_eviction(cache, key, klen);
             } else {
                 ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, vlen);
             }
@@ -1144,7 +1157,8 @@ shardcache_set_internal(shardcache_t *cache,
             rc = cache->storage.store(key, klen, value, vlen, cache->storage.priv);
 
             arc_remove(cache->arc, (const void *)key, klen);
-            shardcache_commence_eviction(cache, key, klen);
+            if (!replica)
+                shardcache_commence_eviction(cache, key, klen);
         }
         return rc;
     }
@@ -1173,8 +1187,8 @@ shardcache_set_internal(shardcache_t *cache,
 
         if (rc == 0) {
             arc_remove(cache->arc, (const void *)key, klen);
-
-            shardcache_commence_eviction(cache, key, klen);
+            if (!replica)
+                shardcache_commence_eviction(cache, key, klen);
         }
         return rc;
     }
@@ -1190,7 +1204,14 @@ shardcache_set_volatile(shardcache_t *cache,
                         size_t vlen,
                         time_t expire)
 {
-    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 0);
+    if (!key || !klen)
+        return -1;
+
+    time_t real_expire = expire ? time(NULL) + expire : 0;
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, real_expire);
+
+    return shardcache_set_internal(cache, key, klen, value, vlen, real_expire, 0, 0);
 }
 
 int
@@ -1201,7 +1222,14 @@ shardcache_add_volatile(shardcache_t *cache,
                         size_t vlen,
                         time_t expire)
 {
-    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 1);
+    if (!key || !klen)
+        return -1;
+
+    time_t real_expire = expire ? time(NULL) + expire : 0;
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, real_expire);
+
+    return shardcache_set_internal(cache, key, klen, value, vlen, real_expire, 1, 0);
 }
 
 int
@@ -1211,7 +1239,13 @@ shardcache_set(shardcache_t *cache,
                void *value,
                size_t vlen)
 {
-    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0);
+    if (!key || !klen)
+        return -1;
+
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, 0);
+
+    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 0);
 }
 
 int
@@ -1221,11 +1255,17 @@ shardcache_add(shardcache_t *cache,
                void *value,
                size_t vlen)
 {
-    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 1);
+    if (!key || !klen)
+        return -1;
+
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, 0);
+
+    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 1, 0);
 }
 
 int
-shardcache_del(shardcache_t *cache, void *key, size_t klen)
+shardcache_del_internal(shardcache_t *cache, void *key, size_t klen, int replica)
 {
     if (!key)
         return -1;
@@ -1260,14 +1300,15 @@ shardcache_del(shardcache_t *cache, void *key, size_t klen)
         {
             arc_remove(cache->arc, (const void *)key, klen);
 
-            shardcache_commence_eviction(cache, key, klen);
+            if (!replica)
+                shardcache_commence_eviction(cache, key, klen);
         }
 
         ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
                    (uint32_t)arc_size(cache->arc));
 
         return 0;
-    } else {
+    } else if (!replica) {
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
         if (!peer) {
             SHC_ERROR("Can't find address for node %s\n", peer);
@@ -1281,6 +1322,19 @@ shardcache_del(shardcache_t *cache, void *key, size_t klen)
     }
 
     return -1;
+
+}
+
+int
+shardcache_del(shardcache_t *cache, void *key, size_t klen)
+{
+    if (!key || !key)
+        return -1;
+
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_DELETE, key, klen, NULL, 0, 0);
+
+    return shardcache_del_internal(cache, key, klen, 0);
 }
 
 int
@@ -1288,6 +1342,9 @@ shardcache_evict(shardcache_t *cache, void *key, size_t klen)
 {
     if (!key || !klen)
         return -1;
+
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_EVICT, key, klen, NULL, 0, 0);
 
     arc_remove(cache->arc, (const void *)key, klen);
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
