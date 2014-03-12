@@ -6,7 +6,7 @@ DEPS = deps/.libs/libhl.a \
        deps/.libs/libiomux.a \
        deps/.libs/libsiphash.a
 
-LDFLAGS += -L.
+LDFLAGS += -L. -ldl
 ifeq ($(UNAME), Linux)
 LDFLAGS += -pthread
 else
