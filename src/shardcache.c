@@ -186,7 +186,7 @@ int shardcache_node_num_addresses(shardcache_node_t *node)
 int shardcache_node_get_all_addresses(shardcache_node_t *node, char **addresses, int num_addresses)
 {
     int i;
-    for (i = 0; i < node->num_replicas; i++)
+    for (i = 0; i < num_addresses && i < node->num_replicas; i++)
         addresses[i] = node->address[i];
     return node->num_replicas;
 }

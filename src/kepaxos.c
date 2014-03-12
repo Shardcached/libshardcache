@@ -1,7 +1,8 @@
-#include "hashtable.h"
 #include "sqlite3.h"
 #include "kepaxos.h"
 #include "atomic.h"
+#include <pqueue.h>
+#include <hashtable.h>
 #ifndef HAVE_UINT64_T
 #define HAVE_UINT64_T
 #endif
@@ -26,6 +27,8 @@ typedef enum {
     KEPAXOS_MSG_TYPE_ACCEPT,
     KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE,
     KEPAXOS_MSG_TYPE_COMMIT,
+    KEPAXOS_MSG_TYPE_RECOVERY,
+    KEPAXOS_MSG_TYPE_RECOVERY_RESPONSE,
 } kepaxos_msg_type_t;
 
 typedef struct {
@@ -37,7 +40,7 @@ typedef struct {
 } kepaxos_vote_t;
 
 struct __kepaxos_cmd_s {
-    kepaxos_cmd_type_t type;
+    unsigned char type;
     kepaxos_msg_type_t msg;
     kepaxos_cmd_status_t status;
     uint32_t seq;
@@ -61,8 +64,11 @@ struct __kepaxos_s {
     kepaxos_callbacks_t callbacks;
     pthread_mutex_t lock;
     uint32_t ballot;
-    sqlite3_stmt *select_stmt;
+    sqlite3_stmt *select_seq_stmt;
+    sqlite3_stmt *select_ballot_stmt;
     sqlite3_stmt *insert_stmt;
+    pqueue_t *recovery_queue;
+    int quit;
 };
 
 static void kepaxos_command_destroy(kepaxos_cmd_t *c)
@@ -96,7 +102,13 @@ kepaxos_context_create(char *dbfile, char **peers, int num_peers, kepaxos_callba
     char sql[2048];
     snprintf(sql, sizeof(sql), "SELECT MAX(seq) FROM ReplicaLog WHERE keyhash1=? AND keyhash2=?");
     const char *tail = NULL;
-    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->select_stmt, &tail);
+    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->select_seq_stmt, &tail);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
+    snprintf(sql, sizeof(sql), "SELECT MAX(ballot) FROM ReplicaLog");
+    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->select_ballot_stmt, &tail);
     if (rc != SQLITE_OK) {
         // TODO - Errors
     }
@@ -126,7 +138,8 @@ kepaxos_context_create(char *dbfile, char **peers, int num_peers, kepaxos_callba
 void
 kepaxos_context_destroy(kepaxos_t *ke)
 {
-    sqlite3_finalize(ke->select_stmt);
+    sqlite3_finalize(ke->select_seq_stmt);
+    sqlite3_finalize(ke->select_ballot_stmt);
     sqlite3_finalize(ke->insert_stmt);
     sqlite3_close(ke->log);
     int i;
@@ -148,30 +161,47 @@ kepaxos_compute_key_hashes(void *key, size_t klen, uint64_t *hash1, uint64_t *ha
     *hash2 = sip_hash24(auth2, key, klen);
 }
 
+/*
+static uint32_t
+kepaxos_max_ballot(kepaxos_t *ke)
+{
+    uint32_t ballot = 0;
+
+    int rc = sqlite3_reset(ke->select_ballot_stmt);
+
+    rc = sqlite3_step(ke->select_ballot_stmt);
+    if (rc == SQLITE_ROW)
+        ballot = sqlite3_column_int(ke->select_ballot_stmt, 0);
+
+    return ballot;
+}
+*/
+
+
 static uint32_t
 last_seq_for_key(kepaxos_t *ke, void *key, size_t klen)
 {
     uint64_t keyhash1, keyhash2;
-    uint64_t seq = 0;
+    uint32_t seq = 0;
 
-    int rc = sqlite3_reset(ke->select_stmt);
+    int rc = sqlite3_reset(ke->select_seq_stmt);
 
     kepaxos_compute_key_hashes(key, klen, &keyhash1, &keyhash2);
 
-    rc = sqlite3_bind_int64(ke->select_stmt, 1, keyhash1);
+    rc = sqlite3_bind_int64(ke->select_seq_stmt, 1, keyhash1);
     if (rc != SQLITE_OK) {
         // TODO - Errors
     }
 
-    rc = sqlite3_bind_int64(ke->select_stmt, 2, keyhash2);
+    rc = sqlite3_bind_int64(ke->select_seq_stmt, 2, keyhash2);
     if (rc != SQLITE_OK) {
         // TODO - Errors
     }
 
     //int cnt = 0;
-    rc = sqlite3_step(ke->select_stmt);
+    rc = sqlite3_step(ke->select_seq_stmt);
     if (rc == SQLITE_ROW)
-        seq = sqlite3_column_int64(ke->select_stmt, 0);
+        seq = sqlite3_column_int(ke->select_seq_stmt, 0);
 
     return seq;
 }
@@ -211,16 +241,12 @@ set_last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint32_t ballot, uin
         fprintf(stderr, "Insert Failed! %d\n", rc);
         return;
     }
-
-
- 
 }
-
 
 static size_t
 kepaxos_build_message(char **out,
                       kepaxos_msg_type_t mtype,
-                      kepaxos_cmd_type_t ctype, 
+                      unsigned char ctype, 
                       uint32_t ballot,
                       void *key,
                       uint32_t klen,
@@ -256,6 +282,31 @@ kepaxos_build_message(char **out,
     return msglen;
 }
 
+#if 0
+static void *
+kepaxos_recovery(void *arg)
+{
+    kepaxos_t *ke = (kepaxos_t *)arg;
+    int i;
+
+    while(!ATOMIC_READ(ke->quit)) {
+        for (i = 0; i < ke->num_peers; i++) {
+            if (i == ke->my_index)
+                continue;
+            uint32_t max_ballot = kepaxos_max_ballot(ke);
+            char *msg = NULL;
+            size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_RECOVERY, 0, max_ballot, NULL, 0, NULL, 0, 0, 0);
+            kepaxos_response_t *responses = NULL;
+            int num_responses = 0;
+            int rc = ke->callbacks.send(&ke->peers[i], 1, (void *)msg, msglen, &responses, &num_responses);
+            if (rc != 0 ) {
+            }
+        }
+    }
+    return NULL;
+}
+#endif
+
 static int
 kepaxos_send_preaccept(kepaxos_t *ke, uint32_t ballot, void *key, size_t klen, uint32_t seq)
 {
@@ -269,7 +320,7 @@ kepaxos_send_preaccept(kepaxos_t *ke, uint32_t ballot, void *key, size_t klen, u
 
     char *msg = NULL;
     size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_PRE_ACCEPT, 0, ballot, key, klen, NULL, 0, seq, 0);
-    int rc = ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen);
+    int rc = ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
     return rc;
 }
@@ -277,7 +328,7 @@ kepaxos_send_preaccept(kepaxos_t *ke, uint32_t ballot, void *key, size_t klen, u
 int
 kepaxos_run_command(kepaxos_t *ke,
                     char *peer,
-                    kepaxos_cmd_type_t type,
+                    unsigned char type,
                     void *key,
                     size_t klen,
                     void *data)
@@ -323,7 +374,7 @@ kepaxos_send_pre_accept_response(kepaxos_t *ke,
 {
     char *msg = NULL;
     size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_PRE_ACCEPT_RESPONSE, 0, ballot, key, klen, NULL, 0, seq, committed);
-    int rc = ke->callbacks.send(&peer, 1, (void *)msg, msglen);
+    int rc = ke->callbacks.send(&peer, 1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
     return rc;
 }
@@ -350,7 +401,8 @@ kepaxos_send_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
                                           cmd->dlen,
                                           cmd->seq, 1);
 
-    int rc =  ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen);
+    
+    int rc =  ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
     return rc;
 }
@@ -358,7 +410,7 @@ kepaxos_send_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
 static int
 kepaxos_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
 {
-    ke->callbacks.commit(cmd->type, cmd->key, cmd->klen, cmd->data, cmd->dlen);
+    ke->callbacks.commit(cmd->type, cmd->key, cmd->klen, cmd->data, cmd->dlen, ke->callbacks.priv);
     set_last_seq_for_key(ke, cmd->key, cmd->klen, cmd->ballot, cmd->seq);
     return kepaxos_send_commit(ke, cmd);
 }
@@ -376,7 +428,7 @@ kepaxos_send_accept(kepaxos_t *ke, uint32_t ballot, void *key, size_t klen, uint
 
     char *msg = NULL;
     size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_ACCEPT, 0, ballot, key, klen, NULL, 0, seq, 0);
-    int rc = ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen);
+    int rc = ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
     return rc;
 }
@@ -392,7 +444,7 @@ kepaxos_send_accept_response(kepaxos_t *ke,
 {
     char *msg = NULL;
     size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE, 0, ballot, key, klen, NULL, 0, seq, committed);
-    int rc = ke->callbacks.send(&peer, 1, (void *)msg, msglen);
+    int rc = ke->callbacks.send(&peer, 1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
     return rc;
 }
@@ -486,7 +538,7 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                     return kepaxos_commit(ke, cmd);
                 } else {
                     if (committed) {
-                        ke->callbacks.recover(cmd->max_voter, key, klen);
+                        ke->callbacks.recover(cmd->max_voter, key, klen, ke->callbacks.priv);
                     } else {
                         // run the paxos-like protocol (long path)
                         free(cmd->votes);
@@ -609,7 +661,7 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                 MUTEX_UNLOCK(&ke->lock);
                 return 0;
             }
-            ke->callbacks.commit(ctype, key, klen, data, dlen);
+            ke->callbacks.commit(ctype, key, klen, data, dlen, ke->callbacks.priv);
             set_last_seq_for_key(ke, key, klen, ballot, seq);
             if (cmd && cmd->seq == seq)
                 ht_delete(ke->commands, key, klen, NULL, NULL);

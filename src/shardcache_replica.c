@@ -2,144 +2,72 @@
 #include <hashtable.h>
 #include <linklist.h>
 #include <queue.h>
+#include <fbuf.h>
+
 #include "atomic.h"
+#include "kepaxos.h"
+#include "shardcache_internal.h"
 
 #define SHARDCACHE_REPLICA_WRKDIR_DEFAULT "/tmp/shcrpl"
-
-struct __shardcache_replica_message_s {
-    shardcache_hdr_t hdr;
-};
-
-typedef struct __shardcache_replica_node_s {
-    uint32_t seq;
-    linked_list_t *messages;
-    shardcache_replica_status_t status;
-    shardcache_replica_role_t role;
-    char *addr;
-} shardcache_replica_node_t;
-
-typedef struct __shardcache_replica_view_s {
-    uint32_t id;
-    int num_addresses;
-    char **addresses;
-} shardcache_replica_view_t;
-
-typedef enum {
-    SHARDCACHE_REPLICA_CMD_STATUS_UNSTABLE,
-    SHARDCACHE_REPLICA_CMD_STATUS_STABLE
-} shardcache_replica_command_status_t;
-
-struct __shardcache_replica_command_s {
-    shardcache_replica_event_t evt;
-    shardcache_replica_operation_t op;
-    shardcache_record_t *records;
-    int num_records;
-    uint32_t view_id;
-    shardcache_replica_command_status_t status;
-    shardcache_replica_node_t *acked;
-    int num_acked;
-};
+#define KEPAXOS_LOG_FILENAME "kepaxos_log.db"
 
 struct __shardcache_replica_s {
     shardcache_t *shc;
-    queue_t *cmd_queue;
     shardcache_node_t *node;
-    hashtable_t *status;
     char *me;
     int num_replicas;
-    shardcache_replica_view_t *current_view;
-    shardcache_replica_view_t *last_view;
-#ifdef __MACH__
-    OSSpinLock view_lock;
-#else
-    pthread_spinlock_t view_lock;
-#endif
-    pthread_t replicator;
-    int quit;
+    kepaxos_t *kepaxos;
 };
 
-static int build_current_view(hashtable_t *table, void *value, size_t vlen, void *priv)
-{
-    shardcache_replica_view_t *view = (shardcache_replica_view_t *)priv;
-    shardcache_replica_node_t *node = (shardcache_replica_node_t *)value;
-    if (node->status == SHARDCACHE_REPLICA_STATUS_ONLINE) {
-        view->addresses = realloc(view->addresses, sizeof(char *) * (view->num_addresses + 1));
-        view->addresses[view->num_addresses++] = node->addr;
-    }
-    if (view->num_addresses >= ht_count(table))
-        return 0;
-    return 1;
-}
 
-void
-shardcache_replica_install_view(shardcache_replica_t *replica, shardcache_replica_view_t *view)
-{
-}
-
-shardcache_replica_view_t *
-shardcache_replica_current_view(shardcache_replica_t *replica)
-{
-    shardcache_replica_view_t *view = calloc(1, sizeof(shardcache_replica_view_t));
-    SPIN_LOCK(&replica->view_lock);
-    view->id = replica->current_view->id + 1;
-    ht_foreach_value(replica->status, build_current_view, view);
-    if (view->num_addresses == replica->current_view->num_addresses) {
-        int i;
-        for (i = 0; i < view->num_addresses; i++) {
-            if (strcmp(view->addresses[i], replica->current_view->addresses[i]) != 0) {
-                // the views differ
-                
-            }
-        }
-    }
-    free(view->addresses);
-    free(view);
-    SPIN_UNLOCK(&replica->view_lock);
-    return replica->current_view;
-}
-
-static void *
-replicator(void *priv)
+static int
+kepaxos_send(char **recipients,
+             int num_recipients,
+             void *cmd,
+             size_t cmd_len,
+             void *priv)
 {
     shardcache_replica_t *replica = (shardcache_replica_t *)priv;
-    while(!ATOMIC_READ(replica->quit)) {
-        // handle new commands
-        shardcache_replica_command_t *cmd = queue_pop_left(replica->cmd_queue);
-        while (cmd) {
-            // do something with cmd
-            cmd = queue_pop_left(replica->cmd_queue);
-
-            switch(cmd->evt) {
-                case SHARDCACHE_REPLICA_RECEIVE:
-                    break;
-                case SHARDCACHE_REPLICA_SEND:
-                    break;
-                default:
-                    // TODO - Error Messages
-                    break;
+    int i;
+    for (i = 0; i < num_recipients; i++) {
+        // TODO - parallelize
+        int fd = connect_to_peer(recipients[i], 2);
+        if (fd < 0)
+            continue;
+        shardcache_record_t record = {
+            .v = cmd,
+            .l = cmd_len
+        };
+        int rc = write_message(fd, (char *)replica->shc->auth, 0, SHC_HDR_REPLICA_CMD, &record, 1);
+        if (rc == 0) {
+            fbuf_t out = FBUF_STATIC_INITIALIZER;
+            shardcache_hdr_t hdr;
+            rc = read_message(fd, (char *)replica->shc->auth, &out, &hdr);
+            if (rc == 0 && hdr == SHC_HDR_REPLICA_CMD) {
+                kepaxos_received_command(replica->kepaxos, recipients[i], fbuf_data(&out), fbuf_used(&out));
             }
         }
-        // let's now check the status and resend failed commands
     }
-    return NULL;
+    return 0;
 }
 
-shardcache_replica_node_t *
-shardcache_replica_node_create(char *addr)
+static int
+kepaxos_commit(unsigned char type,
+               void *key,
+               size_t klen,
+               void *data,
+               size_t dlen,
+               void *priv)
 {
-    shardcache_replica_node_t *node = calloc(1, sizeof(shardcache_replica_node_t));
-    node->addr = strdup(addr);
-    node->messages = create_list();
-    return node;
+    return 0;
 }
- 
-static void
-shardcache_replica_node_destroy(shardcache_replica_node_t *node)
+
+static int
+kepaxos_recover(char *peer, void *key, size_t klen, void *priv)
 {
-    free(node->addr);
-    destroy_list(node->messages);
-    free(node);
+    return 0;
 }
+
 
 shardcache_replica_t *
 shardcache_replica_create(shardcache_t *shc,
@@ -149,41 +77,29 @@ shardcache_replica_create(shardcache_t *shc,
 {
     shardcache_replica_t *replica = calloc(1, sizeof(shardcache_replica_t));
 
-    replica->cmd_queue = queue_create();
-    queue_set_free_value_callback(replica->cmd_queue,
-            (queue_free_value_callback_t)shardcache_replica_command_destroy);
-
     replica->node = shardcache_node_copy(node);
-
-    int rc = pthread_create(&replica->replicator, NULL, replicator, replica);
-    if (rc != 0) {
-        queue_destroy(replica->cmd_queue);
-        shardcache_node_destroy(replica->node);
-        free(replica);
-        return NULL;
-    }
 
     replica->me = strdup(me);
 
     replica->num_replicas = shardcache_node_num_addresses(node);
 
-    replica->status = ht_create(replica->num_replicas, 128, (ht_free_item_callback_t)shardcache_replica_node_destroy);
-
-    int i;
-    for (i = 0; i < replica->num_replicas; i ++) {
-        char *addr = shardcache_node_get_address_at_index(node, i);
-        if (addr) {
-            shardcache_replica_node_t *rnode = shardcache_replica_node_create(addr);
-            rc = ht_set(replica->status, addr, strlen(addr), rnode, sizeof(shardcache_replica_node_t));
-            if (rc != 0) {
-                // TODO - Error messages
-            }
-        }
-    }
-
     SPIN_INIT(&replica->view_lock);
 
     replica->shc = shc;
+
+    // TODO - check wrkdir exists and is writeable
+    char dbfile[2048];
+    snprintf(dbfile, sizeof(dbfile), "%s/%s", wrkdir, KEPAXOS_LOG_FILENAME);
+
+    char **peers = malloc(sizeof(char *) * replica->num_replicas);
+    int num_peers = shardcache_node_get_all_addresses(replica->node, peers,  replica->num_replicas);
+
+    kepaxos_callbacks_t kepaxos_callbacks = {
+        .send = kepaxos_send,
+        .commit = kepaxos_commit,
+        .recover = kepaxos_recover
+    };
+    replica->kepaxos = kepaxos_context_create(dbfile, peers, num_peers, &kepaxos_callbacks);
 
     return replica;
 }
@@ -191,55 +107,18 @@ shardcache_replica_create(shardcache_t *shc,
 void
 shardcache_replica_destroy(shardcache_replica_t *replica)
 {
-    ATOMIC_INCREMENT(replica->quit);
-    pthread_join(replica->replicator, NULL);
-    queue_destroy(replica->cmd_queue);
-    ht_destroy(replica->status);
     shardcache_node_destroy(replica->node);
     free(replica->me);
-    SPIN_DESTROY(&replica->view_lock);
-    if (replica->current_view) {
-        free(replica->current_view->addresses);
-        free(replica->current_view);
-    }
-    if (replica->last_view) {
-        free(replica->last_view->addresses);
-        free(replica->last_view);
-    }
     free(replica);
 }
 
-
-shardcache_replica_command_t *
-shardcache_replica_command_create(shardcache_replica_event_t evt,
-                                  shardcache_replica_operation_t op,
-                                  shardcache_record_t *records,
-                                  int num_records)
+int shardcache_replica_dispatch(shardcache_replica_operation_t op, void *key, size_t klen, void *data, size_t dlen)
 {
-    shardcache_replica_command_t *cmd = calloc(1, sizeof(shardcache_replica_command_t));
-    cmd->evt = evt;
-    cmd->op = op;
-    cmd->records = malloc(sizeof(shardcache_record_t) * num_records);
-    int i;
-    for (i = 0; i < num_records; i++) {
-        cmd->records[i].v = malloc(records[i].l);
-        memcpy(cmd->records[i].v, records[i].v, records[i].l);
-        cmd->records[i].l = records[i].l;
-    }
-    cmd->num_records = num_records;
-    return cmd;
+
+    return 0;
 }
 
-void
-shardcache_replica_command_destroy(shardcache_replica_command_t *cmd)
-{
-    int i;
-    for (i = 0; i < cmd->num_records; i++)
-        free(cmd->records[i].v);
-    free(cmd->records);
-    free(cmd);
-}
-
+/*
 shardcache_replica_status_t
 shardcache_replica_status(shardcache_replica_t *replica, char *addr)
 {
@@ -263,3 +142,7 @@ shardcache_replica_set_status(shardcache_replica_t *replica,
     node->status = status;
     return st;
 }
+*/
+
+
+

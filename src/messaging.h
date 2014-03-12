@@ -49,12 +49,7 @@ typedef enum {
     // generic response header
     SHC_HDR_RESPONSE        = 0x99,
 
-    SHC_HDR_REPLICA_SEND    = 0xA0,
-    SHC_HDR_REPLICA_RECEIVE = 0xA1,
-    SHC_HDR_REPLICA_VIEW    = 0xA2,
-    SHC_HDR_REPLICA_FLUSH   = 0xA3,
-    SHC_HDR_REPLICA_OPTVIEW = 0xA4,
-    SHC_HDR_REPLICA_VIEWACK = 0xA5,
+    SHC_HDR_REPLICA_CMD     = 0xA0,
 
     // signature headers
     SHC_HDR_SIGNATURE_SIP   = 0xF0,
