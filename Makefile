@@ -40,7 +40,7 @@ endif
 TARGETS = $(patsubst %.c, %.o, $(wildcard src/*.c))
 TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
-TEST_EXEC_ORDER = shardcache_test
+TEST_EXEC_ORDER = kepaxos_test shardcache_test
 
 all: CFLAGS += -Ideps/.incs
 all: $(DEPS) objects static shared
