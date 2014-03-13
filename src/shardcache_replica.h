@@ -20,7 +20,7 @@ typedef struct __shardcache_replica_command_s shardcache_replica_command_t;
 
 shardcache_replica_t *shardcache_replica_create(shardcache_t *shc,
                                                 shardcache_node_t *node,
-                                                char *me,
+                                                int my_index,
                                                 char *wrkdir);
 
 void shardcache_replica_destroy(shardcache_replica_t *replica);

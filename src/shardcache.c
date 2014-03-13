@@ -525,13 +525,13 @@ shardcache_create(char *me,
         if (strcmp(nodes[i]->label, me) == 0) {
             for (n = 0; n < nodes[i]->num_replicas; n++) {
                 int fd = open_socket(nodes[i]->address[n], 0);
+                close(fd); 
                 if (fd >= 0) {
                     cache->addr = strdup(nodes[i]->address[n]);
                 }
-               close(fd); 
             }
             if (nodes[i]->num_replicas > 1)
-                cache->replica = shardcache_replica_create(cache, cache->shards[i], cache->addr, NULL);
+                cache->replica = shardcache_replica_create(cache, cache->shards[i], n, NULL);
         }
     }
 

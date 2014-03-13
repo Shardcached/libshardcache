@@ -295,14 +295,14 @@ void *shardcache_replica_async_io(void *priv)
 shardcache_replica_t *
 shardcache_replica_create(shardcache_t *shc,
                           shardcache_node_t *node,
-                          char *me,
+                          int my_index,
                           char *wrkdir)
 {
     shardcache_replica_t *replica = calloc(1, sizeof(shardcache_replica_t));
 
     replica->node = shardcache_node_copy(node);
 
-    replica->me = strdup(me);
+    replica->me = shardcache_node_get_address_at_index(node, my_index);
 
     replica->num_replicas = shardcache_node_num_addresses(node);
 
@@ -321,7 +321,7 @@ shardcache_replica_create(shardcache_t *shc,
         .commit = kepaxos_commit,
         .recover = kepaxos_recover
     };
-    replica->kepaxos = kepaxos_context_create(dbfile, peers, num_peers, 10, &kepaxos_callbacks);
+    replica->kepaxos = kepaxos_context_create(dbfile, peers, num_peers, my_index, 10, &kepaxos_callbacks);
 
     replica->recovery = ht_create(128, 1024, NULL);
 
@@ -347,7 +347,7 @@ shardcache_replica_destroy(shardcache_replica_t *replica)
     shardcache_node_destroy(replica->node);
     ht_destroy(replica->recovery);
     pqueue_destroy(replica->recovery_queue);
-    free(replica->me);
+    //free(replica->me);
     free(replica);
 }
 

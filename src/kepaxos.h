@@ -48,6 +48,7 @@ typedef struct {
 kepaxos_t *kepaxos_context_create(char *dbfile,
                                   char **peers,
                                   int num_peers,
+                                  int my_index,
                                   int timeout,
                                   kepaxos_callbacks_t *callbacks);
 
