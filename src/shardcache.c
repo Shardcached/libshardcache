@@ -199,7 +199,8 @@ shardcache_node_get_all_labels(shardcache_node_t *node, char **labels, int num_l
 {
     int i;
     for (i = 0; i < num_labels && i < node->num_replicas; i++)
-        labels[i] = node->label
+        labels[i] = node->label;
+    return node->num_replicas;
 }
 
 char *
