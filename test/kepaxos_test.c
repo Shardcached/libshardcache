@@ -15,6 +15,7 @@
 
 
 static int total_messages_sent = 0;
+static int total_values_committed = 0;
 
 typedef struct {
     kepaxos_t **contexts;
@@ -29,8 +30,9 @@ static int send_callback(char **recipients,
 {
     callback_argument *arg = (callback_argument *)priv;
     total_messages_sent += num_recipients;
+    // skip the first 4 messages, we want the first command to timeout
     if (total_messages_sent > 4) {
-        // now let's start forwarding messages
+        // now we can start forwarding messages to the correct receipients
         int i;
         for (i = 0; i < num_recipients; i++) {
             char *node = recipients[i];
@@ -51,6 +53,7 @@ static int commit_callback(unsigned char type,
                            int leader,
                            void *priv)
 {
+    total_values_committed++;
     return 0;
 }
 
@@ -152,7 +155,9 @@ int main(int argc, char **argv)
 
     ut_testing("kepaxos_run_command() propagates to all replicas");
     rc = kepaxos_run_command(contexts[0], "node1", 0x00, "test_key", 8, "test_value", 10);
+    ut_validate_int(total_values_committed, 5);
 
+    ut_testing("log is consistent on all replicas");
     int check = 1;
     kepaxos_log_item prev_item = { 0, 0 };
     for (i = 0; i < 5; i++) {
