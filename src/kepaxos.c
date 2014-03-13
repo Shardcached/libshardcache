@@ -281,8 +281,7 @@ kepaxos_context_create(char *dbfile,
     ke->commands = ht_create(128, 1024, (ht_free_item_callback_t)kepaxos_command_destroy);
 
     uint32_t max_ballot = kepaxos_max_ballot(ke) >> 8;
-    if (max_ballot == 0)
-        max_ballot++;
+    max_ballot++;
     ke->ballot = (max_ballot << 8) | ke->my_index;
 
     SHC_DEBUG("Replica context created: %d replicas, starting ballot: %lu",
