@@ -18,7 +18,7 @@
 #define MAX(a, b) ( (a) > (b) ? (a) : (b) )
 #define MIN(a, b) ( (a) < (b) ? (a) : (b) )
 
-#define KEPAXOX_CMD_TTL 30 // default to 30 seconds
+#define KEPAXOS_CMD_TTL 30 // default to 30 seconds
 
 typedef enum {
     KEPAXOS_CMD_STATUS_NONE=0,
@@ -60,6 +60,7 @@ struct __kepaxos_cmd_s {
     char *max_voter;
     uint32_t ballot;
     time_t timestamp;
+    int timeout;
     pthread_mutex_t condition_lock;
     pthread_cond_t condition;
 };
@@ -79,6 +80,7 @@ struct __kepaxos_s {
     pqueue_t *recovery_queue;
     pthread_t expirer;
     int quit;
+    int timeout;
 };
 
 static void
@@ -192,7 +194,7 @@ kepaxos_expire_command(hashtable_t *table,
                                   void *user)
 {
     kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)value;
-    if (time(NULL) > cmd->timestamp + KEPAXOX_CMD_TTL) {
+    if (cmd->timeout > 0 && time(NULL) > (cmd->timestamp + cmd->timeout)) {
         return -1; // if expired we want to remove this item from the table
     }
     return 1;
@@ -210,9 +212,11 @@ kepaxos_expire_commands(void *priv)
 }
 
 kepaxos_t *
-kepaxos_context_create(char *dbfile, char **peers, int num_peers, kepaxos_callbacks_t *callbacks)
+kepaxos_context_create(char *dbfile, char **peers, int num_peers, int timeout, kepaxos_callbacks_t *callbacks)
 {
     kepaxos_t *ke = calloc(1, sizeof(kepaxos_t));
+
+    ke->timeout = timeout > 0 ? timeout : KEPAXOS_CMD_TTL;
 
     int rc = sqlite3_open(dbfile, &ke->log);
     if (rc != SQLITE_OK) {
@@ -251,6 +255,8 @@ kepaxos_context_create(char *dbfile, char **peers, int num_peers, kepaxos_callba
 
 
     ke->peers = malloc(sizeof(char *) * num_peers);
+    ke->num_peers = num_peers;
+
     int i;
     for (i = 0; i < num_peers; i++)
         ke->peers[i] = strdup(peers[i]);
@@ -414,7 +420,7 @@ kepaxos_run_command(kepaxos_t *ke,
         ht_set(ke->commands, key, klen, cmd, sizeof(kepaxos_cmd_t));
     }
     uint32_t interfering_seq = cmd ? cmd->seq : 0; 
-    seq = MAX(seq, interfering_seq);
+    seq = MAX(seq, interfering_seq) + 1;
     // an eventually uncommitted command for K would be overwritten here
     // hence it will be ignored and will fail silently
     // (NOTE: in libshardcache we only care about the most recent command for a key 
@@ -429,7 +435,8 @@ kepaxos_run_command(kepaxos_t *ke,
     cmd->dlen = dlen;
     cmd->status = KEPAXOS_CMD_STATUS_PRE_ACCEPTED;
     cmd->timestamp = time(NULL);
-    uint32_t ballot = (ATOMIC_READ(ke->ballot)|0xFFFFFF00) >> 1;
+    cmd->timeout = ke->timeout;
+    uint32_t ballot = (ATOMIC_READ(ke->ballot)&0xFFFFFF00) >> 1;
     ballot++;
     ballot = (ballot << 1) | ke->my_index;
     ATOMIC_SET_IF(ke->ballot, <, ballot, uint32_t);
@@ -442,9 +449,12 @@ kepaxos_run_command(kepaxos_t *ke,
                   keystr, type, seq, ballot);
     }
     int rc = kepaxos_send_preaccept(ke, ballot, key, klen, seq);
-    pthread_cond_wait(&cmd->condition, &cmd->condition_lock);
+    if (rc >= 0)
+        pthread_cond_wait(&cmd->condition, &cmd->condition_lock);
     MUTEX_UNLOCK(&cmd->condition_lock);
-    return rc;
+
+    uint32_t current_seq = last_seq_for_key(ke, key, klen);
+    return (current_seq >= seq) ? 0 : -1;
 }
 
 static int
@@ -669,6 +679,8 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                 cmd->seq = seq;
                 cmd->ballot = ballot;
                 cmd->status = KEPAXOS_CMD_STATUS_ACCEPTED;
+                cmd->timestamp = time(NULL);
+                cmd->timeout = ke->timeout;
                 accepted_ballot = ballot;
                 accepted_seq = seq;
             }

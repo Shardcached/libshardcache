@@ -321,7 +321,7 @@ shardcache_replica_create(shardcache_t *shc,
         .commit = kepaxos_commit,
         .recover = kepaxos_recover
     };
-    replica->kepaxos = kepaxos_context_create(dbfile, peers, num_peers, &kepaxos_callbacks);
+    replica->kepaxos = kepaxos_context_create(dbfile, peers, num_peers, 10, &kepaxos_callbacks);
 
     replica->recovery = ht_create(128, 1024, NULL);
 
