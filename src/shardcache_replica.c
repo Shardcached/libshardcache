@@ -187,6 +187,10 @@ shardcache_replica_recover(void *priv)
         int32_t prio = 0;
 
         int rc = pqueue_pull_highest(replica->recovery_queue, (void **)&item, NULL, &prio);
+        if (rc != 0) {
+            SHC_ERROR("replica_recover: Can't get the top item from the priority queue");
+        }
+
         if (!item) {
             do {
                 rc = nanosleep(&timeout, &remainder);
@@ -218,10 +222,13 @@ shardcache_replica_recover(void *priv)
         if (rc == 0) {
             shardcache_item_to_recover_t *check = NULL;
             rc = ht_delete(replica->recovery, item->key, item->klen, (void **)&check, NULL);
+            if (rc != 0) {
+                SHC_ERROR("Can't delete item from the recovery table");
+            }
             if (check == item || (check && check->seq == item->seq)) {
                 rc = shardcache_set_internal(replica->shc, item->key, item->klen, fbuf_data(&data), fbuf_used(&data), 0, 0, 0);
                 if (rc != 0) {
-                    // TODO - Error messages
+                    SHC_ERROR("Can't set value for the recovered item");
                 }
                 free_item_to_recover(item);
 
@@ -271,10 +278,13 @@ kepaxos_commit(unsigned char type,
     switch(type) {
         case SHARDCACHE_REPLICA_OP_SET:
             rc = shardcache_set_internal(replica->shc, key, klen, &kdata->data, kdata->len, kdata->expire, 0, leader ? 0 : 1);
+            break;
         case SHARDCACHE_REPLICA_OP_DELETE:
             rc = shardcache_del_internal(replica->shc, key, klen, leader ? 0 : 1);
+            break;
         case SHARDCACHE_REPLICA_OP_EVICT:
             rc = shardcache_evict(replica->shc, key, klen);
+            break;
         default:
             break;
     }
