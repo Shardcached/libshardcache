@@ -185,9 +185,14 @@ kepaxos_command_destroy(kepaxos_cmd_t *c)
     MUTEX_LOCK(&c->condition_lock);
     pthread_cond_broadcast(&c->condition);
     MUTEX_UNLOCK(&c->condition_lock);
+
     free(c->key);
     if (c->data)
         free(c->data);
+
+    if (c->votes)
+        free(c->votes);
+
     MUTEX_DESTROY(&c->condition_lock);
     CONDITION_DESTROY(&c->condition);
     free(c);
