@@ -182,6 +182,8 @@ kepaxos_command_destroy(kepaxos_cmd_t *c)
     free(c->key);
     if (c->data)
         free(c->data);
+    MUTEX_DESTROY(&c->condition_lock);
+    CONDITION_DESTROY(&c->condition);
     free(c);
 }
 
