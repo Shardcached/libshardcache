@@ -113,18 +113,20 @@ last_seq_for_key(kepaxos_t *ke, void *key, size_t klen)
     uint64_t keyhash1, keyhash2;
     uint32_t seq = 0;
 
-    int rc = sqlite3_reset(ke->select_seq_stmt);
-
     kepaxos_compute_key_hashes(key, klen, &keyhash1, &keyhash2);
+
+    int rc = sqlite3_reset(ke->select_seq_stmt);
 
     rc = sqlite3_bind_int64(ke->select_seq_stmt, 1, keyhash1);
     if (rc != SQLITE_OK) {
         // TODO - Errors
+        return 0;
     }
 
     rc = sqlite3_bind_int64(ke->select_seq_stmt, 2, keyhash2);
     if (rc != SQLITE_OK) {
         // TODO - Errors
+        return seq;
     }
 
     //int cnt = 0;
@@ -141,28 +143,32 @@ set_last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint32_t ballot, uin
     uint64_t keyhash1, keyhash2;
     //uint64_t last_seq = 0;
 
-    int rc = sqlite3_reset(ke->insert_stmt);
-
     kepaxos_compute_key_hashes(key, klen, &keyhash1, &keyhash2);
+
+    int rc = sqlite3_reset(ke->insert_stmt);
 
     rc = sqlite3_bind_int(ke->insert_stmt, 1, ballot);
     if (rc != SQLITE_OK) {
         // TODO - Errors
+        return;
     }
 
     rc = sqlite3_bind_int64(ke->insert_stmt, 2, keyhash1);
     if (rc != SQLITE_OK) {
         // TODO - Errors
+        return;
     }
 
     rc = sqlite3_bind_int64(ke->insert_stmt, 3, keyhash2);
     if (rc != SQLITE_OK) {
         // TODO - Errors
+        return;
     }
 
     rc = sqlite3_bind_int(ke->insert_stmt, 4, seq);
     if (rc != SQLITE_OK) {
         // TODO - Errors
+        return;
     }
 
     rc = sqlite3_step(ke->insert_stmt);
@@ -244,19 +250,19 @@ kepaxos_context_create(char *dbfile,
     char sql[2048];
     snprintf(sql, sizeof(sql), "SELECT MAX(seq) FROM ReplicaLog WHERE keyhash1=? AND keyhash2=?");
     const char *tail = NULL;
-    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->select_seq_stmt, &tail);
+    rc = sqlite3_prepare_v2(ke->log, sql, -1, &ke->select_seq_stmt, &tail);
     if (rc != SQLITE_OK) {
         // TODO - Errors
     }
 
     snprintf(sql, sizeof(sql), "SELECT MAX(ballot) FROM ReplicaLog");
-    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->select_ballot_stmt, &tail);
+    rc = sqlite3_prepare_v2(ke->log, sql, -1, &ke->select_ballot_stmt, &tail);
     if (rc != SQLITE_OK) {
         // TODO - Errors
     }
 
     snprintf(sql, sizeof(sql), "INSERT OR REPLACE INTO ReplicaLog VALUES(?, ?, ?, ?)");
-    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->insert_stmt, &tail);
+    rc = sqlite3_prepare_v2(ke->log, sql, -1, &ke->insert_stmt, &tail);
     if (rc != SQLITE_OK) {
         // TODO - Errors
     }
@@ -647,10 +653,11 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                     MUTEX_UNLOCK(&ke->lock);
                     return -1;
                 }
-                cmd->votes = realloc(cmd->votes, sizeof(kepaxos_vote_t) * ++cmd->num_votes);
+                cmd->votes = realloc(cmd->votes, sizeof(kepaxos_vote_t) * (cmd->num_votes + 1));
                 cmd->votes[cmd->num_votes].seq = seq;
                 cmd->votes[cmd->num_votes].ballot = ballot;
                 cmd->votes[cmd->num_votes].peer = peer;
+                cmd->num_votes++;
                 cmd->max_seq = MAX(cmd->max_seq, seq);
                 if (cmd->max_seq == seq)
                     cmd->max_voter = peer;
@@ -740,10 +747,11 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                     MUTEX_UNLOCK(&ke->lock);
                     return -1;
                 }
-                cmd->votes = realloc(cmd->votes, sizeof(kepaxos_vote_t) * ++cmd->num_votes);
+                cmd->votes = realloc(cmd->votes, sizeof(kepaxos_vote_t) * (cmd->num_votes + 1));
                 cmd->votes[cmd->num_votes].seq = seq;
                 cmd->votes[cmd->num_votes].ballot = ballot;
                 cmd->votes[cmd->num_votes].peer = peer;
+                cmd->num_votes++;
                 cmd->max_seq = MAX(cmd->max_seq, seq);
                 if (cmd->max_seq == seq)
                     cmd->max_voter = peer;
