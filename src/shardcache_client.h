@@ -131,7 +131,7 @@ int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen);
 /**
  * @brief Force loading a key into the cache of the node responsible for it.
  *        If the key is already loaded, update the loaded-timestamp.
- * @param cache   A valid pointer to a shardcache_t structure
+ * @param c      A valid pointer to a shardcache_client_t structure
  * @param key     A valid pointer to the key
  * @param klen    The length of the key
  * @return 0 if successfully touched the item, -1 in case of errors
@@ -314,7 +314,7 @@ shc_multi_item_t *shc_multi_item_create(shardcache_client_t *c,
 
 /**
  * @brief Release all the resources allocad for the shc_multi_item_t structure
- * @param A valid pointer to an initialized shc_multi_item_t structure
+ * @param item A valid pointer to an initialized shc_multi_item_t structure
  */
 void shc_multi_item_destroy(shc_multi_item_t *item);
 
