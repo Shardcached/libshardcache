@@ -108,7 +108,7 @@ kepaxos_max_ballot(kepaxos_t *ke)
 }
 
 static uint32_t
-last_seq_for_key(kepaxos_t *ke, void *key, size_t klen)
+last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint32_t *ballot)
 {
     uint64_t keyhash1, keyhash2;
     uint32_t seq = 0;
@@ -131,8 +131,11 @@ last_seq_for_key(kepaxos_t *ke, void *key, size_t klen)
 
     //int cnt = 0;
     rc = sqlite3_step(ke->select_seq_stmt);
-    if (rc == SQLITE_ROW)
+    if (rc == SQLITE_ROW) {
         seq = sqlite3_column_int(ke->select_seq_stmt, 0);
+        if (ballot)
+            *ballot = sqlite3_column_int(ke->select_seq_stmt, 1);
+    }
 
     return seq;
 }
@@ -185,7 +188,11 @@ kepaxos_command_destroy(kepaxos_cmd_t *c)
     MUTEX_LOCK(&c->condition_lock);
     pthread_cond_broadcast(&c->condition);
     MUTEX_UNLOCK(&c->condition_lock);
+}
 
+static void
+kepaxos_command_free(kepaxos_cmd_t *c)
+{
     free(c->key);
     if (c->data)
         free(c->data);
@@ -253,7 +260,7 @@ kepaxos_context_create(char *dbfile,
     }
 
     char sql[2048];
-    snprintf(sql, sizeof(sql), "SELECT MAX(seq) FROM ReplicaLog WHERE keyhash1=? AND keyhash2=?");
+    snprintf(sql, sizeof(sql), "SELECT seq, ballot FROM ReplicaLog WHERE keyhash1=? AND keyhash2=?");
     const char *tail = NULL;
     rc = sqlite3_prepare_v2(ke->log, sql, -1, &ke->select_seq_stmt, &tail);
     if (rc != SQLITE_OK) {
@@ -423,22 +430,14 @@ kepaxos_run_command(kepaxos_t *ke,
 {
     // Replica R1 receives a new set/del/evict request for key K
     MUTEX_LOCK(&ke->lock);
-    uint32_t seq = last_seq_for_key(ke, key, klen);
-    kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)ht_get(ke->commands, key, klen, NULL);
-    if (cmd) {
-        MUTEX_LOCK(&cmd->condition_lock);
-        pthread_cond_broadcast(&cmd->condition);
-        MUTEX_UNLOCK(&cmd->condition_lock);
-        if (cmd->key)
-            free(cmd->key);
-        if (cmd->data)
-            free(cmd->data);
-    } else {
-        cmd = calloc(1, sizeof(kepaxos_cmd_t));
-        MUTEX_INIT(&cmd->condition_lock);
-        CONDITION_INIT(&cmd->condition);
-        ht_set(ke->commands, key, klen, cmd, sizeof(kepaxos_cmd_t));
-    }
+    uint32_t seq = last_seq_for_key(ke, key, klen, NULL);
+    kepaxos_cmd_t *cmd = calloc(1, sizeof(kepaxos_cmd_t));
+    MUTEX_INIT(&cmd->condition_lock);
+    CONDITION_INIT(&cmd->condition);
+
+    // this will release/abort the previous command on the same key(if any)
+    ht_set(ke->commands, key, klen, cmd, sizeof(kepaxos_cmd_t)); 
+
     uint32_t interfering_seq = cmd ? cmd->seq : 0; 
     seq = MAX(seq, interfering_seq) + 1;
     // an eventually uncommitted command for K would be overwritten here
@@ -480,9 +479,10 @@ kepaxos_run_command(kepaxos_t *ke,
         } else {
             MUTEX_UNLOCK(&ke->lock);
         }
+        kepaxos_command_free(cmd);
     }
 
-    uint32_t current_seq = last_seq_for_key(ke, key, klen);
+    uint32_t current_seq = last_seq_for_key(ke, key, klen, NULL);
     return (current_seq >= seq) ? 0 : -1;
 }
 
@@ -612,7 +612,15 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
         {
             // Any replica R receiving a PRE_ACCEPT(BALLOT, K, SEQ) from R1
             MUTEX_LOCK(&ke->lock);
-            uint32_t local_seq = last_seq_for_key(ke, key, klen);
+            uint32_t local_ballot = 0;
+            uint32_t local_seq = last_seq_for_key(ke, key, klen, &local_ballot);
+
+            if (local_seq == seq && local_ballot == ballot) {
+                // ignore this message ... we already have committed this command
+                MUTEX_UNLOCK(&ke->lock);
+                return -1;
+            }
+
             kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)ht_get(ke->commands, key, klen, NULL);
             uint32_t interfering_seq = 0;
             if (cmd) {
@@ -700,6 +708,10 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
             int accepted_ballot = ballot;
             int accepted_seq = seq;
             MUTEX_LOCK(&ke->lock);
+
+            uint32_t local_ballot = 0;
+            uint32_t local_seq = last_seq_for_key(ke, key, klen, &local_ballot);
+
             kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)ht_get(ke->commands, key, klen, NULL);
             if (cmd) {
                 if (ballot < cmd->ballot) {
@@ -712,6 +724,11 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                     accepted_seq = cmd->seq;
                 }
             } else {
+                if (local_seq == seq && local_ballot == ballot) {
+                    // ignore this message ... we already have committed this command
+                    MUTEX_UNLOCK(&ke->lock);
+                    return -1;
+                }
                 cmd = calloc(1, sizeof(kepaxos_cmd_t));
                 cmd->key = malloc(klen);
                 memcpy(cmd->key, key, klen);
@@ -803,7 +820,7 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                 MUTEX_UNLOCK(&ke->lock);
                 return -1;
             }
-            uint32_t last_recorded_seq = last_seq_for_key(ke, key, klen);
+            uint32_t last_recorded_seq = last_seq_for_key(ke, key, klen, NULL);
             if (seq < last_recorded_seq) {
                 // ignore this commit message (it's too old)
                 MUTEX_UNLOCK(&ke->lock);
@@ -811,8 +828,10 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
             }
             ke->callbacks.commit(ctype, key, klen, data, dlen, 0, ke->callbacks.priv);
             set_last_seq_for_key(ke, key, klen, ballot, seq);
-            if (cmd && cmd->seq == seq)
+            if (cmd && cmd->seq == seq) {
                 ht_delete(ke->commands, key, klen, NULL, NULL);
+                kepaxos_command_free(cmd);
+            }
             MUTEX_UNLOCK(&ke->lock);
             break;
         }

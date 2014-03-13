@@ -108,10 +108,11 @@ int fetch_log(char *dbfile, void *key, size_t klen, kepaxos_log_item *item)
     if (rc == SQLITE_ROW) {
         item->seq = sqlite3_column_int(stmt, 0);
         item->ballot = sqlite3_column_int(stmt, 1);
-
-        return 0;
     }
-    return -1;
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(log);
+    return rc;
 }
 
 
