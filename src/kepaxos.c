@@ -271,6 +271,14 @@ kepaxos_context_create(char *dbfile,
         return NULL;
     }
 
+    const char *create_index_sql = "CREATE INDEX IF NOT EXISTS ballot_index ON ReplicaLog (ballot DESC)";
+    rc = sqlite3_exec(ke->log, create_index_sql, NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+        sqlite3_close(ke->log);
+        free(ke);
+        return NULL;
+    }
+
     char sql[2048];
     snprintf(sql, sizeof(sql), "SELECT seq, ballot FROM ReplicaLog WHERE keyhash1=? AND keyhash2=?");
     const char *tail = NULL;
