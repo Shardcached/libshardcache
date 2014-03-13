@@ -178,13 +178,15 @@ shardcache_node_select(shardcache_t *cache, char *label)
     return node;
 }
 
-int shardcache_node_num_addresses(shardcache_node_t *node)
+int
+shardcache_node_num_addresses(shardcache_node_t *node)
 {
     return node->num_replicas;
 
 }
 
-int shardcache_node_get_all_addresses(shardcache_node_t *node, char **addresses, int num_addresses)
+int
+shardcache_node_get_all_addresses(shardcache_node_t *node, char **addresses, int num_addresses)
 {
     int i;
     for (i = 0; i < num_addresses && i < node->num_replicas; i++)
@@ -192,7 +194,16 @@ int shardcache_node_get_all_addresses(shardcache_node_t *node, char **addresses,
     return node->num_replicas;
 }
 
-char *shardcache_node_get_address_at_index(shardcache_node_t *node, int index)
+int
+shardcache_node_get_all_labels(shardcache_node_t *node, char **labels, int num_labels)
+{
+    int i;
+    for (i = 0; i < num_labels && i < node->num_replicas; i++)
+        labels[i] = node->label
+}
+
+char *
+shardcache_node_get_address_at_index(shardcache_node_t *node, int index)
 {
     if (index < node->num_replicas)
         return node->address[index];
@@ -511,11 +522,6 @@ shardcache_create(char *me,
                                                   nodes[i]->address,
                                                   nodes[i]->num_replicas);
         if (strcmp(nodes[i]->label, me) == 0) {
-
-shardcache_replica_t *shardcache_replica_create(shardcache_t *shc,
-                                                shardcache_node_t *node,
-                                                char *me,
-                                                char *wrkdir);
             for (n = 0; n < nodes[i]->num_replicas; n++) {
                 int fd = open_socket(nodes[i]->address[n], 0);
                 if (fd >= 0) {
