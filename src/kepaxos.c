@@ -8,11 +8,17 @@
 #endif
 #include <siphash.h>
 
+#include <unistd.h>
 #include <stdio.h>
 #include <arpa/inet.h>
 
+#include "shardcache.h" // for SHC_DEBUG*()
+#include "shardcache_internal.h" // for KEY2STR()
+
 #define MAX(a, b) ( (a) > (b) ? (a) : (b) )
 #define MIN(a, b) ( (a) < (b) ? (a) : (b) )
+
+#define KEPAXOX_CMD_TTL 30 // default to 30 seconds
 
 typedef enum {
     KEPAXOS_CMD_STATUS_NONE=0,
@@ -53,7 +59,9 @@ struct __kepaxos_cmd_s {
     uint32_t max_seq;
     char *max_voter;
     uint32_t ballot;
-    uint32_t expire;
+    time_t timestamp;
+    pthread_mutex_t condition_lock;
+    pthread_cond_t condition;
 };
 
 struct __kepaxos_s {
@@ -69,88 +77,9 @@ struct __kepaxos_s {
     sqlite3_stmt *select_ballot_stmt;
     sqlite3_stmt *insert_stmt;
     pqueue_t *recovery_queue;
+    pthread_t expirer;
     int quit;
 };
-
-static void kepaxos_command_destroy(kepaxos_cmd_t *c)
-{
-    free(c->key);
-    if (c->data)
-        free(c->data);
-    free(c);
-}
-
-kepaxos_t *
-kepaxos_context_create(char *dbfile, char **peers, int num_peers, kepaxos_callbacks_t *callbacks)
-{
-    kepaxos_t *ke = calloc(1, sizeof(kepaxos_t));
-
-    int rc = sqlite3_open(dbfile, &ke->log);
-    if (rc != SQLITE_OK) {
-        // TODO - Error messages
-        free(ke);
-        return NULL;
-    }
-
-    const char *create_table_sql = "CREATE TABLE IF NOT EXISTS ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, PRIMARY KEY(keyhash1, keyhash2))";
-    rc = sqlite3_exec(ke->log, create_table_sql, NULL, NULL, NULL);
-    if (rc != SQLITE_OK) {
-        // TODO - Errors
-        sqlite3_close(ke->log);
-        free(ke);
-    }
-
-    char sql[2048];
-    snprintf(sql, sizeof(sql), "SELECT MAX(seq) FROM ReplicaLog WHERE keyhash1=? AND keyhash2=?");
-    const char *tail = NULL;
-    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->select_seq_stmt, &tail);
-    if (rc != SQLITE_OK) {
-        // TODO - Errors
-    }
-
-    snprintf(sql, sizeof(sql), "SELECT MAX(ballot) FROM ReplicaLog");
-    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->select_ballot_stmt, &tail);
-    if (rc != SQLITE_OK) {
-        // TODO - Errors
-    }
-
-    snprintf(sql, sizeof(sql), "INSERT OR REPLACE INTO ReplicaLog VALUES(?, ?, ?, ?)");
-    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->insert_stmt, &tail);
-    if (rc != SQLITE_OK) {
-        // TODO - Errors
-    }
-
-
-    ke->peers = malloc(sizeof(char *) * num_peers);
-    int i;
-    for (i = 0; i < num_peers; i++)
-        ke->peers[i] = strdup(peers[i]);
-
-    if (callbacks)
-        memcpy(&ke->callbacks, callbacks, sizeof(kepaxos_callbacks_t));
-
-    ke->commands = ht_create(128, 1024, (ht_free_item_callback_t)kepaxos_command_destroy);
-
-    MUTEX_INIT(&ke->lock);
-
-    return ke;
-}
-
-void
-kepaxos_context_destroy(kepaxos_t *ke)
-{
-    sqlite3_finalize(ke->select_seq_stmt);
-    sqlite3_finalize(ke->select_ballot_stmt);
-    sqlite3_finalize(ke->insert_stmt);
-    sqlite3_close(ke->log);
-    int i;
-    for (i = 0; i < ke->num_peers; i++)
-        free(ke->peers[i]);
-    free(ke->peers);
-    ht_destroy(ke->commands);
-    MUTEX_DESTROY(&ke->lock);
-    free(ke);
-}
 
 static void
 kepaxos_compute_key_hashes(void *key, size_t klen, uint64_t *hash1, uint64_t *hash2)
@@ -162,7 +91,6 @@ kepaxos_compute_key_hashes(void *key, size_t klen, uint64_t *hash1, uint64_t *ha
     *hash2 = sip_hash24(auth2, key, klen);
 }
 
-/*
 static uint32_t
 kepaxos_max_ballot(kepaxos_t *ke)
 {
@@ -176,8 +104,6 @@ kepaxos_max_ballot(kepaxos_t *ke)
 
     return ballot;
 }
-*/
-
 
 static uint32_t
 last_seq_for_key(kepaxos_t *ke, void *key, size_t klen)
@@ -244,6 +170,133 @@ set_last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint32_t ballot, uin
     }
 }
 
+
+static void
+kepaxos_command_destroy(kepaxos_cmd_t *c)
+{
+    MUTEX_LOCK(&c->condition_lock);
+    pthread_cond_signal(&c->condition);
+    MUTEX_UNLOCK(&c->condition_lock);
+    free(c->key);
+    if (c->data)
+        free(c->data);
+    free(c);
+}
+
+static int
+kepaxos_expire_command(hashtable_t *table,
+                                  void *key,
+                                  size_t klen,
+                                  void *value,
+                                  size_t vlen,
+                                  void *user)
+{
+    kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)value;
+    if (time(NULL) > cmd->timestamp + KEPAXOX_CMD_TTL) {
+        return -1; // if expired we want to remove this item from the table
+    }
+    return 1;
+}
+
+static void *
+kepaxos_expire_commands(void *priv)
+{
+    kepaxos_t *ke = (kepaxos_t *)priv;
+    while (!ATOMIC_READ(ke->quit)) {
+        ht_foreach_pair(ke->commands, kepaxos_expire_command, ke);
+        sleep(1);
+    }
+    return NULL;
+}
+
+kepaxos_t *
+kepaxos_context_create(char *dbfile, char **peers, int num_peers, kepaxos_callbacks_t *callbacks)
+{
+    kepaxos_t *ke = calloc(1, sizeof(kepaxos_t));
+
+    int rc = sqlite3_open(dbfile, &ke->log);
+    if (rc != SQLITE_OK) {
+        // TODO - Error messages
+        free(ke);
+        return NULL;
+    }
+
+    const char *create_table_sql = "CREATE TABLE IF NOT EXISTS ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, PRIMARY KEY(keyhash1, keyhash2))";
+    rc = sqlite3_exec(ke->log, create_table_sql, NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+        sqlite3_close(ke->log);
+        free(ke);
+    }
+
+    char sql[2048];
+    snprintf(sql, sizeof(sql), "SELECT MAX(seq) FROM ReplicaLog WHERE keyhash1=? AND keyhash2=?");
+    const char *tail = NULL;
+    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->select_seq_stmt, &tail);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
+    snprintf(sql, sizeof(sql), "SELECT MAX(ballot) FROM ReplicaLog");
+    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->select_ballot_stmt, &tail);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
+    snprintf(sql, sizeof(sql), "INSERT OR REPLACE INTO ReplicaLog VALUES(?, ?, ?, ?)");
+    rc = sqlite3_prepare_v2(ke->log, sql, sizeof(sql), &ke->insert_stmt, &tail);
+    if (rc != SQLITE_OK) {
+        // TODO - Errors
+    }
+
+
+    ke->peers = malloc(sizeof(char *) * num_peers);
+    int i;
+    for (i = 0; i < num_peers; i++)
+        ke->peers[i] = strdup(peers[i]);
+
+    if (callbacks)
+        memcpy(&ke->callbacks, callbacks, sizeof(kepaxos_callbacks_t));
+
+    ke->commands = ht_create(128, 1024, (ht_free_item_callback_t)kepaxos_command_destroy);
+
+    uint32_t max_ballot = kepaxos_max_ballot(ke);
+    ke->ballot = (max_ballot & 0xFFFFFF00) | ke->my_index;
+
+    SHC_DEBUG("Replica context created: %d replicas, starting ballot: %lu",
+              ke->num_peers, ke->ballot);
+
+    MUTEX_INIT(&ke->lock);
+
+    if (pthread_create(&ke->expirer, NULL, kepaxos_expire_commands, ke) != 0) {
+        return NULL;
+    }
+    return ke;
+}
+
+void
+kepaxos_context_destroy(kepaxos_t *ke)
+{
+    ATOMIC_SET(ke->quit, 1);
+    pthread_join(ke->expirer, NULL);
+
+    sqlite3_finalize(ke->select_seq_stmt);
+    sqlite3_finalize(ke->select_ballot_stmt);
+    sqlite3_finalize(ke->insert_stmt);
+    sqlite3_close(ke->log);
+
+    int i;
+    for (i = 0; i < ke->num_peers; i++)
+        free(ke->peers[i]);
+    free(ke->peers);
+
+    ht_destroy(ke->commands);
+
+    MUTEX_DESTROY(&ke->lock);
+
+    free(ke);
+}
+
 static size_t
 kepaxos_build_message(char **out,
                       kepaxos_msg_type_t mtype,
@@ -253,11 +306,10 @@ kepaxos_build_message(char **out,
                       uint32_t klen,
                       void *data,
                       uint32_t dlen,
-                      uint32_t expire,
                       uint32_t seq,
                       int committed)
 {
-    size_t msglen = klen + dlen + 3 + (sizeof(uint32_t) * 5);
+    size_t msglen = klen + dlen + 3 + (sizeof(uint32_t) * 4);
     char *msg = malloc(msglen);
     unsigned char committed_byte = committed ? 1 : 0;
     unsigned char mtype_byte = (unsigned char)mtype;
@@ -279,9 +331,6 @@ kepaxos_build_message(char **out,
     nbo = htonl(dlen);
     memcpy(msg + (3*sizeof(uint32_t)) + 3 + klen, &nbo, sizeof(uint32_t));
     memcpy(msg + (4*sizeof(uint32_t)) + 3 + klen, data, dlen);
-
-    nbo = htonl(expire);
-    memcpy(msg + (4*sizeof(uint32_t)) + 3 + klen + dlen, &nbo, sizeof(uint32_t));
 
     *out = msg;
     return msglen;
@@ -324,9 +373,16 @@ kepaxos_send_preaccept(kepaxos_t *ke, uint32_t ballot, void *key, size_t klen, u
     }
 
     char *msg = NULL;
-    size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_PRE_ACCEPT, 0, ballot, key, klen, NULL, 0, 0, seq, 0);
+    size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_PRE_ACCEPT, 0, ballot, key, klen, NULL, 0, seq, 0);
     int rc = ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
+    if (shardcache_log_level() >= LOG_DEBUG) {
+        char keystr[1024];
+        KEY2STR(key, klen, keystr, sizeof(keystr));
+        SHC_DEBUG("pre_accept sent to %d peers for key %s (cmd: %02x, seq: %lu, ballot: %lu)",
+                  n, keystr, seq, ballot);
+    }
+
     return rc;
 }
 
@@ -337,15 +393,24 @@ kepaxos_run_command(kepaxos_t *ke,
                     void *key,
                     size_t klen,
                     void *data,
-                    size_t dlen,
-                    uint32_t expire)
+                    size_t dlen)
 {
     // Replica R1 receives a new set/del/evict request for key K
     MUTEX_LOCK(&ke->lock);
     uint32_t seq = last_seq_for_key(ke, key, klen);
     kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)ht_get(ke->commands, key, klen, NULL);
-    if (!cmd) {
+    if (cmd) {
+        MUTEX_LOCK(&cmd->condition_lock);
+        pthread_cond_signal(&cmd->condition);
+        MUTEX_UNLOCK(&cmd->condition_lock);
+        if (cmd->key)
+            free(cmd->key);
+        if (cmd->data)
+            free(cmd->data);
+    } else {
         cmd = calloc(1, sizeof(kepaxos_cmd_t));
+        MUTEX_INIT(&cmd->condition_lock);
+        CONDITION_INIT(&cmd->condition);
         ht_set(ke->commands, key, klen, cmd, sizeof(kepaxos_cmd_t));
     }
     uint32_t interfering_seq = cmd ? cmd->seq : 0; 
@@ -359,17 +424,27 @@ kepaxos_run_command(kepaxos_t *ke,
     cmd->key = malloc(klen);
     memcpy(cmd->key, key, klen);
     cmd->klen = klen;
-    if (cmd->data)
-        free(cmd->data);
-    cmd->data = data;
+    cmd->data = malloc(dlen);
+    memcpy(cmd->data, data, dlen);
     cmd->dlen = dlen;
-    cmd->expire = expire;
     cmd->status = KEPAXOS_CMD_STATUS_PRE_ACCEPTED;
+    cmd->timestamp = time(NULL);
     uint32_t ballot = (ATOMIC_READ(ke->ballot)|0xFFFFFF00) >> 1;
     ballot++;
     ballot = (ballot << 1) | ke->my_index;
+    ATOMIC_SET_IF(ke->ballot, <, ballot, uint32_t);
+    MUTEX_LOCK(&cmd->condition_lock);
     MUTEX_UNLOCK(&ke->lock);
-    return kepaxos_send_preaccept(ke, ballot, key, klen, seq);
+    if (shardcache_log_level() >= LOG_DEBUG) {
+        char keystr[1024];
+        KEY2STR(key, klen, keystr, sizeof(keystr));
+        SHC_DEBUG("New kepaxos command for key %s (cmd: %02x, seq: %lu, ballot: %lu)",
+                  keystr, type, seq, ballot);
+    }
+    int rc = kepaxos_send_preaccept(ke, ballot, key, klen, seq);
+    pthread_cond_wait(&cmd->condition, &cmd->condition_lock);
+    MUTEX_UNLOCK(&cmd->condition_lock);
+    return rc;
 }
 
 static int
@@ -383,7 +458,7 @@ kepaxos_send_pre_accept_response(kepaxos_t *ke,
 {
     char *msg = NULL;
     size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_PRE_ACCEPT_RESPONSE,
-                                          0, ballot, key, klen, NULL, 0, 0, seq, committed);
+                                          0, ballot, key, klen, NULL, 0, seq, committed);
 
     int rc = ke->callbacks.send(&peer, 1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
@@ -403,7 +478,7 @@ kepaxos_send_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
 
     char *msg = NULL;
     size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_COMMIT, cmd->type, cmd->ballot,
-                                          cmd->key, cmd->klen, cmd->data, cmd->dlen, cmd->expire, cmd->seq, 1);
+                                          cmd->key, cmd->klen, cmd->data, cmd->dlen, cmd->seq, 1);
 
     
     int rc =  ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen, ke->callbacks.priv);
@@ -414,9 +489,11 @@ kepaxos_send_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
 static int
 kepaxos_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
 {
-    ke->callbacks.commit(cmd->type, cmd->key, cmd->klen, cmd->data, cmd->dlen, cmd->expire, 1, ke->callbacks.priv);
+    ke->callbacks.commit(cmd->type, cmd->key, cmd->klen, cmd->data, cmd->dlen, 1, ke->callbacks.priv);
     set_last_seq_for_key(ke, cmd->key, cmd->klen, cmd->ballot, cmd->seq);
-    return kepaxos_send_commit(ke, cmd);
+    int rc = kepaxos_send_commit(ke, cmd);
+    kepaxos_command_destroy(cmd);
+    return rc;
 }
 
 static int
@@ -431,7 +508,7 @@ kepaxos_send_accept(kepaxos_t *ke, uint32_t ballot, void *key, size_t klen, uint
     }
 
     char *msg = NULL;
-    size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_ACCEPT, 0, ballot, key, klen, NULL, 0, 0, seq, 0);
+    size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_ACCEPT, 0, ballot, key, klen, NULL, 0, seq, 0);
     int rc = ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
     return rc;
@@ -448,7 +525,7 @@ kepaxos_send_accept_response(kepaxos_t *ke,
 {
     char *msg = NULL;
     size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE,
-                                          0, ballot, key, klen, NULL, 0, 0, seq, committed);
+                                          0, ballot, key, klen, NULL, 0, seq, committed);
     int rc = ke->callbacks.send(&peer, 1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
     return rc;
@@ -483,9 +560,6 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
     p += sizeof(uint32_t);
     void *data = dlen ? p : NULL;
     p += dlen;
-
-    uint32_t expire = ntohl(*((uint32_t *)p));
-    p+= sizeof(uint32_t);
 
     // done with parsing
 
@@ -604,6 +678,13 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
         }
         case KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE:
         {
+            if (shardcache_log_level() >= LOG_DEBUG) {
+                char keystr[1024];
+                KEY2STR(key, klen, keystr, sizeof(keystr));
+                SHC_DEBUG("pre_accept response received for key %s (seq: %lu, ballot: %lu)",
+                          keystr, seq, ballot);
+            }
+
             MUTEX_LOCK(&ke->lock);
             kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)ht_get(ke->commands, key, klen, NULL);
             if (cmd) {
@@ -672,7 +753,7 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                 MUTEX_UNLOCK(&ke->lock);
                 return 0;
             }
-            ke->callbacks.commit(ctype, key, klen, data, dlen, expire, 0, ke->callbacks.priv);
+            ke->callbacks.commit(ctype, key, klen, data, dlen, 0, ke->callbacks.priv);
             set_last_seq_for_key(ke, key, klen, ballot, seq);
             if (cmd && cmd->seq == seq)
                 ht_delete(ke->commands, key, klen, NULL, NULL);

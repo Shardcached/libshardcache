@@ -20,40 +20,41 @@
 
 typedef enum {
     // data commands
-    SHC_HDR_GET             = 0x01,
-    SHC_HDR_SET             = 0x02,
-    SHC_HDR_DELETE          = 0x03,
-    SHC_HDR_EVICT           = 0x04,
-    SHC_HDR_GET_ASYNC       = 0x05,
-    SHC_HDR_GET_OFFSET      = 0x06,
-    SHC_HDR_ADD             = 0x07,
-    SHC_HDR_EXISTS          = 0x08,
-    SHC_HDR_TOUCH           = 0x09,
+    SHC_HDR_GET              = 0x01,
+    SHC_HDR_SET              = 0x02,
+    SHC_HDR_DELETE           = 0x03,
+    SHC_HDR_EVICT            = 0x04,
+    SHC_HDR_GET_ASYNC        = 0x05,
+    SHC_HDR_GET_OFFSET       = 0x06,
+    SHC_HDR_ADD              = 0x07,
+    SHC_HDR_EXISTS           = 0x08,
+    SHC_HDR_TOUCH            = 0x09,
 
     // migration commands
-    SHC_HDR_MIGRATION_ABORT = 0x21,
-    SHC_HDR_MIGRATION_BEGIN = 0x22,
-    SHC_HDR_MIGRATION_END   = 0x23,
+    SHC_HDR_MIGRATION_ABORT  = 0x21,
+    SHC_HDR_MIGRATION_BEGIN  = 0x22,
+    SHC_HDR_MIGRATION_END    = 0x23,
 
     // administrative commands
-    SHC_HDR_CHECK           = 0x31,
-    SHC_HDR_STATS           = 0x32,
+    SHC_HDR_CHECK            = 0x31,
+    SHC_HDR_STATS            = 0x32,
 
     // index-related commands
-    SHC_HDR_GET_INDEX       = 0x41,
-    SHC_HDR_INDEX_RESPONSE  = 0x42,
+    SHC_HDR_GET_INDEX        = 0x41,
+    SHC_HDR_INDEX_RESPONSE   = 0x42,
 
     // no-op (for ping/health-check)
-    SHC_HDR_NOOP            = 0x90,
+    SHC_HDR_NOOP             = 0x90,
 
     // generic response header
-    SHC_HDR_RESPONSE        = 0x99,
+    SHC_HDR_RESPONSE         = 0x99,
 
-    SHC_HDR_REPLICA_CMD     = 0xA0,
+    SHC_HDR_REPLICA_COMMAND  = 0xA0,
+    SHC_HDR_REPLICA_RESPONSE = 0xA0,
 
     // signature headers
-    SHC_HDR_SIGNATURE_SIP   = 0xF0,
-    SHC_HDR_CSIGNATURE_SIP  = 0xF1
+    SHC_HDR_SIGNATURE_SIP    = 0xF0,
+    SHC_HDR_CSIGNATURE_SIP   = 0xF1
 
 } shardcache_hdr_t;
 

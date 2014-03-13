@@ -28,10 +28,8 @@ typedef int (*kepaxos_commit_callback_t)(unsigned char type,
                                          size_t klen,
                                          void *data,
                                          size_t dlen,
-                                         uint32_t expire,
                                          int leader,
                                          void *priv);
-
 
 typedef int (*kepaxos_recover_callback_t)(char *peer,
                                           void *key,
@@ -60,8 +58,7 @@ int kepaxos_run_command(kepaxos_t *ke,
                         void *key,
                         size_t klen,
                         void *data,
-                        size_t dlen,
-                        uint32_t expire);
+                        size_t dlen);
 
 int kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen);
 

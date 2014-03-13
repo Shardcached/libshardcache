@@ -4,11 +4,13 @@
 #include <linklist.h>
 #include <fbuf.h>
 #include <pqueue.h>
+#include <iomux.h>
 
 #include "atomic.h"
 #include "kepaxos.h"
 #include "shardcache_internal.h"
 
+#include <unistd.h>
 #include <sys/time.h>
 
 #define SHARDCACHE_REPLICA_WRKDIR_DEFAULT "/tmp/shcrpl"
@@ -24,6 +26,8 @@ struct __shardcache_replica_s {
     pqueue_t *recovery_queue;
     int quit;
     pthread_t recover_th;
+    pthread_t async_io_th;
+    iomux_t *iomux;
 };
 
 typedef struct {
@@ -33,12 +37,98 @@ typedef struct {
     uint32_t seq;
 } shardcache_item_to_recover_t;
 
+typedef struct {
+    size_t len;
+    uint32_t expire;
+    char data; // first byte of the data
+} kepaxos_data_t;
+
+typedef struct {
+    shardcache_replica_t *replica;
+    async_read_ctx_t *ctx;
+    char *peer;
+    int fd;
+    fbuf_t input;
+    fbuf_t output;
+} kepaxos_connection_t;
+
 static void
 free_item_to_recover(shardcache_item_to_recover_t *item)
 {
     free(item->peer);
     free(item->key);
     free(item);
+}
+
+static int
+kepaxos_connection_append_input_data(void *data,
+                                     size_t len,
+                                     int  idx,
+                                     void *priv)
+{
+    kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
+    if (idx == 0) {
+        fbuf_add_binary(&connection->input, data, len);
+    }
+    return 0;
+}
+
+static void
+kepaxos_connection_input(iomux_t *iomux, int fd, void *data, int len, void *priv)
+{
+    kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
+    shardcache_replica_t *replica = connection->replica;
+
+    fbuf_t out = FBUF_STATIC_INITIALIZER;
+    int rc = async_read_context_input_data(data, len, connection->ctx);
+    if (rc != 0) {
+    }
+
+    int read_state = async_read_context_state(connection->ctx);
+    if (read_state == SHC_STATE_READING_DONE ||
+        read_state == SHC_STATE_READING_ERR  ||
+        read_state == SHC_STATE_AUTH_ERR)
+    {
+        shardcache_hdr_t hdr = async_read_context_hdr(connection->ctx);
+        if (hdr == SHC_HDR_REPLICA_RESPONSE) {
+            kepaxos_received_command(replica->kepaxos, connection->peer, fbuf_data(&out), fbuf_used(&out));
+            iomux_remove(iomux, fd);
+            shardcache_release_connection_for_peer(replica->shc, connection->peer, fd);
+            async_read_context_destroy(connection->ctx);
+            free(connection);
+        } else {
+            // TODO - Error message for unexpected response
+            iomux_close(iomux, fd);
+        }
+    }
+
+}
+
+static void 
+kepaxos_connection_output(iomux_t *iomux, int fd, void *priv)
+{
+    kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
+    if (fbuf_used(&connection->output)) {
+        int wb = iomux_write(iomux, fd, fbuf_data(&connection->output), fbuf_used(&connection->output));
+        fbuf_remove(&connection->output, wb);
+    } else {
+        iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
+        cbs->mux_output = NULL;
+    }
+}
+
+static void
+kepaxos_connection_timeout(iomux_t *iomux, int fd, void *priv)
+{
+}
+
+static void
+kepaxos_connection_eof(iomux_t *iomux, int fd, void *priv)
+{
+    kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
+    async_read_context_destroy(connection->ctx);
+    free(connection);
+    close(fd);
 }
 
 static int
@@ -55,20 +145,31 @@ kepaxos_send(char **recipients,
         int fd = shardcache_get_connection_for_peer(replica->shc, recipients[i]);
         if (fd < 0)
             continue;
+        kepaxos_connection_t *connection = calloc(1, sizeof(kepaxos_connection_t));
+        connection->replica = replica;
+        connection->peer = recipients[i];
+        connection->fd = fd;
+        connection->ctx = async_read_context_create((char *)replica->shc->auth,
+                                                    kepaxos_connection_append_input_data,
+                                                    connection);
         shardcache_record_t record = {
             .v = cmd,
             .l = cmd_len
         };
-        int rc = write_message(fd, (char *)replica->shc->auth, 0, SHC_HDR_REPLICA_CMD, &record, 1);
+        int rc = build_message((char *)replica->shc->auth, 0, SHC_HDR_REPLICA_COMMAND, &record, 1, &connection->output);
         if (rc == 0) {
-            fbuf_t out = FBUF_STATIC_INITIALIZER;
-            shardcache_hdr_t hdr;
-            rc = read_message(fd, (char *)replica->shc->auth, &out, &hdr);
-            if (rc == 0 && hdr == SHC_HDR_REPLICA_CMD) {
-                kepaxos_received_command(replica->kepaxos, recipients[i], fbuf_data(&out), fbuf_used(&out));
-            }
+
+            iomux_callbacks_t callbacks = {
+                .mux_input = kepaxos_connection_input,
+                .mux_output = kepaxos_connection_output,
+                .mux_timeout = kepaxos_connection_timeout,
+                .mux_eof = kepaxos_connection_eof,
+                .mux_connection = NULL,
+                .priv = connection
+            };
+
+            iomux_add(replica->iomux, fd, &callbacks);
         }
-        shardcache_release_connection_for_peer(replica->shc, recipients[i], fd);
     }
     return 0;
 }
@@ -159,23 +260,36 @@ kepaxos_commit(unsigned char type,
                size_t klen,
                void *data,
                size_t dlen,
-               uint32_t expire,
                int leader,
                void *priv)
 {
     shardcache_replica_t *replica = (shardcache_replica_t *)priv;
+    int rc = -1;
+
+    kepaxos_data_t *kdata = (kepaxos_data_t *)data;
 
     switch(type) {
         case SHARDCACHE_REPLICA_OP_SET:
-            return shardcache_set_internal(replica->shc, key, klen, data, dlen, expire, 0, leader ? 0 : 1);
+            rc = shardcache_set_internal(replica->shc, key, klen, &kdata->data, kdata->len, kdata->expire, 0, leader ? 0 : 1);
         case SHARDCACHE_REPLICA_OP_DELETE:
-            return shardcache_del_internal(replica->shc, key, klen, leader ? 0 : 1);
+            rc = shardcache_del_internal(replica->shc, key, klen, leader ? 0 : 1);
         case SHARDCACHE_REPLICA_OP_EVICT:
-            return shardcache_evict(replica->shc, key, klen);
+            rc = shardcache_evict(replica->shc, key, klen);
         default:
             break;
     }
-    return 0;
+
+    return rc;
+}
+
+void *shardcache_replica_async_io(void *priv)
+{
+    shardcache_replica_t *replica = (shardcache_replica_t *)priv;
+    while (!replica->quit) {
+        struct timeval timeout = { 0, 500 };
+        iomux_run(replica->iomux, &timeout);
+    }
+    return NULL;
 }
 
 shardcache_replica_t *
@@ -218,6 +332,8 @@ shardcache_replica_create(shardcache_t *shc,
         return NULL;
     }
 
+    replica->iomux = iomux_create();
+    iomux_set_threadsafe(replica->iomux, 1);
     return replica;
 }
 
@@ -248,43 +364,21 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
     // stop any recovery process if in progress
     ht_delete(replica->recovery, key, klen, NULL, NULL);
 
-    return kepaxos_run_command(replica->kepaxos,
-                               replica->me,
-                               (unsigned char)op,
-                               key,
-                               klen,
-                               data,
-                               dlen,
-                               expire);
+    size_t kdlen = sizeof(kepaxos_data_t) + dlen;
+    kepaxos_data_t *kdata = malloc(kdlen);
+    kdata->len = dlen;
+    kdata->expire = expire;
+    memcpy(&kdata->data, data, dlen);
 
+    int rc = kepaxos_run_command(replica->kepaxos,
+                                 replica->me,
+                                 (unsigned char)op,
+                                 key,
+                                 klen,
+                                 kdata,
+                                 kdlen);
 
+    free(kdata);
+    return rc;
 }
-
-/*
-shardcache_replica_status_t
-shardcache_replica_status(shardcache_replica_t *replica, char *addr)
-{
-    shardcache_replica_node_t *node = ht_get(replica->status, addr, strlen(addr), NULL);
-    if (!node)
-        return SHARDCACHE_REPLICA_STATUS_UNKNOWN;
-
-    return node->status;
-}
-
-shardcache_replica_status_t
-shardcache_replica_set_status(shardcache_replica_t *replica,
-                              char *addr,
-                              shardcache_replica_status_t status)
-{
-    shardcache_replica_node_t *node = ht_get(replica->status, addr, strlen(addr), NULL);
-    if (!node)
-        return SHARDCACHE_REPLICA_STATUS_UNKNOWN;
-
-    shardcache_replica_status_t st = node->status;
-    node->status = status;
-    return st;
-}
-*/
-
-
 
