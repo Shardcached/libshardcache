@@ -359,11 +359,13 @@ kepaxos_build_message(char **out,
 
     nbo = htonl(klen);
     memcpy(msg + (2*sizeof(uint32_t)) + 3, &nbo, sizeof(uint32_t));
-    memcpy(msg + (3*sizeof(uint32_t)) + 3, key, klen);
+    if (klen)
+        memcpy(msg + (3*sizeof(uint32_t)) + 3, key, klen);
 
     nbo = htonl(dlen);
     memcpy(msg + (3*sizeof(uint32_t)) + 3 + klen, &nbo, sizeof(uint32_t));
-    memcpy(msg + (4*sizeof(uint32_t)) + 3 + klen, data, dlen);
+    if (dlen)
+        memcpy(msg + (4*sizeof(uint32_t)) + 3 + klen, data, dlen);
 
     *out = msg;
     return msglen;
@@ -570,37 +572,72 @@ kepaxos_send_accept_response(kepaxos_t *ke,
     return rc;
 }
 
+static int
+kepaxos_parse_message(char *msg,
+                      size_t msglen,
+                      uint32_t *ballot,
+                      uint32_t *seq,
+                      unsigned char *mtype,
+                      unsigned char *ctype,
+                      unsigned char *committed,
+                      uint32_t *klen,
+                      void **key,
+                      uint32_t *dlen,
+                      void **data)
+{
+    size_t baselen = (sizeof(uint32_t) * 4) + 3;
+    if (msglen < baselen)
+        return -1;
+
+    char *p = msg;
+
+    *ballot = ntohl(*((uint32_t *)p));
+    p += sizeof(uint32_t);
+
+    *seq = ntohl(*((uint32_t *)p));
+    p += sizeof(uint32_t);
+
+    *mtype = *p++;
+    *ctype = *p++;
+    *committed = *p++;
+
+    *klen = ntohl(*((uint32_t *)p));
+
+    if (msglen < baselen + *klen)
+        return -1;
+
+    p += sizeof(uint32_t);
+    if (*klen) {
+        *key = p;
+        p += *klen;
+    }
+
+    *dlen = ntohl(*((uint32_t *)p));
+
+    if (msglen < baselen + *klen + *dlen)
+        return -1;
+
+    if (*dlen) {
+        p += sizeof(uint32_t);
+        *data = dlen ? p : NULL;
+    }
+
+    return 0;
+}
+
 int
 kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
 {
     if (cmdlen < sizeof(uint32_t) * 4)
         return -1;
+    uint32_t ballot, seq, klen, dlen;
+    unsigned char mtype, ctype, committed;
+    void *key = NULL, *data = NULL;
 
-    // parse the message
-
-    char *p = cmd;
-
-    uint32_t ballot = ntohl(*((uint32_t *)p));
-    p += sizeof(uint32_t);
-
-    uint32_t seq = ntohl(*((uint32_t *)p));
-    p += sizeof(uint32_t);
-
-    unsigned char mtype = *p++;
-    unsigned char ctype = *p++;
-    unsigned char committed = *p++;
-
-    uint32_t klen = ntohl(*((uint32_t *)p));
-    p += sizeof(uint32_t);
-    void *key = p;
-    p += klen;
-
-    uint32_t dlen = ntohl(*((uint32_t *)p));
-    p += sizeof(uint32_t);
-    void *data = dlen ? p : NULL;
-    p += dlen;
-
-    // done with parsing
+    int rc = kepaxos_parse_message(cmd, cmdlen, &ballot, &seq, &mtype, &ctype,
+                                   &committed, &klen, &key, &dlen, &data);
+    if (rc != 0)
+        return -1;
 
     // update the ballot if the current ballot number is bigger
     uint32_t updated_ballot = (ballot&0xFFFFFF00) >> 8;
@@ -746,7 +783,6 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
             }
             MUTEX_UNLOCK(&ke->lock);
             return kepaxos_send_accept_response(ke, peer, accepted_ballot, key, klen, accepted_seq, 0);
-            break;
         }
         case KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE:
         {
