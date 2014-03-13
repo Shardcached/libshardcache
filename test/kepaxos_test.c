@@ -1,9 +1,15 @@
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <ut.h>
 #include <libgen.h>
 #include <stdio.h>
+
+#include <sqlite3.h>
+
+#define HAVE_UINT64_T
+#include <siphash.h>
 
 #include <kepaxos.h>
 
@@ -58,6 +64,53 @@ static int recover_callback(char *peer,
     return 0;
 }
 
+typedef struct {
+    uint32_t seq;
+    uint32_t ballot;
+} kepaxos_log_item;
+
+int fetch_log(char *dbfile, void *key, size_t klen, kepaxos_log_item *item)
+{
+    sqlite3 *log;
+    int rc = sqlite3_open(dbfile, &log);
+    if (rc != SQLITE_OK) {
+        return -1;
+    }
+
+    const char *tail = NULL;
+    sqlite3_stmt *stmt;
+    rc = sqlite3_prepare_v2(log, "SELECT seq, ballot FROM ReplicaLog WHERE keyhash1=? AND keyhash2=?", -1, &stmt, &tail);
+    if (rc != SQLITE_OK) {
+        sqlite3_close(log);
+        return -1;
+    }
+
+    uint64_t keyhash1 = sip_hash24((unsigned char *)"0123456789ABCDEF", key, klen);
+    uint64_t keyhash2 = sip_hash24((unsigned char *)"ABCDEF0987654321", key, klen);
+
+    rc = sqlite3_bind_int64(stmt, 1, keyhash1);
+    if (rc != SQLITE_OK) {
+        sqlite3_finalize(stmt);
+        sqlite3_close(log);
+        return -1;
+    }
+    rc = sqlite3_bind_int64(stmt, 2, keyhash2);
+    if (rc != SQLITE_OK) {
+        sqlite3_finalize(stmt);
+        sqlite3_close(log);
+        return -1;
+    }
+
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        item->seq = sqlite3_column_int(stmt, 0);
+        item->ballot = sqlite3_column_int(stmt, 1);
+
+        return 0;
+    }
+    return -1;
+}
+
 
 int main(int argc, char **argv)
 {
@@ -97,12 +150,32 @@ int main(int argc, char **argv)
     ut_testing("kepaxos_run_command() triggered 4 messages");
     ut_validate_int(total_messages_sent, 4);
 
+    ut_testing("kepaxos_run_command() propagates to all replicas");
     rc = kepaxos_run_command(contexts[0], "node1", 0x00, "test_key", 8, "test_value", 10);
+
+    int check = 1;
+    kepaxos_log_item prev_item = { 0, 0 };
     for (i = 0; i < 5; i++) {
+        char dbfile[2048];
+        snprintf(dbfile, sizeof(dbfile), "/tmp/kepaxos_test%d.db", i);
+        kepaxos_log_item item;
+        fetch_log(dbfile, "test_key", 8, &item);
+        if (i > 0 && memcmp(&prev_item, &item, sizeof(prev_item)) != 0) {
+            check = 0;
+            break;
+        }
+        memcpy(&prev_item, &item, sizeof(prev_item));
     }
+    if (check)
+        ut_success();
+    else
+        ut_failure("Logs are not aligned on all replicas");
 
     for (i = 0; i < 5; i++) {
         kepaxos_context_destroy(contexts[i]);
+        char dbfile[2048];
+        snprintf(dbfile, sizeof(dbfile), "/tmp/kepaxos_test%d.db", i);
+        unlink(dbfile);
     }
 __exit:
     ut_summary();
