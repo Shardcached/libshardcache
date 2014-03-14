@@ -598,14 +598,17 @@ kepaxos_run_command(kepaxos_t *ke,
 
     uint64_t seq = cmd->seq;
     uint64_t ballot = cmd->ballot;
-    MUTEX_UNLOCK(&ke->lock);
+    MUTE_UNLOCK(&ke->lock);
+
     if (shardcache_log_level() >= LOG_DEBUG) {
         char keystr[1024];
         KEY2STR(key, klen, keystr, sizeof(keystr));
         SHC_DEBUG("New kepaxos command for key %s (cmd: %02x, seq: %lu, ballot: %lu)",
                   keystr, type, seq, ballot);
     }
+
     int rc = kepaxos_send_preaccept(ke, ballot, key, klen, seq);
+
     if (rc >= 0) {
         MUTEX_LOCK(&ke->lock);
         kepaxos_cmd_t *now_cmd = (kepaxos_cmd_t *)ht_get(ke->commands, key, klen, NULL);
@@ -623,10 +626,10 @@ kepaxos_run_command(kepaxos_t *ke,
         kepaxos_command_free(cmd);
     }
 
-    uint64_t current_seq = last_seq_for_key(ke, key, klen, NULL);
     // here the command have either succeeded or failed, we can
     // determine it by checking if the current committed seq is 
     // equal or greater than the seq we tried to commit
+    uint64_t current_seq = last_seq_for_key(ke, key, klen, NULL);
     return (current_seq >= seq) ? 0 : -1;
 }
 
@@ -688,8 +691,8 @@ kepaxos_parse_message(char *msg,
                       size_t msglen,
                       kepaxos_msg_t *msg_struct)
 {
-    size_t baselen = (sizeof(uint32_t) * 6) + 3 + sizeof(uint16_t);
-    if (msglen < baselen)
+    size_t expected_len = (sizeof(uint32_t) * 6) + 3 + sizeof(uint16_t);
+    if (msglen < expected_len)
         return -1;
 
     char *p = msg;
@@ -698,6 +701,8 @@ kepaxos_parse_message(char *msg,
     p += sizeof(uint16_t);
     msg_struct->peer = p;
     p += sender_len;
+
+    expected_len += sender_len;
 
     uint32_t ballot_high = ntohl(*((uint32_t *)p));
     p += sizeof(uint32_t);
@@ -721,7 +726,9 @@ kepaxos_parse_message(char *msg,
 
     msg_struct->klen = ntohl(*((uint32_t *)p));
 
-    if (msglen < baselen + msg_struct->klen)
+    expected_len += msg_struct->klen;
+
+    if (msglen < expected_len)
         return -1;
 
     p += sizeof(uint32_t);
@@ -734,7 +741,9 @@ kepaxos_parse_message(char *msg,
 
     msg_struct->dlen = ntohl(*((uint32_t *)p));
 
-    if (msglen < baselen + msg_struct->klen + msg_struct->dlen)
+    expected_len += msg_struct->dlen;
+
+    if (msglen < expected_len)
         return -1;
 
     if (msg_struct->dlen) {
