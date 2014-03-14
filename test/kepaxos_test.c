@@ -213,12 +213,12 @@ int main(int argc, char **argv)
 
 
     int committed = total_values_committed;
-    contexts[2].online = 0;
+    contexts[2].online = 0; // replica 2 crashes as well
     ut_testing("kepaxos_run_command() succeds with less than N/2+1 active replicas");
     rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key2", 8, "test_value2", 10);
     ut_validate_int(committed, total_values_committed);
 
-    ut_testing("offline replicas come back and a new value is set using one of them");
+    ut_testing("offline replicas come back online and a new value is set using one of them");
     contexts[2].online = 1;
     contexts[3].online = 1;
     contexts[4].online = 1;
@@ -228,8 +228,6 @@ int main(int argc, char **argv)
         ut_success();
     else
         ut_failure("Logs are not aligned on the active replicas");
-
-
 
     for (i = 0; i < 5; i++) {
         kepaxos_context_destroy(contexts[i].ke);
