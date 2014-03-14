@@ -27,6 +27,8 @@ struct __shardcache_replica_s {
     pqueue_t *recovery_queue;
     uint32_t recovering;
     uint32_t ballot;
+    uint32_t commits;
+    uint32_t commit_fails;
     int quit;
     pthread_t recover_th;
     pthread_t async_io_th;
@@ -314,6 +316,10 @@ kepaxos_commit(unsigned char type,
         default:
             break;
     }
+
+    ATOMIC_INCREMENT(replica->commits);
+    if (rc != 0)
+        ATOMIC_INCREMENT(replica->commit_fails);
     
     return rc;
 }
@@ -373,6 +379,8 @@ shardcache_replica_create(shardcache_t *shc,
 
     shardcache_counter_add(replica->shc->counters, "replica_recovering", &replica->recovering);
     shardcache_counter_add(replica->shc->counters, "replica_ballot", &replica->ballot);
+    shardcache_counter_add(replica->shc->counters, "replica_commits", &replica->commits);
+    shardcache_counter_add(replica->shc->counters, "replica_commit_fails", &replica->commit_fails);
 
     return replica;
 }
