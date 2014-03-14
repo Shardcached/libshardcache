@@ -19,6 +19,8 @@
 
 #define KEPAXOS_CMD_TTL 30 // default to 30 seconds
 
+#define BALLOT2NODE(__k, __b) (__k)->peers[ (__b) & 0x00000000000000FF ]
+
 typedef enum {
     KEPAXOS_CMD_STATUS_NONE=0,
     KEPAXOS_CMD_STATUS_PRE_ACCEPTED,
@@ -79,7 +81,7 @@ struct __kepaxos_s {
     int timeout;
 };
 
-static void
+static inline void
 kepaxos_compute_key_hashes(void *key, size_t klen, uint64_t *hash1, uint64_t *hash2)
 {
     unsigned char auth1[16] = "0123456789ABCDEF";
@@ -89,7 +91,7 @@ kepaxos_compute_key_hashes(void *key, size_t klen, uint64_t *hash1, uint64_t *ha
     *hash2 = sip_hash24(auth2, key, klen);
 }
 
-static uint64_t
+static inline uint64_t
 kepaxos_max_ballot(kepaxos_t *ke)
 {
     uint64_t ballot = 0;
@@ -107,7 +109,7 @@ kepaxos_max_ballot(kepaxos_t *ke)
     return ballot;
 }
 
-static uint64_t
+static inline uint64_t
 last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint64_t *ballot)
 {
     uint64_t keyhash1, keyhash2;
@@ -144,7 +146,7 @@ last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint64_t *ballot)
     return seq;
 }
 
-static void
+static inline void
 set_last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint64_t ballot, uint64_t seq)
 {
     uint64_t keyhash1, keyhash2;
@@ -227,8 +229,8 @@ kepaxos_expire_command(hashtable_t *table,
         if (cmd->status == KEPAXOS_CMD_STATUS_PRE_ACCEPTED ||
             cmd->status == KEPAXOS_CMD_STATUS_ACCEPTED)
         {
-            int node_index = cmd->ballot & 0x00000000000000FF;
-            ke->callbacks.recover(ke->peers[node_index], key, klen, cmd->seq, cmd->ballot, ke->callbacks.priv);
+            ke->callbacks.recover(BALLOT2NODE(ke, cmd->ballot),
+                    key, klen, cmd->seq, cmd->ballot, ke->callbacks.priv);
         }
         return -1; // if expired we want to remove this item from the table
     }
@@ -246,6 +248,31 @@ kepaxos_expire_commands(void *priv)
     return NULL;
 }
 
+static inline void
+kepaxos_reset_ballot(kepaxos_t *ke)
+{
+    MUTEX_LOCK(&ke->lock);
+    // TODO - implement logic to handle the edge case of consuming all available
+    //        ballot numbers so we need to restart from 1
+    MUTEX_UNLOCK(&ke->lock);
+}
+
+static inline uint64_t
+update_ballot(kepaxos_t *ke, uint64_t ballot)
+{
+   // update the ballot if the current ballot number is bigger
+   uint64_t real_ballot = (ballot&0xFFFFFF00) >> 8;
+    uint64_t updated_ballot = real_ballot + 1;
+    if (real_ballot == 0) {
+        kepaxos_reset_ballot(ke);
+    } else if (updated_ballot == 0) {
+        ATOMIC_SET(ke->ballot, (uint64_t)ke->my_index);
+    } else {
+        ATOMIC_SET_IF(ke->ballot, <, (updated_ballot << 8) | ke->my_index, uint64_t);
+    }
+    return ATOMIC_READ(ke->ballot);
+}
+
 kepaxos_t *
 kepaxos_context_create(char *dbfile,
                        char **peers,
@@ -258,6 +285,7 @@ kepaxos_context_create(char *dbfile,
 
     ke->timeout = timeout > 0 ? timeout : KEPAXOS_CMD_TTL;
     ke->my_index = my_index;
+    ke->ballot = (1 << 8) | ke->my_index;
 
     int rc = sqlite3_open(dbfile, &ke->log);
     if (rc != SQLITE_OK) {
@@ -266,7 +294,9 @@ kepaxos_context_create(char *dbfile,
         return NULL;
     }
 
-    const char *create_table_sql = "CREATE TABLE IF NOT EXISTS ReplicaLog (ballot int, keyhash1 int, keyhash2 int, seq int, PRIMARY KEY(keyhash1, keyhash2))";
+    const char *create_table_sql = "CREATE TABLE IF NOT EXISTS ReplicaLog "
+                                   "(ballot int, keyhash1 int, keyhash2 int, seq int,"
+                                   "PRIMARY KEY(keyhash1, keyhash2))";
     rc = sqlite3_exec(ke->log, create_table_sql, NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
         sqlite3_close(ke->log);
@@ -325,7 +355,7 @@ kepaxos_context_create(char *dbfile,
 
     uint64_t max_ballot = kepaxos_max_ballot(ke) >> 8;
     max_ballot++;
-    ke->ballot = (max_ballot << 8) | ke->my_index;
+    update_ballot(ke, max_ballot);
 
     SHC_DEBUG("Replica context created: %d replicas, starting ballot: %lu",
               ke->num_peers, ke->ballot);
@@ -371,7 +401,7 @@ kepaxos_context_destroy(kepaxos_t *ke)
     free(ke);
 }
 
-static size_t
+static inline size_t
 kepaxos_build_message(char **out,
                       kepaxos_msg_type_t mtype,
                       unsigned char ctype, 
@@ -549,15 +579,15 @@ kepaxos_send_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
     return rc;
 }
 
-static int
+static inline int
 kepaxos_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
 {
     int rc = ke->callbacks.commit(cmd->type, cmd->key, cmd->klen, cmd->data, cmd->dlen, 1, ke->callbacks.priv);
     if (rc == 0) {
         set_last_seq_for_key(ke, cmd->key, cmd->klen, cmd->ballot, cmd->seq);
         rc = kepaxos_send_commit(ke, cmd);
-        kepaxos_command_destroy(cmd);
     }
+    kepaxos_command_destroy(cmd);
     // TODO - recovery if commit failed? try again?
     return rc;
 }
@@ -597,7 +627,7 @@ kepaxos_send_accept_response(kepaxos_t *ke,
     return rc;
 }
 
-static int
+static inline int
 kepaxos_parse_message(char *msg,
                       size_t msglen,
                       uint64_t *ballot,
@@ -660,14 +690,6 @@ kepaxos_parse_message(char *msg,
     return 0;
 }
 
-void
-kepaxos_reset_ballot(kepaxos_t *ke)
-{
-    MUTEX_LOCK(&ke->lock);
-
-    MUTEX_UNLOCK(&ke->lock);
-}
-
 int
 kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
 {
@@ -683,16 +705,7 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
     if (rc != 0)
         return -1;
 
-    // update the ballot if the current ballot number is bigger
-    uint64_t real_ballot = (ballot&0xFFFFFF00) >> 8;
-    uint64_t updated_ballot = real_ballot + 1;
-    if (real_ballot == 0) {
-        kepaxos_reset_ballot(ke);
-    } else if (updated_ballot == 0) {
-        ATOMIC_SET(ke->ballot, (uint64_t)ke->my_index);
-    } else {
-        ATOMIC_SET_IF(ke->ballot, <, (updated_ballot << 8) | ke->my_index, uint64_t);
-    }
+    update_ballot(ke, ballot);
 
     switch(mtype) {
         case KEPAXOS_MSG_TYPE_PRE_ACCEPT:
@@ -733,8 +746,8 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
             uint64_t max_seq = MAX(seq, interfering_seq);
             if (seq >= interfering_seq) {
                 if (cmd->status == KEPAXOS_CMD_STATUS_ACCEPTED) {
-                    int node_index = cmd->ballot & 0x00000000000000FF;
-                    ke->callbacks.recover(ke->peers[node_index], key, klen, cmd->seq, cmd->ballot, ke->callbacks.priv);
+                    ke->callbacks.recover(BALLOT2NODE(ke, cmd->ballot),
+                            key, klen, cmd->seq, cmd->ballot, ke->callbacks.priv);
                 }
                 cmd->status = KEPAXOS_CMD_STATUS_PRE_ACCEPTED;
                 cmd->seq = interfering_seq;
@@ -743,7 +756,6 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
             ballot = cmd->ballot;
             MUTEX_UNLOCK(&ke->lock);
             return kepaxos_send_pre_accept_response(ke, peer, ballot, key, klen, max_seq, (int)committed);
-            break;
         }
         case KEPAXOS_MSG_TYPE_PRE_ACCEPT_RESPONSE:
         {
