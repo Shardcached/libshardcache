@@ -39,6 +39,19 @@ typedef enum {
 typedef struct {
     char *peer;
     uint64_t ballot;
+    uint64_t seq;
+    unsigned char mtype;
+    unsigned char ctype;
+    unsigned char committed;
+    void *key;
+    uint32_t klen;
+    void *data;
+    uint32_t dlen;
+} kepaxos_msg_t;
+
+typedef struct {
+    char *peer;
+    uint64_t ballot;
     void *key;
     size_t klen;
     uint64_t seq;
@@ -272,8 +285,8 @@ kepaxos_reset_ballot(kepaxos_t *ke)
 static inline uint64_t
 update_ballot(kepaxos_t *ke, uint64_t ballot)
 {
-   // update the ballot if the current ballot number is bigger
-   uint64_t real_ballot = (ballot&0xFFFFFF00) >> 8;
+    // update the ballot if the current ballot number is bigger
+    uint64_t real_ballot = (ballot&0xFFFFFF00) >> 8;
     uint64_t updated_ballot = real_ballot + 1;
     if (real_ballot == 0) {
         kepaxos_reset_ballot(ke);
@@ -667,19 +680,6 @@ kepaxos_send_accept_response(kepaxos_t *ke,
     return rc;
 }
 
-typedef struct {
-    char *peer;
-    uint64_t ballot;
-    uint64_t seq;
-    unsigned char mtype;
-    unsigned char ctype;
-    unsigned char committed;
-    void *key;
-    uint32_t klen;
-    void *data;
-    uint32_t dlen;
-} kepaxos_msg_t;
-
 static inline int
 kepaxos_parse_message(char *msg,
                       size_t msglen,
@@ -739,7 +739,7 @@ kepaxos_parse_message(char *msg,
     return 0;
 }
 
-static int
+static inline int
 kepaxos_handle_preaccept(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
 {
     // Any replica R receiving a PRE_ACCEPT(BALLOT, K, SEQ) from R1
@@ -790,7 +790,7 @@ kepaxos_handle_preaccept(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
     return kepaxos_send_pre_accept_response(ke, peer, ballot, msg->key, msg->klen, max_seq, committed);
 }
 
-static int
+static inline int
 kepaxos_handle_preaccept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
 {
     MUTEX_LOCK(&ke->lock);
@@ -849,7 +849,7 @@ kepaxos_handle_preaccept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
     return 0;
 }
 
-static int
+static inline int
 kepaxos_handle_accept(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
 {
     // Any replica R receiving an ACCEPT(BALLOT, K, SEQ) from R1
@@ -899,7 +899,7 @@ kepaxos_handle_accept(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
     return kepaxos_send_accept_response(ke, peer, accepted_ballot, msg->key, msg->klen, accepted_seq, committed);
 }
 
-static int
+static inline int
 kepaxos_handle_accept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
 {
     if (shardcache_log_level() >= LOG_DEBUG && msg->key) {
@@ -978,7 +978,7 @@ kepaxos_handle_accept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
     return 0;
 }
 
-static int
+static inline int
 kepaxos_handle_commit(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
 {
     MUTEX_LOCK(&ke->lock);
@@ -1011,7 +1011,9 @@ kepaxos_handle_commit(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
                   keystr, msg->seq, msg->ballot);
     }
 
-    ke->callbacks.commit(msg->ctype, msg->key, msg->klen, msg->data, msg->dlen, 0, ke->callbacks.priv);
+    ke->callbacks.commit(msg->ctype, msg->key, msg->klen,
+                         msg->data, msg->dlen, 0, ke->callbacks.priv);
+
     set_last_seq_for_key(ke, msg->key, msg->klen, msg->ballot, msg->seq);
 
     if (cmd && cmd->seq == msg->seq) {
