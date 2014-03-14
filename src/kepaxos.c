@@ -859,13 +859,6 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                     accepted_seq = cmd->seq;
                 }
             } else {
-                /*
-                if (local_seq == seq && local_ballot == ballot) {
-                    // ignore this message ... we already have committed this command
-                    MUTEX_UNLOCK(&ke->lock);
-                    return -1;
-                }
-                */
                 cmd = calloc(1, sizeof(kepaxos_cmd_t));
                 cmd->key = malloc(klen);
                 memcpy(cmd->key, key, klen);
@@ -881,6 +874,7 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                 accepted_ballot = ballot;
                 accepted_seq = seq;
             }
+            // inform the sender if we have already committed this seq
             committed = (accepted_seq == local_seq);
             ballot = cmd->ballot;
             MUTEX_UNLOCK(&ke->lock);

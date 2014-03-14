@@ -225,7 +225,8 @@ int main(int argc, char **argv)
     // the following will trigger the long path (paxos-like instance) to align
     // the crashed replicas (3 and 4) which are behind (they missed a command)
     rc = kepaxos_run_command(contexts[3].ke, "node4", 0x00, "test_key", 8, "test_value", 10);
-    check = check_log_consistency(contexts, 0, 2);
+    // now all replicas should be aligned
+    check = check_log_consistency(contexts, 0, 4);
     if (check)
         ut_success();
     else
