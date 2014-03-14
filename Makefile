@@ -83,7 +83,10 @@ $(DEPS): build_deps
 
 objects: $(TARGETS)
 
-$(TARGETS): CFLAGS += -fPIC -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -Wno-array-bounds -Wno-unused-const-variable -Wno-unknown-warning-option -DSQLITE_THREADSAFE=2 -O3 -g
+EXTRA_CFLAGS=-Wno-parentheses -Wno-pointer-sign
+SQLITE_CFLAGS=-Wno-array-bounds -Wno-unused-const-variable -Wno-unknown-warning-option -DSQLITE_THREADSAFE=2
+
+$(TARGETS): CFLAGS += -fPIC -Isrc -Wall -Werror $(EXTRA_CFLAGS) $(SQLITE_CFLAGS) -O3 -g
 
 .PHONY: utils
 utils: 
@@ -102,12 +105,12 @@ clean:
 	make -C utils clean
 
 .PHONY: buld_tests
-build_tests: CFLAGS += -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
+build_tests: CFLAGS += -Isrc -Ideps/.incs -Wall -Werror -O3 -g
 build_tests: static shared
 	@for i in $(TESTS); do\
 	  if [ "X$(UNAME)" = "XDarwin" ]; then \
-	      echo "$(CC) $(CFLAGS) $$i.c -o $$i -L. -Ldeps/.libs -lshardcache -lhl -lsiphash -liomux -lchash $(LDFLAGS) deps/.libs/libut.a -lm";\
-	      $(CC) $(CFLAGS) $$i.c -o $$i -L. -Ldeps/.libs -lshardcache -lhl -lsiphash -liomux -lchash deps/.libs/libut.a $(LDFLAGS) -lm;\
+	      echo "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(SQLITE_CFLAGS) $$i.c -o $$i -lshardcache -lhl -lsiphash -liomux -lchash $(LDFLAGS) deps/.libs/libut.a -lm";\
+	      $(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(SQLITE_CFLAGS) $$i.c -o $$i -Ldeps/.libs -lshardcache -lhl -lsiphash -liomux -lchash -lut $(LDFLAGS) -lm;\
 	  else \
 	      echo "$(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(LDFLAGS) $(DEPS)  deps/.libs/libut.a -lm";\
 	      $(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(DEPS) deps/.libs/libut.a $(LDFLAGS) -lm;\

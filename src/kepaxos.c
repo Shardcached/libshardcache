@@ -944,6 +944,8 @@ kepaxos_handle_accept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
         }
 
         if (cmd->seq == msg->seq && msg->committed) {
+            // some replica has already committed this sequence
+            // let's increase it and try paxos again
             uint64_t new_ballot = ATOMIC_READ(ke->ballot);
             cmd->seq++;
             cmd->ballot = new_ballot;
@@ -956,14 +958,17 @@ kepaxos_handle_accept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
             MUTEX_UNLOCK(&ke->lock);
             return kepaxos_send_accept(ke, new_ballot, msg->key, msg->klen, new_seq);
         }
+
         cmd->votes = realloc(cmd->votes, sizeof(kepaxos_vote_t) * (cmd->num_votes + 1));
         cmd->votes[cmd->num_votes].seq = msg->seq;
         cmd->votes[cmd->num_votes].ballot = msg->ballot;
         cmd->votes[cmd->num_votes].peer = msg->peer;
         cmd->num_votes++;
         cmd->max_seq = MAX(cmd->max_seq, msg->seq);
+
         if (cmd->max_seq == msg->seq)
             cmd->max_voter = msg->peer;
+
         int i;
         int count_ok = 0;
         for (i = 0; i < cmd->num_votes; i++)
