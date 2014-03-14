@@ -1,7 +1,6 @@
 #include "sqlite3.h"
 #include "kepaxos.h"
 #include "atomic.h"
-#include <pqueue.h>
 #include <hashtable.h>
 #ifndef HAVE_UINT64_T
 #define HAVE_UINT64_T
@@ -33,8 +32,6 @@ typedef enum {
     KEPAXOS_MSG_TYPE_ACCEPT,
     KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE,
     KEPAXOS_MSG_TYPE_COMMIT,
-    KEPAXOS_MSG_TYPE_RECOVERY,
-    KEPAXOS_MSG_TYPE_RECOVERY_RESPONSE,
 } kepaxos_msg_type_t;
 
 typedef struct {
@@ -77,7 +74,6 @@ struct __kepaxos_s {
     sqlite3_stmt *select_seq_stmt;
     sqlite3_stmt *select_ballot_stmt;
     sqlite3_stmt *insert_stmt;
-    pqueue_t *recovery_queue;
     pthread_t expirer;
     int quit;
     int timeout;
@@ -219,14 +215,21 @@ kepaxos_command_free(kepaxos_cmd_t *c)
 
 static int
 kepaxos_expire_command(hashtable_t *table,
-                                  void *key,
-                                  size_t klen,
-                                  void *value,
-                                  size_t vlen,
-                                  void *user)
+                       void *key,
+                       size_t klen,
+                       void *value,
+                       size_t vlen,
+                       void *user)
 {
+    kepaxos_t *ke = (kepaxos_t *)user;
     kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)value;
     if (cmd->timeout > 0 && time(NULL) > (cmd->timestamp + cmd->timeout)) {
+        if (cmd->status == KEPAXOS_CMD_STATUS_PRE_ACCEPTED ||
+            cmd->status == KEPAXOS_CMD_STATUS_ACCEPTED)
+        {
+            int node_index = cmd->ballot & 0x000000FF;
+            ke->callbacks.recover(ke->peers[node_index], key, klen, cmd->seq, cmd->ballot, ke->callbacks.priv);
+        }
         return -1; // if expired we want to remove this item from the table
     }
     return 1;
@@ -409,31 +412,6 @@ kepaxos_build_message(char **out,
     return msglen;
 }
 
-#if 0
-static void *
-kepaxos_recovery(void *arg)
-{
-    kepaxos_t *ke = (kepaxos_t *)arg;
-    int i;
-
-    while(!ATOMIC_READ(ke->quit)) {
-        for (i = 0; i < ke->num_peers; i++) {
-            if (i == ke->my_index)
-                continue;
-            uint32_t max_ballot = kepaxos_max_ballot(ke);
-            char *msg = NULL;
-            size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_RECOVERY, 0, max_ballot, NULL, 0, NULL, 0, 0, 0);
-            kepaxos_response_t *responses = NULL;
-            int num_responses = 0;
-            int rc = ke->callbacks.send(&ke->peers[i], 1, (void *)msg, msglen, &responses, &num_responses);
-            if (rc != 0 ) {
-            }
-        }
-    }
-    return NULL;
-}
-#endif
-
 static int
 kepaxos_send_preaccept(kepaxos_t *ke, uint32_t ballot, void *key, size_t klen, uint32_t seq)
 {
@@ -568,10 +546,13 @@ kepaxos_send_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
 static int
 kepaxos_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
 {
-    ke->callbacks.commit(cmd->type, cmd->key, cmd->klen, cmd->data, cmd->dlen, 1, ke->callbacks.priv);
-    set_last_seq_for_key(ke, cmd->key, cmd->klen, cmd->ballot, cmd->seq);
-    int rc = kepaxos_send_commit(ke, cmd);
-    kepaxos_command_destroy(cmd);
+    int rc = ke->callbacks.commit(cmd->type, cmd->key, cmd->klen, cmd->data, cmd->dlen, 1, ke->callbacks.priv);
+    if (rc == 0) {
+        set_last_seq_for_key(ke, cmd->key, cmd->klen, cmd->ballot, cmd->seq);
+        rc = kepaxos_send_commit(ke, cmd);
+        kepaxos_command_destroy(cmd);
+    }
+    // TODO - recovery if commit failed? try again?
     return rc;
 }
 
@@ -719,8 +700,14 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
             }
             interfering_seq = MAX(local_seq, interfering_seq);
             uint32_t max_seq = MAX(seq, interfering_seq);
-            if (max_seq == seq)
+            if (seq >= interfering_seq) {
+                if (cmd->status == KEPAXOS_CMD_STATUS_ACCEPTED) {
+                    int node_index = cmd->ballot & 0x000000FF;
+                    ke->callbacks.recover(ke->peers[node_index], key, klen, cmd->seq, cmd->ballot, ke->callbacks.priv);
+                }
                 cmd->status = KEPAXOS_CMD_STATUS_PRE_ACCEPTED;
+                cmd->seq = interfering_seq;
+            }
             committed = (max_seq == local_seq);
             ballot = cmd->ballot;
             MUTEX_UNLOCK(&ke->lock);
@@ -915,3 +902,7 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
     return 0;
 }
 
+uint32_t kepaxos_ballot(kepaxos_t *ke)
+{
+    return ATOMIC_READ(ke->ballot);
+}
