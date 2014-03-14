@@ -29,6 +29,8 @@ struct __shardcache_replica_s {
     uint32_t ballot;
     uint32_t commits;
     uint32_t commit_fails;
+    uint32_t dispached;
+    uint32_t received;
     int quit;
     pthread_t recover_th;
     pthread_t async_io_th;
@@ -96,6 +98,7 @@ kepaxos_connection_input(iomux_t *iomux, int fd, void *data, int len, void *priv
     {
         shardcache_hdr_t hdr = async_read_context_hdr(connection->ctx);
         if (hdr == SHC_HDR_REPLICA_RESPONSE) {
+            ATOMIC_INCREMENT(replica->received);
             kepaxos_received_command(replica->kepaxos, connection->peer, fbuf_data(&out), fbuf_used(&out));
             iomux_remove(iomux, fd);
             shardcache_release_connection_for_peer(replica->shc, connection->peer, fd);
@@ -381,6 +384,8 @@ shardcache_replica_create(shardcache_t *shc,
     shardcache_counter_add(replica->shc->counters, "replica_ballot", &replica->ballot);
     shardcache_counter_add(replica->shc->counters, "replica_commits", &replica->commits);
     shardcache_counter_add(replica->shc->counters, "replica_commit_fails", &replica->commit_fails);
+    shardcache_counter_add(replica->shc->counters, "replica_dispached", &replica->dispached);
+    shardcache_counter_add(replica->shc->counters, "replica_received", &replica->received);
 
     return replica;
 }
@@ -418,6 +423,8 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
     kdata->len = dlen;
     kdata->expire = expire;
     memcpy(&kdata->data, data, dlen);
+
+    ATOMIC_INCREMENT(replica->dispached);
 
     int rc = kepaxos_run_command(replica->kepaxos,
                                  replica->me,
