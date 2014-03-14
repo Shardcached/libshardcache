@@ -83,7 +83,7 @@ $(DEPS): build_deps
 
 objects: $(TARGETS)
 
-$(TARGETS): CFLAGS += -fPIC -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -Wno-array-bounds -DSQLITE_THREADSAFE=2 -O3 -g
+$(TARGETS): CFLAGS += -fPIC -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -Wno-array-bounds -Wno-unused-const-variable -DSQLITE_THREADSAFE=2 -O3 -g
 
 .PHONY: utils
 utils: 
