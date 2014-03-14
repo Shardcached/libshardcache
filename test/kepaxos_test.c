@@ -40,8 +40,16 @@ static int send_callback(char **recipients,
         char *node = recipients[i];
         node += 4;
         int index = strtol(node, NULL, 10) - 1;
-        if (arg->contexts[index].online)
-            kepaxos_received_command(arg->contexts[index].ke, arg->me, cmd, cmd_len);
+        if (arg->contexts[index].online) {
+            void *response = NULL;
+            size_t response_len = 0;
+            int rc = kepaxos_received_command(arg->contexts[index].ke, arg->me, cmd, cmd_len, &response, &response_len);
+            if (rc == 0) {
+                node = arg->me + 4;
+                index = strtol(node, NULL, 10) - 1;
+                kepaxos_received_response(arg->contexts[index].ke, recipients[i], response, response_len);
+            }
+        }
     }
 
     return 0;

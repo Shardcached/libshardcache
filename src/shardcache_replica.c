@@ -99,7 +99,7 @@ kepaxos_connection_input(iomux_t *iomux, int fd, void *data, int len, void *priv
         shardcache_hdr_t hdr = async_read_context_hdr(connection->ctx);
         if (hdr == SHC_HDR_REPLICA_RESPONSE) {
             ATOMIC_INCREMENT(replica->received);
-            kepaxos_received_command(replica->kepaxos, connection->peer, fbuf_data(&out), fbuf_used(&out));
+            kepaxos_received_response(replica->kepaxos, connection->peer, fbuf_data(&out), fbuf_used(&out));
             iomux_remove(iomux, fd);
             shardcache_release_connection_for_peer(replica->shc, connection->peer, fd);
             async_read_context_destroy(connection->ctx);

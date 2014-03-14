@@ -62,7 +62,8 @@ int kepaxos_run_command(kepaxos_t *ke,
                         void *data,
                         size_t dlen);
 
-int kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen);
+int kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen, void **response, size_t *response_len);
+int kepaxos_received_response(kepaxos_t *ke, char *peer, void *res, size_t reslen);
 
 uint64_t kepaxos_ballot(kepaxos_t *ke);
 

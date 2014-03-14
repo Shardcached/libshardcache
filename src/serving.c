@@ -694,6 +694,9 @@ process_request(void *priv)
             fbuf_destroy(&out);
             break;
         }
+        case SHC_HDR_REPLICA_COMMAND:
+        {
+        }
         default:
             fprintf(stderr, "Unsupported command: 0x%02x\n", (char)ctx->hdr);
             write_status(ctx, -1, WRITE_STATUS_MODE_SIMPLE);
