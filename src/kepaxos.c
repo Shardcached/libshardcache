@@ -451,7 +451,7 @@ kepaxos_build_message(char **out,
                       int committed)
 {
     size_t sender_len = strlen(sender) + 1; // include the terminating null byte
-    size_t msglen = klen + dlen + 3 + (sizeof(uint32_t) * 6) + sender_len;
+    size_t msglen = klen + dlen + 3 + (sizeof(uint32_t) * 6) + sizeof(uint16_t) + sender_len;
     char *msg = malloc(msglen);
     unsigned char committed_byte = committed ? 1 : 0;
     unsigned char mtype_byte = (unsigned char)mtype;
