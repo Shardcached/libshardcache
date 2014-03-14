@@ -538,30 +538,35 @@ kepaxos_send_preaccept(kepaxos_t *ke, uint64_t ballot, void *key, size_t klen, u
     return rc;
 }
 
-int
-kepaxos_run_command(kepaxos_t *ke,
-                    unsigned char type,
-                    void *key,
-                    size_t klen,
-                    void *data,
-                    size_t dlen)
+static kepaxos_cmd_t *
+kepaxos_command_create(kepaxos_t *ke,
+                       uint64_t seq,
+                       unsigned char type,
+                       void *key,
+                       size_t klen,
+                       void *data,
+                       size_t dlen)
 {
-    // Replica R1 receives a new set/del/evict request for key K
-    MUTEX_LOCK(&ke->lock);
-    uint64_t seq = last_seq_for_key(ke, key, klen, NULL);
     kepaxos_cmd_t *cmd = calloc(1, sizeof(kepaxos_cmd_t));
     MUTEX_INIT(&cmd->condition_lock);
     CONDITION_INIT(&cmd->condition);
 
     // this will release/abort the previous command on the same key(if any)
-    ht_set(ke->commands, key, klen, cmd, sizeof(kepaxos_cmd_t)); 
+    kepaxos_cmd_t *prev_cmd =  NULL;
+    ht_get_and_set(ke->commands, key, klen, cmd, sizeof(kepaxos_cmd_t), (void **)&prev_cmd, NULL);
+    if (prev_cmd) {
+        uint64_t interfering_seq = prev_cmd->seq; 
+        seq = MAX(seq, interfering_seq) + 1;
+        kepaxos_command_destroy(prev_cmd);
+    } else {
+        seq++;
+    }
 
-    uint64_t interfering_seq = cmd ? cmd->seq : 0; 
-    seq = MAX(seq, interfering_seq) + 1;
     // an eventually uncommitted command for K would be overwritten here
     // hence it will be ignored and will fail silently
     // (NOTE: in libshardcache we only care about the most recent command for a key 
     //        and not about the entire sequence of commands)
+
     cmd->seq = seq;
     cmd->type = type;
     cmd->key = malloc(klen);
@@ -574,6 +579,24 @@ kepaxos_run_command(kepaxos_t *ke,
     cmd->timestamp = time(NULL);
     cmd->timeout = ke->timeout;
     cmd->ballot = ATOMIC_READ(ke->ballot);
+    return cmd;
+}
+
+int
+kepaxos_run_command(kepaxos_t *ke,
+                    unsigned char type,
+                    void *key,
+                    size_t klen,
+                    void *data,
+                    size_t dlen)
+{
+    // Replica R1 receives a new set/del/evict request for key K
+    MUTEX_LOCK(&ke->lock);
+    uint64_t last_seq = last_seq_for_key(ke, key, klen, NULL);
+
+    kepaxos_cmd_t *cmd = kepaxos_command_create(ke, last_seq, type, key, klen, data, dlen);
+
+    uint64_t seq = cmd->seq;
     uint64_t ballot = cmd->ballot;
     MUTEX_UNLOCK(&ke->lock);
     if (shardcache_log_level() >= LOG_DEBUG) {
@@ -587,17 +610,23 @@ kepaxos_run_command(kepaxos_t *ke,
         MUTEX_LOCK(&ke->lock);
         kepaxos_cmd_t *now_cmd = (kepaxos_cmd_t *)ht_get(ke->commands, key, klen, NULL);
         if (now_cmd == cmd) {
+            // our command wasn't invalidated in the meanwhile
+            // let's wait for its completion (either success or failure)
             MUTEX_LOCK(&cmd->condition_lock);
             MUTEX_UNLOCK(&ke->lock);
             pthread_cond_wait(&cmd->condition, &cmd->condition_lock);
             MUTEX_UNLOCK(&cmd->condition_lock);
         } else {
+            // some other thread invalidated our command, let's forget about it
             MUTEX_UNLOCK(&ke->lock);
         }
         kepaxos_command_free(cmd);
     }
 
     uint64_t current_seq = last_seq_for_key(ke, key, klen, NULL);
+    // here the command have either succeeded or failed, we can
+    // determine it by checking if the current committed seq is 
+    // equal or greater than the seq we tried to commit
     return (current_seq >= seq) ? 0 : -1;
 }
 
