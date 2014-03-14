@@ -18,7 +18,12 @@ static int total_messages_sent = 0;
 static int total_values_committed = 0;
 
 typedef struct {
-    kepaxos_t **contexts;
+    kepaxos_t *ke;
+    int online;
+} kepaxos_node;
+
+typedef struct {
+    kepaxos_node *contexts;
     char *me;
 } callback_argument;
 
@@ -30,16 +35,13 @@ static int send_callback(char **recipients,
 {
     callback_argument *arg = (callback_argument *)priv;
     total_messages_sent += num_recipients;
-    // skip the first 4 messages, we want the first command to timeout
-    if (total_messages_sent > 4) {
-        // now we can start forwarding messages to the correct receipients
-        int i;
-        for (i = 0; i < num_recipients; i++) {
-            char *node = recipients[i];
-            node += 4;
-            int index = strtol(node, NULL, 10) - 1;
-            kepaxos_received_command(arg->contexts[index], arg->me, cmd, cmd_len);
-        }
+    int i;
+    for (i = 0; i < num_recipients; i++) {
+        char *node = recipients[i];
+        node += 4;
+        int index = strtol(node, NULL, 10) - 1;
+        if (arg->contexts[index].online)
+            kepaxos_received_command(arg->contexts[index].ke, arg->me, cmd, cmd_len);
     }
 
     return 0;
@@ -115,6 +117,25 @@ int fetch_log(char *dbfile, void *key, size_t klen, kepaxos_log_item *item)
     return rc;
 }
 
+int check_log_consistency(kepaxos_node *contexts, int start_index, int end_index)
+{
+    int i;
+    int check = 1;
+    kepaxos_log_item prev_item = { 0, 0 };
+    for (i = start_index; i <= end_index; i++) {
+        char dbfile[2048];
+        snprintf(dbfile, sizeof(dbfile), "/tmp/kepaxos_test%d.db", i);
+        kepaxos_log_item item;
+        fetch_log(dbfile, "test_key", 8, &item);
+        if (i > 0 && memcmp(&prev_item, &item, sizeof(prev_item)) != 0) {
+            check = 0;
+            break;
+        }
+        memcpy(&prev_item, &item, sizeof(prev_item));
+    }
+    return check;
+}
+
 
 int main(int argc, char **argv)
 {
@@ -122,7 +143,7 @@ int main(int argc, char **argv)
 
     char *nodes[] = { "node1", "node2", "node3", "node4", "node5" };
 
-    kepaxos_t *contexts[5];
+    kepaxos_node contexts[5];
 
 
     ut_testing("kepaxos_context_create(\"/tmp/kepaxos_test.db\", nodes, 5, 1, &callbacks)");
@@ -139,46 +160,60 @@ int main(int argc, char **argv)
         };
         char dbfile[2048];
         snprintf(dbfile, sizeof(dbfile), "/tmp/kepaxos_test%d.db", i);
-        contexts[i] = kepaxos_context_create(dbfile, nodes, 5, i, 1, &callbacks);
-        if (!contexts[i]) {
+        contexts[i].ke = kepaxos_context_create(dbfile, nodes, 5, i, 1, &callbacks);
+        if (!contexts[i].ke) {
             ut_failure("Can't create a kepaxos instance");
             goto __exit;
         }
+        contexts[i].online = 0;
     }
     ut_success();
 
+    contexts[0].online = 1;
     ut_testing("kepaxos_run_command() timeouts after 1 second");
-    int rc = kepaxos_run_command(contexts[0], "node1", 0x00, "test_key", 8, "test_value", 10);
+    int rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key", 8, "test_value", 10);
     ut_validate_int(rc, -1);
 
     ut_testing("kepaxos_run_command() triggered 4 messages");
     ut_validate_int(total_messages_sent, 4);
 
+    // bring up all the other nodes
+    for (i = 1; i < 5; i++)
+        contexts[i].online = 1;
+
     ut_testing("kepaxos_run_command() propagates to all replicas");
-    rc = kepaxos_run_command(contexts[0], "node1", 0x00, "test_key", 8, "test_value", 10);
+    rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key", 8, "test_value", 10);
     ut_validate_int(total_values_committed, 5);
 
     ut_testing("log is consistent on all replicas");
-    int check = 1;
-    kepaxos_log_item prev_item = { 0, 0 };
-    for (i = 0; i < 5; i++) {
-        char dbfile[2048];
-        snprintf(dbfile, sizeof(dbfile), "/tmp/kepaxos_test%d.db", i);
-        kepaxos_log_item item;
-        fetch_log(dbfile, "test_key", 8, &item);
-        if (i > 0 && memcmp(&prev_item, &item, sizeof(prev_item)) != 0) {
-            check = 0;
-            break;
-        }
-        memcpy(&prev_item, &item, sizeof(prev_item));
-    }
+    
+    int check = check_log_consistency(contexts, 0, 4);
     if (check)
         ut_success();
     else
         ut_failure("Logs are not aligned on all replicas");
 
+
+    // bring down 2 nodes , 3 should be enough to keep working
+    contexts[3].online = 0;
+    contexts[4].online = 0;
+    rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key2", 8, "test_value2", 10);
+    ut_testing("kepaxos_run_command() succeds with only N/2+1 active replicas");
+    check = check_log_consistency(contexts, 0, 2);
+    if (check)
+        ut_success();
+    else
+        ut_failure("Logs are not aligned on the active replicas");
+
+
+    int committed = total_values_committed;
+    contexts[2].online = 0;
+    ut_testing("kepaxos_run_command() succeds with less than N/2+1 active replicas");
+    rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key3", 8, "test_value3", 10);
+    ut_validate_int(committed, total_values_committed);
+
     for (i = 0; i < 5; i++) {
-        kepaxos_context_destroy(contexts[i]);
+        kepaxos_context_destroy(contexts[i].ke);
         char dbfile[2048];
         snprintf(dbfile, sizeof(dbfile), "/tmp/kepaxos_test%d.db", i);
         unlink(dbfile);
