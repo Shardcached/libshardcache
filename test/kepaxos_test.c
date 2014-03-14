@@ -43,11 +43,12 @@ static int send_callback(char **recipients,
         if (arg->contexts[index].online) {
             void *response = NULL;
             size_t response_len = 0;
-            int rc = kepaxos_received_command(arg->contexts[index].ke, arg->me, cmd, cmd_len, &response, &response_len);
-            if (rc == 0) {
+            int rc = kepaxos_received_command(arg->contexts[index].ke, cmd, cmd_len, &response, &response_len);
+            if (rc == 0 && response_len) {
                 node = arg->me + 4;
                 index = strtol(node, NULL, 10) - 1;
-                kepaxos_received_response(arg->contexts[index].ke, recipients[i], response, response_len);
+                kepaxos_received_response(arg->contexts[index].ke, response, response_len);
+                free(response);
             }
         }
     }
@@ -179,7 +180,7 @@ int main(int argc, char **argv)
 
     contexts[0].online = 1;
     ut_testing("kepaxos_run_command() timeouts after 1 second");
-    int rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key", 8, "test_value", 10);
+    int rc = kepaxos_run_command(contexts[0].ke, 0x00, "test_key", 8, "test_value", 10);
     ut_validate_int(rc, -1);
 
     ut_testing("kepaxos_run_command() triggered 4 messages");
@@ -190,7 +191,7 @@ int main(int argc, char **argv)
         contexts[i].online = 1;
 
     ut_testing("kepaxos_run_command() propagates to all replicas");
-    rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key", 8, "test_value", 10);
+    rc = kepaxos_run_command(contexts[0].ke, 0x00, "test_key", 8, "test_value", 10);
     ut_validate_int(total_values_committed, 5);
 
     ut_testing("log is consistent on all replicas");
@@ -205,7 +206,7 @@ int main(int argc, char **argv)
     // bring down 2 nodes , 3 should be enough to keep working
     contexts[3].online = 0;
     contexts[4].online = 0;
-    rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key", 8, "test_value", 10);
+    rc = kepaxos_run_command(contexts[0].ke, 0x00, "test_key", 8, "test_value", 10);
     ut_testing("kepaxos_run_command() succeds with only N/2+1 active replicas");
     check = check_log_consistency(contexts, 0, 2);
     if (check) {
@@ -223,7 +224,7 @@ int main(int argc, char **argv)
     int committed = total_values_committed;
     contexts[2].online = 0; // replica 2 crashes as well
     ut_testing("kepaxos_run_command() fails with less than N/2+1 active replicas");
-    rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key2", 8, "test_value2", 10);
+    rc = kepaxos_run_command(contexts[0].ke, 0x00, "test_key2", 8, "test_value2", 10);
     ut_validate_int(committed, total_values_committed);
 
     ut_testing("offline replicas come back online and a new value is set using one of them");
@@ -232,7 +233,7 @@ int main(int argc, char **argv)
     contexts[4].online = 1;
     // the following will trigger the long path (paxos-like instance) to align
     // the crashed replicas (3 and 4) which are behind (they missed a command)
-    rc = kepaxos_run_command(contexts[3].ke, "node4", 0x00, "test_key", 8, "test_value", 10);
+    rc = kepaxos_run_command(contexts[3].ke, 0x00, "test_key", 8, "test_value", 10);
     // now all replicas should be aligned
     check = check_log_consistency(contexts, 0, 4);
     if (check)

@@ -1,3 +1,6 @@
+#ifndef __SERVING_H__
+#define __SERVING_H__
+
 #include "shardcache.h"
 #include "counters.h"
 
@@ -10,3 +13,5 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
                                     int num_workers,
                                     shardcache_counters_t *counters);
 void stop_serving(shardcache_serving_t *s);
+
+#endif

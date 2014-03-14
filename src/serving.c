@@ -22,6 +22,8 @@
 
 #include "atomic.h"
 
+#include "shardcache_internal.h" // for the replica memeber
+
 #ifndef HAVE_UINT64_T
 #define HAVE_UINT64_T
 #endif
@@ -696,6 +698,15 @@ process_request(void *priv)
         }
         case SHC_HDR_REPLICA_COMMAND:
         {
+            void *response = NULL;
+            size_t response_len = 0;
+            int rc = shardcache_replica_received_command(cache->replica,
+                                                         fbuf_data(&ctx->records[0]),
+                                                         fbuf_used(&ctx->records[0]),
+                                                         &response,
+                                                         &response_len);
+            if (rc == 0) {
+            }
         }
         default:
             fprintf(stderr, "Unsupported command: 0x%02x\n", (char)ctx->hdr);

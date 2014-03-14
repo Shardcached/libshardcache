@@ -439,6 +439,7 @@ kepaxos_context_destroy(kepaxos_t *ke)
 
 static inline size_t
 kepaxos_build_message(char **out,
+                      char *sender,
                       kepaxos_msg_type_t mtype,
                       unsigned char ctype, 
                       uint64_t ballot,
@@ -449,13 +450,20 @@ kepaxos_build_message(char **out,
                       uint64_t seq,
                       int committed)
 {
-    size_t msglen = klen + dlen + 3 + (sizeof(uint32_t) * 6);
+    size_t sender_len = strlen(sender) + 1; // include the terminating null byte
+    size_t msglen = klen + dlen + 3 + (sizeof(uint32_t) * 6) + sender_len;
     char *msg = malloc(msglen);
     unsigned char committed_byte = committed ? 1 : 0;
     unsigned char mtype_byte = (unsigned char)mtype;
     unsigned char ctype_byte = (unsigned char)ctype;
 
     char *p = msg;
+
+    uint16_t slen_nbo = htons(sender_len);
+    memcpy(p, &slen_nbo, sizeof(uint16_t));
+    p += sizeof(uint16_t);
+    memcpy(p, sender, sender_len);
+    p += sender_len;
 
     uint32_t ballot_low = ballot & 0x00000000FFFFFFFF;
     uint32_t ballot_high = ballot >> 32;
@@ -516,7 +524,8 @@ kepaxos_send_preaccept(kepaxos_t *ke, uint64_t ballot, void *key, size_t klen, u
     }
 
     char *msg = NULL;
-    size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_PRE_ACCEPT, 0, ballot, key, klen, NULL, 0, seq, 0);
+    size_t msglen = kepaxos_build_message(&msg, ke->peers[ke->my_index], KEPAXOS_MSG_TYPE_PRE_ACCEPT,
+                                          0, ballot, key, klen, NULL, 0, seq, 0);
     int rc = ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
     if (shardcache_log_level() >= LOG_DEBUG) {
@@ -531,7 +540,6 @@ kepaxos_send_preaccept(kepaxos_t *ke, uint64_t ballot, void *key, size_t klen, u
 
 int
 kepaxos_run_command(kepaxos_t *ke,
-                    char *peer,
                     unsigned char type,
                     void *key,
                     size_t klen,
@@ -605,8 +613,8 @@ kepaxos_send_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
     }
 
     char *msg = NULL;
-    size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_COMMIT, cmd->type, cmd->ballot,
-                                          cmd->key, cmd->klen, cmd->data, cmd->dlen, cmd->seq, 1);
+    size_t msglen = kepaxos_build_message(&msg, ke->peers[ke->my_index], KEPAXOS_MSG_TYPE_COMMIT, cmd->type,
+                                          cmd->ballot, cmd->key, cmd->klen, cmd->data, cmd->dlen, cmd->seq, 1);
 
     
     int rc =  ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen, ke->callbacks.priv);
@@ -639,7 +647,8 @@ kepaxos_send_accept(kepaxos_t *ke, uint64_t ballot, void *key, size_t klen, uint
     }
 
     char *msg = NULL;
-    size_t msglen = kepaxos_build_message(&msg, KEPAXOS_MSG_TYPE_ACCEPT, 0, ballot, key, klen, NULL, 0, seq, 0);
+    size_t msglen = kepaxos_build_message(&msg, ke->peers[ke->my_index], KEPAXOS_MSG_TYPE_ACCEPT,
+                                          0, ballot, key, klen, NULL, 0, seq, 0);
     int rc = ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
     return rc;
@@ -650,11 +659,16 @@ kepaxos_parse_message(char *msg,
                       size_t msglen,
                       kepaxos_msg_t *msg_struct)
 {
-    size_t baselen = (sizeof(uint32_t) * 6) + 3;
+    size_t baselen = (sizeof(uint32_t) * 6) + 3 + sizeof(uint16_t);
     if (msglen < baselen)
         return -1;
 
     char *p = msg;
+
+    uint16_t sender_len = ntohs(*((uint16_t *)p));
+    p += sizeof(uint16_t);
+    msg_struct->peer = p;
+    p += sender_len;
 
     uint32_t ballot_high = ntohl(*((uint32_t *)p));
     p += sizeof(uint32_t);
@@ -705,7 +719,7 @@ kepaxos_parse_message(char *msg,
 }
 
 static inline int
-kepaxos_handle_preaccept(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg, void **response, size_t *response_len)
+kepaxos_handle_preaccept(kepaxos_t *ke, kepaxos_msg_t *msg, void **response, size_t *response_len)
 {
     // Any replica R receiving a PRE_ACCEPT(BALLOT, K, SEQ) from R1
     MUTEX_LOCK(&ke->lock);
@@ -753,13 +767,13 @@ kepaxos_handle_preaccept(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg, void **r
     uint64_t ballot = cmd->ballot;
     MUTEX_UNLOCK(&ke->lock);
 
-    *response_len = kepaxos_build_message((char **)response, KEPAXOS_MSG_TYPE_PRE_ACCEPT_RESPONSE,
+    *response_len = kepaxos_build_message((char **)response, ke->peers[ke->my_index], KEPAXOS_MSG_TYPE_PRE_ACCEPT_RESPONSE,
                                           0, ballot, msg->key, msg->klen, NULL, 0, max_seq, committed);
     return 0;
 }
 
 static inline int
-kepaxos_handle_preaccept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
+kepaxos_handle_preaccept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
 {
     MUTEX_LOCK(&ke->lock);
     kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)ht_get(ke->commands, msg->key, msg->klen, NULL);
@@ -775,7 +789,7 @@ kepaxos_handle_preaccept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
         cmd->votes = realloc(cmd->votes, sizeof(kepaxos_vote_t) * (cmd->num_votes + 1));
         cmd->votes[cmd->num_votes].seq = msg->seq;
         cmd->votes[cmd->num_votes].ballot = msg->ballot;
-        cmd->votes[cmd->num_votes].peer = peer;
+        cmd->votes[cmd->num_votes].peer = msg->peer;
         cmd->num_votes++;
         if (msg->seq != cmd->max_seq) {
             cmd->max_seq = MAX(cmd->max_seq, msg->seq);
@@ -785,7 +799,7 @@ kepaxos_handle_preaccept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
         }
 
         if (cmd->max_seq == msg->seq)
-            cmd->max_voter = peer;
+            cmd->max_voter = msg->peer;
 
         if (cmd->num_votes < ke->num_peers/2) {
             MUTEX_UNLOCK(&ke->lock);
@@ -818,7 +832,7 @@ kepaxos_handle_preaccept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
 }
 
 static inline int
-kepaxos_handle_accept(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg, void *response, size_t *response_len)
+kepaxos_handle_accept(kepaxos_t *ke, kepaxos_msg_t *msg, void *response, size_t *response_len)
 {
     // Any replica R receiving an ACCEPT(BALLOT, K, SEQ) from R1
     uint64_t accepted_ballot = msg->ballot;
@@ -862,15 +876,15 @@ kepaxos_handle_accept(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg, void *respo
         char keystr[1024];
         KEY2STR(msg->key, msg->klen, keystr, sizeof(keystr));
         SHC_DEBUG("%s returns %llu (%d) ballot: %llu for key %s to peer %s\n",
-                  ke->peers[ke->my_index], accepted_seq, committed, accepted_ballot, keystr, peer);
+                  ke->peers[ke->my_index], accepted_seq, committed, accepted_ballot, keystr, msg->peer);
     }
-    *response_len = kepaxos_build_message((char **)response, KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE,
+    *response_len = kepaxos_build_message((char **)response, ke->peers[ke->my_index], KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE,
                                           0, accepted_ballot, msg->key, msg->klen, NULL, 0, accepted_seq, committed);
     return 0;
 }
 
 static inline int
-kepaxos_handle_accept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
+kepaxos_handle_accept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
 {
     if (shardcache_log_level() >= LOG_DEBUG && msg->key) {
         char keystr[1024];
@@ -907,11 +921,11 @@ kepaxos_handle_accept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
         cmd->votes = realloc(cmd->votes, sizeof(kepaxos_vote_t) * (cmd->num_votes + 1));
         cmd->votes[cmd->num_votes].seq = msg->seq;
         cmd->votes[cmd->num_votes].ballot = msg->ballot;
-        cmd->votes[cmd->num_votes].peer = peer;
+        cmd->votes[cmd->num_votes].peer = msg->peer;
         cmd->num_votes++;
         cmd->max_seq = MAX(cmd->max_seq, msg->seq);
         if (cmd->max_seq == msg->seq)
-            cmd->max_voter = peer;
+            cmd->max_voter = msg->peer;
         int i;
         int count_ok = 0;
         for (i = 0; i < cmd->num_votes; i++)
@@ -949,7 +963,7 @@ kepaxos_handle_accept_response(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
 }
 
 static inline int
-kepaxos_handle_commit(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
+kepaxos_handle_commit(kepaxos_t *ke, kepaxos_msg_t *msg)
 {
     MUTEX_LOCK(&ke->lock);
     // Any replica R on receiving a COMMIT(BALLOT, K, SEQ, CMD, DATA) message
@@ -995,7 +1009,7 @@ kepaxos_handle_commit(kepaxos_t *ke, char *peer, kepaxos_msg_t *msg)
 }
 
 int
-kepaxos_received_response(kepaxos_t *ke, char *peer, void *res, size_t reslen)
+kepaxos_received_response(kepaxos_t *ke, void *res, size_t reslen)
 {
     if (reslen < sizeof(uint32_t) * 4)
         return -1;
@@ -1011,9 +1025,9 @@ kepaxos_received_response(kepaxos_t *ke, char *peer, void *res, size_t reslen)
 
     switch(msg.mtype) {
          case KEPAXOS_MSG_TYPE_PRE_ACCEPT_RESPONSE:
-            return kepaxos_handle_preaccept_response(ke, peer, &msg);
+            return kepaxos_handle_preaccept_response(ke, &msg);
         case KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE:
-            return kepaxos_handle_accept_response(ke, peer, &msg);
+            return kepaxos_handle_accept_response(ke, &msg);
         default:
             break;
     }
@@ -1023,7 +1037,6 @@ kepaxos_received_response(kepaxos_t *ke, char *peer, void *res, size_t reslen)
 
 int
 kepaxos_received_command(kepaxos_t *ke,
-                         char *peer,
                          void *cmd,
                          size_t cmdlen,
                          void **response,
@@ -1043,11 +1056,11 @@ kepaxos_received_command(kepaxos_t *ke,
 
     switch(msg.mtype) {
         case KEPAXOS_MSG_TYPE_PRE_ACCEPT:
-            return kepaxos_handle_preaccept(ke, peer, &msg, response, response_len);
+            return kepaxos_handle_preaccept(ke, &msg, response, response_len);
         case KEPAXOS_MSG_TYPE_ACCEPT:
-            return kepaxos_handle_accept(ke, peer, &msg, response, response_len);
+            return kepaxos_handle_accept(ke, &msg, response, response_len);
         case KEPAXOS_MSG_TYPE_COMMIT:
-            return kepaxos_handle_commit(ke, peer, &msg);
+            return kepaxos_handle_commit(ke, &msg);
         default:
             break;
     }
