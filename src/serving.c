@@ -700,6 +700,11 @@ process_request(void *priv)
         {
             void *response = NULL;
             size_t response_len = 0;
+            if (!cache->replica) {
+                write_status(ctx, -1, WRITE_STATUS_MODE_SIMPLE);
+                break;
+            }
+
             int rc = shardcache_replica_received_command(cache->replica,
                                                          fbuf_data(&ctx->records[0]),
                                                          fbuf_used(&ctx->records[0]),
@@ -727,6 +732,7 @@ process_request(void *priv)
             } else {
                 write_status(ctx, rc, WRITE_STATUS_MODE_SIMPLE);
             }
+            break;
         }
         default:
             fprintf(stderr, "Unsupported command: 0x%02x\n", (char)ctx->hdr);
