@@ -705,7 +705,27 @@ process_request(void *priv)
                                                          fbuf_used(&ctx->records[0]),
                                                          &response,
                                                          &response_len);
-            if (rc == 0) {
+            if (rc == 0 && response_len) {
+                fbuf_t out = FBUF_STATIC_INITIALIZER;
+                shardcache_record_t record = {
+                    .v = response,
+                    .l = response_len
+                };
+                if (build_message((char *)ctx->auth,
+                                  ctx->sig_hdr,
+                                  SHC_HDR_REPLICA_RESPONSE,
+                                  &record, 1, &out) == 0)
+                {
+                    // destroy it early ... since we still need one more copy
+                    free(response);
+                    fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+                } else {
+                    free(response);
+                    // TODO - Error Messages
+                }
+                fbuf_destroy(&out);
+            } else {
+                write_status(ctx, rc, WRITE_STATUS_MODE_SIMPLE);
             }
         }
         default:

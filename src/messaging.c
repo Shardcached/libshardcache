@@ -616,6 +616,8 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 hdr != SHC_HDR_STATS &&
                 hdr != SHC_HDR_GET_INDEX &&
                 hdr != SHC_HDR_INDEX_RESPONSE &&
+                hdr != SHC_HDR_REPLICA_COMMAND &&
+                hdr != SHC_HDR_REPLICA_RESPONSE &&
                 hdr != SHC_HDR_RESPONSE)
             {
                 if (shash)
