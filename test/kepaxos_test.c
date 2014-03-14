@@ -197,8 +197,32 @@ int main(int argc, char **argv)
     // bring down 2 nodes , 3 should be enough to keep working
     contexts[3].online = 0;
     contexts[4].online = 0;
-    rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key2", 8, "test_value2", 10);
+    rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key", 8, "test_value", 10);
     ut_testing("kepaxos_run_command() succeds with only N/2+1 active replicas");
+    check = check_log_consistency(contexts, 0, 2);
+    if (check) {
+        check = check_log_consistency(contexts, 0, 4);
+        if (!check) {
+            ut_success();
+        } else {
+            ut_failure("Logs don't differ on the offline replicas");
+        }
+    } else {
+        ut_failure("Logs are not aligned on the active replicas");
+    }
+
+
+    int committed = total_values_committed;
+    contexts[2].online = 0;
+    ut_testing("kepaxos_run_command() succeds with less than N/2+1 active replicas");
+    rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key2", 8, "test_value2", 10);
+    ut_validate_int(committed, total_values_committed);
+
+    ut_testing("offline replicas come back and a new value is set using one of them");
+    contexts[2].online = 1;
+    contexts[3].online = 1;
+    contexts[4].online = 1;
+    rc = kepaxos_run_command(contexts[3].ke, "node4", 0x00, "test_key", 8, "test_value", 10);
     check = check_log_consistency(contexts, 0, 2);
     if (check)
         ut_success();
@@ -206,11 +230,6 @@ int main(int argc, char **argv)
         ut_failure("Logs are not aligned on the active replicas");
 
 
-    int committed = total_values_committed;
-    contexts[2].online = 0;
-    ut_testing("kepaxos_run_command() succeds with less than N/2+1 active replicas");
-    rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key3", 8, "test_value3", 10);
-    ut_validate_int(committed, total_values_committed);
 
     for (i = 0; i < 5; i++) {
         kepaxos_context_destroy(contexts[i].ke);
