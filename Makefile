@@ -103,15 +103,28 @@ clean:
 
 .PHONY: buld_tests
 build_tests: CFLAGS += -Isrc -Ideps/.incs -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
-build_tests: static
+build_tests: static shared
 	@for i in $(TESTS); do\
-	  echo "$(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(LDFLAGS) $(DEPS)  deps/.libs/libut.a -lm";\
-	  $(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(DEPS) deps/.libs/libut.a $(LDFLAGS) -lm;\
+	  if [ "X$(UNAME)" = "XDarwin" ]; then \
+	      echo "$(CC) $(CFLAGS) $$i.c -o $$i -L. -Ldeps/.libs -lshardcache -lhl -lsiphash -liomux -lchash $(LDFLAGS) deps/.libs/libut.a -lm";\
+	      $(CC) $(CFLAGS) $$i.c -o $$i -L. -Ldeps/.libs -lshardcache -lhl -lsiphash -liomux -lchash deps/.libs/libut.a $(LDFLAGS) -lm;\
+	  else \
+	      echo "$(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(LDFLAGS) $(DEPS)  deps/.libs/libut.a -lm";\
+	      $(CC) $(CFLAGS) $$i.c -o $$i libshardcache.a $(DEPS) deps/.libs/libut.a $(LDFLAGS) -lm;\
+	  fi;\
 	done;\
 
 .PHONY: test
 test: build_tests
-	@for i in $(TEST_EXEC_ORDER); do echo; test/$$i; echo; done
+	@for i in $(TEST_EXEC_ORDER); do \
+	    echo; \
+	    if [ "X$(UNAME)" = "XDarwin" ]; then \
+		DYLD_LIBRARY_PATH=".:deps/.libs" test/$$i; \
+	    else \
+		test/$$i; \
+	    fi; \
+	    echo; \
+	done
 
 perl_install:
 	make -C perl install
