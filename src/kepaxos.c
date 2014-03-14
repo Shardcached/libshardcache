@@ -21,6 +21,8 @@
 
 #define BALLOT2NODE(__k, __b) (__k)->peers[ (__b) & 0x00000000000000FF ]
 
+#define KEPAXOS_MSGLEN_MIN (3 + (sizeof(uint32_t) * 6) + sizeof(uint16_t))
+
 typedef enum {
     KEPAXOS_CMD_STATUS_NONE=0,
     KEPAXOS_CMD_STATUS_PRE_ACCEPTED,
@@ -451,7 +453,7 @@ kepaxos_build_message(char **out,
                       int committed)
 {
     size_t sender_len = strlen(sender) + 1; // include the terminating null byte
-    size_t msglen = klen + dlen + 3 + (sizeof(uint32_t) * 6) + sizeof(uint16_t) + sender_len;
+    size_t msglen = KEPAXOS_MSGLEN_MIN + klen + dlen + sender_len;
     char *msg = malloc(msglen);
     unsigned char committed_byte = committed ? 1 : 0;
     unsigned char mtype_byte = (unsigned char)mtype;
@@ -689,7 +691,7 @@ kepaxos_parse_message(char *msg,
                       size_t msglen,
                       kepaxos_msg_t *msg_struct)
 {
-    size_t expected_len = (sizeof(uint32_t) * 6) + 3 + sizeof(uint16_t);
+    size_t expected_len = KEPAXOS_MSGLEN_MIN;
     if (msglen < expected_len)
         return -1;
 
