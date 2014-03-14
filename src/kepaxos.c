@@ -703,6 +703,8 @@ kepaxos_parse_message(char *msg,
     p += sender_len;
 
     expected_len += sender_len;
+    if (msglen < expected_len)
+        return -1;
 
     uint32_t ballot_high = ntohl(*((uint32_t *)p));
     p += sizeof(uint32_t);
@@ -727,7 +729,6 @@ kepaxos_parse_message(char *msg,
     msg_struct->klen = ntohl(*((uint32_t *)p));
 
     expected_len += msg_struct->klen;
-
     if (msglen < expected_len)
         return -1;
 
@@ -742,7 +743,6 @@ kepaxos_parse_message(char *msg,
     msg_struct->dlen = ntohl(*((uint32_t *)p));
 
     expected_len += msg_struct->dlen;
-
     if (msglen < expected_len)
         return -1;
 
