@@ -486,11 +486,9 @@ kepaxos_build_message(char **out,
     memcpy(p, &nbo, sizeof(uint32_t));
     p += sizeof(uint32_t);
 
-    memcpy(p++, &mtype_byte, 1);
-
-    memcpy(p++, &ctype_byte, 1);
-
-    memcpy(p++, &committed_byte, 1);
+    *p++ = mtype_byte;
+    *p++ = ctype_byte;
+    *p++ = committed_byte;
 
     nbo = htonl(klen);
     memcpy(p, &nbo, sizeof(uint32_t));
@@ -598,7 +596,7 @@ kepaxos_run_command(kepaxos_t *ke,
 
     uint64_t seq = cmd->seq;
     uint64_t ballot = cmd->ballot;
-    MUTE_UNLOCK(&ke->lock);
+    MUTEX_UNLOCK(&ke->lock);
 
     if (shardcache_log_level() >= LOG_DEBUG) {
         char keystr[1024];
