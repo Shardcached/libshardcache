@@ -445,7 +445,7 @@ kepaxos_build_message(char **out,
     char *p = msg;
 
     uint32_t ballot_low = ballot & 0x00000000FFFFFFFF;
-    uint32_t ballot_high = ballot >> 4;
+    uint32_t ballot_high = ballot >> 32;
     uint32_t nbo = htonl(ballot_high);
     memcpy(p, &nbo, sizeof(uint32_t));
     p += sizeof(uint32_t);
@@ -456,7 +456,7 @@ kepaxos_build_message(char **out,
 
 
     uint32_t seq_low = seq & 0x00000000FFFFFFFF;
-    uint32_t seq_high = seq >> 4;
+    uint32_t seq_high = seq >> 32;
     nbo = htonl(seq_high);
     memcpy(p, &nbo, sizeof(uint32_t));
     p += sizeof(uint32_t);
@@ -692,7 +692,7 @@ kepaxos_parse_message(char *msg,
     uint32_t ballot_low = ntohl(*((uint32_t *)p));
     p += sizeof(uint32_t);
 
-    *ballot = ((uint64_t)ballot_high << 4) | ((uint64_t)ballot_low);
+    *ballot = ((uint64_t)ballot_high << 32) | ((uint64_t)ballot_low);
 
     uint32_t seq_high = ntohl(*((uint32_t *)p));
     p += sizeof(uint32_t);
@@ -700,7 +700,7 @@ kepaxos_parse_message(char *msg,
     uint32_t seq_low = ntohl(*((uint32_t *)p));
     p += sizeof(uint32_t);
 
-    *seq = ((uint64_t)seq_high << 4) | ((uint64_t)seq_low);
+    *seq = ((uint64_t)seq_high << 32) | ((uint64_t)seq_low);
 
     *mtype = *p++;
     *ctype = *p++;
