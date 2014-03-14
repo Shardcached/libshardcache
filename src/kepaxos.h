@@ -34,7 +34,7 @@ typedef int (*kepaxos_commit_callback_t)(unsigned char type,
 typedef int (*kepaxos_recover_callback_t)(char *peer,
                                           void *key,
                                           size_t klen,
-                                          uint32_t seq,
+                                          uint64_t seq,
                                           int32_t prio,
                                           void *priv);
 
@@ -64,6 +64,6 @@ int kepaxos_run_command(kepaxos_t *ke,
 
 int kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen);
 
-uint32_t kepaxos_ballot(kepaxos_t *ke);
+uint64_t kepaxos_ballot(kepaxos_t *ke);
 
 #endif

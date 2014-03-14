@@ -265,7 +265,7 @@ shardcache_replica_recover(void *priv)
 }
 
 static int
-kepaxos_recover(char *peer, void *key, size_t klen, uint32_t seq, int32_t prio, void *priv)
+kepaxos_recover(char *peer, void *key, size_t klen, uint64_t seq, int32_t prio, void *priv)
 {
     shardcache_replica_t *replica = (shardcache_replica_t *)priv;
     shardcache_item_to_recover_t *item = calloc(1, sizeof(shardcache_item_to_recover_t));

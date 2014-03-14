@@ -62,7 +62,7 @@ static int commit_callback(unsigned char type,
 static int recover_callback(char *peer,
                             void *key,
                             size_t klen,
-                            uint32_t seq,
+                            uint64_t seq,
                             int32_t prio,
                             void *priv)
 {
