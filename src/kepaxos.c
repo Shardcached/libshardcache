@@ -442,33 +442,50 @@ kepaxos_build_message(char **out,
     unsigned char mtype_byte = (unsigned char)mtype;
     unsigned char ctype_byte = (unsigned char)ctype;
 
+    char *p = msg;
+
     uint32_t ballot_low = ballot & 0x00000000FFFFFFFF;
     uint32_t ballot_high = ballot >> 4;
     uint32_t nbo = htonl(ballot_high);
-    memcpy(msg, &nbo, sizeof(uint32_t));
+    memcpy(p, &nbo, sizeof(uint32_t));
+    p += sizeof(uint32_t);
+
     nbo = htonl(ballot_low);
-    memcpy(msg + sizeof(uint32_t), &nbo, sizeof(uint32_t));
+    memcpy(p, &nbo, sizeof(uint32_t));
+    p += sizeof(uint32_t);
+
 
     uint32_t seq_low = seq & 0x00000000FFFFFFFF;
     uint32_t seq_high = seq >> 4;
     nbo = htonl(seq_high);
-    memcpy(msg + 2*sizeof(uint32_t), &nbo, sizeof(uint32_t));
-    nbo = htonl(seq_low);
-    memcpy(msg + 3*sizeof(uint32_t), &nbo, sizeof(uint32_t));
+    memcpy(p, &nbo, sizeof(uint32_t));
+    p += sizeof(uint32_t);
 
-    memcpy(msg + 4*sizeof(uint32_t), &mtype_byte, 1);
-    memcpy(msg + (4*sizeof(uint32_t)) + 1, &ctype_byte, 1);
-    memcpy(msg + (4*sizeof(uint32_t)) + 2, &committed_byte, 1);
+    nbo = htonl(seq_low);
+    memcpy(p, &nbo, sizeof(uint32_t));
+    p += sizeof(uint32_t);
+
+    memcpy(p++, &mtype_byte, 1);
+
+    memcpy(p++, &ctype_byte, 1);
+
+    memcpy(p++, &committed_byte, 1);
 
     nbo = htonl(klen);
-    memcpy(msg + (4*sizeof(uint32_t)) + 3, &nbo, sizeof(uint32_t));
-    if (klen)
-        memcpy(msg + (5*sizeof(uint32_t)) + 3, key, klen);
+    memcpy(p, &nbo, sizeof(uint32_t));
+    p += sizeof(uint32_t);
+
+    if (klen) {
+        memcpy(p, key, klen);
+        p += klen;
+    }
 
     nbo = htonl(dlen);
-    memcpy(msg + (5*sizeof(uint32_t)) + 3 + klen, &nbo, sizeof(uint32_t));
+    memcpy(p, &nbo, sizeof(uint32_t));
+    p += sizeof(uint32_t);
+
     if (dlen)
-        memcpy(msg + (6*sizeof(uint32_t)) + 3 + klen, data, dlen);
+        memcpy(p, data, dlen);
 
     *out = msg;
     return msglen;
