@@ -191,7 +191,7 @@ int main(int argc, char **argv)
     if (check)
         ut_success();
     else
-        ut_failure("Logs are not aligned on all replicas");
+        ut_failure("Log is not aligned on all replicas");
 
 
     // bring down 2 nodes , 3 should be enough to keep working
@@ -205,10 +205,10 @@ int main(int argc, char **argv)
         if (!check) {
             ut_success();
         } else {
-            ut_failure("Logs don't differ on the offline replicas");
+            ut_failure("Log doesn't differ on the offline replicas");
         }
     } else {
-        ut_failure("Logs are not aligned on the active replicas");
+        ut_failure("Log is not aligned on the active replicas");
     }
 
 
@@ -229,7 +229,7 @@ int main(int argc, char **argv)
     if (check)
         ut_success();
     else
-        ut_failure("Logs are not aligned on the active replicas");
+        ut_failure("Log is not aligned on the active replicas");
 
     for (i = 0; i < 5; i++) {
         kepaxos_context_destroy(contexts[i].ke);

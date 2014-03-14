@@ -99,7 +99,8 @@ kepaxos_max_ballot(kepaxos_t *ke)
 
     int rc = sqlite3_reset(ke->select_ballot_stmt);
     if (rc != SQLITE_OK) {
-        // TODO - Error message
+        SHC_ERROR("Can't reset the select-ballot prepared statement: %s",
+                  sqlite3_errmsg(ke->log));
         return 0;
     }
 
@@ -120,28 +121,33 @@ last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint64_t *ballot)
 
     int rc = sqlite3_reset(ke->select_seq_stmt);
     if (rc != SQLITE_OK) {
-        // TODO - Error message
+        SHC_ERROR("Can't reset the select-seq prepared statement: %s",
+                  sqlite3_errmsg(ke->log));
         return 0;
     }
 
     rc = sqlite3_bind_int64(ke->select_seq_stmt, 1, keyhash1);
     if (rc != SQLITE_OK) {
-        // TODO - Errors
+        SHC_ERROR("Can't bind the keyhash1 column (select_seq): %s",
+                  sqlite3_errmsg(ke->log));
         return 0;
     }
 
     rc = sqlite3_bind_int64(ke->select_seq_stmt, 2, keyhash2);
     if (rc != SQLITE_OK) {
-        // TODO - Errors
+        SHC_ERROR("Can't bind the keyhash2 column (select_seq): %s",
+                  sqlite3_errmsg(ke->log));
         return seq;
     }
 
-    //int cnt = 0;
     rc = sqlite3_step(ke->select_seq_stmt);
     if (rc == SQLITE_ROW) {
         seq = sqlite3_column_int64(ke->select_seq_stmt, 0);
         if (ballot)
             *ballot = sqlite3_column_int64(ke->select_seq_stmt, 1);
+    } else {
+        SHC_ERROR("Can't execut the select-seq statement: %s",
+                  sqlite3_errmsg(ke->log));
     }
 
     return seq;
@@ -151,43 +157,48 @@ static inline void
 set_last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint64_t ballot, uint64_t seq)
 {
     uint64_t keyhash1, keyhash2;
-    //uint64_t last_seq = 0;
 
     kepaxos_compute_key_hashes(key, klen, &keyhash1, &keyhash2);
 
     int rc = sqlite3_reset(ke->insert_stmt);
     if (rc != SQLITE_OK) {
-        // TODO - Error message
+        SHC_ERROR("Can't reset the insert statement: %s",
+                  sqlite3_errmsg(ke->log));
         return;
     }
 
     rc = sqlite3_bind_int64(ke->insert_stmt, 1, ballot);
     if (rc != SQLITE_OK) {
-        // TODO - Errors
+        SHC_ERROR("Can't bind the ballot column: %s",
+                  sqlite3_errmsg(ke->log));
         return;
     }
 
     rc = sqlite3_bind_int64(ke->insert_stmt, 2, keyhash1);
     if (rc != SQLITE_OK) {
-        // TODO - Errors
+        SHC_ERROR("Can't bind the keyhash1 column: %s",
+                  sqlite3_errmsg(ke->log));
         return;
     }
 
     rc = sqlite3_bind_int64(ke->insert_stmt, 3, keyhash2);
     if (rc != SQLITE_OK) {
-        // TODO - Errors
+        SHC_ERROR("Can't bind the keyhash2 column: %s",
+                  sqlite3_errmsg(ke->log));
         return;
     }
 
     rc = sqlite3_bind_int64(ke->insert_stmt, 4, seq);
     if (rc != SQLITE_OK) {
-        // TODO - Errors
+        SHC_ERROR("Can't bind the seq column: %s",
+                  sqlite3_errmsg(ke->log));
         return;
     }
 
     rc = sqlite3_step(ke->insert_stmt);
     if (rc != SQLITE_DONE) {
-        fprintf(stderr, "Insert Failed! %d\n", rc);
+        SHC_ERROR("Can't execute the insert statement: %s",
+                  sqlite3_errmsg(ke->log));
         return;
     }
 }
@@ -290,7 +301,8 @@ kepaxos_context_create(char *dbfile,
 
     int rc = sqlite3_open(dbfile, &ke->log);
     if (rc != SQLITE_OK) {
-        // TODO - Error messages
+        SHC_ERROR("Can't open the sqlite dbfile: %s",
+                  sqlite3_errmsg(ke->log));
         free(ke);
         return NULL;
     }
@@ -300,6 +312,8 @@ kepaxos_context_create(char *dbfile,
                                    "PRIMARY KEY(keyhash1, keyhash2))";
     rc = sqlite3_exec(ke->log, create_table_sql, NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
+        SHC_ERROR("Can't create the log table: %s",
+                  sqlite3_errmsg(ke->log));
         sqlite3_close(ke->log);
         free(ke);
         return NULL;
@@ -308,6 +322,8 @@ kepaxos_context_create(char *dbfile,
     const char *create_index_sql = "CREATE INDEX IF NOT EXISTS ballot_index ON ReplicaLog (ballot DESC)";
     rc = sqlite3_exec(ke->log, create_index_sql, NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
+        SHC_ERROR("Can't create the ballot index on log table: %s",
+                  sqlite3_errmsg(ke->log));
         sqlite3_close(ke->log);
         free(ke);
         return NULL;
@@ -318,6 +334,8 @@ kepaxos_context_create(char *dbfile,
     const char *tail = NULL;
     rc = sqlite3_prepare_v2(ke->log, sql, -1, &ke->select_seq_stmt, &tail);
     if (rc != SQLITE_OK) {
+        SHC_ERROR("Can't initialize the select-seq prepared statement: %s",
+                  sqlite3_errmsg(ke->log));
         sqlite3_close(ke->log);
         free(ke);
         return NULL;
@@ -326,6 +344,8 @@ kepaxos_context_create(char *dbfile,
     snprintf(sql, sizeof(sql), "SELECT MAX(ballot) FROM ReplicaLog");
     rc = sqlite3_prepare_v2(ke->log, sql, -1, &ke->select_ballot_stmt, &tail);
     if (rc != SQLITE_OK) {
+        SHC_ERROR("Can't initialize the select-max-ballot prepared statement: %s",
+                  sqlite3_errmsg(ke->log));
         sqlite3_finalize(ke->select_seq_stmt);
         sqlite3_close(ke->log);
         free(ke);
@@ -335,6 +355,8 @@ kepaxos_context_create(char *dbfile,
     snprintf(sql, sizeof(sql), "INSERT OR REPLACE INTO ReplicaLog VALUES(?, ?, ?, ?)");
     rc = sqlite3_prepare_v2(ke->log, sql, -1, &ke->insert_stmt, &tail);
     if (rc != SQLITE_OK) {
+        SHC_ERROR("Can't initialize the insert-or-replace prepared statement: %s",
+                  sqlite3_errmsg(ke->log));
         sqlite3_finalize(ke->select_seq_stmt);
         sqlite3_finalize(ke->select_ballot_stmt);
         sqlite3_close(ke->log);
