@@ -971,8 +971,17 @@ kepaxos_received_command(kepaxos_t *ke, char *peer, void *cmd, size_t cmdlen)
                 MUTEX_UNLOCK(&ke->lock);
                 return 0;
             }
+
+            if (shardcache_log_level() >= LOG_DEBUG && key) {
+                char keystr[1024];
+                KEY2STR(key, klen, keystr, sizeof(keystr));
+                SHC_DEBUG("Committing key %s (seq: %llu, ballot: %llu)\n",
+                          keystr, seq, ballot);
+            }
+
             ke->callbacks.commit(ctype, key, klen, data, dlen, 0, ke->callbacks.priv);
             set_last_seq_for_key(ke, key, klen, ballot, seq);
+
             if (cmd && cmd->seq == seq) {
                 ht_delete(ke->commands, key, klen, NULL, NULL);
                 kepaxos_command_free(cmd);
