@@ -89,7 +89,7 @@ kepaxos_compute_key_hashes(void *key, size_t klen, uint64_t *hash1, uint64_t *ha
     *hash2 = sip_hash24(auth2, key, klen);
 }
 
-static uint32_t
+static uint64_t
 kepaxos_max_ballot(kepaxos_t *ke)
 {
     uint64_t ballot = 0;
