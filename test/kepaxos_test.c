@@ -214,7 +214,7 @@ int main(int argc, char **argv)
 
     int committed = total_values_committed;
     contexts[2].online = 0; // replica 2 crashes as well
-    ut_testing("kepaxos_run_command() succeds with less than N/2+1 active replicas");
+    ut_testing("kepaxos_run_command() fails with less than N/2+1 active replicas");
     rc = kepaxos_run_command(contexts[0].ke, "node1", 0x00, "test_key2", 8, "test_value2", 10);
     ut_validate_int(committed, total_values_committed);
 
