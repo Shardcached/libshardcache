@@ -207,7 +207,7 @@ int main(int argc, char **argv)
     contexts[3].online = 0;
     contexts[4].online = 0;
     rc = kepaxos_run_command(contexts[0].ke, 0x00, "test_key", 8, "test_value", 10);
-    ut_testing("kepaxos_run_command() succeds with only N/2+1 active replicas");
+    ut_testing("kepaxos_run_command() succeeds with only N/2+1 active replicas");
     check = check_log_consistency(contexts, 0, 2);
     if (check) {
         check = check_log_consistency(contexts, 0, 4);

@@ -111,7 +111,7 @@ build_tests: static
 
 .PHONY: test
 test: build_tests
-	for i in $(TEST_EXEC_ORDER); do echo; test/$$i; echo; done
+	@for i in $(TEST_EXEC_ORDER); do echo; test/$$i; echo; done
 
 perl_install:
 	make -C perl install
