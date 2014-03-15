@@ -6,6 +6,8 @@
 #include <libgen.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <stdlib.h>
+#include <time.h>
 
 #include <sqlite3.h>
 
@@ -35,9 +37,23 @@ static int send_callback(char **recipients,
 {
     callback_argument *arg = (callback_argument *)priv;
     __sync_add_and_fetch(&total_messages_sent, num_recipients);
+
+    char **shuffled = malloc(sizeof(char *) * num_recipients);
+    memcpy(shuffled, recipients, sizeof(char *) * num_recipients);
+
     int i;
+    for (i = 0; i < num_recipients * 100; i++) {
+        int idx1 = rand()%num_recipients;
+        int idx2 = rand()%num_recipients;
+        if (idx1 != idx2) {
+            char *tmp = shuffled[idx1];
+            shuffled[idx1] = shuffled[idx2];
+            shuffled[idx2] = tmp;
+        }
+    }
+
     for (i = 0; i < num_recipients; i++) {
-        char *node = recipients[i];
+        char *node = shuffled[i];
         node += 4;
         int index = strtol(node, NULL, 10) - 1;
         if (arg->contexts[index].online) {
@@ -52,7 +68,7 @@ static int send_callback(char **recipients,
             }
         }
     }
-
+    free(shuffled);
     return 0;
 }
 
@@ -156,6 +172,7 @@ void *repeated_command(void *priv)
 
 int main(int argc, char **argv)
 {
+    srand(time(NULL));
     ut_init(basename(argv[0]));
 
     char *nodes[] = { "node1", "node2", "node3", "node4", "node5" };
