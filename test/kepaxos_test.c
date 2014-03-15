@@ -5,6 +5,7 @@
 #include <ut.h>
 #include <libgen.h>
 #include <stdio.h>
+#include <pthread.h>
 
 #include <sqlite3.h>
 
@@ -145,6 +146,14 @@ int check_log_consistency(kepaxos_node *contexts, int start_index, int end_index
     return check;
 }
 
+void *repeated_command(void *priv)
+{
+    kepaxos_t *ke = (kepaxos_t *)priv;
+    int i;
+    for (i = 0; i < 10; i++)
+        kepaxos_run_command(ke, 0x00, "test_key", 8, "test_value", 10);
+    return NULL;
+}
 
 int main(int argc, char **argv)
 {
@@ -239,7 +248,23 @@ int main(int argc, char **argv)
     if (check)
         ut_success();
     else
-        ut_failure("Log is not aligned on the active replicas");
+        ut_failure("Log is not aligned on all the replicas");
+
+    ut_testing("concurrent kepaxos_run_command() from two different replicas");
+    pthread_t threads[2];
+    for (i = 0; i < 2; i++) {
+        pthread_create(&threads[i], NULL, repeated_command, contexts[i].ke);
+    }
+
+    for (i = 0; i < 2; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    check = check_log_consistency(contexts, 0, 4);
+    if (check)
+        ut_success();
+    else
+        ut_failure("Log is not aligned on all the replicas");
 
     for (i = 0; i < 5; i++) {
         kepaxos_context_destroy(contexts[i].ke);
