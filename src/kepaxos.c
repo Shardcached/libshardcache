@@ -614,28 +614,27 @@ kepaxos_run_command(kepaxos_t *ke,
 
     int rc = kepaxos_send_preaccept(ke, ballot, key, klen, seq);
 
+    MUTEX_LOCK(&ke->lock);
+
     if (rc >= 0) {
-        MUTEX_LOCK(&ke->lock);
         kepaxos_cmd_t *now_cmd = (kepaxos_cmd_t *)ht_get(ke->commands, key, klen, NULL);
         if (now_cmd == cmd) {
             // our command wasn't invalidated in the meanwhile
             // let's wait for its completion (either success or failure)
             MUTEX_LOCK(&cmd->lock);
             cmd->waiting = 1;
-            MUTEX_UNLOCK(&ke->lock);
             pthread_cond_wait(&cmd->condition, &cmd->lock);
             MUTEX_UNLOCK(&cmd->lock);
             kepaxos_command_free(cmd);
-        } else {
-            // some other thread invalidated our command, let's forget about it
-            MUTEX_UNLOCK(&ke->lock);
         }
     }
-
     // here the command have either succeeded or failed, we can
     // determine it by checking if the current committed seq is 
     // equal or greater than the seq we tried to commit
     uint64_t current_seq = last_seq_for_key(ke, key, klen, NULL);
+
+    MUTEX_UNLOCK(&ke->lock);
+
     return (current_seq >= seq) ? 0 : -1;
 }
 
