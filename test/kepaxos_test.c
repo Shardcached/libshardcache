@@ -263,7 +263,7 @@ int main(int argc, char **argv)
     else
         ut_failure("Log is not aligned on all the replicas");
 
-    ut_testing("concurrent kepaxos_run_command() from two different replicas");
+    ut_testing("concurrent kepaxos_run_command() from random replicas");
     pthread_t threads[2];
     for (i = 0; i < 2; i++) {
         pthread_create(&threads[i], NULL, repeated_command, contexts);
