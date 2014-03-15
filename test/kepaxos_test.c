@@ -162,6 +162,7 @@ void *repeated_command(void *priv)
     kepaxos_node *contexts = (kepaxos_node *)priv;
     int i;
     for (i = 0; i < 10; i++) {
+        // send the command to a random replica
         int j = rand()%5;
         kepaxos_run_command(contexts[j].ke, 0x00, "test_key", 8, "test_value", 10);
     }
@@ -200,7 +201,7 @@ int main(int argc, char **argv)
     }
     ut_success();
 
-    contexts[0].online = 1;
+    contexts[0].online = 1; // start by bringing online only 1 replica
     ut_testing("kepaxos_run_command() timeouts after 1 second");
     int rc = kepaxos_run_command(contexts[0].ke, 0x00, "test_key", 8, "test_value", 10);
     ut_validate_int(rc, -1);
@@ -208,7 +209,7 @@ int main(int argc, char **argv)
     ut_testing("kepaxos_run_command() triggered 4 messages");
     ut_validate_int(total_messages_sent, 4);
 
-    // bring up all the other nodes
+    // bring up all the other replicas
     for (i = 1; i < 5; i++)
         contexts[i].online = 1;
 
@@ -225,7 +226,7 @@ int main(int argc, char **argv)
         ut_failure("Log is not aligned on all replicas");
 
 
-    // bring down 2 nodes , 3 should be enough to keep working
+    // bring down 2 replicas (node4 and node5) , 3 should be enough to keep working
     contexts[3].online = 0;
     contexts[4].online = 0;
     rc = kepaxos_run_command(contexts[0].ke, 0x00, "test_key", 8, "test_value", 10);
@@ -250,9 +251,12 @@ int main(int argc, char **argv)
     ut_validate_int(committed, total_values_committed);
 
     ut_testing("offline replicas come back online and a new value is set using one of them");
+
+    // bring all replicas back online
     contexts[2].online = 1;
     contexts[3].online = 1;
     contexts[4].online = 1;
+
     // the following will trigger the long path (paxos-like instance) to align
     // the crashed replicas (3 and 4) which are behind (they missed a command)
     rc = kepaxos_run_command(contexts[3].ke, 0x00, "test_key", 8, "test_value", 10);
@@ -263,6 +267,8 @@ int main(int argc, char **argv)
     else
         ut_failure("Log is not aligned on all the replicas");
 
+    // now let's test concurrency when the same key is tried to be changed
+    // by multiple replicas at the same time
     ut_testing("concurrent kepaxos_run_command() from random replicas");
     pthread_t threads[2];
     for (i = 0; i < 2; i++) {
