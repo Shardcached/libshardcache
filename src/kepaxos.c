@@ -623,8 +623,10 @@ kepaxos_run_command(kepaxos_t *ke,
             // let's wait for its completion (either success or failure)
             MUTEX_LOCK(&cmd->lock);
             cmd->waiting = 1;
+            MUTEX_UNLOCK(&ke->lock);
             pthread_cond_wait(&cmd->condition, &cmd->lock);
             MUTEX_UNLOCK(&cmd->lock);
+            MUTEX_LOCK(&ke->lock);
             kepaxos_command_free(cmd);
         }
     }
