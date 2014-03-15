@@ -76,7 +76,7 @@ struct __kepaxos_cmd_s {
     uint64_t ballot;
     time_t timestamp;
     int timeout;
-    pthread_mutex_t condition_lock;
+    pthread_mutex_t lock;
     pthread_cond_t condition;
     int waiting;
 };
@@ -223,9 +223,9 @@ set_last_seq_for_key(kepaxos_t *ke, void *key, size_t klen, uint64_t ballot, uin
 static void
 kepaxos_command_destroy(kepaxos_cmd_t *c)
 {
-    MUTEX_LOCK(&c->condition_lock);
+    MUTEX_LOCK(&c->lock);
     pthread_cond_broadcast(&c->condition);
-    MUTEX_UNLOCK(&c->condition_lock);
+    MUTEX_UNLOCK(&c->lock);
 }
 
 static void
@@ -238,7 +238,7 @@ kepaxos_command_free(kepaxos_cmd_t *c)
     if (c->votes)
         free(c->votes);
 
-    MUTEX_DESTROY(&c->condition_lock);
+    MUTEX_DESTROY(&c->lock);
     CONDITION_DESTROY(&c->condition);
     free(c);
 }
@@ -253,6 +253,7 @@ kepaxos_expire_command(hashtable_t *table,
 {
     kepaxos_t *ke = (kepaxos_t *)user;
     kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)value;
+    MUTEX_LOCK(&cmd->lock);
     if (cmd->timeout > 0 && time(NULL) > (cmd->timestamp + cmd->timeout)) {
         if (cmd->status == KEPAXOS_CMD_STATUS_PRE_ACCEPTED ||
             cmd->status == KEPAXOS_CMD_STATUS_ACCEPTED)
@@ -260,8 +261,10 @@ kepaxos_expire_command(hashtable_t *table,
             ke->callbacks.recover(BALLOT2NODE(ke, cmd->ballot),
                     key, klen, cmd->seq, cmd->ballot, ke->callbacks.priv);
         }
+        MUTEX_UNLOCK(&cmd->lock);
         return -1; // if expired we want to remove this item from the table
     }
+    MUTEX_UNLOCK(&cmd->lock);
     return 1;
 }
 
@@ -549,26 +552,17 @@ kepaxos_command_create(kepaxos_t *ke,
                        size_t dlen)
 {
     kepaxos_cmd_t *cmd = calloc(1, sizeof(kepaxos_cmd_t));
-    MUTEX_INIT(&cmd->condition_lock);
+    MUTEX_INIT(&cmd->lock);
     CONDITION_INIT(&cmd->condition);
 
     // this will release/abort the previous command on the same key(if any)
     kepaxos_cmd_t *prev_cmd =  NULL;
-    ht_get_and_set(ke->commands, key, klen, cmd, sizeof(kepaxos_cmd_t), (void **)&prev_cmd, NULL);
-    if (prev_cmd) {
-        uint64_t interfering_seq = prev_cmd->seq; 
-        seq = MAX(seq, interfering_seq) + 1;
-        kepaxos_command_destroy(prev_cmd);
-    } else {
-        seq++;
-    }
-
     // an eventually uncommitted command for K would be overwritten here
     // hence it will be ignored and will fail silently
     // (NOTE: in libshardcache we only care about the most recent command for a key 
     //        and not about the entire sequence of commands)
 
-    cmd->seq = seq;
+    cmd->seq = ++seq;
     cmd->type = type;
     cmd->key = malloc(klen);
     memcpy(cmd->key, key, klen);
@@ -580,6 +574,16 @@ kepaxos_command_create(kepaxos_t *ke,
     cmd->timestamp = time(NULL);
     cmd->timeout = ke->timeout;
     cmd->ballot = ATOMIC_READ(ke->ballot);
+
+    ht_get_and_set(ke->commands, key, klen, cmd, sizeof(kepaxos_cmd_t), (void **)&prev_cmd, NULL);
+    if (prev_cmd) {
+        uint64_t interfering_seq = prev_cmd->seq; 
+        MUTEX_LOCK(&cmd->lock);
+        cmd->seq = MAX(seq, interfering_seq+1);
+        MUTEX_UNLOCK(&cmd->lock);
+        kepaxos_command_destroy(prev_cmd);
+    } 
+
     return cmd;
 }
 
@@ -616,11 +620,11 @@ kepaxos_run_command(kepaxos_t *ke,
         if (now_cmd == cmd) {
             // our command wasn't invalidated in the meanwhile
             // let's wait for its completion (either success or failure)
-            MUTEX_LOCK(&cmd->condition_lock);
+            MUTEX_LOCK(&cmd->lock);
             cmd->waiting = 1;
             MUTEX_UNLOCK(&ke->lock);
-            pthread_cond_wait(&cmd->condition, &cmd->condition_lock);
-            MUTEX_UNLOCK(&cmd->condition_lock);
+            pthread_cond_wait(&cmd->condition, &cmd->lock);
+            MUTEX_UNLOCK(&cmd->lock);
             kepaxos_command_free(cmd);
         } else {
             // some other thread invalidated our command, let's forget about it
@@ -782,7 +786,9 @@ kepaxos_handle_preaccept(kepaxos_t *ke, kepaxos_msg_t *msg, void **response, siz
             MUTEX_UNLOCK(&ke->lock);
             return -1;
         }
+        MUTEX_LOCK(&cmd->lock);
         cmd->ballot = MAX(msg->ballot, cmd->ballot);
+        MUTEX_UNLOCK(&cmd->lock);
         interfering_seq = cmd->seq;
     } else {
         cmd = calloc(1, sizeof(kepaxos_cmd_t));
@@ -802,8 +808,10 @@ kepaxos_handle_preaccept(kepaxos_t *ke, kepaxos_msg_t *msg, void **response, siz
             ke->callbacks.recover(BALLOT2NODE(ke, cmd->ballot),
                     msg->key, msg->klen, cmd->seq, cmd->ballot, ke->callbacks.priv);
         }
+        MUTEX_LOCK(&cmd->lock);
         cmd->status = KEPAXOS_CMD_STATUS_PRE_ACCEPTED;
         cmd->seq = interfering_seq;
+        MUTEX_UNLOCK(&cmd->lock);
     }
     int committed = (max_seq == local_seq);
     uint64_t ballot = cmd->ballot;
@@ -828,6 +836,7 @@ kepaxos_handle_preaccept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
             MUTEX_UNLOCK(&ke->lock);
             return -1;
         }
+        MUTEX_LOCK(&cmd->lock);
         cmd->votes = realloc(cmd->votes, sizeof(kepaxos_vote_t) * (cmd->num_votes + 1));
         cmd->votes[cmd->num_votes].seq = msg->seq;
         cmd->votes[cmd->num_votes].ballot = msg->ballot;
@@ -843,6 +852,8 @@ kepaxos_handle_preaccept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
         if (cmd->max_seq == msg->seq)
             cmd->max_voter = msg->peer;
 
+        MUTEX_UNLOCK(&cmd->lock);
+
         if (cmd->num_votes < ke->num_peers/2) {
             MUTEX_UNLOCK(&ke->lock);
             return 0; // we don't have a quorum yet
@@ -855,6 +866,7 @@ kepaxos_handle_preaccept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
             return kepaxos_commit(ke, cmd);
         } else {
             // run the paxos-like protocol (long path)
+            MUTEX_LOCK(&cmd->lock);
             free(cmd->votes);
             cmd->votes = NULL;
             cmd->num_votes = 0;
@@ -865,6 +877,7 @@ kepaxos_handle_preaccept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
             cmd->ballot = ballot;
             uint64_t new_seq = cmd->seq;
             cmd->status = KEPAXOS_CMD_STATUS_ACCEPTED;
+            MUTEX_UNLOCK(&cmd->lock);
             MUTEX_UNLOCK(&ke->lock);
             return kepaxos_send_accept(ke, ballot, msg->key, msg->klen, new_seq);
         }
@@ -903,11 +916,13 @@ kepaxos_handle_accept(kepaxos_t *ke, kepaxos_msg_t *msg, void *response, size_t 
         ht_set(ke->commands, msg->key, msg->klen, cmd, sizeof(kepaxos_cmd_t));
     }
     if (msg->seq >= cmd->seq) {
+        MUTEX_LOCK(&cmd->lock);
         cmd->seq = msg->seq;
         cmd->ballot = msg->ballot;
         cmd->status = KEPAXOS_CMD_STATUS_ACCEPTED;
         cmd->timestamp = time(NULL);
         cmd->timeout = ke->timeout;
+        MUTEX_UNLOCK(&cmd->lock);
         accepted_ballot = msg->ballot;
         accepted_seq = msg->seq;
     }
@@ -951,6 +966,7 @@ kepaxos_handle_accept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
             // some replica has already committed this sequence
             // let's increase it and try paxos again
             uint64_t new_ballot = ATOMIC_READ(ke->ballot);
+            MUTEX_LOCK(&cmd->lock);
             cmd->seq++;
             cmd->ballot = new_ballot;
             free(cmd->votes);
@@ -958,11 +974,13 @@ kepaxos_handle_accept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
             cmd->num_votes = 0;
             cmd->max_seq = 0;
             cmd->max_voter = NULL;
+            MUTEX_UNLOCK(&cmd->lock);
             uint64_t new_seq = cmd->seq;
             MUTEX_UNLOCK(&ke->lock);
             return kepaxos_send_accept(ke, new_ballot, msg->key, msg->klen, new_seq);
         }
 
+        MUTEX_LOCK(&cmd->lock);
         cmd->votes = realloc(cmd->votes, sizeof(kepaxos_vote_t) * (cmd->num_votes + 1));
         cmd->votes[cmd->num_votes].seq = msg->seq;
         cmd->votes[cmd->num_votes].ballot = msg->ballot;
@@ -994,12 +1012,16 @@ kepaxos_handle_accept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
                 cmd->max_seq = 0;
                 cmd->max_voter = NULL;
                 uint64_t new_seq = cmd->seq;
+                MUTEX_UNLOCK(&cmd->lock);
                 MUTEX_UNLOCK(&ke->lock);
                 return kepaxos_send_accept(ke, new_ballot, msg->key, msg->klen, new_seq);
             }
+            MUTEX_UNLOCK(&cmd->lock);
             MUTEX_UNLOCK(&ke->lock);
             return 0; // we don't have a quorum yet
         }
+
+        MUTEX_UNLOCK(&cmd->lock);
         // the command has been accepted by a quorum
         ht_delete(ke->commands, msg->key, msg->klen, (void **)&cmd, NULL);
         MUTEX_UNLOCK(&ke->lock);
