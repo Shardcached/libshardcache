@@ -661,7 +661,9 @@ kepaxos_commit(kepaxos_t *ke, kepaxos_cmd_t *cmd)
 {
     int rc = ke->callbacks.commit(cmd->type, cmd->key, cmd->klen, cmd->data, cmd->dlen, 1, ke->callbacks.priv);
     if (rc == 0) {
+        MUTEX_LOCK(&ke->lock);
         set_last_seq_for_key(ke, cmd->key, cmd->klen, cmd->ballot, cmd->seq);
+        MUTEX_UNLOCK(&ke->lock);
         rc = kepaxos_send_commit(ke, cmd);
     }
     kepaxos_command_destroy(cmd);
