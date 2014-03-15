@@ -14,7 +14,6 @@
 
 #include <kepaxos.h>
 
-
 static int total_messages_sent = 0;
 static int total_values_committed = 0;
 
@@ -35,7 +34,7 @@ static int send_callback(char **recipients,
                          void *priv)
 {
     callback_argument *arg = (callback_argument *)priv;
-    total_messages_sent += num_recipients;
+    __sync_add_and_fetch(&total_messages_sent, num_recipients);
     int i;
     for (i = 0; i < num_recipients; i++) {
         char *node = recipients[i];
@@ -65,7 +64,7 @@ static int commit_callback(unsigned char type,
                            int leader,
                            void *priv)
 {
-    total_values_committed++;
+    __sync_add_and_fetch(&total_values_committed, 1);
     return 0;
 }
 
@@ -162,7 +161,6 @@ int main(int argc, char **argv)
     char *nodes[] = { "node1", "node2", "node3", "node4", "node5" };
 
     kepaxos_node contexts[5];
-
 
     ut_testing("kepaxos_context_create(\"/tmp/kepaxos_test.db\", nodes, 5, 1, &callbacks)");
     int i;
