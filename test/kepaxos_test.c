@@ -42,7 +42,7 @@ static int send_callback(char **recipients,
     memcpy(shuffled, recipients, sizeof(char *) * num_recipients);
 
     int i;
-    for (i = num_recipients - 1; i > 0; i++) {
+    for (i = num_recipients - 1; i > 0; i--) {
         int j = rand()%i;
         char *tmp = shuffled[i];
         shuffled[i] = shuffled[j];
