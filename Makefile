@@ -49,7 +49,8 @@ tsan:
 	@export CC=gcc-4.8; \
 	export LDFLAGS="-pie -ltsan"; \
 	export CFLAGS="-fsanitize=thread -g -fPIC -pie"; \
-	make all
+	make clean; \
+	make test
 
 .PHONY: build_deps
 build_deps:
