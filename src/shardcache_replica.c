@@ -283,7 +283,7 @@ kepaxos_recover(char *peer, void *key, size_t klen, uint64_t seq, int32_t prio, 
     ht_set(replica->recovery, key, klen, item, sizeof(shardcache_item_to_recover_t));
     void *k = malloc(klen);
     memcpy(k, key, klen);
-    pqueue_insert(replica->recovery_queue, prio, key, klen);
+    pqueue_insert(replica->recovery_queue, prio, k, klen);
     return 0;
 }
 
