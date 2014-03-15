@@ -78,6 +78,7 @@ struct __kepaxos_cmd_s {
     int timeout;
     pthread_mutex_t condition_lock;
     pthread_cond_t condition;
+    int waiting;
 };
 
 struct __kepaxos_s {
@@ -616,14 +617,15 @@ kepaxos_run_command(kepaxos_t *ke,
             // our command wasn't invalidated in the meanwhile
             // let's wait for its completion (either success or failure)
             MUTEX_LOCK(&cmd->condition_lock);
+            cmd->waiting = 1;
             MUTEX_UNLOCK(&ke->lock);
             pthread_cond_wait(&cmd->condition, &cmd->condition_lock);
             MUTEX_UNLOCK(&cmd->condition_lock);
+            kepaxos_command_free(cmd);
         } else {
             // some other thread invalidated our command, let's forget about it
             MUTEX_UNLOCK(&ke->lock);
         }
-        kepaxos_command_free(cmd);
     }
 
     // here the command have either succeeded or failed, we can
@@ -1043,9 +1045,11 @@ kepaxos_handle_commit(kepaxos_t *ke, kepaxos_msg_t *msg)
 
     set_last_seq_for_key(ke, msg->key, msg->klen, msg->ballot, msg->seq);
 
-    if (cmd && cmd->seq == msg->seq) {
+    if (cmd && cmd->seq == msg->seq && msg->ballot >= cmd->ballot) {
+        int waiting = cmd->waiting;
         ht_delete(ke->commands, msg->key, msg->klen, NULL, NULL);
-        kepaxos_command_free(cmd);
+        if (!waiting)
+            kepaxos_command_free(cmd);
     }
     MUTEX_UNLOCK(&ke->lock);
     return 0;
