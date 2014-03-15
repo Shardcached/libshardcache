@@ -159,10 +159,12 @@ int check_log_consistency(kepaxos_node *contexts, int start_index, int end_index
 
 void *repeated_command(void *priv)
 {
-    kepaxos_t *ke = (kepaxos_t *)priv;
+    kepaxos_node *contexts = (kepaxos_node *)priv;
     int i;
-    for (i = 0; i < 10; i++)
-        kepaxos_run_command(ke, 0x00, "test_key", 8, "test_value", 10);
+    for (i = 0; i < 10; i++) {
+        int j = rand()%5;
+        kepaxos_run_command(contexts[j].ke, 0x00, "test_key", 8, "test_value", 10);
+    }
     return NULL;
 }
 
@@ -264,7 +266,7 @@ int main(int argc, char **argv)
     ut_testing("concurrent kepaxos_run_command() from two different replicas");
     pthread_t threads[2];
     for (i = 0; i < 2; i++) {
-        pthread_create(&threads[i], NULL, repeated_command, contexts[i].ke);
+        pthread_create(&threads[i], NULL, repeated_command, contexts);
     }
 
     for (i = 0; i < 2; i++) {
