@@ -1045,7 +1045,7 @@ kepaxos_handle_commit(kepaxos_t *ke, kepaxos_msg_t *msg)
 
     set_last_seq_for_key(ke, msg->key, msg->klen, msg->ballot, msg->seq);
 
-    if (cmd && cmd->seq == msg->seq && msg->ballot >= cmd->ballot) {
+    if (cmd && cmd->seq <= msg->seq) {
         int waiting = cmd->waiting;
         ht_delete(ke->commands, msg->key, msg->klen, NULL, NULL);
         if (!waiting)
