@@ -38,18 +38,15 @@ static int send_callback(char **recipients,
     callback_argument *arg = (callback_argument *)priv;
     __sync_add_and_fetch(&total_messages_sent, num_recipients);
 
-    char **shuffled = malloc(sizeof(char *) * num_recipients);
+    char *shuffled[num_recipients];
     memcpy(shuffled, recipients, sizeof(char *) * num_recipients);
 
     int i;
-    for (i = 0; i < num_recipients * 100; i++) {
-        int idx1 = rand()%num_recipients;
-        int idx2 = rand()%num_recipients;
-        if (idx1 != idx2) {
-            char *tmp = shuffled[idx1];
-            shuffled[idx1] = shuffled[idx2];
-            shuffled[idx2] = tmp;
-        }
+    for (i = num_recipients - 1; i > 0; i++) {
+        int j = rand()%i;
+        char *tmp = shuffled[i];
+        shuffled[i] = shuffled[j];
+        shuffled[j] = tmp;
     }
 
     for (i = 0; i < num_recipients; i++) {
@@ -68,7 +65,6 @@ static int send_callback(char **recipients,
             }
         }
     }
-    free(shuffled);
     return 0;
 }
 
