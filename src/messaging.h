@@ -50,7 +50,9 @@ typedef enum {
     SHC_HDR_RESPONSE         = 0x99,
 
     SHC_HDR_REPLICA_COMMAND  = 0xA0,
-    SHC_HDR_REPLICA_RESPONSE = 0xA0,
+    SHC_HDR_REPLICA_RESPONSE = 0xA1,
+    SHC_HDR_REPLICA_PING     = 0xA2,
+    SHC_HDR_REPLICA_ACK      = 0xA3,
 
     // signature headers
     SHC_HDR_SIGNATURE_SIP    = 0xF0,
