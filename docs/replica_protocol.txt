@@ -30,7 +30,15 @@ PRE_ACCEPT_RESPONSE : 0x02
 ACCEPT              : 0x03
 ACCEPT_RESPONSE     : 0x04
 COMMIT              : 0x05
-CMD_TYPE            : <BYTE>
+CMD_TYPE            : <CMD_SET> | <CMD_ADD> | <CMD_DELETE> | <CMD_EVICT> |
+                      <CMD_MIGRATION_BEGIN> | <CMD_MIGRATION_ABORT> | <CMD_MIGRATION_END>
+CMD_SET             : 0x01
+CMD_ADD             : 0x02
+CMD_DELETE          : 0x03
+CMD_EVICT           : 0x04
+CMD_MIGRATION_BEGIN : 0x05
+CMD_MIGRATION_ABORT : 0x06
+CMD_MIGRATION_END   : 0x07
 COMMITTED           : <BYTE>
 KLEN                : <LONG_SIZE>
 KEY                 : <DATA>
