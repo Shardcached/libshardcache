@@ -84,7 +84,7 @@ static int recover_callback(char *peer,
                             void *key,
                             size_t klen,
                             uint64_t seq,
-                            int32_t prio,
+                            uint64_t ballot,
                             void *priv)
 {
     return 0;

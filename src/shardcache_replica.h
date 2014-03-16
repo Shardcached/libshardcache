@@ -25,12 +25,6 @@ shardcache_replica_t *shardcache_replica_create(shardcache_t *shc,
 
 void shardcache_replica_destroy(shardcache_replica_t *replica);
 
-int shardcache_replica_received_command(shardcache_replica_t *replica,
-                                        void *cmd,
-                                        size_t cmdlen,
-                                        void **response,
-                                        size_t *response_len);
-
 int shardcache_replica_dispatch(shardcache_replica_t *replica,
                                 shardcache_replica_operation_t op,
                                 void *key,
@@ -38,6 +32,18 @@ int shardcache_replica_dispatch(shardcache_replica_t *replica,
                                 void *data,
                                 size_t dlen,
                                 uint32_t expire);
+
+int shardcache_replica_received_command(shardcache_replica_t *replica,
+                                        void *cmd,
+                                        size_t cmdlen,
+                                        void **response,
+                                        size_t *response_len);
+
+int shardcache_replica_received_ping(shardcache_replica_t *replica,
+                                     void *cmd,
+                                     size_t cmdlen,
+                                     void **response,
+                                     size_t *response_len);
 
 /*
 typedef enum {

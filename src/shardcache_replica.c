@@ -41,7 +41,8 @@ typedef struct {
     char *peer;
     void *key;
     size_t klen;
-    uint32_t seq;
+    uint64_t ballot;
+    uint64_t seq;
 } shardcache_item_to_recover_t;
 
 typedef struct {
@@ -104,6 +105,7 @@ kepaxos_connection_input(iomux_t *iomux, int fd, void *data, int len, void *priv
             shardcache_release_connection_for_peer(replica->shc, connection->peer, fd);
             async_read_context_destroy(connection->ctx);
             free(connection);
+        } else if (hdr == SHC_HDR_REPLICA_ACK) {
         } else {
             // TODO - Error message for unexpected response
             iomux_close(iomux, fd);
@@ -182,6 +184,61 @@ kepaxos_send(char **recipients,
     return 0;
 }
 
+static void
+shardcache_replica_ping(shardcache_replica_t *replica)
+{
+    char **peers = malloc(sizeof(char *) * replica->num_replicas);
+    int num_peers = shardcache_node_get_all_addresses(replica->node, peers,  replica->num_replicas);
+
+    int i;
+    for (i = 0; i < num_peers; i++) {
+        if (*replica->me != *peers[i] ||
+            strcmp(replica->me, peers[i]) != 0)
+        {
+            int fd = shardcache_get_connection_for_peer(replica->shc, peers[i]);
+            if (fd < 0)
+                continue;
+            kepaxos_connection_t *connection = calloc(1, sizeof(kepaxos_connection_t));
+            connection->replica = replica;
+            connection->peer = peers[i];
+            connection->fd = fd;
+            connection->ctx = async_read_context_create((char *)replica->shc->auth,
+                                                        kepaxos_connection_append_input_data,
+                                                        connection);
+
+            uint64_t ballot = kepaxos_ballot(replica->kepaxos);
+            uint32_t ballot_low = htonl(ballot & 0x00000000FFFFFFFF);
+            uint32_t ballot_high = htonl(ballot >> 32);
+            size_t peer_len = strlen(replica->me) + 1;
+            uint32_t msg_len = sizeof(uint64_t) + peer_len;
+            char *msg = malloc(msg_len);
+            memcpy(msg, &ballot_high, sizeof(uint32_t));
+            memcpy(msg + sizeof(uint32_t), &ballot_low, sizeof(uint32_t));
+            memcpy(msg + (2 * sizeof(uint32_t)), replica->me, peer_len);
+            shardcache_record_t record = {
+                .v = msg,
+                .l = msg_len
+            };
+            int rc = build_message((char *)replica->shc->auth, 0, SHC_HDR_REPLICA_PING, &record, 1, &connection->output);
+            if (rc == 0) {
+
+                iomux_callbacks_t callbacks = {
+                    .mux_input = kepaxos_connection_input,
+                    .mux_output = kepaxos_connection_output,
+                    .mux_timeout = kepaxos_connection_timeout,
+                    .mux_eof = kepaxos_connection_eof,
+                    .mux_connection = NULL,
+                    .priv = connection
+                };
+                iomux_add(replica->iomux, fd, &callbacks);
+            }
+            free(msg);
+        }
+    }
+
+    free(peers);
+}
+
 /* TODO - parallelize recovery */
 static void *
 shardcache_replica_recover(void *priv)
@@ -194,7 +251,7 @@ shardcache_replica_recover(void *priv)
 
         void *key = NULL;
         size_t klen = 0;
-        int32_t prio = 0;
+        uint64_t prio = 0;
 
         ATOMIC_SET(replica->recovering, pqueue_count(replica->recovery_queue));
         ATOMIC_SET(replica->ballot, kepaxos_ballot(replica->kepaxos));
@@ -205,6 +262,7 @@ shardcache_replica_recover(void *priv)
         }
 
         if (!key) {
+            shardcache_replica_ping(replica);
             do {
                 rc = nanosleep(&timeout, &remainder);
                 if (ATOMIC_READ(replica->quit))
@@ -247,17 +305,39 @@ shardcache_replica_recover(void *priv)
             if (rc != 0) {
                 SHC_ERROR("Can't delete item from the recovery table");
             }
-            if (check == item || (check && check->seq == item->seq)) {
-                rc = shardcache_set_internal(replica->shc, item->key, item->klen, fbuf_data(&data), fbuf_used(&data), 0, 0, 0);
-                if (rc != 0) {
-                    SHC_ERROR("Can't set value for the recovered item");
+
+            if (check == item || (check && check->seq == item->seq))
+            {
+                rc = kepaxos_recovered(replica->kepaxos,
+                                       item->key,
+                                       item->klen,
+                                       item->ballot,
+                                       item->seq);
+                if (rc == 0) {
+                    rc = shardcache_set_internal(replica->shc,
+                                                 item->key,
+                                                 item->klen,
+                                                 fbuf_data(&data),
+                                                 fbuf_used(&data),
+                                                 0, 0, 0);
+                    if (rc != 0) {
+                        SHC_ERROR("Can't set value for the recovered item");
+                    }
                 }
-
                 free_item_to_recover(check);
-
+                continue;
             } else if (check) {
                 // put it back
-                ht_set(replica->recovery, check->key, check->klen, check, sizeof(shardcache_item_to_recover_t));
+                int rc = ht_set_if_not_exists(replica->recovery,
+                                              check->key,
+                                              check->klen,
+                                              check,
+                                              sizeof(shardcache_item_to_recover_t));
+                if (rc == 1) {
+                    // a new entry has been added to the recovery table in the meanwhile
+                    // we can drop this one
+                    free_item_to_recover(check);
+                }
             }
         } else {
             // retry
@@ -270,7 +350,12 @@ shardcache_replica_recover(void *priv)
 }
 
 static int
-kepaxos_recover(char *peer, void *key, size_t klen, uint64_t seq, int32_t prio, void *priv)
+kepaxos_recover(char *peer,
+                void *key,
+                size_t klen,
+                uint64_t seq,
+                uint64_t ballot,
+                void *priv)
 {
     shardcache_replica_t *replica = (shardcache_replica_t *)priv;
     shardcache_item_to_recover_t *item = calloc(1, sizeof(shardcache_item_to_recover_t));
@@ -280,10 +365,11 @@ kepaxos_recover(char *peer, void *key, size_t klen, uint64_t seq, int32_t prio, 
     item->peer = strdup(peer);
     item->klen = klen;
     item->seq = seq;
+    item->ballot = ballot;
     ht_set(replica->recovery, key, klen, item, sizeof(shardcache_item_to_recover_t));
     void *k = malloc(klen);
     memcpy(k, key, klen);
-    pqueue_insert(replica->recovery_queue, prio, k, klen);
+    pqueue_insert(replica->recovery_queue, ballot, k, klen);
     return 0;
 }
 
@@ -308,7 +394,14 @@ kepaxos_commit(unsigned char type,
 
     switch(type) {
         case SHARDCACHE_REPLICA_OP_SET:
-            rc = shardcache_set_internal(replica->shc, key, klen, &kdata->data, kdata->len, kdata->expire, 0, leader ? 0 : 1);
+            rc = shardcache_set_internal(replica->shc,
+                                         key,
+                                         klen,
+                                         &kdata->data,
+                                         kdata->len,
+                                         kdata->expire,
+                                         0,
+                                         leader ? 0 : 1);
             break;
         case SHARDCACHE_REPLICA_OP_DELETE:
             rc = shardcache_del_internal(replica->shc, key, klen, leader ? 0 : 1);
@@ -374,6 +467,7 @@ shardcache_replica_create(shardcache_t *shc,
 
     if (pthread_create(&replica->recover_th, NULL, shardcache_replica_recover, replica) != 0) {
         shardcache_replica_destroy(replica); 
+        free(peers);
         return NULL;
     }
 
@@ -387,6 +481,7 @@ shardcache_replica_create(shardcache_t *shc,
     shardcache_counter_add(replica->shc->counters, "replica_dispached", &replica->dispached);
     shardcache_counter_add(replica->shc->counters, "replica_received", &replica->received);
 
+    free(peers);
     return replica;
 }
 
@@ -404,13 +499,56 @@ shardcache_replica_destroy(shardcache_replica_t *replica)
 }
 
 int
+shardcache_replica_received_ping(shardcache_replica_t *replica,
+                                 void *cmd,
+                                 size_t cmdlen,
+                                 void **response,
+                                 size_t *response_len)
+{
+    if (cmdlen < sizeof(uint64_t) + 1)
+        return -1;
+
+    char *p = cmd;
+    uint32_t ballot_high = ntohl(*((uint32_t *)p));
+    p += sizeof(uint32_t);
+    uint32_t ballot_low = ntohl(*((uint32_t *)p));
+    p += sizeof(uint32_t);
+    uint64_t ballot = ((uint64_t)ballot_high) << 32 | ballot_low;
+    char *peer = p;
+    int i;
+
+    for (i = 0; i < cmdlen - sizeof(uint64_t); i++) {
+        if (peer[i] == 0)
+            break;
+    }
+
+    if (i == cmdlen - sizeof(uint64_t))
+        return -1;
+
+    uint64_t *ballots = NULL;
+    uint64_t *seqs = NULL;
+    int num_pairs = 0;
+
+    int rc = kepaxos_get_diff(replica->kepaxos, ballot, &ballots, &seqs, &num_pairs);
+    if (rc != 0)
+        return -1; 
+
+    return 0;
+}
+
+int
 shardcache_replica_received_command(shardcache_replica_t *replica,
                                     void *cmd,
                                     size_t cmdlen,
                                     void **response,
                                     size_t *response_len)
 {
-    return 0;
+    ATOMIC_INCREMENT(replica->received);
+    return kepaxos_received_command(replica->kepaxos,
+                                    cmd,
+                                    cmdlen,
+                                    response,
+                                    response_len);
 }
 
 int
