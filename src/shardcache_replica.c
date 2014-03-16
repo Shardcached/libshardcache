@@ -49,13 +49,13 @@
 }
 
 struct __shardcache_replica_s {
-    shardcache_t *shc;       //!< a valid shardcache instance
-    shardcache_node_t *node; //!< the shardcache node (union of all replicas)
-    char *me;                //!< myself (among the node replicas)
-    int num_replicas;        //!< the number of replicase
-    kepaxos_t *kepaxos;      //!< a valid kepaxos context
-    hashtable_t *recovery;   //!< teomporary store for keys being recovered
-    pqueue_t *recovery_queue;
+    shardcache_t *shc;        // a valid shardcache instance
+    shardcache_node_t *node;  // the shardcache node (union of all replicas)
+    char *me;                 // myself (among the node replicas)
+    int num_replicas;         // the number of replicase
+    kepaxos_t *kepaxos;       // a valid kepaxos context
+    hashtable_t *recovery;    // teomporary store for keys being recovered
+    pqueue_t *recovery_queue; // priority queue with the items to recover
     struct {
         uint32_t recovering;
         uint32_t ballot;
@@ -65,11 +65,11 @@ struct __shardcache_replica_s {
         uint32_t responses;
         uint32_t commands;
         uint32_t acks;
-    } counters;
-    int quit;
-    pthread_t recover_th;
-    pthread_t async_io_th;
-    iomux_t *iomux;
+    } counters; // counters exported to libshardcache
+    int quit; // tells both the recovery and the async-io threads when to exit
+    pthread_t recover_th; // the recovery thread
+    pthread_t async_io_th; // the async-io thread
+    iomux_t *iomux; // the iomux used by the async-io thread
 };
 
 typedef struct {
@@ -560,7 +560,7 @@ shardcache_replica_recover(void *priv)
 void *shardcache_replica_async_io(void *priv)
 {
     shardcache_replica_t *replica = (shardcache_replica_t *)priv;
-    while (!replica->quit) {
+    while (!ATOMIC_READ(replica->quit)) {
         struct timeval timeout = { 0, 500 };
         iomux_run(replica->iomux, &timeout);
     }
