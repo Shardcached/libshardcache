@@ -18,6 +18,36 @@
 #define SHARDCACHE_REPLICA_WRKDIR_DEFAULT "/tmp/shcrpl"
 #define KEPAXOS_LOG_FILENAME "kepaxos_log.db"
 
+#define MSG_WRITE_UINT64(__p, __o, __n) \
+{ \
+    uint32_t __low = htonl((__n) & 0x00000000FFFFFFFF); \
+    uint32_t __high = htonl((__n) >> 32); \
+    memcpy((__p) + (__o), &__high, sizeof(uint32_t)); \
+    (__o) += sizeof(uint32_t); \
+    memcpy((__p) + (__o), &__low, sizeof(uint32_t)); \
+    (__o) += sizeof(uint32_t); \
+}
+
+#define MSG_WRITE_UINT32(__p, __o, __n) \
+{ \
+        uint32_t __nbo = htonl((__n)); \
+        memcpy((__p) + (__o), &__nbo, sizeof(uint32_t)); \
+        (__o) += sizeof(uint32_t); \
+}
+
+#define MSG_READ_UINT64(__p, __n) { \
+    uint32_t __high = ntohl(*((uint32_t *)(__p))); \
+    (__p) += sizeof(uint32_t); \
+    uint32_t __low = ntohl(*((uint32_t *)(__p))); \
+    (__p) += sizeof(uint32_t); \
+    (__n) = ((uint64_t)__high) << 32 | __low; \
+}
+
+#define MSG_READ_UINT32(__p, __n) { \
+    (__n) = ntohl(*((uint32_t *)(__p))); \
+    (__p) += sizeof(uint32_t); \
+}
+
 struct __shardcache_replica_s {
     shardcache_t *shc;       //!< a valid shardcache instance
     shardcache_node_t *node; //!< the shardcache node (union of all replicas)
@@ -208,14 +238,16 @@ shardcache_replica_ping(shardcache_replica_t *replica)
                                                         connection);
 
             uint64_t ballot = kepaxos_ballot(replica->kepaxos);
-            uint32_t ballot_low = htonl(ballot & 0x00000000FFFFFFFF);
-            uint32_t ballot_high = htonl(ballot >> 32);
             size_t peer_len = strlen(replica->me) + 1;
-            uint32_t msg_len = sizeof(uint64_t) + peer_len;
+            uint32_t msg_len = sizeof(uint64_t) + sizeof(uint32_t) + peer_len;
+
             char *msg = malloc(msg_len);
-            memcpy(msg, &ballot_high, sizeof(uint32_t));
-            memcpy(msg + sizeof(uint32_t), &ballot_low, sizeof(uint32_t));
-            memcpy(msg + (2 * sizeof(uint32_t)), replica->me, peer_len);
+            size_t offset = 0;
+            MSG_WRITE_UINT32(msg, offset, peer_len);
+            memcpy(msg + offset, replica->me, peer_len);
+            offset += peer_len;
+            MSG_WRITE_UINT64(msg, offset, ballot);
+
             shardcache_record_t record = {
                 .v = msg,
                 .l = msg_len
@@ -510,21 +542,13 @@ shardcache_replica_received_ping(shardcache_replica_t *replica,
         return -1;
 
     char *p = cmd;
-    uint32_t ballot_high = ntohl(*((uint32_t *)p));
-    p += sizeof(uint32_t);
-    uint32_t ballot_low = ntohl(*((uint32_t *)p));
-    p += sizeof(uint32_t);
-    uint64_t ballot = ((uint64_t)ballot_high) << 32 | ballot_low;
-    char *peer = p;
-    int i;
 
-    for (i = 0; i < cmdlen - sizeof(uint64_t); i++) {
-        if (peer[i] == 0)
-            break;
-    }
-
-    if (i == cmdlen - sizeof(uint64_t))
-        return -1;
+    uint32_t peer_len;
+    uint64_t ballot;
+    MSG_READ_UINT32(p, peer_len);
+    //char *peer = p;
+    p += peer_len;
+    MSG_READ_UINT64(p, ballot);
 
     kepaxos_diff_item_t *items = NULL;
     int num_items = 0;
@@ -532,14 +556,25 @@ shardcache_replica_received_ping(shardcache_replica_t *replica,
     if (rc != 0)
         return -1; 
 
+    size_t myname_len = strlen(replica->me) + 1;
+    size_t outlen = sizeof(uint32_t) + myname_len + sizeof(uint16_t);
+    char *out = malloc(outlen);
+    uint32_t len_nbo = htonl(myname_len);
+    memcpy(out, &len_nbo, sizeof(uint32_t));
+    memcpy(out + sizeof(uint32_t), replica->me, myname_len);
+    uint16_t num_items_nbo = htons((uint16_t)num_items); 
+    memcpy(out + sizeof(uint32_t) + myname_len, &num_items_nbo, sizeof(uint16_t));
+
+    int i;
     for (i = 0; i < num_items; i++) {
         kepaxos_diff_item_t *item = &items[i];
-        // XXX this check is useless, it's here just to suppress compiler's warnings/errors
-        //     while this logis is not implemented
-        if (item) {
-               
-            // TODO - build the response
-        }
+        int offset = outlen;
+        outlen += sizeof(uint64_t) * 2 + sizeof(uint32_t) + item->klen;
+        out = realloc(out, outlen);
+        MSG_WRITE_UINT64(out, offset, item->ballot);
+        MSG_WRITE_UINT64(out, offset, item->seq);
+        MSG_WRITE_UINT32(out, offset, item->klen);
+        memcpy(out + offset, item->key, item->klen);
     }
 
     kepaxos_diff_release(items, num_items);
