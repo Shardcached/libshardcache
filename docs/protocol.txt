@@ -37,9 +37,9 @@ MSG_REPLICA_PING     : 0xA2
 MSG_REPLICA_ACK      : 0xA3
 RECORD               : <SIZE><DATA>[<SIZE><DATA>...]<EOR> | <NULL_RECORD>
 SIZE                 : <WORD>
-WORD                 : <HIGH_BYTE><LOW_BYTE>
-HIGH_BYTE            : <BYTE>
-LOW_BYTE             : <BYTE>
+WORD                 : <BYTE_HIGH><BYTE_LOW>
+BYTE_HIGH            : <BYTE>
+BYTE_LOW             : <BYTE>
 BYTE                 : 0x00 - 0xFF
 DATA                 : <BYTE>...<BYTE>
 EOR                  : <NULL_BYTE><NULL_BYTE>
@@ -68,9 +68,9 @@ TTL                  : <RECORD>
 INDEX                : <RECORD>
 OFFSET               : <LONG_SIZE>
 LONG_SIZE            : <DOUBLE_WORD>
-DOUBLE_WORD          : <HIGH_WORD><LOW_WORD>
-HIGH_WORD            : <WORD>
-LOW_WORD             : <WORD>
+DOUBLE_WORD          : <WORD_HIGH><WORD_LOW>
+WORD_HIGH            : <WORD>
+WORD_LOW             : <WORD>
 LONG_LONG_SIZE:      : <QUAD_WORD>
 QUAD_WORD            : <DOUBLE_WORD_HIGH><DOUBLE_WORD_LOW>
 DOUBLE_WORD_HIGH     : <DOUBLE_WORD>
