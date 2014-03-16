@@ -18,48 +18,48 @@
 #define SHARDCACHE_REPLICA_WRKDIR_DEFAULT "/tmp/shcrpl"
 #define KEPAXOS_LOG_FILENAME "kepaxos_log.db"
 
-#define MSG_WRITE_UINT64(__p, __o, __n) \
+#define MSG_WRITE_UINT64(__m, __o, __n) \
 { \
     uint32_t __low = htonl((__n) & 0x00000000FFFFFFFF); \
     uint32_t __high = htonl((__n) >> 32); \
-    memcpy((__p) + (__o), &__high, sizeof(uint32_t)); \
+    memcpy((__m) + (__o), &__high, sizeof(uint32_t)); \
     (__o) += sizeof(uint32_t); \
-    memcpy((__p) + (__o), &__low, sizeof(uint32_t)); \
+    memcpy((__m) + (__o), &__low, sizeof(uint32_t)); \
     (__o) += sizeof(uint32_t); \
 }
 
-#define MSG_WRITE_UINT32(__p, __o, __n) \
+#define MSG_WRITE_UINT32(__m, __o, __n) \
 { \
         uint32_t __nbo = htonl((__n)); \
-        memcpy((__p) + (__o), &__nbo, sizeof(uint32_t)); \
+        memcpy((__m) + (__o), &__nbo, sizeof(uint32_t)); \
         (__o) += sizeof(uint32_t); \
 }
 
-#define MSG_WRITE_POINTER(__p, __o, __d, __l) \
+#define MSG_WRITE_POINTER(__m, __o, __p, __l) \
 { \
-    memcpy((__p) + (__o), (__d), (__l)); \
+    memcpy((__m) + (__o), (__p), (__l)); \
     (__o) += (__l); \
 }
 
-#define MSG_READ_UINT64(__p, __n) { \
-    uint32_t __high = ntohl(*((uint32_t *)(__p))); \
-    (__p) += sizeof(uint32_t); \
-    uint32_t __low = ntohl(*((uint32_t *)(__p))); \
-    (__p) += sizeof(uint32_t); \
+#define MSG_READ_UINT64(__m, __n) { \
+    uint32_t __high = ntohl(*((uint32_t *)(__m))); \
+    (__m) += sizeof(uint32_t); \
+    uint32_t __low = ntohl(*((uint32_t *)(__m))); \
+    (__m) += sizeof(uint32_t); \
     (__n) = ((uint64_t)__high) << 32 | __low; \
 }
 
-#define MSG_READ_UINT32(__p, __n) { \
-    (__n) = ntohl(*((uint32_t *)(__p))); \
-    (__p) += sizeof(uint32_t); \
+#define MSG_READ_UINT32(__m, __n) { \
+    (__n) = ntohl(*((uint32_t *)(__m))); \
+    (__m) += sizeof(uint32_t); \
 }
 
-#define MSG_READ_POINTER(__p, __a, __l) { \
+#define MSG_READ_POINTER(__m, __p, __l) { \
     if ((__l) > 0) { \
-        (__a) = (__p); \
-        (__p) += (__l); \
+        (__p) = (__m); \
+        (__m) += (__l); \
     } else { \
-        (__a) = NULL; \
+        (__p) = NULL; \
     } \
 }
 
@@ -377,6 +377,10 @@ shardcache_replica_received_ack(shardcache_replica_t *replica, void *msg, size_t
         return;
     }
     MSG_READ_POINTER(p, peer, peer_len);
+    if (!peer) {
+        SHC_ERROR("No sender in shardcache_replica_received_ack()");
+        return;
+    }
     MSG_READ_UINT32(p, num_items);
 
     size_t offset = p - (char *)msg;
