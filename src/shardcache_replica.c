@@ -56,14 +56,16 @@ struct __shardcache_replica_s {
     kepaxos_t *kepaxos;      //!< a valid kepaxos context
     hashtable_t *recovery;   //!< teomporary store for keys being recovered
     pqueue_t *recovery_queue;
-    uint32_t recovering;
-    uint32_t ballot;
-    uint32_t commits;
-    uint32_t commit_fails;
-    uint32_t dispached;
-    uint32_t responses;
-    uint32_t commands;
-    uint32_t acks;
+    struct {
+        uint32_t recovering;
+        uint32_t ballot;
+        uint32_t commits;
+        uint32_t commit_fails;
+        uint32_t dispached;
+        uint32_t responses;
+        uint32_t commands;
+        uint32_t acks;
+    } counters;
     int quit;
     pthread_t recover_th;
     pthread_t async_io_th;
@@ -129,10 +131,10 @@ kepaxos_connection_input(iomux_t *iomux, int fd, void *data, int len, void *priv
         if (hdr == SHC_HDR_REPLICA_RESPONSE || hdr == SHC_HDR_REPLICA_ACK)
         {
             if (hdr == SHC_HDR_REPLICA_RESPONSE) {
-                ATOMIC_INCREMENT(replica->responses);
+                ATOMIC_INCREMENT(replica->counters.responses);
                 kepaxos_received_response(replica->kepaxos, fbuf_data(&out), fbuf_used(&out));
             } else {
-                ATOMIC_INCREMENT(replica->acks);
+                ATOMIC_INCREMENT(replica->counters.acks);
                 shardcache_replica_received_ack(replica, fbuf_data(&out), fbuf_used(&out));
             }
             iomux_remove(iomux, fd);
@@ -252,9 +254,9 @@ kepaxos_commit(unsigned char type,
             break;
     }
 
-    ATOMIC_INCREMENT(replica->commits);
+    ATOMIC_INCREMENT(replica->counters.commits);
     if (rc != 0)
-        ATOMIC_INCREMENT(replica->commit_fails);
+        ATOMIC_INCREMENT(replica->counters.commit_fails);
     
     return rc;
 }
@@ -418,8 +420,8 @@ shardcache_replica_recover(void *priv)
         size_t klen = 0;
         uint64_t prio = 0;
 
-        ATOMIC_SET(replica->recovering, pqueue_count(replica->recovery_queue));
-        ATOMIC_SET(replica->ballot, kepaxos_ballot(replica->kepaxos));
+        ATOMIC_SET(replica->counters.recovering, pqueue_count(replica->recovery_queue));
+        ATOMIC_SET(replica->counters.ballot, kepaxos_ballot(replica->kepaxos));
 
         int rc = pqueue_pull_highest(replica->recovery_queue, (void **)&key, &klen, &prio);
         if (rc != 0) {
@@ -524,6 +526,43 @@ void *shardcache_replica_async_io(void *priv)
     return NULL;
 }
 
+static void
+shardcache_replica_register_counters(shardcache_replica_t *replica)
+{
+    shardcache_counter_add(replica->shc->counters,
+                           "replica_recovering",
+                           &replica->counters.recovering);
+
+    shardcache_counter_add(replica->shc->counters,
+                           "replica_ballot",
+                           &replica->counters.ballot);
+
+    shardcache_counter_add(replica->shc->counters,
+                           "replica_commits",
+                           &replica->counters.commits);
+
+    shardcache_counter_add(replica->shc->counters,
+                           "replica_commit_fails",
+                           &replica->counters.commit_fails);
+
+    shardcache_counter_add(replica->shc->counters,
+                           "replica_dispached",
+                           &replica->counters.dispached);
+
+    shardcache_counter_add(replica->shc->counters,
+                           "replica_responses",
+                           &replica->counters.responses);
+
+    shardcache_counter_add(replica->shc->counters,
+                           "replica_commands",
+                           &replica->counters.commands);
+
+    shardcache_counter_add(replica->shc->counters,
+                           "replica_acks",
+                           &replica->counters.acks);
+
+}
+
 shardcache_replica_t *
 shardcache_replica_create(shardcache_t *shc,
                           shardcache_node_t *node,
@@ -559,7 +598,8 @@ shardcache_replica_create(shardcache_t *shc,
 
     replica->recovery_queue = pqueue_create(PQUEUE_MODE_LOWEST, 1<<20, free);
 
-    if (pthread_create(&replica->recover_th, NULL, shardcache_replica_recover, replica) != 0) {
+    if (pthread_create(&replica->recover_th, NULL, shardcache_replica_recover, replica) != 0)
+    {
         shardcache_replica_destroy(replica); 
         free(peers);
         return NULL;
@@ -568,14 +608,7 @@ shardcache_replica_create(shardcache_t *shc,
     replica->iomux = iomux_create();
     iomux_set_threadsafe(replica->iomux, 1);
 
-    shardcache_counter_add(replica->shc->counters, "replica_recovering", &replica->recovering);
-    shardcache_counter_add(replica->shc->counters, "replica_ballot", &replica->ballot);
-    shardcache_counter_add(replica->shc->counters, "replica_commits", &replica->commits);
-    shardcache_counter_add(replica->shc->counters, "replica_commit_fails", &replica->commit_fails);
-    shardcache_counter_add(replica->shc->counters, "replica_dispached", &replica->dispached);
-    shardcache_counter_add(replica->shc->counters, "replica_responses", &replica->responses);
-    shardcache_counter_add(replica->shc->counters, "replica_commands", &replica->commands);
-    shardcache_counter_add(replica->shc->counters, "replica_acks", &replica->acks);
+    shardcache_replica_register_counters(replica);
 
     free(peers);
     return replica;
@@ -652,7 +685,7 @@ shardcache_replica_received_command(shardcache_replica_t *replica,
                                     void **response,
                                     size_t *response_len)
 {
-    ATOMIC_INCREMENT(replica->commands);
+    ATOMIC_INCREMENT(replica->counters.commands);
     return kepaxos_received_command(replica->kepaxos,
                                     cmd,
                                     cmdlen,
@@ -681,7 +714,7 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
     kdata->expire = expire;
     memcpy(&kdata->data, data, dlen);
 
-    ATOMIC_INCREMENT(replica->dispached);
+    ATOMIC_INCREMENT(replica->counters.dispached);
 
     int rc = kepaxos_run_command(replica->kepaxos,
                                  (unsigned char)op,
