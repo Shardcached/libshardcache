@@ -700,6 +700,10 @@ shardcache_replica_received_ping(shardcache_replica_t *replica,
     char *peer = NULL;
     MSG_READ_UINT32(p, peer_len);
     MSG_READ_POINTER(p, peer, peer_len);
+    if (!peer) {
+        SHC_ERROR("No sender in shardcache_replica_received_ping()");
+        return -1;
+    }
     MSG_READ_UINT64(p, ballot);
 
     kepaxos_diff_item_t *items = NULL;
