@@ -1,6 +1,9 @@
 --------------------------------------------------------------------------------------
 
 * Shardcache protocol extensions for replica support *
+  NOTE: Client implementations shouldn't care about replica support
+        and should never send/receive replica messages,
+        hence these extensions can be completely ignored
 
 REPLICA_COMMAND  : <MSG_REPLICA_COMMAND><KEPAXOS_BLOB><EOM>
 REPLICA_RESPONSE : <MSG_REPLICA_RESPONSE><KEPAXOS_BLOB><EOM>
