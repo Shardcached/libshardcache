@@ -13,6 +13,7 @@
 
 #include <unistd.h>
 #include <sys/time.h>
+#include <arpa/inet.h>
 
 #define SHARDCACHE_REPLICA_WRKDIR_DEFAULT "/tmp/shcrpl"
 #define KEPAXOS_LOG_FILENAME "kepaxos_log.db"
