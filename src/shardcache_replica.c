@@ -99,6 +99,15 @@ static void
 shardcache_replica_received_ack(shardcache_replica_t *replica, void *msg, size_t len);
 
 static int
+shardcache_replica_received_ping(shardcache_replica_t *replica,
+                                 void *cmd,
+                                 size_t cmdlen,
+                                 void **response,
+                                 size_t *response_len);
+
+
+
+static int
 kepaxos_connection_append_input_data(void *data,
                                      size_t len,
                                      int  idx,
@@ -627,7 +636,7 @@ shardcache_replica_destroy(shardcache_replica_t *replica)
     free(replica);
 }
 
-int
+static int
 shardcache_replica_received_ping(shardcache_replica_t *replica,
                                  void *cmd,
                                  size_t cmdlen,
@@ -678,19 +687,40 @@ shardcache_replica_received_ping(shardcache_replica_t *replica,
     return 0;
 }
 
-int
+shardcache_hdr_t
 shardcache_replica_received_command(shardcache_replica_t *replica,
+                                    shardcache_hdr_t hdr,
                                     void *cmd,
                                     size_t cmdlen,
                                     void **response,
                                     size_t *response_len)
 {
+    int rc;
+    shardcache_hdr_t ret = SHC_HDR_RESPONSE;
     ATOMIC_INCREMENT(replica->counters.commands);
-    return kepaxos_received_command(replica->kepaxos,
-                                    cmd,
-                                    cmdlen,
-                                    response,
-                                    response_len);
+    switch (hdr) {
+        case SHC_HDR_REPLICA_COMMAND:
+            rc = kepaxos_received_command(replica->kepaxos,
+                                            cmd,
+                                            cmdlen,
+                                            response,
+                                            response_len);
+            if (rc == 0 && response_len)
+                ret = SHC_HDR_REPLICA_RESPONSE;
+            break;
+        case SHC_HDR_REPLICA_PING:
+            rc = shardcache_replica_received_ping(replica,
+                                                  cmd,
+                                                  cmdlen,
+                                                  response,
+                                                  response_len);
+            if (rc == 0 && response_len)
+                ret = SHC_HDR_REPLICA_ACK;
+            break;
+        default:
+            break;
+    }
+    return ret;
 }
 
 int

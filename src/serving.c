@@ -706,31 +706,21 @@ process_request(void *priv)
                 break;
             }
 
-            int rc;
-            if (ctx->hdr == SHC_HDR_REPLICA_COMMAND) {
-                rc = shardcache_replica_received_command(cache->replica,
-                                                         fbuf_data(&ctx->records[0]),
-                                                         fbuf_used(&ctx->records[0]),
-                                                         &response,
-                                                         &response_len);
-            } else {
-                rc = shardcache_replica_received_ping(cache->replica,
-                                                      fbuf_data(&ctx->records[0]),
-                                                      fbuf_used(&ctx->records[0]),
-                                                      &response,
-                                                      &response_len);
-            }
-            if (rc == 0 && response_len) {
+            shardcache_hdr_t rhdr =
+                shardcache_replica_received_command(cache->replica,
+                                                    ctx->hdr,
+                                                    fbuf_data(&ctx->records[0]),
+                                                    fbuf_used(&ctx->records[0]),
+                                                    &response,
+                                                    &response_len);
+            if (response_len) {
                 fbuf_t out = FBUF_STATIC_INITIALIZER;
                 shardcache_record_t record = {
                     .v = response,
                     .l = response_len
                 };
                 if (build_message((char *)ctx->auth,
-                                  ctx->sig_hdr,
-                                  ctx->hdr == SHC_HDR_REPLICA_COMMAND
-                                    ? SHC_HDR_REPLICA_RESPONSE 
-                                    : SHC_HDR_REPLICA_ACK,
+                                  ctx->sig_hdr, rhdr,
                                   &record, 1, &out) == 0)
                 {
                     // destroy it early ... since we still need one more copy

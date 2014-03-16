@@ -33,17 +33,12 @@ int shardcache_replica_dispatch(shardcache_replica_t *replica,
                                 size_t dlen,
                                 uint32_t expire);
 
-int shardcache_replica_received_command(shardcache_replica_t *replica,
-                                        void *cmd,
-                                        size_t cmdlen,
-                                        void **response,
-                                        size_t *response_len);
-
-int shardcache_replica_received_ping(shardcache_replica_t *replica,
-                                     void *cmd,
-                                     size_t cmdlen,
-                                     void **response,
-                                     size_t *response_len);
-
+shardcache_hdr_t
+shardcache_replica_received_command(shardcache_replica_t *replica,
+                                    shardcache_hdr_t hdr,
+                                    void *cmd,
+                                    size_t cmdlen,
+                                    void **response,
+                                    size_t *response_len);
 
 #endif
