@@ -1060,7 +1060,7 @@ shardcache_set_internal(shardcache_t *cache,
 {
     // if we are not the owner try propagating the command to the responsible peer
     
-    if (!key || !value)
+    if (klen == 0 || vlen == 0 || !key || !value)
         return -1;
 
     char keystr[1024];
@@ -1613,7 +1613,7 @@ shardcache_check_migration_continuum(shardcache_t *cache,
     return ignore;
 }
 
-static int
+int
 shardcache_set_migration_continuum(shardcache_t *cache,
                                    shardcache_node_t **nodes,
                                    int num_nodes)
@@ -1654,11 +1654,11 @@ shardcache_set_migration_continuum(shardcache_t *cache,
     return 0;
 }
 
-int
-shardcache_migration_begin(shardcache_t *cache,
-                           shardcache_node_t **nodes,
-                           int num_nodes,
-                           int forward)
+static int
+shardcache_migration_begin_internal(shardcache_t *cache,
+                                    shardcache_node_t **nodes,
+                                    int num_nodes,
+                                    int forward)
 {
     int i;
 
@@ -1703,8 +1703,20 @@ shardcache_migration_begin(shardcache_t *cache,
     return 0;
 }
 
+
 int
-shardcache_migration_abort(shardcache_t *cache)
+shardcache_migration_begin(shardcache_t *cache,
+                           shardcache_node_t **nodes,
+                           int num_nodes,
+                           int forward)
+{
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_MIGRATION_BEGIN, NULL, 0, nodes, num_nodes, 0);
+    return shardcache_migration_begin_internal(cache, nodes, num_nodes, forward);
+}
+
+static int
+shardcache_migration_abort_internal(shardcache_t *cache)
 {
     int ret = -1;
     SPIN_LOCK(&cache->migration_lock);
@@ -1724,7 +1736,15 @@ shardcache_migration_abort(shardcache_t *cache)
 }
 
 int
-shardcache_migration_end(shardcache_t *cache)
+shardcache_migration_abort(shardcache_t *cache)
+{
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_MIGRATION_ABORT, NULL, 0, NULL, 0, 0);
+    return shardcache_migration_abort_internal(cache);
+}
+
+static int
+shardcache_migration_end_internal(shardcache_t *cache)
 {
     int ret = -1;
     SPIN_LOCK(&cache->migration_lock);
@@ -1744,6 +1764,14 @@ shardcache_migration_end(shardcache_t *cache)
     SPIN_UNLOCK(&cache->migration_lock);
     pthread_join(cache->migrate_th, NULL);
     return ret;
+}
+
+int
+shardcache_migration_end(shardcache_t *cache)
+{
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_MIGRATION_END, NULL, 0, NULL, 0, 0);
+    return shardcache_migration_end_internal(cache);
 }
 
 int

@@ -160,3 +160,5 @@ int shardcache_set_internal(shardcache_t *cache, void *key, size_t klen,
 
 int shardcache_del_internal(shardcache_t *cache, void *key, size_t klen, int replica);
 
+int shardcache_set_migration_continuum(shardcache_t *cache, shardcache_node_t **nodes, int num_nodes);
+

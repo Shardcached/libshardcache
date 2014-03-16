@@ -259,6 +259,32 @@ kepaxos_commit(unsigned char type,
         case SHARDCACHE_REPLICA_OP_EVICT:
             rc = shardcache_evict(replica->shc, key, klen);
             break;
+        case SHARDCACHE_REPLICA_OP_MIGRATION_BEGIN:
+        {
+            int num_shards = 0;
+            shardcache_node_t **nodes = NULL;
+            char *s = (char *)data;
+            while (s && *s) {
+                char *tok = strsep(&s, ",");
+                if(tok) {
+                    char *label = strsep(&tok, ":");
+                    char *addr = tok;
+                    size_t size = (num_shards + 1) * sizeof(shardcache_node_t *);
+                    nodes = realloc(nodes, size);
+                    shardcache_node_t *node = shardcache_node_create(label, &addr, 1);
+                    nodes[num_shards++] = node;
+                } 
+            }
+            rc = shardcache_set_migration_continuum(replica->shc, nodes, num_shards);
+            if (rc != 0) {
+                // TODO - Error messages
+            }
+            int i;
+            for (i = 0; i < num_shards; i++)
+                shardcache_node_destroy(nodes[i]);
+            free(nodes);
+            break;
+        }
         default:
             break;
     }
@@ -732,8 +758,21 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
                             size_t dlen,
                             uint32_t expire)
 {
-    // stop any recovery process if in progress
     shardcache_item_to_recover_t *item = NULL;
+
+    // XXX - big hack (special meaning for the NULL key
+    //       (and later for the 0-key in using kepaxos)
+    if (op == SHARDCACHE_REPLICA_OP_MIGRATION_BEGIN ||
+        op == SHARDCACHE_REPLICA_OP_MIGRATION_ABORT ||
+        op == SHARDCACHE_REPLICA_OP_MIGRATION_END)
+    {
+        key = "";
+        klen = 1;
+    } else if (klen == 0 || !key) {
+        return -1;
+    }
+
+    // stop any recovery process for this key if in progress
     ht_delete(replica->recovery, key, klen, (void **)&item, NULL);
     if (item)
         free_item_to_recover(item);
