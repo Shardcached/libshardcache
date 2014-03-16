@@ -285,6 +285,12 @@ kepaxos_commit(unsigned char type,
             free(nodes);
             break;
         }
+        case SHARDCACHE_REPLICA_OP_MIGRATION_ABORT:
+            shardcache_migration_abort(replica->shc);
+            break;
+        case SHARDCACHE_REPLICA_OP_MIGRATION_END:
+            shardcache_migration_end(replica->shc);
+            break;
         default:
             break;
     }
