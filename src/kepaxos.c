@@ -988,9 +988,9 @@ int kepaxos_get_diff(kepaxos_t *ke,
     if (!log)
         return -1;
 
-    *num_items = kepaxos_diff_from_ballot(log, ballot, items);
+    int rc = kepaxos_diff_from_ballot(log, ballot, items, num_items);
 
-    return num_items >= 0 ? 0 : -1;
+    return rc;
 }
 
 void

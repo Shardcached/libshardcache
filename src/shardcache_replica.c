@@ -525,13 +525,23 @@ shardcache_replica_received_ping(shardcache_replica_t *replica,
     if (i == cmdlen - sizeof(uint64_t))
         return -1;
 
-    uint64_t *ballots = NULL;
-    uint64_t *seqs = NULL;
-    int num_pairs = 0;
-
-    int rc = kepaxos_get_diff(replica->kepaxos, ballot, &ballots, &seqs, &num_pairs);
+    kepaxos_diff_item_t *items = NULL;
+    int num_items = 0;
+    int rc = kepaxos_get_diff(replica->kepaxos, ballot, &items, &num_items);
     if (rc != 0)
         return -1; 
+
+    for (i = 0; i < num_items; i++) {
+        kepaxos_diff_item_t *item = &items[i];
+        // XXX this check is useless, it's here just to suppress compiler's warnings/errors
+        //     while this logis is not implemented
+        if (item) {
+               
+            // TODO - build the response
+        }
+    }
+
+    kepaxos_diff_release(items, num_items);
 
     return 0;
 }
