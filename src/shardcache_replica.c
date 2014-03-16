@@ -35,6 +35,12 @@
         (__o) += sizeof(uint32_t); \
 }
 
+#define MSG_WRITE_POINTER(__p, __o, __d, __l) \
+{ \
+    memcpy((__p) + (__o), (__d), (__l)); \
+    (__o) += (__l); \
+}
+
 #define MSG_READ_UINT64(__p, __n) { \
     uint32_t __high = ntohl(*((uint32_t *)(__p))); \
     (__p) += sizeof(uint32_t); \
@@ -46,6 +52,15 @@
 #define MSG_READ_UINT32(__p, __n) { \
     (__n) = ntohl(*((uint32_t *)(__p))); \
     (__p) += sizeof(uint32_t); \
+}
+
+#define MSG_READ_POINTER(__p, __a, __l) { \
+    if ((__l) > 0) { \
+        (__a) = (__p); \
+        (__p) += (__l); \
+    } else { \
+        (__a) = NULL; \
+    } \
 }
 
 struct __shardcache_replica_s {
@@ -361,8 +376,7 @@ shardcache_replica_received_ack(shardcache_replica_t *replica, void *msg, size_t
         SHC_ERROR("Buffer underrun in shardcache_replica_received_ack()");
         return;
     }
-    peer = p;
-    p += peer_len;
+    MSG_READ_POINTER(p, peer, peer_len);
     MSG_READ_UINT32(p, num_items);
 
     size_t offset = p - (char *)msg;
@@ -383,10 +397,8 @@ shardcache_replica_received_ack(shardcache_replica_t *replica, void *msg, size_t
             SHC_ERROR("Buffer underrun in shardcache_replica_received_ack()");
             return;
         }
-        if (klen)
-            key = p;
+        MSG_READ_POINTER(p, key, klen);
         kepaxos_recover(peer, key, klen, seq, ballot, replica);
-        offset += klen;
     }
 }
 
@@ -419,8 +431,7 @@ shardcache_replica_ping(shardcache_replica_t *replica)
             char *msg = malloc(msg_len);
             size_t offset = 0;
             MSG_WRITE_UINT32(msg, offset, peer_len);
-            memcpy(msg + offset, replica->me, peer_len);
-            offset += peer_len;
+            MSG_WRITE_POINTER(msg, offset, replica->me, peer_len);
             MSG_WRITE_UINT64(msg, offset, ballot);
 
             shardcache_record_t record = {
@@ -682,9 +693,9 @@ shardcache_replica_received_ping(shardcache_replica_t *replica,
 
     uint32_t peer_len;
     uint64_t ballot;
+    char *peer = NULL;
     MSG_READ_UINT32(p, peer_len);
-    //char *peer = p;
-    p += peer_len;
+    MSG_READ_POINTER(p, peer, peer_len);
     MSG_READ_UINT64(p, ballot);
 
     kepaxos_diff_item_t *items = NULL;
@@ -698,8 +709,7 @@ shardcache_replica_received_ping(shardcache_replica_t *replica,
     char *out = malloc(outlen);
     size_t offset = 0;
     MSG_WRITE_UINT32(out, offset, myname_len);
-    memcpy(out + offset, replica->me, myname_len);
-    offset += myname_len;
+    MSG_WRITE_POINTER(out, offset, replica->me, myname_len);
     MSG_WRITE_UINT32(out, offset, num_items);
 
     int i;
@@ -711,7 +721,7 @@ shardcache_replica_received_ping(shardcache_replica_t *replica,
         MSG_WRITE_UINT64(out, offset, item->ballot);
         MSG_WRITE_UINT64(out, offset, item->seq);
         MSG_WRITE_UINT32(out, offset, item->klen);
-        memcpy(out + offset, item->key, item->klen);
+        MSG_WRITE_POINTER(out, offset, item->key, item->klen);
     }
 
     kepaxos_diff_release(items, num_items);
