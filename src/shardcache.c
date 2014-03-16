@@ -1581,39 +1581,14 @@ migrate(void *priv)
     return NULL;
 }
 
-int
-shardcache_migration_begin(shardcache_t *cache,
-                           shardcache_node_t **nodes,
-                           int num_nodes,
-                           int forward)
+static int
+shardcache_check_migration_continuum(shardcache_t *cache,
+                                     shardcache_node_t **nodes,
+                                     int num_nodes)
 {
-    int i, n;
-
-    SPIN_LOCK(&cache->migration_lock);
-    if (cache->migration) {
-        // already in a migration, ignore this command
-        SPIN_UNLOCK(&cache->migration_lock);
-        return -1;
-    }
-
-    SHC_NOTICE("Starting migration");
-
-    size_t shard_lens[num_nodes];
-    char *shard_names[num_nodes];
-
-    fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
-
-    for (i = 0; i < num_nodes; i++) {
-        shard_names[i] = nodes[i]->label;
-        shard_lens[i] = strlen(shard_names[i]);
-        if (i > 0) 
-            fbuf_add(&mgb_message, ",");
-        int rindex = rand()%nodes[i]->num_replicas;
-        fbuf_printf(&mgb_message, "%s:%s", nodes[i]->label, nodes[i]->address[rindex]);
-    }
-
 
     int ignore = 0;
+    int i,n;
 
     if (num_nodes == cache->num_shards) {
         // let's assume the lists are the same, if not
@@ -1635,26 +1610,82 @@ shardcache_migration_begin(shardcache_t *cache,
         }
     }
 
-    if (!ignore) {
-        cache->migration_done = 0;
-        cache->migration_shards = malloc(sizeof(shardcache_node_t *) * num_nodes);
-        cache->num_migration_shards = num_nodes;
-        for (i = 0; i < cache->num_migration_shards; i++) {
-            shardcache_node_t *node = nodes[i];
-            cache->migration_shards[i] = shardcache_node_create(node->label, node->address, node->num_replicas);
-        }
+    return ignore;
+}
 
-        cache->migration = chash_create((const char **)shard_names,
-                                        shard_lens,
-                                        num_nodes,
-                                        200);
+static int
+shardcache_set_migration_continuum(shardcache_t *cache,
+                                   shardcache_node_t **nodes,
+                                   int num_nodes)
+{
+    size_t shard_lens[num_nodes];
+    char *shard_names[num_nodes];
 
-        pthread_create(&cache->migrate_th, NULL, migrate, cache);
+    SPIN_LOCK(&cache->migration_lock);
+
+    if (cache->migration) {
+        // already in a migration, ignore this command
+        SPIN_UNLOCK(&cache->migration_lock);
+        return -1;
     }
 
+    if (shardcache_check_migration_continuum(cache, nodes, num_nodes) != 0) {
+        SPIN_UNLOCK(&cache->migration_lock);
+        return -1;
+    }
+
+    cache->migration_done = 0;
+    cache->migration_shards = malloc(sizeof(shardcache_node_t *) * num_nodes);
+    cache->num_migration_shards = num_nodes;
+    int i;
+    for (i = 0; i < cache->num_migration_shards; i++) {
+        shardcache_node_t *node = nodes[i];
+        cache->migration_shards[i] = shardcache_node_create(node->label, node->address, node->num_replicas);
+        shard_names[i] = nodes[i]->label;
+        shard_lens[i] = strlen(shard_names[i]);
+    }
+
+    cache->migration = chash_create((const char **)shard_names,
+                                    shard_lens,
+                                    num_nodes,
+                                    200);
+
     SPIN_UNLOCK(&cache->migration_lock);
+    return 0;
+}
+
+int
+shardcache_migration_begin(shardcache_t *cache,
+                           shardcache_node_t **nodes,
+                           int num_nodes,
+                           int forward)
+{
+    int i;
+
+    if (shardcache_set_migration_continuum(cache, nodes, num_nodes) != 0) {
+        SPIN_UNLOCK(&cache->migration_lock);
+        return -1;
+    }
+
+    SHC_NOTICE("Starting migration");
+
+    pthread_create(&cache->migrate_th, NULL, migrate, cache);
 
     if (forward) {
+        size_t shard_lens[num_nodes];
+        char *shard_names[num_nodes];
+
+        fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
+
+        for (i = 0; i < num_nodes; i++) {
+            shard_names[i] = nodes[i]->label;
+            shard_lens[i] = strlen(shard_names[i]);
+            if (i > 0) 
+                fbuf_add(&mgb_message, ",");
+            int rindex = rand()%nodes[i]->num_replicas;
+            fbuf_printf(&mgb_message, "%s:%s", nodes[i]->label, nodes[i]->address[rindex]);
+        }
+
         for (i = 0; i < cache->num_shards; i++) {
             if (strcmp(cache->shards[i]->label, cache->me) != 0) {
                 int rindex = rand()%cache->shards[i]->num_replicas;
@@ -1671,8 +1702,8 @@ shardcache_migration_begin(shardcache_t *cache,
                 }
             }
         }
+        fbuf_destroy(&mgb_message);
     }
-    fbuf_destroy(&mgb_message);
 
     return 0;
 }
