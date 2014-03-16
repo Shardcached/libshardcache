@@ -1672,14 +1672,9 @@ shardcache_migration_begin(shardcache_t *cache,
     pthread_create(&cache->migrate_th, NULL, migrate, cache);
 
     if (forward) {
-        size_t shard_lens[num_nodes];
-        char *shard_names[num_nodes];
-
         fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
 
         for (i = 0; i < num_nodes; i++) {
-            shard_names[i] = nodes[i]->label;
-            shard_lens[i] = strlen(shard_names[i]);
             if (i > 0) 
                 fbuf_add(&mgb_message, ",");
             int rindex = rand()%nodes[i]->num_replicas;
