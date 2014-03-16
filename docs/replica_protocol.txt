@@ -9,9 +9,15 @@ REPLICA_ACK      : <MSG_REPLICA_ACK><REPLICA_ACK_BLOB><EOM>
 KEPAXOS_BLOB     : <RECORD>
 REPLICA_ACK_BLOB : <RECORD>
 
+NOTE: Replica messages are just blobs from the point of view of the shardcache protocol.
+      This means that they are encoded/transferred as a simple record, the replca subsystem
+      will take care of building/parsing such blobs and the format might change in the future
+      without affecting the shardcache protocol itself.
+      The internal format of such messages is described below.
+
 --------------------------------------------------------------------------------------
 
-* Replica protocol blob format *
+* Replica protocol internal message format *
 
 KEPAXOS_BLOB        : <SENDER_LEN><SENDER_NAME><BALLOT><SEQ><MSG_TYPE><CMD_TYPE><COMMITTED><KLEN><KEY>[<DLEN><DATA>]
 SENDER_LEN          : <LONG_SIZE>
@@ -32,10 +38,12 @@ DLEN                : <LONG_SIZE>
 REPLICA_PING_BLOB   : <SENDER_LEN><SENDER_NAME><BALLOT>
 REPLICA_ACK_BLOB    : <SENDER_LEN><SENDER_NAME><NUM_ITEMS>[<DIFF_ITEM>...]
 NUM_ITEMS           : <LONG_SIZE>
+DIFF_ITEM           : <BALLOT><SEQ><KLEN><KEY>
 
 * Refer to docs/protocol.txt for the definitions missing here (as <DATA>, <BYTE>,  <LONG_SIZE>, etc...) *
 
 --------------------------------------------------------------------------------------
+
 * Local log implementation*
 
 Implemented using an sqlite database with the following table
