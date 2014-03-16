@@ -766,8 +766,11 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
 {
     shardcache_item_to_recover_t *item = NULL;
 
-    // XXX - big hack (special meaning for the NULL key
+    // XXX - big hack : special meaning for the NULL key
     //       (and later for the 0-key in using kepaxos)
+    //       We still want migration commands to run into
+    //       kepaxos to ensure accepting a migration request
+    //       only if at least N/2 + 1 replicas are aware of it
     if (op == SHARDCACHE_REPLICA_OP_MIGRATION_BEGIN ||
         op == SHARDCACHE_REPLICA_OP_MIGRATION_ABORT ||
         op == SHARDCACHE_REPLICA_OP_MIGRATION_END)
