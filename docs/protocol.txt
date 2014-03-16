@@ -8,12 +8,13 @@ MAGIC                : <MAGIC_BYTES><VERSION>
 MAGIC_BYTES          : <0x73><0x68><0x63>
 VERSION              : <BYTE>
 HDR                  : <MSG_GET> | <MSG_SET> | <MSG_DELETE> | <MSG_EVICT> |
-                       <MSG_GET_ASYNC> | <MSG_GET_OFFSET> | <MSG_GET_INDEX> |
+                       <MSG_GET_ASYNC> | <MSG_GET_OFFSET> |
+                       <MSG_GET_INDEX> | <MSG_INDEX_RESPONSE> |
                        <MSG_ADD> | <MSG_EXISTS> | <MSG_TOUCH> |
                        <MSG_MIGRATION_BEGIN> | <MSG_MIGRATION_ABORT> | <MSG_MIGRATION_END> |
-                       <MSG_CHECK> | <MSG_STATS> | <MSG_INDEX_RESPONSE>
-                       <MSG_REPLICA_SEND> | <MSG_REPLICA_RECEIVE> | <MSG_REPLICA_VIEW> |
-                       <MSG_REPLICA_FLUSH> | <MSG_REPLICA_OPTVIEW> | <MSG_REPLICA_VIEWACK>
+                       <MSG_CHECK> | <MSG_STATS> |
+                       <MSG_REPLICA_COMMAND> | <MSG_REPLICA_RESPONSE> |
+                       <MSG_REPLICA_PING> | <MSG_REPLICA_ACK>
 MSG_GET              : 0x01
 MSG_SET              : 0x02
 MSG_DELETE           : 0x03
@@ -30,6 +31,10 @@ MSG_CHECK            : 0x31
 MSG_STATS            : 0x32
 MSG_GET_INDEX        : 0x41
 MSG_INDEX_RESPONSE   : 0x42
+MSG_REPLICA_COMMAND  : 0xA0
+MSG_REPLICA_RESPONSE : 0xA1
+MSG_REPLICA_PING     : 0xA2
+MSG_REPLICA_ACK      : 0xA3
 RECORD               : <SIZE><DATA>[<SIZE><DATA>...]<EOR> | <NULL_RECORD>
 SIZE                 : <WORD>
 WORD                 : <HIGH_BYTE><LOW_BYTE>
@@ -62,11 +67,16 @@ VALUE                : <RECORD>
 TTL                  : <RECORD>
 INDEX                : <RECORD>
 OFFSET               : <LONG_SIZE>
-LONG_SIZE            : <HIGH_WORD><LOW_WORD>
-LENGTH               : <LONG_SIZE>
-REMAINING_BYTES      : <LONG_SIZE>
+LONG_SIZE            : <DOUBLE_WORD>
+DOUBLE_WORD          : <HIGH_WORD><LOW_WORD>
 HIGH_WORD            : <WORD>
 LOW_WORD             : <WORD>
+LONG_LONG_SIZE:      : <QUAD_WORD>
+QUAD_WORD            : <DOUBLE_WORD_HIGH><DOUBLE_WORD_LOW>
+DOUBLE_WORD_HIGH     : <DOUBLE_WORD>
+DOUBLE_WORD_LOW      : <DOUBLE_WORD>
+LENGTH               : <LONG_SIZE>
+REMAINING_BYTES      : <LONG_SIZE>
 NODES_LIST           : <NODES_STRING>
 NODES_STRING         : <LABEL><:><ADDRESS><:><PORT>[<,><LABEL><:><ADDRESS><:><PORT>...]
 LABEL                : <STRING>
@@ -77,6 +87,8 @@ PORT                 : <STRING>
 STRING               : <DATA>
 
 The implemented messages in libshardcache are the following:
+(REPLICA messages are not included, refer to docs/replica_protocol.txt
+ for details about their format)
 
 
 GET_MESSAGE       : <MSG_GET><KEY><EOM>

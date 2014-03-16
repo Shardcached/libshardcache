@@ -1,33 +1,39 @@
-* Data structures involved *
-typedef enum {
-    CMD_TYPE_SET,
-    CMD_TYPE_DEL,
-    CMD_TYPE_EVICT
-} replica_cmd_type_t;
+--------------------------------------------------------------------------------------
 
-typedef struct {
-    replica_cmd_type_t type;
-    uint32_t seq;
-    void *value;
-    size_t vlen;
-} replica_cmd_t;
+* Shardcache protocol extensions for replica support *
 
-typedef struct {
-    sqlite3 *log;
-    hashtable_t *commands; // key => cmd
-    hashtable_t *ballots;  // node_label => last ballot seen
-} replica_t;
+REPLICA_COMMAND  : <MSG_REPLICA_COMMAND><KEPAXOS_BLOB><EOM>
+REPLICA_RESPONSE : <MSG_REPLICA_RESPONSE><KEPAXOS_BLOB><EOM>
+REPLICA_PING     : <MSG_REPLICA_PING><REPLICA_PING_BLOB><EOM>
+REPLICA_ACK      : <MSG_REPLICA_ACK><REPLICA_ACK_BLOB><EOM>
+KEPAXOS_BLOB     : <RECORD>
+REPLICA_ACK_BLOB : <RECORD>
 
 --------------------------------------------------------------------------------------
 
-* Replica protocol extensions *
+* Replica protocol blob format *
 
-PRE_ACCEPT:    <BALLOT><KEY><SEQ>
-PRE_ACCEPT_OK: <BALLOT><KEY><SEQ>
-ACCEPT:        <BALLOT><KEY><SEQ>
-ACCEPT_OK:     <BALLOT><KEY><SEQ>
-COMMIT:        <BALLOT><KEY><SEQ><CMD><DATA>
-COMMIT_OK:     <BALLOT><KEY><SEQ>
+KEPAXOS_BLOB        : <SENDER_LEN><SENDER_NAME><BALLOT><SEQ><MSG_TYPE><CMD_TYPE><COMMITTED><KLEN><KEY>[<DLEN><DATA>]
+SENDER_LEN          : <LONG_SIZE>
+SENDER_NAME         : <DATA>
+BALLOT              : <QUAD_WORD>
+SEQ                 : <QUAD_WORD>
+MSG_TYPE            : <PRE_ACCEPT> | <PRE_ACCEPT_RESPONSE> | <ACCEPT> | <ACCEPT_RESPONSE> | <COMMIT>
+PRE_ACCEPT          : 0x01
+PRE_ACCEPT_RESPONSE : 0x02
+ACCEPT              : 0x03
+ACCEPT_RESPONSE     : 0x04
+COMMIT              : 0x05
+CMD_TYPE            : <BYTE>
+COMMITTED           : <BYTE>
+KLEN                : <LONG_SIZE>
+KEY                 : <DATA>
+DLEN                : <LONG_SIZE>
+REPLICA_PING_BLOB   : <SENDER_LEN><SENDER_NAME><BALLOT>
+REPLICA_ACK_BLOB    : <SENDER_LEN><SENDER_NAME><NUM_ITEMS>[<DIFF_ITEM>...]
+NUM_ITEMS           : <LONG_SIZE>
+
+* Refer to docs/protocol.txt for the definitions missing here (as <DATA>, <BYTE>,  <LONG_SIZE>, etc...) *
 
 --------------------------------------------------------------------------------------
 * Local log implementation*

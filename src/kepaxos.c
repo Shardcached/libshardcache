@@ -30,11 +30,11 @@ typedef enum {
 } kepaxos_cmd_status_t;
 
 typedef enum {
-    KEPAXOS_MSG_TYPE_PRE_ACCEPT,
-    KEPAXOS_MSG_TYPE_PRE_ACCEPT_RESPONSE,
-    KEPAXOS_MSG_TYPE_ACCEPT,
-    KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE,
-    KEPAXOS_MSG_TYPE_COMMIT,
+    KEPAXOS_MSG_TYPE_PRE_ACCEPT          = 0x01,
+    KEPAXOS_MSG_TYPE_PRE_ACCEPT_RESPONSE = 0x02,
+    KEPAXOS_MSG_TYPE_ACCEPT              = 0x03,
+    KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE     = 0x04,
+    KEPAXOS_MSG_TYPE_COMMIT              = 0x05,
 } kepaxos_msg_type_t;
 
 typedef struct {
