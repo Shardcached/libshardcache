@@ -45,19 +45,5 @@ int shardcache_replica_received_ping(shardcache_replica_t *replica,
                                      void **response,
                                      size_t *response_len);
 
-/*
-typedef enum {
-    SHARDCACHE_REPLICA_STATUS_ONLINE = 0,
-    SHARDCACHE_REPLICA_STATUS_OFFLINE,
-    SHARDCACHE_REPLICA_STATUS_UNKNOWN
-} shardcache_replica_status_t;
-
-shardcache_replica_status_t  shardcache_replica_status(shardcache_replica_t *replica, char *addr);
-
-shardcache_replica_status_t shardcache_replica_set_status(shardcache_replica_t *replica,
-                                                          char *addr,
-                                                          shardcache_replica_status_t status);
-*/
-
 
 #endif
