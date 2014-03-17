@@ -653,21 +653,26 @@ shardcache_destroy(shardcache_t *cache)
         SHC_DEBUG2("Expirer thread stopped");
     }
 
-    SHC_DEBUG2("Stopping the async i/o thread");
-    ATOMIC_INCREMENT(cache->async_quit);
-    pthread_join(cache->async_io_th, NULL);
-    iomux_destroy(cache->async_mux);
-    SHC_DEBUG2("Async i/o thread stopped");
+    if (cache->async_mux) {
+        SHC_DEBUG2("Stopping the async i/o thread");
+        ATOMIC_INCREMENT(cache->async_quit);
+        pthread_join(cache->async_io_th, NULL);
+        iomux_destroy(cache->async_mux);
+        SHC_DEBUG2("Async i/o thread stopped");
+    }
 
     if (cache->replica)
         shardcache_replica_destroy(cache->replica);
 
-    for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
-        shardcache_counter_remove(cache->counters, cache->cnt[i].name);
+    if (cache->counters) {
+        for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
+            shardcache_counter_remove(cache->counters, cache->cnt[i].name);
+        }
+        shardcache_release_counters(cache->counters);
     }
-    shardcache_release_counters(cache->counters);
 
-    ht_destroy(cache->volatile_storage);
+    if (cache->volatile_storage)
+        ht_destroy(cache->volatile_storage);
 
     if (cache->auth)
         free((void *)cache->auth);
@@ -683,7 +688,8 @@ shardcache_destroy(shardcache_t *cache)
         free(cache->addr);
     shardcache_free_nodes(cache->shards, cache->num_shards);
 
-    connections_pool_destroy(cache->connections_pool);
+    if (cache->connections_pool)
+        connections_pool_destroy(cache->connections_pool);
 
     free(cache);
     SHC_DEBUG("Shardcache node stopped");
