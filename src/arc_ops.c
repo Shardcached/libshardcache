@@ -358,6 +358,12 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     obj->complete = 1;
 
     if (obj->async) {
+        shardcache_fetch_from_peer_notify_arg arg = {
+            .obj = obj,
+            .data = obj->data,
+            .len = obj->dlen
+        };
+        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
         if (obj->evict)
             arc_ops_evict_object(cache, obj);
