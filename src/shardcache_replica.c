@@ -20,18 +20,15 @@
 
 #define MSG_WRITE_UINT64(__m, __o, __n) \
 { \
-    uint32_t __low = htonl((__n) & 0x00000000FFFFFFFF); \
-    uint32_t __high = htonl((__n) >> 32); \
-    memcpy((__m) + (__o), &__high, sizeof(uint32_t)); \
+    *((uint32_t *)((__m) + (__o))) = htonl((__n) >> 32); \
     (__o) += sizeof(uint32_t); \
-    memcpy((__m) + (__o), &__low, sizeof(uint32_t)); \
+    *((uint32_t *)((__m) + (__o))) = htonl((__n) & 0x00000000FFFFFFFF); \
     (__o) += sizeof(uint32_t); \
 }
 
 #define MSG_WRITE_UINT32(__m, __o, __n) \
 { \
-        uint32_t __nbo = htonl((__n)); \
-        memcpy((__m) + (__o), &__nbo, sizeof(uint32_t)); \
+        *((uint32_t *)((__m) + (__o))) = htonl((__n)); \
         (__o) += sizeof(uint32_t); \
 }
 
@@ -42,11 +39,9 @@
 }
 
 #define MSG_READ_UINT64(__m, __n) { \
-    uint32_t __high = ntohl(*((uint32_t *)(__m))); \
-    (__m) += sizeof(uint32_t); \
-    uint32_t __low = ntohl(*((uint32_t *)(__m))); \
-    (__m) += sizeof(uint32_t); \
-    (__n) = ((uint64_t)__high) << 32 | __low; \
+    (__n) = ((uint64_t)ntohl(*((uint32_t *)(__m))) << 32) | \
+            ntohl(*((uint32_t *)((__m) + sizeof(uint32_t)))); \
+    (__m) +=  2 * sizeof(uint32_t); \
 }
 
 #define MSG_READ_UINT32(__m, __n) { \
