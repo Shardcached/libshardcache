@@ -21,7 +21,7 @@ typedef struct __arc_ops {
      * this time. Use the arc_object_init() function to initialize
      * the arc_object structure.
      */
-    void *(*create) (const void *key, size_t klen, int async, void *priv);
+    void *(*create) (const void *key, size_t klen, int async, arc_resource_t *res, void *priv);
     
     /**
      * @brief Fetch the data associated with the object.
@@ -93,6 +93,7 @@ arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t klen, void **val
  * @param res    : An opaque ARC resource previously returned by arc_lookup()
  */
 void arc_release_resource(arc_t *cache, arc_resource_t *res);
+void arc_retain_resource(arc_t *cache, arc_resource_t *res);
 
 /**
  * @brief Force eviction of an item

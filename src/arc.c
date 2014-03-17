@@ -112,11 +112,10 @@ struct __arc {
 static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state);
 
 /* Initialize a new object with this function. */
-static arc_object_t *arc_object_create(arc_t *cache, void *ptr, const void *key, size_t len)
+static arc_object_t *arc_object_create(arc_t *cache, const void *key, size_t len)
 {
     arc_object_t *obj = calloc(1, sizeof(arc_object_t));
     obj->state = NULL;
-    obj->ptr = ptr;
     obj->cache = cache;
 
     arc_list_init(&obj->head);
@@ -399,6 +398,15 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res) {
     release_ref(cache->refcnt, obj->node);
 }
 
+/* Lookup an object with the given key. */
+void arc_retain_resource(arc_t *cache, arc_resource_t *res) {
+    arc_object_t *obj = (arc_object_t *)res;
+
+    MUTEX_LOCK(&obj->lock);
+    retain_ref(cache->refcnt, obj->node);
+    MUTEX_UNLOCK(&obj->lock);
+}
+
 arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
 {
     MUTEX_LOCK(&cache->lock);
@@ -440,8 +448,9 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
         return obj;
     }
 
-    void *ptr = cache->ops->create(key, len, async, cache->ops->priv);
-    obj = arc_object_create(cache, ptr, key, len);
+    obj = arc_object_create(cache, key, len);
+    void *ptr = cache->ops->create(key, len, async, (arc_resource_t *)obj, cache->ops->priv);
+    obj->ptr = ptr;
     obj->async = async;
 
     if (!obj) {
