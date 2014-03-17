@@ -13,3 +13,5 @@ test/*_test
 *.dSYM
 *.tar.gz
 *.orig
+html/
+latex/
