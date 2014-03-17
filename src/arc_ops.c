@@ -273,8 +273,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
 
     MUTEX_LOCK(&obj->lock);
     if (obj->data) { // the value is already loaded, we don't need to fetch
-        MUTEX_UNLOCK(&obj->lock);
         *size = obj->dlen;
+        MUTEX_UNLOCK(&obj->lock);
         return 0;
     }
 
