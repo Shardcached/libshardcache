@@ -921,12 +921,14 @@ _delete_from_peer_internal(char *peer,
                            int fd)
 {
     int should_close = 0;
+
+    SHC_DEBUG("Sending del command to peer %s (owner: %d)", peer, owner);
+
     if (fd < 0) {
         fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
         should_close = 1;
     }
 
-    SHC_DEBUG("Sending del command to peer %s (owner: %d)", peer, owner);
     if (fd >= 0) {
         unsigned char hdr = owner ? SHC_HDR_DELETE : SHC_HDR_EVICT;
         shardcache_record_t record = {
@@ -1559,5 +1561,6 @@ int
 connect_to_peer(char *address_string, unsigned int timeout)
 {
     int fd = open_connection(address_string, SHARDCACHE_PORT_DEFAULT, timeout);
+    SHC_ERROR("Can't connect to %s : %s", address_string, strerror(errno));
     return fd;
 }
