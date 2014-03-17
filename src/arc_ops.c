@@ -101,8 +101,10 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     int drop = 0;
 
     MUTEX_LOCK(&obj->lock);
+    arc_retain_resource(cache->arc, obj->res);
     if (!obj->listeners) {
         MUTEX_UNLOCK(&obj->lock);
+        arc_release_resource(cache->arc, obj->res);
         return -1;
     }
     if (error) {
@@ -138,6 +140,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     }
 
     MUTEX_UNLOCK(&obj->lock);
+    arc_release_resource(cache->arc, obj->res);
 
     if (complete) {
         if (total_len && !drop) {
@@ -232,7 +235,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
 }
 
 void *
-arc_ops_create(const void *key, size_t len, int async, void *priv)
+arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     cache_object_t *obj = calloc(1, sizeof(cache_object_t));
@@ -242,6 +245,7 @@ arc_ops_create(const void *key, size_t len, int async, void *priv)
     memcpy(obj->key, key, len);
     obj->data = NULL;
     obj->complete = 0;
+    obj->res = res;
     if (async) {
         obj->async = async;
         obj->listeners = create_list();
