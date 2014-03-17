@@ -163,10 +163,10 @@ static void arc_balance(arc_t *cache, size_t size)
     while (cache->mrug.size + cache->mfug.size > cache->c) {
         if (cache->mfug.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mfug);
-            arc_move(cache, obj, NULL);
+            arc_remove(cache, obj->key, obj->klen);
         } else if (cache->mrug.size > 0) {
             arc_object_t *obj = arc_state_lru(&cache->mrug);
-            arc_move(cache, obj, NULL);
+            arc_remove(cache, obj->key, obj->klen);
         } else {
             break;
         }
@@ -220,7 +220,6 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 
     if (state == NULL) {
         /* The object is being removed from the cache, destroy it. */
-        ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
         MUTEX_UNLOCK(&obj->lock);
         release_ref(cache->refcnt, obj->node);
 
@@ -381,7 +380,8 @@ void arc_destroy(arc_t *cache)
 
 void arc_remove(arc_t *cache, const void *key, size_t len)
 {
-    arc_object_t *obj = ht_get(cache->hash, (void *)key, len, NULL);
+    arc_object_t *obj = NULL;
+    ht_delete(cache->hash, (void *)key, len, (void **)&obj, NULL);
     if (obj) {
         MUTEX_LOCK(&obj->lock);
         if (obj && obj->state) {
