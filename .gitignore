@@ -11,3 +11,5 @@
 test/*_test
 .DS_Store
 *.dSYM
+*.tar.gz
+*.orig
