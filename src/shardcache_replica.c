@@ -217,6 +217,9 @@ kepaxos_recover(char *peer,
                 uint64_t ballot,
                 void *priv)
 {
+    if (!peer || !key || !klen)
+        return -1;
+
     shardcache_replica_t *replica = (shardcache_replica_t *)priv;
     shardcache_item_to_recover_t *item = calloc(1, sizeof(shardcache_item_to_recover_t));
 
@@ -728,6 +731,9 @@ shardcache_replica_received_ping(shardcache_replica_t *replica,
     }
 
     kepaxos_diff_release(items, num_items);
+
+    *response = out;
+    *response_len = outlen;
 
     return 0;
 }
