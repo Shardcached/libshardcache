@@ -337,15 +337,28 @@ shardcache_evictor_job_t *create_evictor_job(void *key, size_t klen)
     return job;
 }
 
+static int
+evict_key(hashtable_t *table, void *value, size_t vlen, void *user)
+{
+    shardcache_evictor_job_t **job = (shardcache_evictor_job_t **)user;
+    *job = (shardcache_evictor_job_t *)value;
+    // remove the value from the table and stop the iteration 
+    // and since there is no free value callback the job won't
+    // be released on removal 
+    return -2;
+}
+
 static void *
 evictor(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
-    linked_list_t *jobs = cache->evictor_jobs;
+    hashtable_t *jobs = cache->evictor_jobs;
 
     while (!ATOMIC_READ(cache->evictor_quit))
     {
-        shardcache_evictor_job_t *job = (shardcache_evictor_job_t *)shift_value(jobs);
+
+        shardcache_evictor_job_t *job = NULL;
+        // this will extract only the first value
         while (job) {
             char keystr[1024];
             KEY2STR(job->key, job->klen, keystr, sizeof(keystr));
@@ -364,23 +377,25 @@ evictor(void *priv)
                     shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
                 }
             }
-            destroy_evictor_job(job);
 
             SHC_DEBUG2("Eviction job for key '%s' completed", keystr);
+            destroy_evictor_job(job);
+            ht_foreach_value(jobs, evict_key, &job);
+        }
 
-            job = (shardcache_evictor_job_t *)shift_value(jobs);
-        }
-        struct timeval now;
-        int rc = 0;
-        rc = gettimeofday(&now, NULL);
-        if (rc == 0) {
-            struct timespec abstime = { now.tv_sec + 1, now.tv_usec * 1000 };
-            MUTEX_LOCK(&cache->evictor_lock);
-            pthread_cond_timedwait(&cache->evictor_cond, &cache->evictor_lock, &abstime);
-            MUTEX_UNLOCK(&cache->evictor_lock);
-        } else {
-            // TODO - Error messsages
-        }
+        //if (!ht_count(jobs)) {
+            struct timeval now;
+            int rc = 0;
+            rc = gettimeofday(&now, NULL);
+            if (rc == 0) {
+                struct timespec abstime = { now.tv_sec + 1, now.tv_usec * 1000 };
+                MUTEX_LOCK(&cache->evictor_lock);
+                pthread_cond_timedwait(&cache->evictor_cond, &cache->evictor_lock, &abstime);
+                MUTEX_UNLOCK(&cache->evictor_lock);
+            } else {
+                // TODO - Error messsages
+            }
+        //}
     }
     return NULL;
 }
@@ -585,9 +600,7 @@ shardcache_create(char *me,
     if (ATOMIC_READ(cache->evict_on_delete)) {
         MUTEX_INIT(&cache->evictor_lock);
         CONDITION_INIT(&cache->evictor_cond);
-        cache->evictor_jobs = create_list();
-        set_free_value_callback(cache->evictor_jobs,
-                                (free_value_callback_t)destroy_evictor_job);
+        cache->evictor_jobs = ht_create(128, 256, NULL);
         pthread_create(&cache->evictor_th, NULL, evictor, cache);
     }
 
@@ -642,7 +655,9 @@ shardcache_destroy(shardcache_t *cache)
         pthread_join(cache->evictor_th, NULL);
         MUTEX_DESTROY(&cache->evictor_lock);
         CONDITION_DESTROY(&cache->evictor_cond);
-        destroy_list(cache->evictor_jobs);
+        ht_set_free_item_callback(cache->evictor_jobs,
+                (ht_free_item_callback_t)destroy_evictor_job);
+        ht_destroy(cache->evictor_jobs);
         SHC_DEBUG2("Evictor thread stopped");
     }
 
@@ -1047,7 +1062,13 @@ shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
     KEY2STR(key, klen, keystr, sizeof(keystr));
     SHC_DEBUG2("Adding evictor job for key %s", keystr);
 
-    push_value(cache->evictor_jobs, job);
+    int rc = ht_set_if_not_exists(cache->evictor_jobs, key, klen, job, sizeof(shardcache_evictor_job_t));
+
+    if (rc != 0) {
+        destroy_evictor_job(job);
+        return;
+    }
+
     MUTEX_LOCK(&cache->evictor_lock);
     pthread_cond_signal(&cache->evictor_cond);
     MUTEX_UNLOCK(&cache->evictor_lock);

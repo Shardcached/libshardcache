@@ -104,7 +104,7 @@ struct __shardcache_s {
                                   // polling on the linked list used as queue)
     pthread_mutex_t evictor_lock; // mutex to use when accessing the evictor_cond
                                   //condition variable
-    linked_list_t *evictor_jobs;  // linked list used as queue for eviction jobs
+    hashtable_t *evictor_jobs;    // linked list used as queue for eviction jobs
     int evictor_quit;             // boolean flag to tell the evictor thread to quit
                                   // (accessed using the atomic builtins)
 
