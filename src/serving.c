@@ -49,6 +49,10 @@ struct __shardcache_serving_s {
     queue_t *workers;
     queue_t *busy;
     int worker_index;
+    uint32_t num_fds;
+    uint32_t busy_workers;
+    uint32_t spare_workers;
+    uint32_t total_workers;
     shardcache_counters_t *counters;
 };
 
@@ -466,10 +470,6 @@ process_request(void *priv)
             }
 
             get_async_data(cache, key, klen, get_async_data_handler, ctx);
-            /*
-            iomux_callbacks_t *cbs = iomux_callbacks(ctx->iomux, ctx->fd);
-            cbs->mux_output = shardcache_output_handler;
-            */
             break;
         }
         case SHC_HDR_GET:
@@ -766,6 +766,7 @@ shardcache_select_worker(shardcache_serving_t *serv)
         MUTEX_INIT(&wrk->wakeup_lock);
         CONDITION_INIT(&wrk->wakeup_cond);
         pthread_create(&wrk->thread, NULL, worker, wrk);
+        ATOMIC_INCREMENT(serv->total_workers);
     }
     queue_push_right(serv->busy, wrk);
 
@@ -784,6 +785,7 @@ shardcache_dispose_worker(shardcache_serving_t *serv, shardcache_worker_context_
         CONDITION_DESTROY(&wrk->wakeup_cond);
         SHC_DEBUG("Disposing worker %p", wrk);
         free(wrk);
+        ATOMIC_DECREMENT(serv->total_workers);
         return;
     }
     queue_push_right(serv->workers, wrk);
@@ -889,6 +891,7 @@ worker(void *priv)
         shardcache_connection_context_t *ctx = queue_pop_left(jobs);
 
         ATOMIC_SET(wrkctx->busy, 1);
+        ATOMIC_INCREMENT(ctx->serv->busy_workers);
         while(ctx) {
             int state = async_read_context_state(ctx->reader_ctx);
             while (state == SHC_STATE_READING_DONE) {
@@ -922,6 +925,7 @@ worker(void *priv)
             ctx = queue_pop_left(jobs);
         }
         ATOMIC_SET(wrkctx->busy, 0);
+        ATOMIC_DECREMENT(ctx->serv->busy_workers);
         pthread_testcancel();
         
         // we don't have any filedescriptor to handle in the mux,
@@ -994,6 +998,7 @@ serve_cache(void *priv)
                     queue_push_right(serv->busy, wrk);
             }
         }
+        ATOMIC_SET(serv->spare_workers, queue_count(serv->workers));
     }
 
     return NULL;
@@ -1042,11 +1047,10 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
                 (queue_free_value_callback_t)shardcache_connection_context_destroy);
 
         if (s->counters) {
-            /*
-            char varname[256];
-            snprintf(varname, sizeof(varname), "worker[%d].busy", i);
-            shardcache_counter_add(s->counters, varname, &s->workers[i].busy);
-            */
+            shardcache_counter_add(s->counters, "busy_workers", &s->busy_workers);
+            shardcache_counter_add(s->counters, "num_fds", &s->num_fds);
+            shardcache_counter_add(s->counters, "spare_workers", &s->spare_workers);
+            shardcache_counter_add(s->counters, "total_workers", &s->total_workers);
         }
 
         MUTEX_INIT(&wrk->wakeup_lock);
@@ -1083,16 +1087,6 @@ void stop_serving(shardcache_serving_t *s) {
     // second pass
     wrk = queue_pop_left(s->workers);
     while (wrk) {
-        /*
-        if (s->counters) {
-            char varname[256];
-            snprintf(varname, sizeof(varname), "worker%d::numfds", i);
-            shardcache_counter_remove(s->counters, varname);
-            snprintf(varname, sizeof(varname), "worker%d::busy", i);
-            shardcache_counter_remove(s->counters, varname);
-        }
-        */
-
         ATOMIC_INCREMENT(wrk->leave);
 
         // wake up the worker if slacking
@@ -1107,7 +1101,14 @@ void stop_serving(shardcache_serving_t *s) {
         SHC_DEBUG3("Worker thread %p exited", wrk);
     }
     SHC_DEBUG2("All worker threads have been collected");
-    free(s->workers);
+    queue_destroy(s->workers);
+    if (s->counters) {
+        shardcache_counter_remove(s->counters, "busy_workers");
+        shardcache_counter_remove(s->counters, "num_fds");
+        shardcache_counter_remove(s->counters, "spare_workers");
+        shardcache_counter_remove(s->counters, "total_workers");
+    }
+
     close(s->sock);
     free(s);
 }
