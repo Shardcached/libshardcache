@@ -161,7 +161,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
     if (shardcache_log_level() >= LOG_DEBUG) {
         char keystr[1024];
         KEY2STR(obj->key, obj->klen, keystr, sizeof(keystr));
-        SHC_DEBUG("Fetching data for key %s from peer %s", keystr, peer); 
+        SHC_DEBUG2("Fetching data for key %s from peer %s", keystr, peer); 
     }
 
     shardcache_node_t *node = shardcache_node_select(cache, peer);

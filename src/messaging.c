@@ -281,11 +281,11 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             int match = (memcmp(&digest, &received_digest, sizeof(digest)) == 0);
 
             if (shardcache_log_level() >= LOG_DEBUG) {
-                SHC_DEBUG("computed digest for received data: %s",
+                SHC_DEBUG2("computed digest for received data: %s",
                           shardcache_hex_escape((char *)&digest, sizeof(digest), 0));
 
                 uint8_t *remote = (uint8_t *)&received_digest;
-                SHC_DEBUG("digest from received data: %s (%s)",
+                SHC_DEBUG2("digest from received data: %s (%s)",
                           shardcache_hex_escape(remote, sizeof(digest), 0),
                           match ? "MATCH" : "MISMATCH");
             }
@@ -513,10 +513,10 @@ read_and_check_siphash_signature(int fd, sip_hash *shash)
 
     int match = (memcmp(&digest, &received_digest, sizeof(digest)) == 0);
 
-    SHC_DEBUG("computed digest for received data: %s",
+    SHC_DEBUG2("computed digest for received data: %s",
             shardcache_hex_escape((unsigned char *)&digest, sizeof(digest), 0));
 
-    SHC_DEBUG("digest from received data: %s (%s)",
+    SHC_DEBUG2("digest from received data: %s (%s)",
               shardcache_hex_escape((unsigned char *)&received_digest, sizeof(digest), 0),
               match ? "MATCH" : "MISMATCH");
 
@@ -888,12 +888,12 @@ write_message(int fd,
 
     size_t mlen = fbuf_used(&msg);
     size_t dlen = auth ? sizeof(uint64_t) : 0;
-    SHC_DEBUG("sending message: %s",
+    SHC_DEBUG2("sending message: %s",
            shardcache_hex_escape(fbuf_data(&msg), mlen-dlen, DEBUG_DUMP_MAXSIZE));
 
     if (dlen)
     if (dlen && fbuf_used(&msg) >= dlen) {
-        SHC_DEBUG("computed digest: %s",
+        SHC_DEBUG2("computed digest: %s",
                   shardcache_hex_escape(fbuf_end(&msg)-dlen, dlen, 0));
     }
 
@@ -922,7 +922,7 @@ _delete_from_peer_internal(char *peer,
 {
     int should_close = 0;
 
-    SHC_DEBUG("Sending del command to peer %s (owner: %d)", peer, owner);
+    SHC_DEBUG2("Sending del command to peer %s (owner: %d)", peer, owner);
 
     if (fd < 0) {
         fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
@@ -945,7 +945,7 @@ _delete_from_peer_internal(char *peer,
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHC_HDR_RESPONSE && rc == 0) {
-                SHC_DEBUG("Got (del) response from peer %s: %02x\n",
+                SHC_DEBUG2("Got (del) response from peer %s: %02x\n",
                           peer, *((char *)fbuf_data(&resp)));
                 if (should_close)
                     close(fd);
@@ -1042,7 +1042,7 @@ _send_to_peer_internal(char *peer,
             errno = 0;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHC_HDR_RESPONSE && rc == 0) {
-                SHC_DEBUG("Got (set) response from peer %s : %s\n",
+                SHC_DEBUG2("Got (set) response from peer %s : %s\n",
                           peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
@@ -1140,7 +1140,7 @@ fetch_from_peer(char *peer,
                     char keystr[1024];
                     memcpy(keystr, key, len < 1024 ? len : 1024);
                     keystr[len] = 0;
-                    SHC_DEBUG("Got new data from peer %s : %s => %s", peer, keystr,
+                    SHC_DEBUG2("Got new data from peer %s : %s => %s", peer, keystr,
                               shardcache_hex_escape(fbuf_data(out), fbuf_used(out), DEBUG_DUMP_MAXSIZE));
                 }
                 if (should_close)
@@ -1201,7 +1201,7 @@ offset_from_peer(char *peer,
                     char keystr[1024];
                     memcpy(keystr, key, len < 1024 ? len : 1024);
                     keystr[len] = 0;
-                    SHC_DEBUG("Got new data from peer %s : %s => %s", peer, keystr,
+                    SHC_DEBUG2("Got new data from peer %s : %s => %s", peer, keystr,
                               shardcache_hex_escape(fbuf_data(out), fbuf_used(out), DEBUG_DUMP_MAXSIZE));
                 }
                 if (should_close)
@@ -1233,7 +1233,7 @@ exists_on_peer(char *peer,
         should_close = 1;
     }
 
-    SHC_DEBUG("Sending exists command to peer %s", peer);
+    SHC_DEBUG2("Sending exists command to peer %s", peer);
     if (fd >= 0) {
         unsigned char hdr = SHC_HDR_EXISTS;
         shardcache_record_t record = {
@@ -1250,7 +1250,7 @@ exists_on_peer(char *peer,
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHC_HDR_RESPONSE && rc == 0) {
-                SHC_DEBUG("Got (exists) response from peer %s : %s\n",
+                SHC_DEBUG2("Got (exists) response from peer %s : %s\n",
                           peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
@@ -1297,7 +1297,7 @@ touch_on_peer(char *peer,
         should_close = 1;
     }
 
-    SHC_DEBUG("Sending touch command to peer %s", peer);
+    SHC_DEBUG2("Sending touch command to peer %s", peer);
     if (fd >= 0) {
         unsigned char hdr = SHC_HDR_TOUCH;
         shardcache_record_t record = {
@@ -1314,7 +1314,7 @@ touch_on_peer(char *peer,
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
             if (hdr == SHC_HDR_RESPONSE && rc == 0) {
-                SHC_DEBUG("Got (touch) response from peer %s : %s\n",
+                SHC_DEBUG2("Got (touch) response from peer %s : %s\n",
                           peer, fbuf_data(&resp));
                 if (should_close)
                     close(fd);
@@ -1504,7 +1504,7 @@ migrate_peer(char *peer,
         fbuf_t resp = FBUF_STATIC_INITIALIZER;
         rc = read_message(fd, auth, &resp, &hdr);
         if (hdr == SHC_HDR_RESPONSE && rc == 0) {
-            SHC_DEBUG("Got (del) response from peer %s : %s",
+            SHC_DEBUG2("Got (del) response from peer %s : %s",
                     peer, fbuf_data(&resp));
             if (should_close)
                 close(fd);

@@ -1045,7 +1045,7 @@ shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
 
     char keystr[1024];
     KEY2STR(key, klen, keystr, sizeof(keystr));
-    SHC_DEBUG("Adding evictor job for key %s", keystr);
+    SHC_DEBUG2("Adding evictor job for key %s", keystr);
 
     push_value(cache->evictor_jobs, job);
     MUTEX_LOCK(&cache->evictor_lock);
@@ -1177,7 +1177,7 @@ shardcache_set_internal(shardcache_t *cache,
     }
     else if (node_len)
     {
-        SHC_DEBUG("Forwarding set command %s => %s (%d) to %s",
+        SHC_DEBUG2("Forwarding set command %s => %s (%d) to %s",
                 keystr, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
                 (int)vlen, node_name);
 
