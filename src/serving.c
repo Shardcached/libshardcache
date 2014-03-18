@@ -43,6 +43,7 @@ struct __shardcache_serving_s {
     shardcache_t *cache;
     int sock;
     pthread_t io_thread;
+    int leave;
     const char *auth;
     const char *me;
     int num_workers;
@@ -928,7 +929,6 @@ worker(void *priv)
         }
         ATOMIC_SET(wrkctx->busy, 0);
         ATOMIC_DECREMENT(wrkctx->serv->busy_workers);
-        pthread_testcancel();
         
         // we don't have any filedescriptor to handle in the mux,
         // let's sit for 1 second waiting for the listener thread to wake
@@ -981,13 +981,16 @@ serve_cache(void *priv)
         .priv = serv
     };
 
-    iomux_add(iomux, serv->sock, &connection_callbacks);
-    iomux_listen(iomux, serv->sock);
+    iomux_add(iomux, serv->sock, &connection_callbacks); iomux_listen(iomux,
+            serv->sock);
 
-    for (;;) {
-        pthread_testcancel();
+    while (!ATOMIC_READ(serv->leave)) {
+        struct timeval threshold = { 0, 20000 };
+        struct timeval tv = { 0, 1000 };
+        struct timeval before, now, diff;
 
-        struct timeval tv = { 0, 20000 };
+        gettimeofday(&before, NULL);
+
         iomux_run(iomux, &tv);
         int i;
         for (i = 0; i < queue_count(serv->busy); i++) {
@@ -1000,7 +1003,19 @@ serve_cache(void *priv)
                     queue_push_right(serv->busy, wrk);
             }
         }
+
         ATOMIC_SET(serv->spare_workers, queue_count(serv->workers));
+
+        if (queue_count(serv->busy)) {
+            gettimeofday(&now, NULL);
+            timersub(&now, &before, &diff);
+            if (timercmp(&diff, &threshold, <)) {
+                timersub(&threshold, &diff, &diff);
+                struct timespec ts = { 0, diff.tv_usec * 1000 };
+                // we don't care if we are waken up by an interrupt
+                nanosleep(&ts, NULL);
+            }
+        }
     }
 
     return NULL;
@@ -1076,7 +1091,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
 void stop_serving(shardcache_serving_t *s) {
 
     // first stop the listener thread, so we won't get new connections
-    pthread_cancel(s->io_thread);
+    ATOMIC_INCREMENT(s->leave);
     pthread_join(s->io_thread, NULL);
 
     SHC_NOTICE("Collecting worker threads (might have to wait until i/o is finished)");
