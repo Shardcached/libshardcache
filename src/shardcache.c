@@ -1196,12 +1196,13 @@ shardcache_set_internal(shardcache_t *cache,
         else
             rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
 
-        shardcache_release_connection_for_peer(cache, addr, fd);
-
         if (rc == 0) {
+            shardcache_release_connection_for_peer(cache, addr, fd);
             arc_remove(cache->arc, (const void *)key, klen);
             if (!replica)
                 shardcache_commence_eviction(cache, key, klen);
+        } else {
+            close(fd);
         }
         return rc;
     }
@@ -1330,7 +1331,10 @@ shardcache_del_internal(shardcache_t *cache, void *key, size_t klen, int replica
         char *addr = shardcache_node_get_address(peer);
         int fd = shardcache_get_connection_for_peer(cache, addr);
         int rc = delete_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
-        shardcache_release_connection_for_peer(cache, addr, fd);
+        if (rc == 0)
+            shardcache_release_connection_for_peer(cache, addr, fd);
+        else
+            close(fd);
         return rc;
     }
 
@@ -1529,11 +1533,12 @@ migrate(void *priv)
                         SHC_DEBUG("Migrator copying %s to peer %s (%s)", keystr, node_name, addr);
                         int fd = shardcache_get_connection_for_peer(cache, addr);
                         int rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, 0, fd);
-                        shardcache_release_connection_for_peer(cache, addr, fd);
                         if (rc == 0) {
+                            shardcache_release_connection_for_peer(cache, addr, fd);
                             ATOMIC_INCREMENT(migrated_items);
                             push_value(to_delete, &index->items[i]);
                         } else {
+                            close(fd);
                             fprintf(stderr, "Errors copying %s to peer %s (%s)\n", keystr, node_name, addr);
                             ATOMIC_INCREMENT(errors);
                         }
