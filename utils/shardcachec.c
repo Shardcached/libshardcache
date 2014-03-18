@@ -28,7 +28,7 @@ void usage(char *prgname) {
 }
 
 int num_nodes = 0;
-shardcache_node_t *nodes = NULL;
+shardcache_node_t **nodes = NULL;
 
 static int parse_nodes_string(char *str)
 {
@@ -44,11 +44,9 @@ static int parse_nodes_string(char *str)
                 free(copy);
                 return -1;
             }
-            num_nodes++;
-            nodes = realloc(nodes, num_nodes * sizeof(shardcache_node_t));
-            shardcache_node_t *node = &nodes[num_nodes-1];
-            snprintf(node->label, sizeof(node->label), "%s", label);
-            snprintf(node->address, sizeof(node->address), "%s", addr);
+            nodes = realloc(nodes, (num_nodes + 1) * sizeof(shardcache_node_t *));
+            shardcache_node_t *node = shardcache_node_create(label, &addr, 1);
+            nodes[num_nodes++] = node;
         } 
     }
     free(copy);
@@ -283,15 +281,17 @@ int main (int argc, char **argv) {
         size_t len;
         int i;
         for (i = 0; i < num_nodes; i++) {
-            if (selected_node && strcmp(nodes[i].label, selected_node) != 0)
+            char *label = shardcache_node_get_label(nodes[i]);
+            char *address = shardcache_node_get_address(nodes[i]); 
+            if (selected_node && strcmp(label, selected_node) != 0)
                 continue;
             found++;
-            printf("* Stats for node: %s (%s)\n\n", nodes[i].label, nodes[i].address);
-            int rc = shardcache_client_stats(client, nodes[i].label, &stats, &len); 
+            printf("* Stats for node: %s (%s)\n\n", label, address);
+            int rc = shardcache_client_stats(client, label, &stats, &len); 
             if (rc == 0)
                 printf("%s\n", stats);
             else
-                printf("Error querying node: %s (%s)\n", nodes[i].label, nodes[i].address);
+                printf("Error querying node: %s (%s)\n", label, address);
             if (stats)
                 free(stats);
             printf("\n");
@@ -306,14 +306,15 @@ int main (int argc, char **argv) {
 
         int i;
         for (i = 0; i < num_nodes; i++) {
-            if (selected_node && strcmp(nodes[i].label, selected_node) != 0)
+            char *label = shardcache_node_get_label(nodes[i]);
+            if (selected_node && strcmp(label, selected_node) != 0)
                 continue;
             found++;
-            int rc = shardcache_client_check(client, nodes[i].label);
+            int rc = shardcache_client_check(client, label);
             if (rc == 0)
-                printf("%s OK\n", nodes[i].label);
+                printf("%s OK\n", label);
             else
-                printf("%s NOT OK\n", nodes[i].label);
+                printf("%s NOT OK\n", label);
         }
         if (found == 0 && selected_node)
             fprintf(stderr, "Error: Unknown node %s\n", selected_node);
@@ -325,11 +326,13 @@ int main (int argc, char **argv) {
 
         int i;
         for (i = 0; i < num_nodes; i++) {
-            if (selected_node && strcmp(nodes[i].label, selected_node) != 0)
+            char *label = shardcache_node_get_label(nodes[i]);
+            char *address = shardcache_node_get_address(nodes[i]); 
+            if (selected_node && strcmp(label, selected_node) != 0)
                 continue;
             found++;
-            printf("* Index for node: %s (%s)\n\n", nodes[i].label, nodes[i].address);
-            shardcache_storage_index_t *index = shardcache_client_index(client, nodes[i].label);
+            printf("* Index for node: %s (%s)\n\n", label, address);
+            shardcache_storage_index_t *index = shardcache_client_index(client, label);
             if (index) {
                 int n;
                 for (n = 0; n < index->size; n ++) {
@@ -340,7 +343,7 @@ int main (int argc, char **argv) {
                 }
                 shardcache_free_index(index);
             } else {
-                printf("%s NOT OK\n", nodes[i].label);
+                printf("%s NOT OK\n", label);
             }
             printf("\n");
         }
