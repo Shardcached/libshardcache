@@ -1039,19 +1039,19 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
     s->workers = queue_create();
     s->busy = queue_create();
 
+    if (s->counters) {
+        shardcache_counter_add(s->counters, "busy_workers", &s->busy_workers);
+        shardcache_counter_add(s->counters, "num_fds", &s->num_fds);
+        shardcache_counter_add(s->counters, "spare_workers", &s->spare_workers);
+        shardcache_counter_add(s->counters, "total_workers", &s->total_workers);
+    }
+
     int i;
     for (i = 0; i < num_workers; i++) {
         shardcache_worker_context_t *wrk = calloc(1, sizeof(shardcache_worker_context_t));
         wrk->jobs = queue_create();
         queue_set_free_value_callback(wrk->jobs,
                 (queue_free_value_callback_t)shardcache_connection_context_destroy);
-
-        if (s->counters) {
-            shardcache_counter_add(s->counters, "busy_workers", &s->busy_workers);
-            shardcache_counter_add(s->counters, "num_fds", &s->num_fds);
-            shardcache_counter_add(s->counters, "spare_workers", &s->spare_workers);
-            shardcache_counter_add(s->counters, "total_workers", &s->total_workers);
-        }
 
         MUTEX_INIT(&wrk->wakeup_lock);
         CONDITION_INIT(&wrk->wakeup_cond);
