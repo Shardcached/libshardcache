@@ -360,29 +360,31 @@ evictor(void *priv)
         // this will extract only the first value
         shardcache_evictor_job_t *job = NULL;
         ht_foreach_value(jobs, evict_key, &job);
-        char keystr[1024] = { 0 };
+        if (job) {
+            char keystr[1024] = { 0 };
 
-        if (shardcache_log_level() >= LOG_DEBUG)
-            KEY2STR(job->key, job->klen, keystr, sizeof(keystr));
+            if (shardcache_log_level() >= LOG_DEBUG)
+                KEY2STR(job->key, job->klen, keystr, sizeof(keystr));
 
-        SHC_DEBUG2("Eviction job for key '%s' started", keystr);
+            SHC_DEBUG2("Eviction job for key '%s' started", keystr);
 
-        int i;
-        for (i = 0; i < cache->num_shards; i++) {
-            char *peer = cache->shards[i]->label;
-            if (strcmp(peer, cache->me) != 0) {
-                SHC_DEBUG3("Sending Eviction command to %s", peer);
-                int rindex = rand()%cache->shards[i]->num_replicas;
-                int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
-                int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd);
-                if (rc != 0)
-                    SHC_WARNING("evict_from_peer return %d for peer %s", rc, peer);
-                shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
+            int i;
+            for (i = 0; i < cache->num_shards; i++) {
+                char *peer = cache->shards[i]->label;
+                if (strcmp(peer, cache->me) != 0) {
+                    SHC_DEBUG3("Sending Eviction command to %s", peer);
+                    int rindex = rand()%cache->shards[i]->num_replicas;
+                    int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
+                    int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd);
+                    if (rc != 0)
+                        SHC_WARNING("evict_from_peer return %d for peer %s", rc, peer);
+                    shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
+                }
             }
-        }
 
-        SHC_DEBUG2("Eviction job for key '%s' completed", keystr);
-        destroy_evictor_job(job);
+            SHC_DEBUG2("Eviction job for key '%s' completed", keystr);
+            destroy_evictor_job(job);
+        }
 
         if (!ht_count(jobs)) {
             // if we have no more jobs to handle let's sleep a bit
