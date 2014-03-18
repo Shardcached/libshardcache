@@ -36,6 +36,7 @@ typedef struct {
     int leave;
     pthread_cond_t wakeup_cond;
     pthread_mutex_t wakeup_lock;
+    shardcache_serving_t *serv;
 } shardcache_worker_context_t;
 
 struct __shardcache_serving_s {
@@ -758,6 +759,7 @@ shardcache_select_worker(shardcache_serving_t *serv)
     if (!wrk) {
         // create a new worker
         wrk = calloc(1, sizeof(shardcache_worker_context_t));
+        wrk->serv = serv;
         wrk->jobs = queue_create();
         queue_set_free_value_callback(wrk->jobs,
                 (queue_free_value_callback_t)shardcache_connection_context_destroy);
@@ -891,7 +893,7 @@ worker(void *priv)
         shardcache_connection_context_t *ctx = queue_pop_left(jobs);
 
         ATOMIC_SET(wrkctx->busy, 1);
-        ATOMIC_INCREMENT(ctx->serv->busy_workers);
+        ATOMIC_INCREMENT(wrkctx->serv->busy_workers);
         while(ctx) {
             int state = async_read_context_state(ctx->reader_ctx);
             while (state == SHC_STATE_READING_DONE) {
@@ -925,7 +927,7 @@ worker(void *priv)
             ctx = queue_pop_left(jobs);
         }
         ATOMIC_SET(wrkctx->busy, 0);
-        ATOMIC_DECREMENT(ctx->serv->busy_workers);
+        ATOMIC_DECREMENT(wrkctx->serv->busy_workers);
         pthread_testcancel();
         
         // we don't have any filedescriptor to handle in the mux,
@@ -1049,6 +1051,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
     int i;
     for (i = 0; i < num_workers; i++) {
         shardcache_worker_context_t *wrk = calloc(1, sizeof(shardcache_worker_context_t));
+        wrk->serv = s;
         wrk->jobs = queue_create();
         queue_set_free_value_callback(wrk->jobs,
                 (queue_free_value_callback_t)shardcache_connection_context_destroy);
