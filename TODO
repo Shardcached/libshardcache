@@ -1,3 +1,9 @@
+ * don't use synchronous i/o when handling requests in serving.c
+   it leads to a dead-lock situation if all the available workers are busy
+
+ * optimize eviction by using a different datastructure which allows getting rid
+   of duplicates
+
  * support replicas
 
  * support message compression
