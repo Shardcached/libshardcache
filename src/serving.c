@@ -780,8 +780,8 @@ shardcache_input_handler(iomux_t *iomux,
         process_request(ctx);
         pthread_mutex_lock(&ctx->output_lock);
         if (ATOMIC_READ(ctx->fetching)) {
-                iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
-                cbs->mux_output = shardcache_output_handler;
+            iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
+            cbs->mux_output = shardcache_output_handler;
             pthread_mutex_unlock(&ctx->output_lock);
             break;
         }
