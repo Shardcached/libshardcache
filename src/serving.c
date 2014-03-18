@@ -1102,6 +1102,7 @@ void stop_serving(shardcache_serving_t *s) {
         MUTEX_DESTROY(&wrk->wakeup_lock);
         CONDITION_DESTROY(&wrk->wakeup_cond);
         SHC_DEBUG3("Worker thread %p exited", wrk);
+        wrk = queue_pop_left(s->workers);
     }
     SHC_DEBUG2("All worker threads have been collected");
     queue_destroy(s->workers);
