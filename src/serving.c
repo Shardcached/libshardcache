@@ -1026,24 +1026,23 @@ serve_cache(void *priv)
 
         gettimeofday(&before, NULL);
 
-        if (!ATOMIC_READ(serv->cache->quit)) {
-            iomux_run(iomux, &tv);
+        iomux_run(iomux, &tv);
 
-            int i;
-            for (i = 0; i < queue_count(serv->busy); i++) {
-                shardcache_worker_context_t *wrk = (shardcache_worker_context_t *)queue_pop_left(serv->busy);
-                if (wrk) {
-                    if (ATOMIC_READ(wrk->busy) == 0) {
-                        shardcache_dispose_worker(serv, wrk);
-                    }
-                    else
-                        queue_push_right(serv->busy, wrk);
+        int i;
+        for (i = 0; i < queue_count(serv->busy); i++) {
+            shardcache_worker_context_t *wrk = (shardcache_worker_context_t *)queue_pop_left(serv->busy);
+            if (wrk) {
+                if (ATOMIC_READ(wrk->busy) == 0) {
+                    shardcache_dispose_worker(serv, wrk);
                 }
+                else
+                    queue_push_right(serv->busy, wrk);
             }
-
-            ATOMIC_SET(serv->spare_workers, queue_count(serv->workers));
         }
-        if (queue_count(serv->busy) || ATOMIC_READ(serv->cache->quit)) {
+
+        ATOMIC_SET(serv->spare_workers, queue_count(serv->workers));
+
+        if (queue_count(serv->busy)) {
             gettimeofday(&now, NULL);
             timersub(&now, &before, &diff);
             if (timercmp(&diff, &threshold, <)) {
@@ -1126,10 +1125,10 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
     return s;
 }
 
-void stop_serving(shardcache_serving_t *s) {
-
-    SHC_NOTICE("Collecting worker threads (might have to wait until i/o is finished)");
-    shardcache_worker_context_t *wrk = queue_pop_left(s->busy);
+static void
+destroy_workers_queue(queue_t *queue)
+{
+    shardcache_worker_context_t *wrk = queue_pop_left(queue);
 
     while (wrk) {
         ATOMIC_INCREMENT(wrk->leave);
@@ -1144,33 +1143,26 @@ void stop_serving(shardcache_serving_t *s) {
         MUTEX_DESTROY(&wrk->wakeup_lock);
         CONDITION_DESTROY(&wrk->wakeup_cond);
         SHC_DEBUG3("Worker thread %p exited", wrk);
-        wrk = queue_pop_left(s->busy);
+        wrk = queue_pop_left(queue);
     }
-    queue_destroy(s->busy);
-    // second pass
-    wrk = queue_pop_left(s->workers);
-    while (wrk) {
-        ATOMIC_INCREMENT(wrk->leave);
-
-        // wake up the worker if slacking
-        CONDITION_SIGNAL(&wrk->wakeup_cond, &wrk->wakeup_lock);
-
-        pthread_join(wrk->thread, NULL);
-
-        queue_destroy(wrk->jobs);
-
-        MUTEX_DESTROY(&wrk->wakeup_lock);
-        CONDITION_DESTROY(&wrk->wakeup_cond);
-        SHC_DEBUG3("Worker thread %p exited", wrk);
-        wrk = queue_pop_left(s->workers);
-    }
-    SHC_DEBUG2("All worker threads have been collected");
-    queue_destroy(s->workers);
+    queue_destroy(queue);
  
-    // first stop the listener thread, so we won't get new connections
+}
+
+void
+stop_serving(shardcache_serving_t *s)
+{
+    // first we can stop the I/O thread
     ATOMIC_INCREMENT(s->leave);
     pthread_join(s->io_thread, NULL);
 
+    // now the workers
+    SHC_NOTICE("Collecting worker threads (might have to wait until i/o is finished)");
+    destroy_workers_queue(s->busy); // first the busy ones
+    destroy_workers_queue(s->workers); // than the remaining idle workers
+    SHC_DEBUG2("All worker threads have been collected");
+ 
+    // unregister our counters if we did at creation time
     if (s->counters) {
         shardcache_counter_remove(s->counters, "busy_workers");
         shardcache_counter_remove(s->counters, "num_fds");
@@ -1178,6 +1170,7 @@ void stop_serving(shardcache_serving_t *s) {
         shardcache_counter_remove(s->counters, "total_workers");
     }
 
+    // and finally we can close the listening sock
     close(s->sock);
     free(s);
 }
