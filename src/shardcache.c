@@ -539,6 +539,7 @@ shardcache_create(char *me,
 
     cache->ops.priv = cache;
     cache->shards = malloc(sizeof(shardcache_node_t *) * nnodes);
+    int me_found = 0;
     for (i = 0; i < nnodes; i++) {
         shard_names[i] = nodes[i]->label;
         shard_lens[i] = strlen(shard_names[i]);
@@ -546,11 +547,15 @@ shardcache_create(char *me,
                                                   nodes[i]->address,
                                                   nodes[i]->num_replicas);
         if (strcmp(nodes[i]->label, me) == 0) {
+            me_found = 1;
             for (n = 0; n < nodes[i]->num_replicas; n++) {
                 int fd = open_socket(nodes[i]->address[n], 0);
-                close(fd); 
                 if (fd >= 0) {
+                    SHC_DEBUG("Using address %s\n", nodes[i]->address[n]);
                     cache->addr = strdup(nodes[i]->address[n]);
+                    close(fd);
+                } else {
+                    SHC_DEBUG("Skipping address %s\n", nodes[i]->address[n]);
                 }
             }
             if (nodes[i]->num_replicas > 1)
@@ -559,7 +564,11 @@ shardcache_create(char *me,
     }
 
     if (!cache->addr) {
-        fprintf(stderr, "Can't find my address (%s) among the configured nodes\n", cache->me);
+        if (me_found) {
+            SHC_ERROR("Can't bind any address configured for node %s\n", me);
+        } else {
+            SHC_ERROR("Can't find my address (%s) among the configured nodes\n", cache->me);
+        }
         shardcache_destroy(cache);
         return NULL;
     }
@@ -652,7 +661,8 @@ shardcache_destroy(shardcache_t *cache)
     if (cache->serv)
         stop_serving(cache->serv);
 
-    if (ATOMIC_READ(cache->evict_on_delete)) {
+    if (ATOMIC_READ(cache->evict_on_delete) && cache->evictor_jobs)
+    {
         SHC_DEBUG2("Stopping evictor thread");
         pthread_join(cache->evictor_th, NULL);
         MUTEX_DESTROY(&cache->evictor_lock);
