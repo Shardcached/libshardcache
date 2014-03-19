@@ -605,7 +605,6 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 hdr != SHC_HDR_GET &&
                 hdr != SHC_HDR_DELETE &&
                 hdr != SHC_HDR_EVICT &&
-                hdr != SHC_HDR_EVICT_NORESPONSE &&
                 hdr != SHC_HDR_GET_ASYNC &&
                 hdr != SHC_HDR_GET_OFFSET &&
                 hdr != SHC_HDR_ADD &&
@@ -934,11 +933,11 @@ _delete_from_peer_internal(char *peer,
 
     if (fd >= 0) {
         unsigned char hdr;
-        if (owner) {
+        if (owner)
             hdr = SHC_HDR_DELETE;
-        } else {
-            hdr = expect_response ? SHC_HDR_EVICT : SHC_HDR_EVICT_NORESPONSE;
-        }
+        else
+            hdr = SHC_HDR_EVICT;
+
         shardcache_record_t record = {
             .v = key,
             .l = klen
