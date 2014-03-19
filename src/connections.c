@@ -180,11 +180,9 @@ int write_socket(int fd, char *buf, int len) {
  */
 int read_socket(int fd, char *buf, int len) {
     int rb = 0;
-    rb =  read(fd, buf, len);
-    if (rb == -1 && (errno != EINTR && errno != EAGAIN)) { 
-        fprintf(stderr, "Read on fd %d failed: %s", fd, strerror(errno));
-        return -1;
-    }
+    do {
+        rb =  read(fd, buf, len);
+    } while(rb < 0 && (errno == EINTR || errno == EAGAIN));
     return rb;
 }
 
