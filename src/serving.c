@@ -29,6 +29,8 @@
 #endif
 #include <siphash.h>
 
+#define SHARDCACHE_SERVING_MAX_RETRIES 3
+
 typedef struct {
     pthread_t thread;
     queue_t *jobs;
@@ -82,6 +84,8 @@ struct __shardcache_connection_context_s {
     shardcache_worker_context_t *worker_ctx;
     async_read_ctx_t *reader_ctx;
     iomux_t *iomux;
+    int retries;
+    struct timeval retry_timeout;
 };
 
 static int
@@ -758,6 +762,10 @@ shardcache_select_worker(shardcache_serving_t *serv)
 
     // skip over workers who are busy computing/serving a response
     if (!wrk) {
+        if (queue_count(serv->busy) >= ATOMIC_READ(serv->max_workers)) {
+            // max workers reached, refuse to return a worker
+            return NULL;
+        }
         // create a new worker
         wrk = calloc(1, sizeof(shardcache_worker_context_t));
         wrk->serv = serv;
@@ -779,7 +787,7 @@ shardcache_select_worker(shardcache_serving_t *serv)
 static void
 shardcache_dispose_worker(shardcache_serving_t *serv, shardcache_worker_context_t *wrk)
 {
-    if (queue_count(serv->workers) >= serv->max_workers) {
+    if (queue_count(serv->workers) >= ATOMIC_READ(serv->max_workers)) {
         ATOMIC_INCREMENT(wrk->leave);
         CONDITION_SIGNAL(&wrk->wakeup_cond, &wrk->wakeup_lock);
         pthread_join(wrk->thread, NULL);
@@ -792,6 +800,28 @@ shardcache_dispose_worker(shardcache_serving_t *serv, shardcache_worker_context_
         return;
     }
     queue_push_right(serv->workers, wrk);
+}
+
+static void
+shardcache_request_handler(iomux_t *iomux, int fd, shardcache_connection_context_t *ctx)
+{
+    // begin the worker slection process
+    // first get the next worker in the array
+    shardcache_worker_context_t *wrkctx = shardcache_select_worker(ctx->serv);
+
+    if (wrkctx) {
+        iomux_remove(iomux, fd);
+        queue_push_right(wrkctx->jobs, ctx);
+        CONDITION_SIGNAL(&wrkctx->wakeup_cond, &wrkctx->wakeup_lock);
+    } else {
+        // all workers are busy, we need to postpone this command
+        if (++ctx->retries <= SHARDCACHE_SERVING_MAX_RETRIES) {
+            write_status(ctx, -1, WRITE_STATUS_MODE_SIMPLE);
+            return;
+        }
+        struct timeval timeout = { 0, ctx->retries * 333333 };
+        iomux_set_timeout(iomux, fd, &timeout);
+    }
 }
 
 static void
@@ -826,15 +856,8 @@ shardcache_input_handler(iomux_t *iomux,
         ctx->sig_hdr = async_read_context_sig_hdr(ctx->reader_ctx);
 
 
-        // begin the worker slection process
-        // first get the next worker in the array
-        shardcache_worker_context_t *wrkctx = shardcache_select_worker(ctx->serv);
-
-        if (wrkctx) {
-            iomux_remove(iomux, fd);
-            queue_push_right(wrkctx->jobs, ctx);
-            CONDITION_SIGNAL(&wrkctx->wakeup_cond, &wrkctx->wakeup_lock);
-        }
+        ctx->retries = 0;
+        shardcache_request_handler(iomux, fd, ctx);
 
     }
 
@@ -849,6 +872,15 @@ shardcache_input_handler(iomux_t *iomux,
                   ctx->hdr, inet_ntoa(saddr.sin_addr), state);
         iomux_close(iomux, fd);
     }
+}
+
+static void
+shardcache_timeout_handler(iomux_t *iomux, int fd, void *priv)
+{
+    shardcache_connection_context_t *ctx =
+        (shardcache_connection_context_t *)priv;
+
+    shardcache_request_handler(iomux, fd, ctx);
 }
 
 static void
@@ -876,8 +908,8 @@ shardcache_connection_handler(iomux_t *iomux, int fd, void *priv)
         .mux_connection = NULL,
         .mux_input = shardcache_input_handler,
         .mux_eof = shardcache_eof_handler,
+        .mux_timeout = shardcache_timeout_handler,
         .mux_output = NULL,
-        .mux_timeout = NULL,
         .priv = ctx
     };
     iomux_add(iomux, fd, &connection_callbacks);
@@ -1031,7 +1063,8 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
     s->cache = cache;
     s->me = me;
     s->auth = auth;
-    s->num_workers = s->max_workers = num_workers;
+    s->num_workers = num_workers;
+    s->max_workers = s->num_workers * 2;
     s->counters = counters;
 
     // open the listening socket
@@ -1064,7 +1097,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
     }
 
     int i;
-    for (i = 0; i < num_workers; i++) {
+    for (i = 0; i < ATOMIC_READ(num_workers); i++) {
         shardcache_worker_context_t *wrk = calloc(1, sizeof(shardcache_worker_context_t));
         wrk->serv = s;
         wrk->jobs = queue_create();
@@ -1130,4 +1163,32 @@ void stop_serving(shardcache_serving_t *s) {
 
     close(s->sock);
     free(s);
+}
+
+int
+max_serving_workers(shardcache_serving_t *s, int new_value)
+{
+    int old_value = ATOMIC_READ(s->max_workers);
+    if (new_value >= 0) {
+        if (new_value > ATOMIC_READ(s->num_workers)) {
+            ATOMIC_SET(s->max_workers, new_value);
+        } else {
+            ATOMIC_SET(s->max_workers, ATOMIC_READ(s->num_workers));
+        }
+    }
+    return old_value;
+}
+
+int
+min_serving_workers(shardcache_serving_t *s, int new_value)
+{
+    int old_value = ATOMIC_READ(s->num_workers);
+    if (new_value >= 0) {
+        if (new_value > ATOMIC_READ(s->max_workers)) {
+            ATOMIC_SET(s->max_workers, new_value);
+            ATOMIC_SET(s->num_workers, new_value);
+        } else {
+            ATOMIC_SET(s->num_workers, new_value);
+        }
+    }   return old_value;
 }
