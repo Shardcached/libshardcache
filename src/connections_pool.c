@@ -9,6 +9,8 @@
 #include "connections_pool.h"
 #include "messaging.h"
 
+#include <errno.h>
+
 #include "atomic.h"
 
 struct __connections_pool_s {
@@ -81,8 +83,25 @@ connections_pool_get(connections_pool_t *cc, char *addr)
             int flags = fcntl(rfd, F_GETFL, 0);
             if (flags == -1) {
                 close(rfd);
-                return -1;
+                fd = queue_pop_left(connection_queue);
+                continue;
             }
+
+            flags |= O_NONBLOCK;
+            fcntl(rfd, F_SETFL, flags);
+
+            int rb = 0;
+            do {
+                char discard[1<<16];
+                rb = read(rfd, &discard, sizeof(discard));
+            } while (rb > 0);
+
+            if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                close(rfd);
+                fd = queue_pop_left(connection_queue);
+                continue;
+            }
+
 
             flags &= ~O_NONBLOCK;
             fcntl(rfd, F_SETFL, flags);
@@ -105,8 +124,11 @@ void
 connections_pool_add(connections_pool_t *cc, char *addr, int fd)
 {
     queue_t *connection_queue = get_connection_queue(cc, addr);
-    if (!connection_queue)
+    if (!connection_queue) {
+        close(fd);
         return;
+    }
+
     if (queue_count(connection_queue) < ATOMIC_READ(cc->max_spare)) {
         int *fdp = malloc(sizeof(int));
         *fdp = fd;
