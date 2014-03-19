@@ -604,6 +604,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr)
                 hdr != SHC_HDR_GET &&
                 hdr != SHC_HDR_DELETE &&
                 hdr != SHC_HDR_EVICT &&
+                hdr != SHC_HDR_EVICT_NORESPONSE &&
                 hdr != SHC_HDR_GET_ASYNC &&
                 hdr != SHC_HDR_GET_OFFSET &&
                 hdr != SHC_HDR_ADD &&
