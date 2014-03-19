@@ -129,7 +129,6 @@ int main(int argc, char **argv)
         sprintf(v, "test_value%d", i);
         shardcache_client_set(client1, k, strlen(k), v, strlen(v), 0);
         void *vptr = NULL;
-        usleep(1);
         size_t s = shardcache_client_get(client2, k, strlen(k), &vptr);
         vv = (char *)vptr;
         if (s == 0) {
