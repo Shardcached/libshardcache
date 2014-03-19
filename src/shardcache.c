@@ -132,6 +132,7 @@ shardcache_node_destroy(shardcache_node_t *node)
     free(node->label);
     for (i = 0; i < node->num_replicas; i++)
         free(node->address[i]);
+    free(node->address);
     free(node->string);
     free(node);
 }
@@ -285,7 +286,7 @@ shardcache_test_ownership(shardcache_t *cache,
 int
 shardcache_get_connection_for_peer(shardcache_t *cache, char *peer)
 {
-    if (!cache->use_persistent_connections)
+    if (!ATOMIC_READ(cache->use_persistent_connections))
         return connect_to_peer(peer, cache->tcp_timeout);
 
     // this will reuse an available filedescriptor already connected to peer
@@ -299,7 +300,7 @@ shardcache_release_connection_for_peer(shardcache_t *cache, char *peer, int fd)
     if (fd < 0)
         return;
 
-    if (!cache->use_persistent_connections) {
+    if (!ATOMIC_READ(cache->use_persistent_connections)) {
         close(fd);
         return;
     }
@@ -376,10 +377,12 @@ evictor(void *priv)
                     int rindex = rand()%cache->shards[i]->num_replicas;
                     int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
                     int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 0);
-                    if (rc != 0)
+                    if (rc == 0) {
+                        close(fd);
+                        //shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
+                    } else {
                         SHC_WARNING("evict_from_peer return %d for peer %s", rc, peer);
-                    //shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
-                    close(fd);
+                    }
                 }
             }
 

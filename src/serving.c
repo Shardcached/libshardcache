@@ -953,6 +953,10 @@ worker(void *priv)
             }
 
             if (state != SHC_STATE_READING_ERR && state != SHC_STATE_AUTH_ERR) {
+                if (ATOMIC_READ(ctx->serv->leave)) {
+                    shardcache_connection_context_destroy(ctx);
+                    break;
+                }
                 iomux_callbacks_t connection_callbacks = {
                     .mux_connection = NULL,
                     .mux_input = shardcache_input_handler,
@@ -1056,6 +1060,7 @@ serve_cache(void *priv)
         }
     }
 
+    iomux_destroy(iomux);
     return NULL;
 }
 
@@ -1145,6 +1150,7 @@ destroy_workers_queue(queue_t *queue)
         MUTEX_DESTROY(&wrk->wakeup_lock);
         CONDITION_DESTROY(&wrk->wakeup_cond);
         SHC_DEBUG3("Worker thread %p exited", wrk);
+        free(wrk);
         wrk = queue_pop_left(queue);
     }
     queue_destroy(queue);

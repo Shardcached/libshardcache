@@ -83,6 +83,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
         ctx->moff = 0;
         ctx->version = 0;
         ctx->csig = 0;
+        ctx->hdr = 0;
         memset(ctx->magic, 0, sizeof(ctx->magic));
     }
 
