@@ -903,7 +903,7 @@ shardcache_get_helper(void *key,
         fbuf_add_binary(&arg->data, data, dlen);
     } else if (!total_size) {
         // error notified (dlen == 0 && total_size == 0)
-	arg->complete = 1;
+        arg->complete = 1;
         arg->stat = -1;
         pthread_cond_signal(&arg->cond);
         MUTEX_UNLOCK(&arg->lock);
@@ -944,8 +944,7 @@ shardcache_get(shardcache_t *cache,
     };
 
     char keystr[1024];
-    if (shardcache_log_level() >= LOG_DEBUG)
-        KEY2STR(key, klen, keystr, sizeof(keystr));
+    KEY2STR(key, klen, keystr, sizeof(keystr));
 
     SHC_DEBUG2("Getting value for key: %s", keystr);
 

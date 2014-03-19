@@ -45,6 +45,7 @@ struct __shardcache_serving_s {
     shardcache_t *cache;
     int sock;
     pthread_t io_thread;
+    iomux_t *io_mux;
     int leave;
     const char *auth;
     const char *me;
@@ -83,7 +84,6 @@ struct __shardcache_connection_context_s {
     shardcache_get_remainder_callback_t get_remainder_cb;
     shardcache_worker_context_t *worker_ctx;
     async_read_ctx_t *reader_ctx;
-    iomux_t *iomux;
     int retries;
     struct timeval retry_timeout;
 };
@@ -105,14 +105,13 @@ async_read_handler(void *data, size_t len, int idx, void *priv)
 
 
 static shardcache_connection_context_t *
-shardcache_connection_context_create(shardcache_serving_t *serv, int fd, iomux_t *iomux)
+shardcache_connection_context_create(shardcache_serving_t *serv, int fd)
 {
     shardcache_connection_context_t *ctx =
         calloc(1, sizeof(shardcache_connection_context_t));
 
     ctx->output = fbuf_create(0);
 
-    ctx->iomux = iomux;
     ctx->serv = serv;
     ctx->fd = fd;
     ctx->reader_ctx = async_read_context_create((char *)serv->auth,
@@ -905,7 +904,7 @@ shardcache_connection_handler(iomux_t *iomux, int fd, void *priv)
     shardcache_serving_t *serv = (shardcache_serving_t *)priv;
 
     shardcache_connection_context_t *ctx =
-        shardcache_connection_context_create(serv, fd, iomux);
+        shardcache_connection_context_create(serv, fd);
 
     iomux_callbacks_t connection_callbacks = {
         .mux_connection = NULL,
@@ -951,10 +950,6 @@ worker(void *priv)
             }
 
             if (state != SHC_STATE_READING_ERR && state != SHC_STATE_AUTH_ERR) {
-                if (ATOMIC_READ(ctx->serv->leave)) {
-                    shardcache_connection_context_destroy(ctx);
-                    break;
-                }
                 iomux_callbacks_t connection_callbacks = {
                     .mux_connection = NULL,
                     .mux_input = shardcache_input_handler,
@@ -963,7 +958,10 @@ worker(void *priv)
                     .mux_timeout = NULL,
                     .priv = ctx
                 };
-                iomux_add(ctx->iomux, ctx->fd, &connection_callbacks);
+                iomux_add(wrkctx->serv->io_mux, ctx->fd, &connection_callbacks);
+            } else {
+                close(ctx->fd);
+                shardcache_connection_context_destroy(ctx);
             }
             ctx = queue_pop_left(jobs);
         }
@@ -1009,9 +1007,6 @@ serve_cache(void *priv)
         return NULL;
     }
 
-    iomux_t *iomux = iomux_create();
-    iomux_set_threadsafe(iomux, 1); 
-
     iomux_callbacks_t connection_callbacks = {
         .mux_connection = shardcache_connection_handler,
         .mux_input = NULL,
@@ -1021,8 +1016,8 @@ serve_cache(void *priv)
         .priv = serv
     };
 
-    iomux_add(iomux, serv->sock, &connection_callbacks); iomux_listen(iomux,
-            serv->sock);
+    iomux_add(serv->io_mux, serv->sock, &connection_callbacks);
+    iomux_listen(serv->io_mux, serv->sock);
 
     while (!ATOMIC_READ(serv->leave)) {
         struct timeval threshold = { 0, 20000 };
@@ -1031,7 +1026,7 @@ serve_cache(void *priv)
 
         gettimeofday(&before, NULL);
 
-        iomux_run(iomux, &tv);
+        iomux_run(serv->io_mux, &tv);
 
         int i;
         for (i = 0; i < queue_count(serv->busy); i++) {
@@ -1059,7 +1054,6 @@ serve_cache(void *priv)
         }
     }
 
-    iomux_destroy(iomux);
     return NULL;
 }
 
@@ -1120,6 +1114,9 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
         queue_push_right(s->workers, wrk);
     }
 
+    s->io_mux = iomux_create();
+    iomux_set_threadsafe(s->io_mux, 1); 
+
     // and start a background thread to handle incoming connections
     int rc = pthread_create(&s->io_thread, NULL, serve_cache, s);
     if (rc != 0) {
@@ -1176,6 +1173,8 @@ stop_serving(shardcache_serving_t *s)
         shardcache_counter_remove(s->counters, "spare_workers");
         shardcache_counter_remove(s->counters, "total_workers");
     }
+
+    iomux_destroy(s->io_mux);
 
     // and finally we can close the listening sock
     close(s->sock);

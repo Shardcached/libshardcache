@@ -202,13 +202,18 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
                 obj->drop = 0;
 
         } else {
-            foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-            // NOTE: there is no need to explicitly call arc_remove() here because we are going
-            //       to return immediately with an error code. The item will not be cached but
-            //       instead will be automatically removed before returning from arc_lookup()
+            if (obj->listeners) {
+                foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+                clear_list(obj->listeners);
+            } else {
+                arc_release_resource(cache->arc, obj->res);
+            }
+
+            obj->evicted = 1;
+
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
-            if (obj->evict)
-                arc_ops_evict_object(cache, obj);
+
+            free(arg);
         }
     } else { 
         fbuf_t value = FBUF_STATIC_INITIALIZER;
