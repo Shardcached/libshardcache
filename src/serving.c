@@ -960,6 +960,7 @@ worker(void *priv)
                 iomux_callbacks_t connection_callbacks = {
                     .mux_connection = NULL,
                     .mux_input = shardcache_input_handler,
+                    .mux_eof = shardcache_eof_handler,
                     .mux_output = shardcache_output_handler,
                     .mux_timeout = NULL,
                     .priv = ctx
