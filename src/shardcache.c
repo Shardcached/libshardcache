@@ -378,10 +378,10 @@ evictor(void *priv)
                     int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
                     int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 0);
                     if (rc == 0) {
-                        close(fd);
-                        //shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
+                        shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
                     } else {
                         SHC_WARNING("evict_from_peer return %d for peer %s", rc, peer);
+                        close(fd);
                     }
                 }
             }

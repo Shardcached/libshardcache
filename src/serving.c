@@ -567,8 +567,13 @@ process_request(void *priv)
         case SHC_HDR_EVICT_NORESPONSE:
         {
             shardcache_evict(cache, key, klen);
-            if (ctx->hdr == SHC_HDR_EVICT)
+            if (ctx->hdr == SHC_HDR_EVICT) {
                 write_status(ctx, 0, WRITE_STATUS_MODE_SIMPLE);
+            } else {
+                char noop = SHC_HDR_NOOP;
+                fbuf_add_binary(ctx->output, &noop, 1);
+            }
+                
             break;
         }
         case SHC_HDR_MIGRATION_BEGIN:
@@ -873,8 +878,8 @@ shardcache_input_handler(iomux_t *iomux,
         struct sockaddr_in saddr;
         socklen_t addr_len = sizeof(struct sockaddr_in);
         getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
-        SHC_DEBUG("Bad message %02x from %s (%d)",
-                  ctx->hdr, inet_ntoa(saddr.sin_addr), state);
+        SHC_WARNING("Bad message %02x from %s (%d)",
+                    ctx->hdr, inet_ntoa(saddr.sin_addr), state);
         iomux_close(iomux, fd);
     }
 }
