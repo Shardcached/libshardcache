@@ -29,6 +29,7 @@ typedef enum {
     SHC_HDR_ADD              = 0x07,
     SHC_HDR_EXISTS           = 0x08,
     SHC_HDR_TOUCH            = 0x09,
+    SHC_HDR_EVICT_NORESPONSE = 0x10,
 
     // migration commands
     SHC_HDR_MIGRATION_ABORT  = 0x21,
@@ -103,7 +104,8 @@ evict_from_peer(char *peer,
                 unsigned char sig,
                 void *key,
                 size_t klen,
-                int fd);
+                int fd,
+                int expect_response);
 
 int send_to_peer(char *peer,
                  char *auth,

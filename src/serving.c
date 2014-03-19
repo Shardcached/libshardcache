@@ -564,9 +564,11 @@ process_request(void *priv)
             break;
         }
         case SHC_HDR_EVICT:
+        case SHC_HDR_EVICT_NORESPONSE:
         {
             shardcache_evict(cache, key, klen);
-            write_status(ctx, 0, WRITE_STATUS_MODE_SIMPLE);
+            if (ctx->hdr == SHC_HDR_EVICT)
+                write_status(ctx, 0, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_MIGRATION_BEGIN:

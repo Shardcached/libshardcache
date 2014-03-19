@@ -918,7 +918,8 @@ _delete_from_peer_internal(char *peer,
                            void *key,
                            size_t klen,
                            int owner,
-                           int fd)
+                           int fd,
+                           int expect_response)
 {
     int should_close = 0;
 
@@ -930,7 +931,12 @@ _delete_from_peer_internal(char *peer,
     }
 
     if (fd >= 0) {
-        unsigned char hdr = owner ? SHC_HDR_DELETE : SHC_HDR_EVICT;
+        unsigned char hdr;
+        if (owner) {
+            hdr = SHC_HDR_DELETE;
+        } else {
+            hdr = expect_response ? SHC_HDR_EVICT : SHC_HDR_EVICT_NORESPONSE;
+        }
         shardcache_record_t record = {
             .v = key,
             .l = klen
@@ -940,7 +946,7 @@ _delete_from_peer_internal(char *peer,
         // if we are not forwarding a delete command to the owner
         // of the key, but only an eviction request to a peer,
         // we don't need to wait for the response
-        if (rc == 0) {
+        if (rc == 0 && expect_response) {
             shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
@@ -963,7 +969,9 @@ _delete_from_peer_internal(char *peer,
         }
         if (should_close)
             close(fd);
+        return (rc == 0) ? 0 : -1;
     }
+
     return -1;
 }
 
@@ -975,7 +983,7 @@ delete_from_peer(char *peer,
                  size_t klen,
                  int fd)
 {
-    return _delete_from_peer_internal(peer, auth, sig, key, klen, 1, fd);
+    return _delete_from_peer_internal(peer, auth, sig, key, klen, 1, fd, 1);
 }
 
 int
@@ -984,9 +992,10 @@ evict_from_peer(char *peer,
                 unsigned char sig,
                 void *key,
                 size_t klen,
-                int fd)
+                int fd,
+                int expect_response)
 {
-    return _delete_from_peer_internal(peer, auth, sig, key, klen, 0, fd);
+    return _delete_from_peer_internal(peer, auth, sig, key, klen, 0, fd, expect_response);
 }
 
 
