@@ -354,7 +354,7 @@ evictor(void *priv)
     shardcache_t *cache = (shardcache_t *)priv;
     hashtable_t *jobs = cache->evictor_jobs;
 
-    while (!ATOMIC_READ(cache->evictor_quit))
+    while (!ATOMIC_READ(cache->quit))
     {
 
         // this will extract only the first value
@@ -444,7 +444,7 @@ void *
 shardcache_expire_volatile_keys(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
-    while (!ATOMIC_READ(cache->expirer_quit))
+    while (!ATOMIC_READ(cache->quit))
     {
         time_t now = time(NULL);
 
@@ -643,19 +643,13 @@ shardcache_destroy(shardcache_t *cache)
 {
     int i;
 
+    ATOMIC_INCREMENT(cache->quit);
+
     if (cache->serv)
         stop_serving(cache->serv);
 
-    SPIN_LOCK(&cache->migration_lock);
-    if (cache->migration) {
-        shardcache_migration_abort(cache);    
-    }
-    SPIN_UNLOCK(&cache->migration_lock);
-    SPIN_DESTROY(&cache->migration_lock);
-
     if (ATOMIC_READ(cache->evict_on_delete)) {
         SHC_DEBUG2("Stopping evictor thread");
-        ATOMIC_INCREMENT(cache->evictor_quit);
         pthread_join(cache->evictor_th, NULL);
         MUTEX_DESTROY(&cache->evictor_lock);
         CONDITION_DESTROY(&cache->evictor_cond);
@@ -665,16 +659,22 @@ shardcache_destroy(shardcache_t *cache)
         SHC_DEBUG2("Evictor thread stopped");
     }
 
+    SPIN_LOCK(&cache->migration_lock);
+    if (cache->migration) {
+        shardcache_migration_abort(cache);    
+    }
+    SPIN_UNLOCK(&cache->migration_lock);
+    SPIN_DESTROY(&cache->migration_lock);
+
     if (cache->expirer_started) {
         SHC_DEBUG2("Stopping expirer thread");
-        ATOMIC_INCREMENT(cache->expirer_quit);
         pthread_join(cache->expirer_th, NULL);
         SHC_DEBUG2("Expirer thread stopped");
     }
 
     if (cache->async_mux) {
-        SHC_DEBUG2("Stopping the async i/o thread");
         ATOMIC_INCREMENT(cache->async_quit);
+        SHC_DEBUG2("Stopping the async i/o thread");
         pthread_join(cache->async_io_th, NULL);
         iomux_destroy(cache->async_mux);
         SHC_DEBUG2("Async i/o thread stopped");
@@ -764,7 +764,7 @@ shardcache_get_offset(shardcache_t *cache,
 typedef struct {
     int stat;
     size_t dlen;
-    arc_t *arc;
+    shardcache_t *cache;
     arc_resource_t *res;
     shardcache_get_async_callback_t cb;
     void *priv;
@@ -781,10 +781,19 @@ shardcache_get_async_helper(void *key,
 {
     shardcache_get_async_helper_arg_t *arg = (shardcache_get_async_helper_arg_t *)priv;
 
+    arc_t *arc = arg->cache->arc;
+
+    if (arg->cache->async_quit) {
+        arc_release_resource(arc, arg->res);
+        free(arg);
+        return -1;
+    }
+
     int rc = arg->cb(key, klen, data, dlen, total_size, timestamp, arg->priv);
+
     if (rc != 0 || (!dlen && !total_size)) { // error
         //arg->stat = -1;
-        arc_release_resource(arg->arc, arg->res);
+        arc_release_resource(arc, arg->res);
         free(arg);
         return -1;
     }
@@ -792,7 +801,7 @@ shardcache_get_async_helper(void *key,
     arg->dlen += dlen;
 
     if (total_size) {
-        arc_release_resource(arg->arc, arg->res);
+        arc_release_resource(arc, arg->res);
         free(arg);
     }
 
@@ -840,7 +849,7 @@ shardcache_get_async(shardcache_t *cache,
         shardcache_get_async_helper_arg_t *arg = calloc(1, sizeof(shardcache_get_async_helper_arg_t));
         arg->cb = cb;
         arg->priv = priv;
-        arg->arc = cache->arc;
+        arg->cache = cache;
         arg->res = res;
 
         shardcache_get_listener_t *listener = malloc(sizeof(shardcache_get_listener_t));
@@ -929,9 +938,23 @@ shardcache_get(shardcache_t *cache,
     int rc = shardcache_get_async(cache, key, klen, shardcache_get_helper, &arg);
 
     if (rc == 0) {
-        CONDITION_WAIT_WHILE(&arg.cond, &arg.lock, !arg.complete && arg.stat == 0);
+        MUTEX_LOCK(&arg.lock);
+        while (!arg.complete && arg.stat == 0) {
+            struct timeval now;
+            gettimeofday(&now, NULL);
+            struct timeval waiting_time = { 0, 500000 };
+            struct timeval sum;
+            timeradd(&now, &waiting_time, &sum);
+            struct timespec abstime = { sum.tv_sec, sum.tv_usec * 1000 };
+            pthread_cond_timedwait(&arg.cond, &arg.lock, &abstime); 
+            if (ATOMIC_READ(cache->quit)) {
+                fbuf_clear(&arg.data);
+                break;
+            }
+        }
+        MUTEX_UNLOCK(&arg.lock);
 
-         if (arg.stat != 0) {
+         if (arg.stat != 0 && !ATOMIC_READ(cache->async_quit)) {
              fbuf_destroy(&arg.data);
              SHC_ERROR("Error trying to get key: %s", keystr);
              return NULL;

@@ -82,7 +82,6 @@ struct __shardcache_s {
                           // in seconds (epoch)
     pthread_t expirer_th; // the thread taking care of propagating expiration commands
     int expirer_started;  // flag indicating the the expirer thread has started
-    int expirer_quit;     // controls the expirer thread, if true the expirer thread will quit
 
     int evict_on_delete;  // boolean flag indicating if eviction will be automatically
                           // triggered when deleting an existing key 
@@ -105,8 +104,6 @@ struct __shardcache_s {
     pthread_mutex_t evictor_lock; // mutex to use when accessing the evictor_cond
                                   //condition variable
     hashtable_t *evictor_jobs;    // linked list used as queue for eviction jobs
-    int evictor_quit;             // boolean flag to tell the evictor thread to quit
-                                  // (accessed using the atomic builtins)
 
     shardcache_counters_t *counters; // the internal counters instance
 
@@ -138,8 +135,8 @@ struct __shardcache_s {
                             // i/o operations
     iomux_t *async_mux;     // the iomux instance used for the asynchronous i/o;
                             // operations
-    int async_quit;         // boolean flag used to thell the async_io thread to quit
-                            // (accessed using the atomic builtins)
+    int async_quit;
+    int quit;
 };
 
 typedef struct {

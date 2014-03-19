@@ -309,6 +309,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                 MUTEX_UNLOCK(&obj->lock);
                 return (obj->drop && !obj->async) ? 1 : 0;
             }
+            MUTEX_UNLOCK(&obj->lock);
             return -1;
         }
     }
