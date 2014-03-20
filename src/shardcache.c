@@ -378,6 +378,34 @@ evictor(void *priv)
                     SHC_DEBUG3("Sending Eviction command to %s", peer);
                     int rindex = rand()%cache->shards[i]->num_replicas;
                     int fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
+
+                    for (;;) {
+                        int flags = fcntl(fd, F_GETFL, 0);
+                        if (flags == -1) {
+                            close(fd);
+                            fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
+                            continue;
+                        }
+
+                        flags |= O_NONBLOCK;
+                        fcntl(fd, F_SETFL, flags);
+
+                        int rb = 0;
+                        do {
+                            char discard[1<<16];
+                            rb = read(fd, &discard, sizeof(discard));
+                        } while (rb > 0);
+
+                        if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                            close(fd);
+                            fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
+                            continue;
+                        }
+                        flags &= ~O_NONBLOCK;
+                        fcntl(fd, F_SETFL, flags);
+                        break;
+                    }
+
                     int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 0);
                     if (rc == 0) {
                         connections_pool_add(connections, cache->shards[i]->address[rindex], fd);
@@ -965,6 +993,10 @@ shardcache_get(shardcache_t *cache,
             timeradd(&now, &waiting_time, &sum);
             struct timespec abstime = { sum.tv_sec, sum.tv_usec * 1000 };
             pthread_cond_timedwait(&arg->cond, &arg->lock, &abstime); 
+            if (ATOMIC_READ(cache->async_quit)) {
+                arg->stat = 1;
+                break;
+            }
         }
         MUTEX_UNLOCK(&arg->lock);
 
