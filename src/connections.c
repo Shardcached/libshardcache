@@ -23,6 +23,8 @@
 #include <netdb.h>
 #include <sys/select.h>
 
+#include <pthread.h>
+
 #include "connections.h"
 
 #ifndef INADDR_LOOPBACK
@@ -65,6 +67,10 @@ string2sockaddr(const char *host, int port, struct sockaddr_in *sockaddr)
 
         int rc = -1;
 
+        static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+        pthread_mutex_lock(&lock);
+
         if (strcmp(host2, "*") == 0) {
             ip = INADDR_ANY;
             if (p)
@@ -72,6 +78,8 @@ string2sockaddr(const char *host, int port, struct sockaddr_in *sockaddr)
         } else {
             rc = getaddrinfo(host2, p, &hints, &info);
         }
+
+        pthread_mutex_unlock(&lock);
         if (rc == 0) {
             if (ip != INADDR_ANY)
                 ip = ((struct sockaddr_in *)info->ai_addr)->sin_addr.s_addr;
