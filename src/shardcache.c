@@ -376,7 +376,7 @@ evictor(void *priv)
                     SHC_DEBUG3("Sending Eviction command to %s", peer);
                     int rindex = rand()%cache->shards[i]->num_replicas;
                     int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
-                    int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 0);
+                    int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 1);
                     if (rc == 0) {
                         shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
                     } else {
