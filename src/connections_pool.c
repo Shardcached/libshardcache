@@ -75,37 +75,21 @@ connections_pool_get(connections_pool_t *cc, char *addr)
 
     int *fd = queue_pop_left(connection_queue);
     while (fd) {
+        int rfd = *fd;
+        int flags = fcntl(rfd, F_GETFL, 0);
+        if (flags == -1) {
+            close(rfd);
+            fd = queue_pop_left(connection_queue);
+            continue;
+        }
+        flags &= ~O_NONBLOCK;
+        fcntl(rfd, F_SETFL, flags);
         char noop = SHC_HDR_NOOP;
         if (write(*fd, &noop, 1) == 1) {
             int rfd = *fd;
             free(fd);
 
-            int flags = fcntl(rfd, F_GETFL, 0);
-            if (flags == -1) {
-                close(rfd);
-                fd = queue_pop_left(connection_queue);
-                continue;
-            }
-
-            flags |= O_NONBLOCK;
-            fcntl(rfd, F_SETFL, flags);
-
-            int rb = 0;
-            do {
-                char discard[1<<16];
-                rb = read(rfd, &discard, sizeof(discard));
-            } while (rb > 0);
-
-            if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
-                close(rfd);
-                fd = queue_pop_left(connection_queue);
-                continue;
-            }
-
-
-            flags &= ~O_NONBLOCK;
-            fcntl(rfd, F_SETFL, flags);
-
+        
             return rfd;
         } else {
             close(*fd);
