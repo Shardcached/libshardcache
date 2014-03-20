@@ -29,7 +29,7 @@
 #endif
 #include <siphash.h>
 
-#define SHARDCACHE_SERVING_MAX_RETRIES 3
+#define SHARDCACHE_SERVING_MAX_RETRIES 10
 
 typedef struct {
     pthread_t thread;
@@ -87,6 +87,7 @@ struct __shardcache_connection_context_s {
     int retries;
     struct timeval retry_timeout;
     fbuf_t *input;
+    int processing;
 };
 
 static int
@@ -167,6 +168,7 @@ write_status(shardcache_connection_context_t *ctx, int rc, char mode)
     }
 
     uint32_t magic = htonl(SHC_MAGIC);
+    MUTEX_LOCK(&ctx->output_lock);
     fbuf_add_binary(ctx->output, (char *)&magic, sizeof(magic));
 
     sip_hash *shash = NULL;
@@ -191,6 +193,7 @@ write_status(shardcache_connection_context_t *ctx, int rc, char mode)
                                 fbuf_used(ctx->output) - initial_offset, &digest);
         fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
     }
+    MUTEX_UNLOCK(&ctx->output_lock);
 
     if (shash)
         sip_hash_free(shash);
@@ -361,7 +364,7 @@ static void get_async_data(shardcache_t *cache,
 static void * worker(void *priv);
 
 static shardcache_worker_context_t *
-shardcache_select_worker(shardcache_serving_t *serv)
+shardcache_select_worker(shardcache_serving_t *serv, int force)
 {
     if (ATOMIC_READ(serv->leave))
         return NULL;
@@ -371,8 +374,14 @@ shardcache_select_worker(shardcache_serving_t *serv)
     // skip over workers who are busy computing/serving a response
     if (!wrk) {
         if (queue_count(serv->busy) >= ATOMIC_READ(serv->max_workers)) {
-            // max workers reached, refuse to return a worker
-            return NULL;
+            if (!force) {
+                do {
+                    wrk = queue_pop_left(serv->workers);
+                } while(wrk && ATOMIC_READ(wrk->leave));
+            } else {
+                // max workers reached, refuse to return a worker
+                return NULL;
+            }
         }
         // create a new worker
         wrk = calloc(1, sizeof(shardcache_worker_context_t));
@@ -398,19 +407,22 @@ shardcache_request_handler(iomux_t *iomux, int fd, shardcache_connection_context
 {
     // begin the worker slection process
     // first get the next worker in the array
-    shardcache_worker_context_t *wrkctx = shardcache_select_worker(ctx->serv);
+    shardcache_worker_context_t *wrkctx = shardcache_select_worker(ctx->serv, (ctx->retries > SHARDCACHE_SERVING_MAX_RETRIES) ? 1 : 0);
 
-    if (wrkctx) {
-        iomux_remove(iomux, fd);
+    if (wrkctx && !ATOMIC_READ(ctx->processing)) {
+        ctx->retries = 0;
+        ATOMIC_SET(ctx->processing, 1);
+        //printf("PUSHED JOB %p\n", wrkctx);
         queue_push_right(wrkctx->jobs, ctx);
         CONDITION_SIGNAL(&wrkctx->wakeup_cond, &wrkctx->wakeup_lock);
     } else {
         // all workers are busy, we need to postpone this command
-        if (++ctx->retries <= SHARDCACHE_SERVING_MAX_RETRIES) {
-            write_status(ctx, -1, WRITE_STATUS_MODE_SIMPLE);
-            return;
-        }
+        ctx->retries++;
         struct timeval timeout = { 0, ctx->retries * 333333 };
+        if (timeout.tv_usec > 1000000) {
+            timeout.tv_sec = 1;
+            timeout.tv_usec = 0;
+        }
         iomux_set_timeout(iomux, fd, &timeout);
     }
 }
@@ -463,7 +475,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
         fbuf_remove(ctx->output, wb);
     }
 
-    if (!fbuf_used(ctx->output) && !ATOMIC_READ(ctx->fetching)) {
+    if (!fbuf_used(ctx->output) && !ATOMIC_READ(ctx->fetching) && !ATOMIC_READ(ctx->processing)) {
         iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
         cbs->mux_output = NULL;
         if (fbuf_used(ctx->input)) {
@@ -887,14 +899,11 @@ shardcache_input_handler(iomux_t *iomux,
     if (!ctx)
         return;
 
-    MUTEX_LOCK(&ctx->output_lock);
-
-    if (ATOMIC_READ(ctx->fetching) != 0 || fbuf_used(ctx->output)) {
-        MUTEX_UNLOCK(&ctx->output_lock);
+    if (ATOMIC_READ(ctx->fetching) != 0 || ATOMIC_READ(ctx->processing) || ctx->retries)
+    {
         fbuf_add_binary(ctx->input, data, len);
         return;
     }
-    MUTEX_UNLOCK(&ctx->output_lock);
 
     // new data arrived so we want to run the asyncrhonous reader to update the context
     if (fbuf_used(ctx->input)) {
@@ -930,7 +939,12 @@ shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
     close(fd);
 
     if (ctx) {
-        shardcache_connection_context_destroy(ctx);
+        int prev = -1;
+        do {
+            prev = __sync_val_compare_and_swap(&ctx->processing, prev, 2);
+        } while(ATOMIC_READ(ctx->processing) != 2);
+        if (prev == 0)
+            shardcache_connection_context_destroy(ctx);
     }
 }
 
@@ -939,18 +953,20 @@ shardcache_connection_handler(iomux_t *iomux, int fd, void *priv)
 {
     shardcache_serving_t *serv = (shardcache_serving_t *)priv;
 
-    shardcache_connection_context_t *ctx =
-        shardcache_connection_context_create(serv, fd);
+    if (!ATOMIC_READ(serv->leave)) {
+        shardcache_connection_context_t *ctx =
+            shardcache_connection_context_create(serv, fd);
 
-    iomux_callbacks_t connection_callbacks = {
-        .mux_connection = NULL,
-        .mux_input = shardcache_input_handler,
-        .mux_eof = shardcache_eof_handler,
-        .mux_timeout = shardcache_timeout_handler,
-        .mux_output = NULL,
-        .priv = ctx
-    };
-    iomux_add(iomux, fd, &connection_callbacks);
+        iomux_callbacks_t connection_callbacks = {
+            .mux_connection = NULL,
+            .mux_input = shardcache_input_handler,
+            .mux_eof = shardcache_eof_handler,
+            .mux_timeout = shardcache_timeout_handler,
+            .mux_output = NULL,
+            .priv = ctx
+        };
+        iomux_add(iomux, fd, &connection_callbacks);
+    }
 }
 
 
@@ -966,6 +982,7 @@ worker(void *priv)
         ATOMIC_SET(wrkctx->busy, 1);
         ATOMIC_INCREMENT(wrkctx->serv->busy_workers);
         while(ctx) {
+            //printf("HANDLING JOB %p\n", wrkctx);
             int state = async_read_context_state(ctx->reader_ctx);
             while (state == SHC_STATE_READING_DONE) {
                 process_request(ctx);
@@ -986,19 +1003,28 @@ worker(void *priv)
             }
 
             if (state != SHC_STATE_READING_ERR && state != SHC_STATE_AUTH_ERR) {
-                iomux_callbacks_t connection_callbacks = {
-                    .mux_connection = NULL,
-                    .mux_input = shardcache_input_handler,
-                    .mux_eof = shardcache_eof_handler,
-                    .mux_output = shardcache_output_handler,
-                    .mux_timeout = NULL,
-                    .priv = ctx
-                };
-                iomux_add(wrkctx->serv->io_mux, ctx->fd, &connection_callbacks);
+                if (ATOMIC_READ(ctx->processing) != 2) {
+                    int wb = iomux_write(wrkctx->serv->io_mux, ctx->fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
+                    fbuf_remove(ctx->output, wb);
+                    if (fbuf_used(ctx->output)) {
+                        iomux_callbacks_t *cbs = iomux_callbacks(wrkctx->serv->io_mux, ctx->fd);
+                        cbs->mux_output = shardcache_output_handler;
+                    }
+                    int prev = __sync_bool_compare_and_swap(&ctx->processing, 1, 0);
+                    if (prev == 2) {
+                        shardcache_connection_context_destroy(ctx);
+                    }
+                } else {
+                    shardcache_connection_context_destroy(ctx);
+                }
             } else {
-                close(ctx->fd);
+                if (ATOMIC_READ(ctx->processing) != 2) {
+                    iomux_remove(wrkctx->serv->io_mux, ctx->fd);
+                    close(ctx->fd);
+                }
                 shardcache_connection_context_destroy(ctx);
             }
+            //printf("DONE JOB %p\n", wrkctx);
             ctx = queue_pop_left(jobs);
         }
         ATOMIC_SET(wrkctx->busy, 0);
@@ -1068,11 +1094,12 @@ serve_cache(void *priv)
         for (i = 0; i < queue_count(serv->busy); i++) {
             shardcache_worker_context_t *wrk = (shardcache_worker_context_t *)queue_pop_left(serv->busy);
             if (wrk) {
-                if (ATOMIC_READ(wrk->busy) == 0) {
+                if (ATOMIC_READ(wrk->busy) == 0 && !queue_count(wrk->jobs)) {
                     shardcache_dispose_worker(serv, wrk);
                 }
-                else
+                else {
                     queue_push_right(serv->busy, wrk);
+                }
             }
         }
 
@@ -1166,7 +1193,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
 }
 
 static void
-destroy_workers_queue(queue_t *queue)
+clear_workers_queue(queue_t *queue)
 {
     shardcache_worker_context_t *wrk = queue_pop_left(queue);
 
@@ -1186,7 +1213,6 @@ destroy_workers_queue(queue_t *queue)
         free(wrk);
         wrk = queue_pop_left(queue);
     }
-    queue_destroy(queue);
  
 }
 
@@ -1198,8 +1224,8 @@ stop_serving(shardcache_serving_t *s)
 
     // now the workers
     SHC_NOTICE("Collecting worker threads (might have to wait until i/o is finished)");
-    destroy_workers_queue(s->busy); // first the busy ones
-    destroy_workers_queue(s->workers); // than the remaining idle workers
+    clear_workers_queue(s->busy); // first the busy ones
+    clear_workers_queue(s->workers); // than the remaining idle workers
     SHC_DEBUG2("All worker threads have been collected");
  
     // unregister our counters if we did at creation time
@@ -1214,6 +1240,8 @@ stop_serving(shardcache_serving_t *s)
     pthread_join(s->io_thread, NULL);
 
     iomux_destroy(s->io_mux);
+    queue_destroy(s->busy);
+    queue_destroy(s->workers);
 
     free(s);
 }

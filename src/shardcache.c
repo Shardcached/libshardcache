@@ -376,7 +376,7 @@ evictor(void *priv)
                     SHC_DEBUG3("Sending Eviction command to %s", peer);
                     int rindex = rand()%cache->shards[i]->num_replicas;
                     int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
-                    int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 1);
+                    int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 0);
                     if (rc == 0) {
                         shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
                     } else {
@@ -885,6 +885,7 @@ typedef struct {
     fbuf_t data;
     int stat;
     struct timeval ts;
+    int free;
     int complete;
 } shardcache_get_helper_arg_t;
 
@@ -919,7 +920,9 @@ shardcache_get_helper(void *key,
         }
         pthread_cond_signal(&arg->cond);
     }
+
     MUTEX_UNLOCK(&arg->lock);
+
     return 0;
 }
 
@@ -933,59 +936,65 @@ shardcache_get(shardcache_t *cache,
     if (!key)
         return NULL;
 
-    shardcache_get_helper_arg_t arg = {
+    shardcache_get_helper_arg_t *arg = calloc(1, sizeof(shardcache_get_helper_arg_t));
 
-        .lock = PTHREAD_MUTEX_INITIALIZER,
-        .cond = PTHREAD_COND_INITIALIZER,
-        .data = FBUF_STATIC_INITIALIZER,
-        .stat = 0,
-        .ts = { 0, 0 },
-        .complete = 0
-    };
+    MUTEX_INIT(&arg->lock);
+    CONDITION_INIT(&arg->cond);
+    arg->stat = 0;
+    memset(&arg->ts, 0, sizeof(arg->ts));
+    memset(&arg->data, 0, sizeof(arg->data));
+    arg->complete = 0;
 
     char keystr[1024];
     KEY2STR(key, klen, keystr, sizeof(keystr));
 
     SHC_DEBUG2("Getting value for key: %s", keystr);
 
-    int rc = shardcache_get_async(cache, key, klen, shardcache_get_helper, &arg);
+    int rc = shardcache_get_async(cache, key, klen, shardcache_get_helper, arg);
 
     if (rc == 0) {
-        MUTEX_LOCK(&arg.lock);
-        while (!arg.complete && arg.stat == 0) {
+        MUTEX_LOCK(&arg->lock);
+        while (!arg->complete && arg->stat == 0) {
             struct timeval now;
             gettimeofday(&now, NULL);
             struct timeval waiting_time = { 0, 500000 };
             struct timeval sum;
             timeradd(&now, &waiting_time, &sum);
             struct timespec abstime = { sum.tv_sec, sum.tv_usec * 1000 };
-            pthread_cond_timedwait(&arg.cond, &arg.lock, &abstime); 
-            if (ATOMIC_READ(cache->quit)) {
-                fbuf_clear(&arg.data);
-                break;
-            }
+            pthread_cond_timedwait(&arg->cond, &arg->lock, &abstime); 
         }
-        MUTEX_UNLOCK(&arg.lock);
+        MUTEX_UNLOCK(&arg->lock);
 
-         if (arg.stat != 0 && !ATOMIC_READ(cache->async_quit)) {
-             fbuf_destroy(&arg.data);
-             SHC_ERROR("Error trying to get key: %s", keystr);
-             return NULL;
-         }
+        char *value = fbuf_data(&arg->data);
+        uint32_t len = fbuf_used(&arg->data);
+        int stat = arg->stat;
 
-         char *value = fbuf_data(&arg.data);
-         if (vlen)
-             *vlen = fbuf_used(&arg.data);
+        if (timestamp)
+            memcpy(timestamp, &arg->ts, sizeof(struct timeval));
 
-         if (timestamp)
-             memcpy(timestamp, &arg.ts, sizeof(struct timeval));
+        MUTEX_DESTROY(&arg->lock);
+        CONDITION_DESTROY(&arg->cond);
+        free(arg);
 
-         if (!value)
-             SHC_DEBUG("No value for key: %s", keystr);
+        if (stat != 0 && !ATOMIC_READ(cache->async_quit)) {
+            SHC_ERROR("Error trying to get key: %s", keystr);
+            if (value)
+                free(value);
+            return NULL;
+        }
 
-         return value;
+        if (vlen)
+            *vlen = len;
+
+        if (!value)
+            SHC_DEBUG("No value for key: %s", keystr);
+
+        return value;
     }
-    fbuf_destroy(&arg.data);
+    fbuf_destroy(&arg->data);
+    MUTEX_DESTROY(&arg->lock);
+    CONDITION_DESTROY(&arg->cond);
+    free(arg);
     return NULL;
 }
 
