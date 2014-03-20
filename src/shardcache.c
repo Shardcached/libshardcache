@@ -355,6 +355,8 @@ evictor(void *priv)
     shardcache_t *cache = (shardcache_t *)priv;
     hashtable_t *jobs = cache->evictor_jobs;
 
+    connections_pool_t *connections = connections_pool_create(5000, 1);
+
     while (!ATOMIC_READ(cache->quit))
     {
 
@@ -375,10 +377,10 @@ evictor(void *priv)
                 if (strcmp(peer, cache->me) != 0) {
                     SHC_DEBUG3("Sending Eviction command to %s", peer);
                     int rindex = rand()%cache->shards[i]->num_replicas;
-                    int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
+                    int fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
                     int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 0);
                     if (rc == 0) {
-                        shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
+                        connections_pool_add(connections, cache->shards[i]->address[rindex], fd);
                     } else {
                         SHC_WARNING("evict_from_peer return %d for peer %s", rc, peer);
                         close(fd);
@@ -405,6 +407,7 @@ evictor(void *priv)
             }
         }
     }
+    connections_pool_destroy(connections);
     return NULL;
 }
 
