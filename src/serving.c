@@ -29,7 +29,7 @@
 #endif
 #include <siphash.h>
 
-#define SHARDCACHE_SERVING_MAX_RETRIES 10
+#define SHARDCACHE_SERVING_MAX_RETRIES 10 
 
 typedef struct {
     pthread_t thread;
@@ -63,31 +63,41 @@ struct __shardcache_serving_s {
 
 typedef struct __shardcache_connection_context_s shardcache_connection_context_t;
 
-typedef void (*shardcache_get_remainder_callback_t)(shardcache_connection_context_t *ctx);
+typedef struct {
+#define SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX 4
+    fbuf_t records[SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX];
+    int fd;
+    shardcache_hdr_t hdr;
+    shardcache_hdr_t sig_hdr;
+    shardcache_connection_context_t *ctx;
+} shardcache_request_t;
 
 struct __shardcache_connection_context_s {
     shardcache_hdr_t hdr;
     shardcache_hdr_t sig_hdr;
 
     pthread_mutex_t output_lock;
+    pthread_mutex_t request_lock;
     int fetching;
+    int queued;
+    int free;
     sip_hash *fetch_shash;
     rbuf_t *fetch_accumulator;
     int fetch_error;
+
+#define SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX 4
+    fbuf_t records[SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX];
 
     shardcache_serving_t *serv;
 
     fbuf_t *output;
     int fd;
-#define SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX 4
-    fbuf_t records[SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX];
-    shardcache_get_remainder_callback_t get_remainder_cb;
     shardcache_worker_context_t *worker_ctx;
     async_read_ctx_t *reader_ctx;
     int retries;
     struct timeval retry_timeout;
     fbuf_t *input;
-    int processing;
+    queue_t *requests;
 };
 
 static int
@@ -96,8 +106,10 @@ async_read_handler(void *data, size_t len, int idx, void *priv)
     shardcache_connection_context_t *ctx =
         (shardcache_connection_context_t *)priv;
 
-    if (idx >= 0 && idx < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX)
+    MUTEX_LOCK(&ctx->request_lock);
+    if (idx >= 0 && idx < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX && !ATOMIC_READ(ctx->fetching))
         fbuf_add_binary(&ctx->records[idx], data, len);
+    MUTEX_UNLOCK(&ctx->request_lock);
 
     // idx == -1 means that reading finished 
     // idx == -2 means error
@@ -122,17 +134,38 @@ shardcache_connection_context_create(shardcache_serving_t *serv, int fd)
                                                     ctx);
     MUTEX_INIT(&ctx->output_lock);
     ctx->fetch_accumulator = rbuf_create(1<<16);
+    ctx->requests = queue_create();
     return ctx;
 }
 
 static void
 shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
 {
+    MUTEX_LOCK(&ctx->output_lock);
+    if (ATOMIC_READ(ctx->fetching) || ATOMIC_READ(ctx->queued)) {
+        ATOMIC_SET(ctx->free, 1);
+        MUTEX_UNLOCK(&ctx->output_lock);
+        printf("POSTPONING %p\n", ctx);
+        return;
+    }
+
+    printf("RELEASING %p\n", ctx);
+    MUTEX_UNLOCK(&ctx->output_lock);
     fbuf_free(ctx->output);
     fbuf_free(ctx->input);
     int i;
-    for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++)
+    for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
         fbuf_destroy(&ctx->records[i]);
+    }
+    shardcache_request_t *req = queue_pop_left(ctx->requests);
+    while (req) {
+        for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
+            fbuf_destroy(&req->records[i]);
+        }
+        free(req);
+        req = queue_pop_left(ctx->requests);
+    }
+    queue_destroy(ctx->requests);
     async_read_context_destroy(ctx->reader_ctx);
     rbuf_destroy(ctx->fetch_accumulator);
     MUTEX_DESTROY(&ctx->output_lock);
@@ -193,6 +226,11 @@ write_status(shardcache_connection_context_t *ctx, int rc, char mode)
                                 fbuf_used(ctx->output) - initial_offset, &digest);
         fbuf_add_binary(ctx->output, (char *)&digest, sizeof(digest));
     }
+
+    int wb = iomux_write(ctx->serv->io_mux, ctx->fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
+    if (wb)
+        fbuf_remove(ctx->output, wb);
+
     MUTEX_UNLOCK(&ctx->output_lock);
 
     if (shash)
@@ -219,6 +257,8 @@ static int get_async_data_handler(void *key,
             sip_hash_free(ctx->fetch_shash);
             ctx->fetch_shash = NULL;
         }
+        if (ATOMIC_READ(ctx->free))
+            shardcache_connection_context_destroy(ctx);
         return -1;
     }
     static int max_chunk_size = (1<<16)-1;
@@ -226,8 +266,8 @@ static int get_async_data_handler(void *key,
     uint16_t accumulated_size = rbuf_len(ctx->fetch_accumulator);
     size_t to_process = accumulated_size + dlen;
     size_t data_offset = 0;
+    MUTEX_LOCK(&ctx->output_lock);
     while(to_process >= max_chunk_size) {
-        MUTEX_LOCK(&ctx->output_lock);
         size_t copy_size = max_chunk_size;
         uint16_t clen = htons(max_chunk_size);
         fbuf_add_binary(ctx->output, (void *)&clen, sizeof(clen));
@@ -255,14 +295,15 @@ static int get_async_data_handler(void *key,
                 SHC_ERROR("Can't compute the siphash digest!\n");
                 sip_hash_free(ctx->fetch_shash);
                 ctx->fetch_shash = NULL;
-                MUTEX_UNLOCK(&ctx->output_lock);
                 ATOMIC_SET(ctx->fetching, 0);
+                MUTEX_UNLOCK(&ctx->output_lock);
+                if (ATOMIC_READ(ctx->free))
+                    shardcache_connection_context_destroy(ctx);
                 ATOMIC_INCREMENT(ctx->fetch_error);
                 return -1;
             }
             fbuf_add_binary(ctx->output, (void *)&digest, sizeof(digest));
         }
-        MUTEX_UNLOCK(&ctx->output_lock);
         to_process = accumulated_size + (dlen - data_offset);
     }
 
@@ -274,10 +315,13 @@ static int get_async_data_handler(void *key,
         }
     }
     
+    int wb = iomux_write(ctx->serv->io_mux, ctx->fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
+    if (wb)
+        fbuf_remove(ctx->output, wb);
+
     if (total_size > 0 && timestamp) {
         uint16_t eor = 0;
         char eom = 0;
-        MUTEX_LOCK(&ctx->output_lock);
         if (accumulated_size) {
             // flush what we have left in the accumulator
             uint16_t clen = htons(accumulated_size);
@@ -295,8 +339,10 @@ static int get_async_data_handler(void *key,
                         SHC_ERROR("Can't compute the siphash digest!\n");
                         sip_hash_free(ctx->fetch_shash);
                         ctx->fetch_shash = NULL;
-                        MUTEX_UNLOCK(&ctx->output_lock);
                         ATOMIC_SET(ctx->fetching, 0);
+                        MUTEX_UNLOCK(&ctx->output_lock);
+                        if (ATOMIC_READ(ctx->free))
+                            shardcache_connection_context_destroy(ctx);
                         ATOMIC_INCREMENT(ctx->fetch_error);
                         return -1;
                     }
@@ -320,9 +366,14 @@ static int get_async_data_handler(void *key,
             ctx->fetch_shash = NULL;
         }
 
+        int wb = iomux_write(ctx->serv->io_mux, ctx->fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
+        if (wb)
+            fbuf_remove(ctx->output, wb);
         ATOMIC_SET(ctx->fetching, 0);
-        MUTEX_UNLOCK(&ctx->output_lock);
     }
+    MUTEX_UNLOCK(&ctx->output_lock);
+    if (ATOMIC_READ(ctx->free))
+        shardcache_connection_context_destroy(ctx);
 
     return 0;
 }
@@ -356,6 +407,9 @@ static void get_async_data(shardcache_t *cache,
             sip_hash_free(ctx->fetch_shash);
             ctx->fetch_shash = NULL;
         }
+        int wb = iomux_write(ctx->serv->io_mux, ctx->fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
+        if (wb)
+            fbuf_remove(ctx->output, wb);
         MUTEX_UNLOCK(&ctx->output_lock);
         ATOMIC_SET(ctx->fetching, 0);
     }
@@ -374,14 +428,20 @@ shardcache_select_worker(shardcache_serving_t *serv, int force)
     // skip over workers who are busy computing/serving a response
     if (!wrk) {
         if (queue_count(serv->busy) >= ATOMIC_READ(serv->max_workers)) {
-            if (!force) {
-                do {
-                    wrk = queue_pop_left(serv->workers);
-                } while(wrk && ATOMIC_READ(wrk->leave));
-            } else {
-                // max workers reached, refuse to return a worker
-                return NULL;
-            }
+            if (force) {
+                int cnt = queue_count(serv->busy);
+                wrk = queue_pop_left(serv->busy);
+                while(cnt && wrk && ATOMIC_READ(wrk->leave)) {
+                    queue_push_right(serv->busy, wrk);
+                    wrk = queue_pop_left(serv->busy);
+                    cnt--;
+                }
+                if (wrk) {
+                    queue_push_right(serv->busy, wrk);
+                    return wrk;
+                }
+            } 
+            return NULL;
         }
         // create a new worker
         wrk = calloc(1, sizeof(shardcache_worker_context_t));
@@ -407,18 +467,19 @@ shardcache_request_handler(iomux_t *iomux, int fd, shardcache_connection_context
 {
     // begin the worker slection process
     // first get the next worker in the array
-    shardcache_worker_context_t *wrkctx = shardcache_select_worker(ctx->serv, (ctx->retries > SHARDCACHE_SERVING_MAX_RETRIES) ? 1 : 0);
+    shardcache_worker_context_t *wrkctx = shardcache_select_worker(ctx->serv, (ctx->retries >= SHARDCACHE_SERVING_MAX_RETRIES) ? 1 : 0);
 
-    if (wrkctx && !ATOMIC_READ(ctx->processing)) {
+    if (wrkctx) {
         ctx->retries = 0;
-        ATOMIC_SET(ctx->processing, 1);
         //printf("PUSHED JOB %p\n", wrkctx);
+        ATOMIC_SET(ctx->queued, 1);
+
         queue_push_right(wrkctx->jobs, ctx);
         CONDITION_SIGNAL(&wrkctx->wakeup_cond, &wrkctx->wakeup_lock);
     } else {
         // all workers are busy, we need to postpone this command
         ctx->retries++;
-        struct timeval timeout = { 0, ctx->retries * 333333 };
+        struct timeval timeout = { 0, ctx->retries * 666 };
         if (timeout.tv_usec > 1000000) {
             timeout.tv_sec = 1;
             timeout.tv_usec = 0;
@@ -437,13 +498,24 @@ shardcache_check_context_state(iomux_t *iomux, int fd, shardcache_connection_con
     int state = async_read_context_state(ctx->reader_ctx);
     if (state == SHC_STATE_READING_DONE) {
 
+        MUTEX_LOCK(&ctx->request_lock);
         ctx->hdr = async_read_context_hdr(ctx->reader_ctx);
         ctx->sig_hdr = async_read_context_sig_hdr(ctx->reader_ctx);
 
-
         ctx->retries = 0;
+        shardcache_request_t *req = calloc(1, sizeof(shardcache_request_t));
+        req->hdr = ctx->hdr;
+        req->sig_hdr = ctx->sig_hdr;
+        req->ctx = ctx;
+
+        memcpy(&req->records, &ctx->records, sizeof(req->records));
+        bzero(&ctx->records, sizeof(ctx->records));
+        queue_push_right(ctx->requests, req);
+        MUTEX_UNLOCK(&ctx->request_lock);
         shardcache_request_handler(iomux, fd, ctx);
 
+    } else if (!ATOMIC_READ(ctx->queued) && queue_count(ctx->requests)) {
+        shardcache_request_handler(iomux, fd, ctx);
     }
 
     if (state == SHC_STATE_READING_ERR || state == SHC_STATE_AUTH_ERR) {
@@ -472,15 +544,16 @@ shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
         int wb = iomux_write(iomux, fd,
                             fbuf_data(ctx->output),
                             fbuf_used(ctx->output));
-        fbuf_remove(ctx->output, wb);
+        if (wb) {
+            fbuf_remove(ctx->output, wb);
+        }
     }
 
-    if (!fbuf_used(ctx->output) && !ATOMIC_READ(ctx->fetching) && !ATOMIC_READ(ctx->processing)) {
-        iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
-        cbs->mux_output = NULL;
+    if (!fbuf_used(ctx->output)) {
+        iomux_write_set_callback(ctx->serv->io_mux, ctx->fd, NULL);
         if (fbuf_used(ctx->input)) {
-            MUTEX_UNLOCK(&ctx->output_lock);
             async_read_context_input_data(fbuf_data(ctx->input), fbuf_used(ctx->input), ctx->reader_ctx);
+            MUTEX_UNLOCK(&ctx->output_lock);
             fbuf_clear(ctx->input);
             if (shardcache_check_context_state(iomux, fd, ctx) != 0) {
                 iomux_close(iomux, fd);
@@ -491,26 +564,41 @@ shardcache_output_handler(iomux_t *iomux, int fd, void *priv)
     MUTEX_UNLOCK(&ctx->output_lock);
 }
 
-static void *
-process_request(void *priv)
+static void
+shardcache_set_async_response(void *key, size_t klen, int ret, void *priv)
 {
     shardcache_connection_context_t *ctx =
         (shardcache_connection_context_t *)priv;
+
+    if (ATOMIC_READ(ctx->free)) {
+        shardcache_connection_context_destroy(ctx);
+    } else {
+        write_status(ctx, ret, WRITE_STATUS_MODE_SIMPLE);
+        ATOMIC_SET(ctx->fetching, 0);
+    }
+    if (ATOMIC_READ(ctx->free))
+        shardcache_connection_context_destroy(ctx);
+}
+
+static void *
+process_request(shardcache_request_t *req)
+{
+    shardcache_connection_context_t *ctx = req->ctx;
     shardcache_t *cache = ctx->serv->cache;
 
     int rc = 0;
-    void *key = fbuf_data(&ctx->records[0]);
-    size_t klen = fbuf_used(&ctx->records[0]);
+    void *key = fbuf_data(&req->records[0]);
+    size_t klen = fbuf_used(&req->records[0]);
 
-    switch(ctx->hdr) {
+    switch(req->hdr) {
         case SHC_HDR_GET_OFFSET:
         {
             fbuf_t out = FBUF_STATIC_INITIALIZER;
             char buf[1<<16];
 
             uint32_t offset = 0;
-            if (fbuf_used(&ctx->records[1]) == 4) {
-                memcpy(&offset, fbuf_data(&ctx->records[1]), sizeof(uint32_t));
+            if (fbuf_used(&req->records[1]) == 4) {
+                memcpy(&offset, fbuf_data(&req->records[1]), sizeof(uint32_t));
                 offset = ntohl(offset);
             } else {
                 // TODO - Error Messages
@@ -518,8 +606,8 @@ process_request(void *priv)
             }
 
             uint32_t size = 0;
-            if (fbuf_used(&ctx->records[2]) == 4) {
-                memcpy(&size, fbuf_data(&ctx->records[2]), sizeof(uint32_t));
+            if (fbuf_used(&req->records[2]) == 4) {
+                memcpy(&size, fbuf_data(&req->records[2]), sizeof(uint32_t));
                 size = ntohl(size);
             } else {
                 // TODO - Error Messages
@@ -542,11 +630,13 @@ process_request(void *priv)
                 };
 
                 if (build_message((char *)ctx->serv->auth,
-                                  ctx->sig_hdr,
+                                  req->sig_hdr,
                                   SHC_HDR_RESPONSE,
                                   record, 2, &out) == 0)
                 {
+                    MUTEX_LOCK(&ctx->output_lock);
                     fbuf_add_binary(ctx->output, fbuf_data(&out), fbuf_used(&out));
+                    MUTEX_UNLOCK(&ctx->output_lock);
                 }
                 else
                 {
@@ -557,11 +647,14 @@ process_request(void *priv)
             fbuf_destroy(&out);
             break;
         }
+        case SHC_HDR_GET:
         case SHC_HDR_GET_ASYNC:
         {
             shardcache_hdr_t hdr = SHC_HDR_RESPONSE;
 
             uint32_t magic = htonl(SHC_MAGIC);
+
+            MUTEX_LOCK(&ctx->output_lock);
             fbuf_add_binary(ctx->output, (char *)&magic, sizeof(magic));
 
             if (ctx->serv->auth) {
@@ -577,9 +670,10 @@ process_request(void *priv)
 
             if (ctx->serv->auth && ctx->fetch_shash) {
                 sip_hash_update(ctx->fetch_shash, (char *)&hdr, 1);
-                if (ctx->sig_hdr&0x01) {
+                if (req->sig_hdr&0x01) {
                     uint64_t digest;
                     if (!sip_hash_final_integer(ctx->fetch_shash, &digest)) {
+                        MUTEX_UNLOCK(&ctx->output_lock);
                         fbuf_set_used(ctx->output, fbuf_used(ctx->output) - 2);
                         SHC_ERROR("Can't compute the siphash digest!\n");
                         break;
@@ -588,10 +682,11 @@ process_request(void *priv)
                 }
          
             }
-
+            MUTEX_UNLOCK(&ctx->output_lock);
             get_async_data(cache, key, klen, get_async_data_handler, ctx);
             break;
         }
+        /*
         case SHC_HDR_GET:
         {
             fbuf_t out = FBUF_STATIC_INITIALIZER;
@@ -618,44 +713,49 @@ process_request(void *priv)
                 free(v);
             break;
         }
+        */
         case SHC_HDR_SET:
         {
             uint32_t expire = 0;
-            if (fbuf_used(&ctx->records[2]) == 4) {
-                memcpy(&expire, fbuf_data(&ctx->records[2]), sizeof(uint32_t));
+            if (fbuf_used(&req->records[2]) == 4) {
+                memcpy(&expire, fbuf_data(&req->records[2]), sizeof(uint32_t));
                 expire = ntohl(expire);
             }
             if (expire > 0) {
                 rc = shardcache_set_volatile(cache,
                                              key,
                                              klen,
-                                             fbuf_data(&ctx->records[1]),
-                                             fbuf_used(&ctx->records[1]),
+                                             fbuf_data(&req->records[1]),
+                                             fbuf_used(&req->records[1]),
                                              expire);
 
+                write_status(ctx, rc, WRITE_STATUS_MODE_SIMPLE);
             } else {
-                rc = shardcache_set(cache, key, klen,
-                        fbuf_data(&ctx->records[1]), fbuf_used(&ctx->records[1]));
+                ATOMIC_SET(ctx->fetching, 1);
+                rc = shardcache_set_async(cache, key, klen,
+                                          fbuf_data(&req->records[1]),
+                                          fbuf_used(&req->records[1]),
+                                          shardcache_set_async_response,
+                                          ctx);
             }
-            write_status(ctx, rc, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_ADD:
         {
-            if (fbuf_used(&ctx->records[2]) == 4) {
+            if (fbuf_used(&req->records[2]) == 4) {
                 uint32_t expire;
-                memcpy(&expire, fbuf_data(&ctx->records[2]), sizeof(uint32_t));
+                memcpy(&expire, fbuf_data(&req->records[2]), sizeof(uint32_t));
                 expire = ntohl(expire);
                 rc = shardcache_add_volatile(cache,
                                              key,
                                              klen,
-                                             fbuf_data(&ctx->records[1]),
-                                             fbuf_used(&ctx->records[1]),
+                                             fbuf_data(&req->records[1]),
+                                             fbuf_used(&req->records[1]),
                                              expire);
 
             } else {
                 rc = shardcache_add(cache, key, klen,
-                        fbuf_data(&ctx->records[1]), fbuf_used(&ctx->records[1]));
+                        fbuf_data(&req->records[1]), fbuf_used(&req->records[1]));
             }
             write_status(ctx, rc, WRITE_STATUS_MODE_EXISTS);
             break;
@@ -688,7 +788,7 @@ process_request(void *priv)
         {
             int num_shards = 0;
             shardcache_node_t **nodes = NULL;
-            char *s = (char *)fbuf_data(&ctx->records[0]);
+            char *s = (char *)fbuf_data(&req->records[0]);
             while (s && *s) {
                 char *tok = strsep(&s, ",");
                 if(tok) {
@@ -760,12 +860,14 @@ process_request(void *priv)
                     .l = fbuf_used(&buf)
                 };
                 if (build_message((char *)ctx->serv->auth,
-                                  ctx->sig_hdr,
+                                  req->sig_hdr,
                                   SHC_HDR_RESPONSE,
                                   &record, 1, &out) == 0)
                 {
+                    MUTEX_LOCK(&ctx->output_lock);
                     fbuf_add_binary(ctx->output,
                             fbuf_data(&out), fbuf_used(&out));
+                    MUTEX_UNLOCK(&ctx->output_lock);
                 } else {
                     // TODO - Error Messages
                 }
@@ -831,9 +933,9 @@ process_request(void *priv)
 
             shardcache_hdr_t rhdr =
                 shardcache_replica_received_command(cache->replica,
-                                                    ctx->hdr,
-                                                    fbuf_data(&ctx->records[0]),
-                                                    fbuf_used(&ctx->records[0]),
+                                                    req->hdr,
+                                                    fbuf_data(&req->records[0]),
+                                                    fbuf_used(&req->records[0]),
                                                     &response,
                                                     &response_len);
             if (response_len) {
@@ -843,7 +945,7 @@ process_request(void *priv)
                     .l = response_len
                 };
                 if (build_message((char *)ctx->serv->auth,
-                                  ctx->sig_hdr, rhdr,
+                                  req->sig_hdr, rhdr,
                                   &record, 1, &out) == 0)
                 {
                     // destroy it early ... since we still need one more copy
@@ -860,31 +962,36 @@ process_request(void *priv)
             break;
         }
         default:
-            fprintf(stderr, "Unsupported command: 0x%02x\n", (char)ctx->hdr);
+            fprintf(stderr, "Unsupported command: 0x%02x\n", (char)req->hdr);
             write_status(ctx, -1, WRITE_STATUS_MODE_SIMPLE);
             break;
     }
 
+    /*
+    int i;
+    for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++)
+        fbuf_clear(&req->records[i]);
+        */
+
     return NULL;
 }
 
+/*
 static void
 shardcache_dispose_worker(shardcache_serving_t *serv, shardcache_worker_context_t *wrk)
 {
-    if (queue_count(serv->workers) >= ATOMIC_READ(serv->max_workers)) {
-        ATOMIC_INCREMENT(wrk->leave);
-        CONDITION_SIGNAL(&wrk->wakeup_cond, &wrk->wakeup_lock);
-        pthread_join(wrk->thread, NULL);
-        queue_destroy(wrk->jobs);
-        MUTEX_DESTROY(&wrk->wakeup_lock);
-        CONDITION_DESTROY(&wrk->wakeup_cond);
-        SHC_DEBUG("Disposing worker %p", wrk);
-        free(wrk);
-        ATOMIC_DECREMENT(serv->total_workers);
-        return;
-    }
-    queue_push_right(serv->workers, wrk);
+    ATOMIC_INCREMENT(wrk->leave);
+    CONDITION_SIGNAL(&wrk->wakeup_cond, &wrk->wakeup_lock);
+    pthread_join(wrk->thread, NULL);
+    queue_destroy(wrk->jobs);
+    MUTEX_DESTROY(&wrk->wakeup_lock);
+    CONDITION_DESTROY(&wrk->wakeup_cond);
+    SHC_DEBUG("Disposing worker %p", wrk);
+    free(wrk);
+    ATOMIC_DECREMENT(serv->total_workers);
+    return;
 }
+*/
 
 static void
 shardcache_input_handler(iomux_t *iomux,
@@ -899,8 +1006,15 @@ shardcache_input_handler(iomux_t *iomux,
     if (!ctx)
         return;
 
-    if (ATOMIC_READ(ctx->fetching) != 0 || ATOMIC_READ(ctx->processing) || ctx->retries)
+    MUTEX_LOCK(&ctx->output_lock);
+    if (ATOMIC_READ(ctx->fetching) != 0 || fbuf_used(ctx->output) || ctx->retries)
     {
+        if (fbuf_used(ctx->output)) {
+            int wb = iomux_write(iomux, fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
+            if (wb > 0)
+                fbuf_remove(ctx->output, wb);
+        }
+        MUTEX_UNLOCK(&ctx->output_lock);
         fbuf_add_binary(ctx->input, data, len);
         return;
     }
@@ -911,14 +1025,20 @@ shardcache_input_handler(iomux_t *iomux,
         async_read_context_input_data(fbuf_data(ctx->input), fbuf_used(ctx->input), ctx->reader_ctx);
         fbuf_clear(ctx->input);
         if (shardcache_check_context_state(iomux, fd, ctx) != 0) {
+            MUTEX_UNLOCK(&ctx->output_lock);
             iomux_close(iomux, fd);
             return;
         }
     } else {
         async_read_context_input_data(data, len, ctx->reader_ctx);
-        if (shardcache_check_context_state(iomux, fd, ctx) != 0)
+        if (shardcache_check_context_state(iomux, fd, ctx) != 0) {
+            MUTEX_UNLOCK(&ctx->output_lock);
             iomux_close(iomux, fd);
+            return;
+        }
     }
+
+    MUTEX_UNLOCK(&ctx->output_lock);
 }
 
 static void
@@ -927,7 +1047,8 @@ shardcache_timeout_handler(iomux_t *iomux, int fd, void *priv)
     shardcache_connection_context_t *ctx =
         (shardcache_connection_context_t *)priv;
 
-    shardcache_request_handler(iomux, fd, ctx);
+    if (!ATOMIC_READ(ctx->queued))
+        shardcache_request_handler(iomux, fd, ctx);
 }
 
 static void
@@ -937,14 +1058,10 @@ shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
         (shardcache_connection_context_t *)priv;
 
     close(fd);
+    ATOMIC_DECREMENT(ctx->serv->num_fds);
 
     if (ctx) {
-        int prev = -1;
-        do {
-            prev = __sync_val_compare_and_swap(&ctx->processing, prev, 2);
-        } while(ATOMIC_READ(ctx->processing) != 2);
-        if (prev == 0)
-            shardcache_connection_context_destroy(ctx);
+        shardcache_connection_context_destroy(ctx);
     }
 }
 
@@ -966,6 +1083,7 @@ shardcache_connection_handler(iomux_t *iomux, int fd, void *priv)
             .priv = ctx
         };
         iomux_add(iomux, fd, &connection_callbacks);
+        ATOMIC_INCREMENT(serv->num_fds);
     }
 }
 
@@ -980,55 +1098,47 @@ worker(void *priv)
         shardcache_connection_context_t *ctx = queue_pop_left(jobs);
 
         ATOMIC_SET(wrkctx->busy, 1);
-        ATOMIC_INCREMENT(wrkctx->serv->busy_workers);
         while(ctx) {
             //printf("HANDLING JOB %p\n", wrkctx);
-            int state = async_read_context_state(ctx->reader_ctx);
-            while (state == SHC_STATE_READING_DONE) {
-                process_request(ctx);
+            if (ATOMIC_READ(ctx->free)) {
+                shardcache_connection_context_destroy(ctx);
+                ctx = queue_pop_left(jobs);
+                continue;
+            }
+
+            shardcache_request_t *req = queue_pop_left(ctx->requests);
+            while (req) {
+                process_request(req);
                 int i;
                 for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++)
-                    fbuf_clear(&ctx->records[i]);
+                    fbuf_clear(&req->records[i]);
+                free(req);
+                MUTEX_LOCK(&ctx->output_lock);
 
                 if (ATOMIC_READ(ctx->fetching)) {
+                    iomux_write_set_callback(wrkctx->serv->io_mux, ctx->fd, shardcache_output_handler);
+                    MUTEX_UNLOCK(&ctx->output_lock);
                     break;
                 }
-
-                // we might have received already data for the next command,
-                // so let's run the asynchronous reader again to update
-                // consume all pending data, if any, and to update the context 
-                async_read_context_input_data(NULL, 0, ctx->reader_ctx);
-
-                state = async_read_context_state(ctx->reader_ctx);
-            }
-
-            if (state != SHC_STATE_READING_ERR && state != SHC_STATE_AUTH_ERR) {
-                if (ATOMIC_READ(ctx->processing) != 2) {
-                    int wb = iomux_write(wrkctx->serv->io_mux, ctx->fd, fbuf_data(ctx->output), fbuf_used(ctx->output));
-                    fbuf_remove(ctx->output, wb);
-                    if (fbuf_used(ctx->output)) {
-                        iomux_callbacks_t *cbs = iomux_callbacks(wrkctx->serv->io_mux, ctx->fd);
-                        cbs->mux_output = shardcache_output_handler;
-                    }
-                    int prev = __sync_bool_compare_and_swap(&ctx->processing, 1, 0);
-                    if (prev == 2) {
-                        shardcache_connection_context_destroy(ctx);
-                    }
-                } else {
+                MUTEX_UNLOCK(&ctx->output_lock);
+                if (ATOMIC_READ(ctx->free)) {
+                    MUTEX_UNLOCK(&ctx->output_lock);
                     shardcache_connection_context_destroy(ctx);
                 }
-            } else {
-                if (ATOMIC_READ(ctx->processing) != 2) {
-                    iomux_remove(wrkctx->serv->io_mux, ctx->fd);
-                    close(ctx->fd);
-                }
-                shardcache_connection_context_destroy(ctx);
+                req = queue_pop_left(ctx->requests);
             }
+
+            if (ATOMIC_READ(ctx->free)) {
+                MUTEX_UNLOCK(&ctx->output_lock);
+                shardcache_connection_context_destroy(ctx);
+            } else {
+                ATOMIC_SET(ctx->queued, 0);
+            }
+
             //printf("DONE JOB %p\n", wrkctx);
             ctx = queue_pop_left(jobs);
         }
         ATOMIC_SET(wrkctx->busy, 0);
-        ATOMIC_DECREMENT(wrkctx->serv->busy_workers);
         
         // we don't have any filedescriptor to handle in the mux,
         // let's sit for 1 second waiting for the listener thread to wake
@@ -1082,11 +1192,7 @@ serve_cache(void *priv)
     iomux_listen(serv->io_mux, serv->sock);
 
     while (!ATOMIC_READ(serv->leave)) {
-        struct timeval threshold = { 0, 20000 };
-        struct timeval tv = { 0, 1000 };
-        struct timeval before, now, diff;
-
-        gettimeofday(&before, NULL);
+        struct timeval tv = { 0, 100000 };
 
         iomux_run(serv->io_mux, &tv);
 
@@ -1095,7 +1201,7 @@ serve_cache(void *priv)
             shardcache_worker_context_t *wrk = (shardcache_worker_context_t *)queue_pop_left(serv->busy);
             if (wrk) {
                 if (ATOMIC_READ(wrk->busy) == 0 && !queue_count(wrk->jobs)) {
-                    shardcache_dispose_worker(serv, wrk);
+                    queue_push_right(serv->workers, wrk);
                 }
                 else {
                     queue_push_right(serv->busy, wrk);
@@ -1103,18 +1209,16 @@ serve_cache(void *priv)
             }
         }
 
-        ATOMIC_SET(serv->spare_workers, queue_count(serv->workers));
+        /*
+        while (queue_count(serv->workers) > (queue_count(serv->busy) ? serv->max_workers : serv->num_workers)) {
+            shardcache_worker_context_t *wrk = (shardcache_worker_context_t *)queue_pop_left(serv->workers);
+            if (!wrk)
+                break;
+            shardcache_dispose_worker(serv, wrk);
+        }*/
 
-        if (queue_count(serv->busy)) {
-            gettimeofday(&now, NULL);
-            timersub(&now, &before, &diff);
-            if (timercmp(&diff, &threshold, <)) {
-                timersub(&threshold, &diff, &diff);
-                struct timespec ts = { 0, diff.tv_usec * 1000 };
-                // we don't care if we are waken up by an interrupt
-                nanosleep(&ts, NULL);
-            }
-        }
+        ATOMIC_SET(serv->spare_workers, queue_count(serv->workers));
+        ATOMIC_SET(serv->busy_workers, queue_count(serv->busy));
     }
 
     return NULL;

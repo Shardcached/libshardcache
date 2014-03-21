@@ -680,6 +680,18 @@ int shardcache_set(shardcache_t *cache,
                    void *value,
                    size_t vlen);
 
+
+typedef void (*shardcache_set_async_callback_t)(void *key, size_t klen, int res, void *priv);
+
+int shardcache_set_async(shardcache_t *cache,
+                         void *key,
+                         size_t klen,
+                         void *value,
+                         size_t vlen,
+                         shardcache_set_async_callback_t cb,
+                         void *priv);
+
+
 /**
  * @brief Set the value for a key if it doesn't already exist 
  * @param cache   A valid pointer to a shardcache_t structure

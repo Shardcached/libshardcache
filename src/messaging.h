@@ -106,6 +106,16 @@ evict_from_peer(char *peer,
                 int fd,
                 int expect_response);
 
+/*
+typedef int (*send_to_peer_async_cb)(char *peer,
+                                     void *key,
+                                     size_t klen,
+                                     void *data,
+                                     size_t len,
+                                     int error,
+                                     void *priv);
+                                     */
+
 int send_to_peer(char *peer,
                  char *auth,
                  unsigned char sig_hdr,
@@ -115,6 +125,16 @@ int send_to_peer(char *peer,
                  size_t vlen,
                  uint32_t expire,
                  int fd);
+
+int send_to_peer_no_response(char *peer,
+                             char *auth,
+                             unsigned char sig,
+                             void *key,
+                             size_t klen,
+                             void *value,
+                             size_t vlen,
+                             uint32_t expire,
+                             int fd);
 
 int
 add_to_peer(char *peer,

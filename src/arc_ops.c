@@ -84,12 +84,12 @@ typedef struct
 
 static int
 arc_ops_fetch_from_peer_async_cb(char *peer,
-                              void *key,
-                              size_t klen,
-                              void *data,
-                              size_t len,
-                              int error,
-                              void *priv)
+                                 void *key,
+                                 size_t klen,
+                                 void *data,
+                                 size_t len,
+                                 int error,
+                                 void *priv)
 {
     shc_fetch_async_arg_t *arg = (shc_fetch_async_arg_t *)priv;
     cache_object_t *obj = arg->obj;

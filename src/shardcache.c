@@ -378,12 +378,16 @@ evictor(void *priv)
                     SHC_DEBUG3("Sending Eviction command to %s", peer);
                     int rindex = rand()%cache->shards[i]->num_replicas;
                     int fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
+                    if (fd < 0)
+                        break;
 
                     for (;;) {
                         int flags = fcntl(fd, F_GETFL, 0);
                         if (flags == -1) {
                             close(fd);
                             fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
+                            if (fd < 0)
+                                break;
                             continue;
                         }
 
@@ -399,6 +403,8 @@ evictor(void *priv)
                         if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
                             close(fd);
                             fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
+                            if (fd < 0)
+                                break;
                             continue;
                         }
                         flags &= ~O_NONBLOCK;
@@ -524,7 +530,7 @@ shardcache_run_async(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     while (!ATOMIC_READ(cache->async_quit)) {
-        struct timeval timeout = { 0, 20000 };
+        struct timeval timeout = { 0, 500000 };
         iomux_run(cache->async_mux, &timeout);
     }
     return NULL;
@@ -828,7 +834,7 @@ shardcache_get_async_helper(void *key,
 
     arc_t *arc = arg->cache->arc;
 
-    if (arg->cache->async_quit) {
+    if (ATOMIC_READ(arg->cache->async_quit)) {
         arc_release_resource(arc, arg->res);
         free(arg);
         return -1;
@@ -986,12 +992,14 @@ shardcache_get(shardcache_t *cache,
     if (rc == 0) {
         MUTEX_LOCK(&arg->lock);
         while (!arg->complete && arg->stat == 0) {
+            MUTEX_UNLOCK(&arg->lock);
             struct timeval now;
             gettimeofday(&now, NULL);
             struct timeval waiting_time = { 0, 500000 };
             struct timeval sum;
             timeradd(&now, &waiting_time, &sum);
             struct timespec abstime = { sum.tv_sec, sum.tv_usec * 1000 };
+            MUTEX_LOCK(&arg->lock);
             pthread_cond_timedwait(&arg->cond, &arg->lock, &abstime); 
             if (ATOMIC_READ(cache->async_quit)) {
                 arg->stat = 1;
@@ -1159,6 +1167,33 @@ shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
 }
 
 
+
+typedef struct {
+    void *key;
+    size_t klen;
+    shardcache_set_async_callback_t cb;
+    void *priv;
+    int done;
+} shardcache_set_async_helper_arg_t;
+
+static int shardcache_set_async_helper(void *data,
+                                       size_t len,
+                                       int  idx,
+                                       void *priv)
+{
+    shardcache_set_async_helper_arg_t *arg = (shardcache_set_async_helper_arg_t *)priv;
+    if (idx == 0 && data && len == 1) {
+        arg->cb(arg->key, arg->klen, (int)*((char *)data), arg->priv);
+        arg->done = 1;
+    } else if (idx < 0) {
+        if (!arg->done)
+            arg->cb(arg->key, arg->klen, -1, arg->priv);
+        free(arg->key);
+        free(arg);
+    }
+    return 0;
+}
+
 int
 shardcache_set_internal(shardcache_t *cache,
                          void *key,
@@ -1167,7 +1202,9 @@ shardcache_set_internal(shardcache_t *cache,
                          size_t vlen,
                          time_t expire,
                          int inx,
-                         int replica)
+                         int replica,
+                         shardcache_set_async_callback_t cb,
+                         void *priv)
 {
     // if we are not the owner try propagating the command to the responsible peer
     
@@ -1278,6 +1315,8 @@ shardcache_set_internal(shardcache_t *cache,
             if (!replica)
                 shardcache_commence_eviction(cache, key, klen);
         }
+        if (cb)
+            cb(key, klen, rc, priv);
         return rc;
     }
     else if (node_len)
@@ -1296,10 +1335,23 @@ shardcache_set_internal(shardcache_t *cache,
         int fd = shardcache_get_connection_for_peer(cache, addr);
 
         int rc = -1;
-        if (inx)
+        if (inx) {
             rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
-        else
+        } else if (cb) {
+            rc = send_to_peer_no_response(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
+            if (rc == 0) {
+                shardcache_set_async_helper_arg_t *arg = calloc(1, sizeof(shardcache_set_async_helper_arg_t));
+                arg->key = malloc(klen);
+                memcpy(arg->key, key, klen);
+                arg->klen = klen;
+                arg->cb = cb;
+                arg->priv = priv;
+                rc = read_message_async(fd, cache->async_mux, (char *)cache->auth, shardcache_set_async_helper, arg);
+            }
+
+        } else {
             rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
+        }
 
         if (rc == 0) {
             shardcache_release_connection_for_peer(cache, addr, fd);
@@ -1330,7 +1382,7 @@ shardcache_set_volatile(shardcache_t *cache,
     if (cache->replica)
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, real_expire);
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, real_expire, 0, 0);
+    return shardcache_set_internal(cache, key, klen, value, vlen, real_expire, 0, 0, NULL, NULL);
 }
 
 int
@@ -1348,7 +1400,7 @@ shardcache_add_volatile(shardcache_t *cache,
     if (cache->replica)
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, real_expire);
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, real_expire, 1, 0);
+    return shardcache_set_internal(cache, key, klen, value, vlen, real_expire, 1, 0, NULL, NULL);
 }
 
 int
@@ -1364,7 +1416,7 @@ shardcache_set(shardcache_t *cache,
     if (cache->replica)
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, 0);
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 0);
+    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 0, NULL, NULL);
 }
 
 int
@@ -1380,8 +1432,26 @@ shardcache_add(shardcache_t *cache,
     if (cache->replica)
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, 0);
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 1, 0);
+    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 1, 0, NULL, NULL);
 }
+
+int shardcache_set_async(shardcache_t *cache,
+                         void *key,
+                         size_t klen,
+                         void *value,
+                         size_t vlen,
+                         shardcache_set_async_callback_t cb,
+                         void *priv)
+{
+    if (!key || !klen)
+        return -1;
+
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, 0);
+
+    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 0, cb, priv);
+}
+
 
 int
 shardcache_del_internal(shardcache_t *cache, void *key, size_t klen, int replica)

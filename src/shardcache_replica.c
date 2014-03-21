@@ -264,7 +264,8 @@ kepaxos_commit(unsigned char type,
                                          kdata->len,
                                          kdata->expire,
                                          0,
-                                         leader ? 0 : 1);
+                                         leader ? 0 : 1,
+                                         NULL, NULL);
             break;
         case SHARDCACHE_REPLICA_OP_DELETE:
             rc = shardcache_del_internal(replica->shc, key, klen, leader ? 0 : 1);
@@ -540,7 +541,7 @@ shardcache_replica_recover(void *priv)
                                                  item->klen,
                                                  fbuf_data(&data),
                                                  fbuf_used(&data),
-                                                 0, 0, 0);
+                                                 0, 0, 0, NULL, NULL);
                     if (rc != 0) {
                         SHC_ERROR("Can't set value for the recovered item");
                     }

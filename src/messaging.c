@@ -41,6 +41,7 @@ struct __async_read_ctx_s {
     int moff;
     sip_hash *shash;
     int blocking;
+    struct timeval last_update;
 };
 
 static int _tcp_timeout = SHARDCACHE_TCP_TIMEOUT_DEFAULT;
@@ -77,13 +78,14 @@ async_read_context_sig_hdr(async_read_ctx_t *ctx)
 int
 async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
 {
+    gettimeofday(&ctx->last_update, NULL);
+
     if (ctx->state == SHC_STATE_READING_DONE) {
         ctx->state = SHC_STATE_READING_NONE;
         ctx->rnum = 0;
         ctx->moff = 0;
         ctx->version = 0;
         ctx->csig = 0;
-        ctx->hdr = 0;
         memset(ctx->magic, 0, sizeof(ctx->magic));
     }
 
@@ -102,6 +104,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
 
     if (ctx->state == SHC_STATE_READING_NONE || ctx->state == SHC_STATE_READING_MAGIC)
     {
+        ctx->hdr = 0;
         unsigned char byte;
         rbuf_read(ctx->buf, &byte, 1);
         while (byte == SHC_HDR_NOOP && rbuf_len(ctx->buf) > 0)
@@ -341,6 +344,7 @@ async_read_context_create(char *auth,
     ctx->cb = cb;
     ctx->cb_priv = priv;
     ctx->auth = auth;
+    gettimeofday(&ctx->last_update, NULL);
     return ctx;
 }
 
@@ -367,6 +371,23 @@ read_async_input_eof(iomux_t *iomux, int fd, void *priv)
     async_read_context_destroy(ctx);
 }
 
+/*
+static void
+read_async_timeout(iomux_t *iomux, int fd, void *priv)
+{
+    async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
+    struct timeval maxwait = { 3, 0 };
+    struct timeval now, diff;
+    gettimeofday(&now, NULL);
+    timersub(&now, &ctx->last_update, &diff);
+    if (timercmp(&diff, &maxwait, >)) {
+    } else { 
+        struct timeval tv = { 1, 0 };
+        iomux_set_timeout(iomux, fd, &tv);
+    }
+}
+*/
+
 int
 read_message_async(int fd,
                    iomux_t *iomux,
@@ -380,8 +401,11 @@ read_message_async(int fd,
     iomux_callbacks_t cbs = {
         .mux_input = read_async_input_data,
         .mux_eof = read_async_input_eof,
+        .mux_timeout = NULL, //read_async_timeout,
         .priv = ctx
     };
+
+    int blocking = 0;
 
     if (!iomux) {
         // if no iomux has been passed, we need to create
@@ -392,12 +416,17 @@ read_message_async(int fd,
             async_read_context_destroy(ctx);
             return -1;
         }
-        ctx->blocking = 1;
+        blocking = 1;
     }
 
-    iomux_add(iomux, fd, &cbs);
+    ctx->blocking = blocking;
 
-    if (ctx->blocking) {
+    iomux_add(iomux, fd, &cbs);
+    //struct timeval tv = { 1, 0 };
+    //iomux_set_timeout(iomux, fd, &tv);
+
+    if (blocking) {
+        iomux_add(iomux, fd, &cbs);
         // we are in blocking mode, let's wait for the job
         // to be completed
         for (;;) {
@@ -1011,7 +1040,8 @@ _send_to_peer_internal(char *peer,
                        size_t vlen,
                        uint32_t expire,
                        int add,
-                       int fd)
+                       int fd,
+                       int expect_response)
 {
     int should_close = 0;
     if (fd < 0) {
@@ -1019,6 +1049,7 @@ _send_to_peer_internal(char *peer,
         should_close = 1;
     }
 
+    int rc = -1;
     if (fd >= 0) {
         shardcache_record_t record[3] = {
             {
@@ -1037,7 +1068,7 @@ _send_to_peer_internal(char *peer,
             record[2].v = &expire_nbo;
             record[2].l = sizeof(expire);
         }
-        int rc = write_message(fd, auth, sig_hdr,
+        rc = write_message(fd, auth, sig_hdr,
                                add ? SHC_HDR_ADD : SHC_HDR_SET,
                                record, expire ? 3 : 2);
         if (rc != 0) {
@@ -1046,7 +1077,7 @@ _send_to_peer_internal(char *peer,
             return -1;
         }
 
-        if (rc == 0) {
+        if (rc == 0 && expect_response) {
             shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             errno = 0;
@@ -1080,14 +1111,29 @@ _send_to_peer_internal(char *peer,
                         hdr, peer, strerror(errno));
             }
             fbuf_destroy(&resp);
-        } else {
+        } else if (rc != 0) {
             fprintf(stderr, "Error reading from socket %d (%s) : %s\n",
                     fd, peer, strerror(errno));
         }
         if (should_close)
             close(fd);
     }
-    return -1;
+    return rc;
+}
+
+int
+send_to_peer_no_response(char *peer,
+                         char *auth,
+                         unsigned char sig,
+                         void *key,
+                         size_t klen,
+                         void *value,
+                         size_t vlen,
+                         uint32_t expire,
+                         int fd)
+{
+    return _send_to_peer_internal(peer,
+            auth, sig, key, klen, value, vlen, expire, 0, fd, 0);
 }
 
 int
@@ -1102,7 +1148,7 @@ send_to_peer(char *peer,
              int fd)
 {
     return _send_to_peer_internal(peer,
-            auth, sig, key, klen, value, vlen, expire, 0, fd);
+            auth, sig, key, klen, value, vlen, expire, 0, fd, 1);
 }
 
 int
@@ -1117,7 +1163,7 @@ add_to_peer(char *peer,
             int fd)
 {
     return _send_to_peer_internal(peer, auth, sig, key, klen,
-                                  value, vlen, expire, 1, fd);
+                                  value, vlen, expire, 1, fd, 1);
 }
 
 int

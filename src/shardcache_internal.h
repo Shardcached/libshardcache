@@ -17,6 +17,7 @@
 #include "serving.h"
 #include "counters.h"
 #include "atomic.h"
+#include "shardcache.h"
 #include "shardcache_replica.h"
 
 #define DEBUG_DUMP_MAXSIZE 128
@@ -152,8 +153,16 @@ int shardcache_get_connection_for_peer(shardcache_t *cache, char *peer);
 
 void shardcache_release_connection_for_peer(shardcache_t *cache, char *peer, int fd);
 
-int shardcache_set_internal(shardcache_t *cache, void *key, size_t klen,
-        void *value, size_t vlen, time_t expire, int inx, int replica);
+int shardcache_set_internal(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            void *value,
+                            size_t vlen,
+                            time_t expire,
+                            int inx,
+                            int replica,
+                            shardcache_set_async_callback_t cb,
+                            void *priv);
 
 int shardcache_del_internal(shardcache_t *cache, void *key, size_t klen, int replica);
 
