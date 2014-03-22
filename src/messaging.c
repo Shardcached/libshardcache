@@ -78,6 +78,7 @@ async_read_context_sig_hdr(async_read_ctx_t *ctx)
 int
 async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
 {
+    int used_bytes = 0;
     gettimeofday(&ctx->last_update, NULL);
 
     if (ctx->state == SHC_STATE_READING_DONE) {
@@ -89,15 +90,8 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
         memset(ctx->magic, 0, sizeof(ctx->magic));
     }
 
-    int wb = 0;
     if (data && len)
-        wb = rbuf_write(ctx->buf, data, len);
-
-    if (wb != len) {
-        fprintf(stderr, "read_message_async buffer underrun!\n");
-        ctx->state = SHC_STATE_READING_ERR;
-        return -1;
-    }
+        used_bytes = rbuf_write(ctx->buf, data, len);
 
     if (!rbuf_len(ctx->buf))
         return 0;
@@ -111,14 +105,14 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             rbuf_read(ctx->buf, &byte, 1); // skip
 
         if (byte == SHC_HDR_NOOP && !rbuf_len(ctx->buf))
-            return 0;
+            return used_bytes;
 
         ctx->magic[0] = byte;
         ctx->state = SHC_STATE_READING_MAGIC;
         ctx->moff = 1;
 
         if (rbuf_len(ctx->buf) < sizeof(uint32_t) - ctx->moff) {
-            return 0;
+            return used_bytes;
         }
 
         rbuf_read(ctx->buf, &ctx->magic[ctx->moff], sizeof(uint32_t) - ctx->moff);
@@ -142,7 +136,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
     {
         if (ctx->state == SHC_STATE_READING_SIG_HDR) {
             if (rbuf_len(ctx->buf) < 1)
-                return 0;
+                return used_bytes;
             rbuf_read(ctx->buf, (unsigned char *)&ctx->sig_hdr, 1);
             if (ctx->sig_hdr == SHC_HDR_SIGNATURE_SIP || ctx->sig_hdr == SHC_HDR_CSIGNATURE_SIP)
             {
@@ -168,7 +162,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
         }
         if (ctx->state == SHC_STATE_READING_HDR) {
             if (rbuf_len(ctx->buf) < 1)
-                return 0;
+                return used_bytes;
             rbuf_read(ctx->buf, (unsigned char *)&ctx->hdr, 1);
         }
 
@@ -268,7 +262,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
 
     if (ctx->state == SHC_STATE_READING_AUTH) {
         if (rbuf_len(ctx->buf) < SHARDCACHE_MSG_SIG_LEN)
-            return 0;
+            return used_bytes;
 
         if (ctx->shash) {
             uint64_t digest;
@@ -303,7 +297,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
         }
         ctx->state = SHC_STATE_READING_DONE;
     }
-    return 0;
+    return used_bytes;
 }
 
 static int

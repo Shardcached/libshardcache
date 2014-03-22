@@ -695,6 +695,14 @@ shardcache_destroy(shardcache_t *cache)
 
     ATOMIC_INCREMENT(cache->quit);
 
+    if (cache->async_mux) {
+        ATOMIC_INCREMENT(cache->async_quit);
+        SHC_DEBUG2("Stopping the async i/o thread");
+        pthread_join(cache->async_io_th, NULL);
+        iomux_destroy(cache->async_mux);
+        SHC_DEBUG2("Async i/o thread stopped");
+    }
+
     if (cache->serv)
         stop_serving(cache->serv);
 
@@ -721,14 +729,6 @@ shardcache_destroy(shardcache_t *cache)
         SHC_DEBUG2("Stopping expirer thread");
         pthread_join(cache->expirer_th, NULL);
         SHC_DEBUG2("Expirer thread stopped");
-    }
-
-    if (cache->async_mux) {
-        ATOMIC_INCREMENT(cache->async_quit);
-        SHC_DEBUG2("Stopping the async i/o thread");
-        pthread_join(cache->async_io_th, NULL);
-        iomux_destroy(cache->async_mux);
-        SHC_DEBUG2("Async i/o thread stopped");
     }
 
     if (cache->replica)

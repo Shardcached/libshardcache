@@ -41,8 +41,9 @@ typedef struct {
     pthread_cond_t wakeup_cond;
     pthread_mutex_t wakeup_lock;
     shardcache_serving_t *serv;
-    hashtable_t *fds;
+    //hashtable_t *fds;
     iomux_t *iomux;
+    linked_list_t *prune;
 } shardcache_worker_context_t;
 
 struct __shardcache_serving_s {
@@ -104,6 +105,7 @@ struct __shardcache_connection_context_s {
     struct timeval retry_timeout;
     rbuf_t *input;
     shardcache_worker_context_t *worker;
+    int closed;
 };
 
 static int
@@ -141,6 +143,21 @@ shardcache_connection_context_create(shardcache_serving_t *serv, int fd)
 }
 
 static void
+shardcache_request_destroy(shardcache_request_t *req)
+{
+    int i;
+    for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
+        fbuf_destroy(&req->records[i]);
+    }
+    fbuf_destroy(&req->output);
+    if (req->fetch_shash)
+        sip_hash_free(req->fetch_shash);
+    MUTEX_DESTROY(&req->lock);
+    rbuf_destroy(req->fetch_accumulator);
+    free(req);
+}
+
+static void
 shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
 {
     rbuf_destroy(ctx->output);
@@ -148,6 +165,11 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
     int i;
     for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
         fbuf_destroy(&ctx->records[i]);
+    }
+    shardcache_request_t *req = shift_value(ctx->requests);
+    while(req) {
+        shardcache_request_destroy(req);
+        req = shift_value(ctx->requests);
     }
     destroy_list(ctx->requests);
     async_read_context_destroy(ctx->reader_ctx);
@@ -781,20 +803,6 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
     return req;
 }
 
-static void
-shardcache_request_destroy(shardcache_request_t *req)
-{
-    int i;
-    for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
-        fbuf_destroy(&req->records[i]);
-    }
-    fbuf_destroy(&req->output);
-    if (req->fetch_shash)
-        sip_hash_free(req->fetch_shash);
-    MUTEX_DESTROY(&req->lock);
-    rbuf_destroy(req->fetch_accumulator);
-}
-
 static int
 shardcache_update_context_state(iomux_t *iomux, int fd, shardcache_connection_context_t *ctx)
 {
@@ -802,7 +810,9 @@ shardcache_update_context_state(iomux_t *iomux, int fd, shardcache_connection_co
     // TODO - avoid this copy
     char *input = malloc(len);
     rbuf_read(ctx->input, input, len);
-    async_read_context_input_data(input, len, ctx->reader_ctx);
+    int processed = async_read_context_input_data(input, len, ctx->reader_ctx);
+    if (processed < len)
+        rbuf_write(ctx->input, input + processed, len - processed);
     free(input);
     int state = async_read_context_state(ctx->reader_ctx);
     if (state == SHC_STATE_READING_DONE) {
@@ -879,23 +889,6 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
     *len = offset;
 }
 
-/*
-static void
-shardcache_dispose_worker(shardcache_serving_t *serv, shardcache_worker_context_t *wrk)
-{
-    ATOMIC_INCREMENT(wrk->leave);
-    CONDITION_SIGNAL(&wrk->wakeup_cond, &wrk->wakeup_lock);
-    pthread_join(wrk->thread, NULL);
-    queue_destroy(wrk->jobs);
-    MUTEX_DESTROY(&wrk->wakeup_lock);
-    CONDITION_DESTROY(&wrk->wakeup_cond);
-    SHC_DEBUG("Disposing worker %p", wrk);
-    free(wrk);
-    ATOMIC_DECREMENT(serv->total_workers);
-    return;
-}
-*/
-
 static int
 shardcache_input_handler(iomux_t *iomux,
                          int fd,
@@ -937,6 +930,11 @@ shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
     ATOMIC_DECREMENT(ctx->serv->num_fds);
 
     if (ctx) {
+        if (list_count(ctx->requests)) {
+            ctx->closed = 1;
+            push_value(ctx->worker->prune, ctx);
+            return;
+        }
         shardcache_connection_context_destroy(ctx);
     }
 }
@@ -981,7 +979,7 @@ worker(void *priv)
                 .mux_output = shardcache_output_handler,
                 .priv = ctx
             };
-            ht_set(wrkctx->fds, &ctx->fd, sizeof(ctx->fd), ctx, sizeof(shardcache_connection_context_t));
+            //ht_set(wrkctx->fds, &ctx->fd, sizeof(ctx->fd), ctx, sizeof(shardcache_connection_context_t));
             iomux_add(wrkctx->iomux, ctx->fd, &connection_callbacks);
             ctx = queue_pop_left(jobs);
         }
@@ -994,6 +992,25 @@ worker(void *priv)
 
         ATOMIC_SET(wrkctx->busy, 0);
 
+        int to_check = list_count(wrkctx->prune);
+        while (to_check--) {
+            shardcache_connection_context_t *to_prune = shift_value(wrkctx->prune);
+            int pending = list_count(to_prune->requests);
+            while (pending--) {
+                shardcache_request_t *req = shift_value(to_prune->requests);
+                if (ATOMIC_READ(req->done)) {
+                    shardcache_request_destroy(req);
+                } else {
+                    // put it back;
+                    push_value(to_prune->requests, req);
+                }
+            }
+            if (!list_count(to_prune->requests)) {
+                shardcache_connection_context_destroy(to_prune);
+            } else {
+                push_value(wrkctx->prune, to_prune);
+            }
+        }
         if (iomux_isempty(wrkctx->iomux)) {
             // we don't have any filedescriptor to handle in the mux,
             // let's sit for 1 second waiting for the listener thread to wake
@@ -1104,12 +1121,13 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
         shardcache_worker_context_t *wrk = calloc(1, sizeof(shardcache_worker_context_t));
         wrk->serv = s;
         wrk->jobs = queue_create();
+        wrk->prune = create_list();
         queue_set_free_value_callback(wrk->jobs,
                 (queue_free_value_callback_t)shardcache_connection_context_destroy);
 
         MUTEX_INIT(&wrk->wakeup_lock);
         CONDITION_INIT(&wrk->wakeup_cond);
-        wrk->fds = ht_create(1024, 65535, NULL);
+        //wrk->fds = ht_create(1024, 65535, NULL);
         wrk->iomux = iomux_create();
         pthread_create(&wrk->thread, NULL, worker, wrk);
         push_value(s->workers, wrk);
@@ -1148,6 +1166,22 @@ clear_workers_list(linked_list_t *list)
         MUTEX_DESTROY(&wrk->wakeup_lock);
         CONDITION_DESTROY(&wrk->wakeup_cond);
         SHC_DEBUG3("Worker thread %p exited", wrk);
+
+        shardcache_connection_context_t *ctx = shift_value(wrk->prune);
+        while (ctx) {
+            shardcache_request_t *req = shift_value(ctx->requests);
+            while (req) {
+                shardcache_request_destroy(req);
+                req = shift_value(ctx->requests);
+            }
+            shardcache_connection_context_destroy(ctx);
+            ctx = shift_value(wrk->prune);
+        }
+        iomux_destroy(wrk->iomux);
+
+        destroy_list(wrk->prune);
+
+        //ht_destroy(wrk->fds);
         free(wrk);
         wrk = shift_value(list);
     }
@@ -1157,6 +1191,8 @@ clear_workers_list(linked_list_t *list)
 void
 stop_serving(shardcache_serving_t *s)
 {
+    ATOMIC_INCREMENT(s->leave);
+
     iomux_remove(s->io_mux, s->sock);
     close(s->sock);
 
@@ -1173,7 +1209,6 @@ stop_serving(shardcache_serving_t *s)
         shardcache_counter_remove(s->counters, "total_workers");
     }
 
-    ATOMIC_INCREMENT(s->leave);
     pthread_join(s->io_thread, NULL);
 
     iomux_destroy(s->io_mux);

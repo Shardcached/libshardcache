@@ -138,7 +138,7 @@ kepaxos_connection_input(iomux_t *iomux, int fd, unsigned char *data, int len, v
 
     fbuf_t out = FBUF_STATIC_INITIALIZER;
     int rc = async_read_context_input_data(data, len, connection->ctx);
-    if (rc != 0) {
+    if (rc < 0) {
     }
 
     int read_state = async_read_context_state(connection->ctx);
