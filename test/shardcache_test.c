@@ -191,7 +191,7 @@ int main(int argc, char **argv)
         char key[32];
         char value[32];
         snprintf(key, sizeof(key), "test_key%d", 200+i);
-        snprintf(key, sizeof(key), "test_value%d", 200+i);
+        snprintf(value, sizeof(value), "test_value%d", 200+i);
         items[i] = shc_multi_item_create(client, key, strlen(key), value, strlen(value));
     }
 
@@ -204,7 +204,7 @@ int main(int argc, char **argv)
         char key[32];
         snprintf(key, sizeof(key), "test_key%d", 200+i);
         if (items[i]->status != 0) {
-            ut_failure("satus for key %s != 0", key);
+            ut_failure("status for key %s != 0", key);
             failed = 1;
             break;
         }
