@@ -1059,8 +1059,66 @@ shardcache_head(shardcache_t *cache,
     return remainder + rlen;
 }
 
+typedef struct {
+    void *key;
+    size_t klen;
+    shardcache_async_response_callback_t cb;
+    void *priv;
+    int done;
+    char *addr;
+    int fd;
+    shardcache_hdr_t hdr;
+    shardcache_t *cache;
+} shardcache_async_command_helper_arg_t;
+
+static int shardcache_async_command_helper(void *data,
+                                           size_t len,
+                                           int  idx,
+                                           void *priv)
+{
+    shardcache_async_command_helper_arg_t *arg =
+        (shardcache_async_command_helper_arg_t *)priv;
+
+    if (idx == 0 && data && len == 1) {
+        int rc = (int)*((char *)data);
+        // mangle the return code to conform
+        // to the specific command (if necessary)
+        if (arg->hdr == SHC_HDR_EXISTS) {
+           switch(rc) {
+                case SHC_RES_YES:
+                    rc = 1;
+                    break;
+                case SHC_RES_NO:
+                    rc = 0;
+                    break;
+                default:
+                    rc = -1;
+                    break;
+           }
+      
+        }
+        arg->cb(arg->key, arg->klen, rc, arg->priv);
+        arg->done = 1;
+    } else if (idx < 0) {
+        if (!arg->done)
+            arg->cb(arg->key, arg->klen, -1, arg->priv);
+        if (idx == -1) {
+            shardcache_release_connection_for_peer(arg->cache, arg->addr, arg->fd);
+        } else {
+            close(arg->fd);
+        }
+        free(arg->key);
+        free(arg);
+    }
+    return 0;
+}
+
 int
-shardcache_exists(shardcache_t *cache, void *key, size_t klen)
+shardcache_exists_async(shardcache_t *cache,
+                        void *key,
+                        size_t klen,
+                        shardcache_async_response_callback_t cb,
+                        void *priv)
 {
     if (!key || !klen)
         return -1;
@@ -1074,31 +1132,67 @@ shardcache_exists(shardcache_t *cache, void *key, size_t klen)
     if (is_mine == -1)
         is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
 
+    int rc = -1;
+
     if (is_mine == 1)
     {
+        // TODO - clean this bunch of nested conditions
         if (!ht_exists(cache->volatile_storage, key, klen)) {
             if (cache->use_persistent_storage && cache->storage.exist) {
-                if (!cache->storage.exist(key, klen, cache->storage.priv))
-                    return 0;
+                if (!cache->storage.exist(key, klen, cache->storage.priv)) {
+                    rc = 0;
+                } else {
+                    rc = 1;
+                }
             } else {
-                return 0;
+                rc = 0;
             }
+        } else {
+            rc = 1;
         }
-        return 1;
+
+        if (cb)
+            cb(key, klen, rc, priv);
+
     } else {
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name); 
         if (!peer) {
             SHC_ERROR("Can't find address for node %s\n", peer);
+            if (cb)
+                cb(key, klen, -1, priv);
             return -1;
         }
         char *addr = shardcache_node_get_address(peer);
         int fd = shardcache_get_connection_for_peer(cache, addr);
-        int rc = exists_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
-        shardcache_release_connection_for_peer(cache, addr, fd);
-        return rc;
+        if (cb) {
+            rc = exists_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 0);
+            if (rc == 0) {
+                shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
+                arg->key = malloc(klen);
+                memcpy(arg->key, key, klen);
+                arg->klen = klen;
+                arg->cb = cb;
+                arg->priv = priv;
+                arg->cache = cache;
+                arg->addr = addr;
+                arg->fd = fd;
+                arg->hdr = SHC_HDR_EXISTS;
+                rc = read_message_async(fd, cache->async_mux, (char *)cache->auth, shardcache_async_command_helper, arg);
+            }
+        } else {
+            rc = exists_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
+            shardcache_release_connection_for_peer(cache, addr, fd);
+        }
     }
 
-    return -1;
+    return rc;
+}
+
+
+int
+shardcache_exists(shardcache_t *cache, void *key, size_t klen)
+{
+    return shardcache_exists_async(cache, key, klen, NULL, NULL);
 }
 
 int
@@ -1168,32 +1262,6 @@ shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
 
 
 
-typedef struct {
-    void *key;
-    size_t klen;
-    shardcache_set_async_callback_t cb;
-    void *priv;
-    int done;
-} shardcache_set_async_helper_arg_t;
-
-static int shardcache_set_async_helper(void *data,
-                                       size_t len,
-                                       int  idx,
-                                       void *priv)
-{
-    shardcache_set_async_helper_arg_t *arg = (shardcache_set_async_helper_arg_t *)priv;
-    if (idx == 0 && data && len == 1) {
-        arg->cb(arg->key, arg->klen, (int)*((char *)data), arg->priv);
-        arg->done = 1;
-    } else if (idx < 0) {
-        if (!arg->done)
-            arg->cb(arg->key, arg->klen, -1, arg->priv);
-        free(arg->key);
-        free(arg);
-    }
-    return 0;
-}
-
 int
 shardcache_set_internal(shardcache_t *cache,
                          void *key,
@@ -1203,13 +1271,16 @@ shardcache_set_internal(shardcache_t *cache,
                          time_t expire,
                          int inx,
                          int replica,
-                         shardcache_set_async_callback_t cb,
+                         shardcache_async_response_callback_t cb,
                          void *priv)
 {
     // if we are not the owner try propagating the command to the responsible peer
     
-    if (klen == 0 || vlen == 0 || !key || !value)
+    if (klen == 0 || vlen == 0 || !key || !value) {
+        if (cb)
+            cb(key, klen, -1, priv);
         return -1;
+    }
 
     char keystr[1024];
     KEY2STR(key, klen, keystr, sizeof(keystr));
@@ -1240,6 +1311,8 @@ shardcache_set_internal(shardcache_t *cache,
 
             if (inx && ht_exists(cache->volatile_storage, key, klen)) {
                 SHC_DEBUG("A volatile value already exists for key %s", keystr);
+                if (cb)
+                    cb(key, klen, 1, priv);
                 return 1;
             }
 
@@ -1288,6 +1361,8 @@ shardcache_set_internal(shardcache_t *cache,
             if (inx) {
                 if (ht_exists(cache->volatile_storage, key, klen) == 1) {
                     SHC_DEBUG("A volatile value already exists for key %s", keystr);
+                    if (cb)
+                        cb(key, klen, 1, priv);
                     return 1;
                 }
             } else {
@@ -1306,6 +1381,8 @@ shardcache_set_internal(shardcache_t *cache,
                     cache->storage.exist(key, klen, cache->storage.priv) == 1)
             {
                 SHC_DEBUG("A value already exists for key %s", keystr);
+                if (cb)
+                    cb(key, klen, 1, priv);
                 return 1;
             }
 
@@ -1328,6 +1405,8 @@ shardcache_set_internal(shardcache_t *cache,
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
         if (!peer) {
             SHC_ERROR("Can't find address for node %s\n", peer);
+            if (cb)
+                cb(key, klen, -1, priv);
             return -1;
         }
         char *addr = shardcache_node_get_address(peer);
@@ -1336,34 +1415,65 @@ shardcache_set_internal(shardcache_t *cache,
 
         int rc = -1;
         if (inx) {
-            rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
+            if (cb) {
+                rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 0);
+                if (rc == 0) {
+                    shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
+                    arg->key = malloc(klen);
+                    memcpy(arg->key, key, klen);
+                    arg->klen = klen;
+                    arg->cb = cb;
+                    arg->priv = priv;
+                    arg->cache = cache;
+                    arg->addr = addr;
+                    arg->fd = fd;
+                    arg->hdr = SHC_HDR_SET;
+                    rc = read_message_async(fd, cache->async_mux, (char *)cache->auth, shardcache_async_command_helper, arg);
+                }
+            } else {
+                rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 1);
+                if (rc == 0) {
+                    shardcache_release_connection_for_peer(cache, addr, fd);
+                } else {
+                    close(fd);
+                }
+            }
         } else if (cb) {
-            rc = send_to_peer_no_response(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
+            rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 0);
             if (rc == 0) {
-                shardcache_set_async_helper_arg_t *arg = calloc(1, sizeof(shardcache_set_async_helper_arg_t));
+                shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
                 arg->key = malloc(klen);
                 memcpy(arg->key, key, klen);
                 arg->klen = klen;
                 arg->cb = cb;
                 arg->priv = priv;
-                rc = read_message_async(fd, cache->async_mux, (char *)cache->auth, shardcache_set_async_helper, arg);
+                arg->cache = cache;
+                arg->addr = addr;
+                arg->fd = fd;
+                arg->hdr = SHC_HDR_SET;
+                rc = read_message_async(fd, cache->async_mux, (char *)cache->auth, shardcache_async_command_helper, arg);
             }
 
         } else {
-            rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd);
+            rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 1);
+            if (rc == 0) {
+                shardcache_release_connection_for_peer(cache, addr, fd);
+            } else {
+                close(fd);
+            }
         }
 
         if (rc == 0) {
-            shardcache_release_connection_for_peer(cache, addr, fd);
             arc_remove(cache->arc, (const void *)key, klen);
             if (!replica)
                 shardcache_commence_eviction(cache, key, klen);
-        } else {
-            close(fd);
         }
+
         return rc;
     }
 
+    if (cb)
+        cb(key, klen, -1, priv);
     return -1;
 }
 
@@ -1436,11 +1546,13 @@ shardcache_add(shardcache_t *cache,
 }
 
 int shardcache_set_async(shardcache_t *cache,
-                         void *key,
+                         void  *key,
                          size_t klen,
-                         void *value,
+                         void  *value,
                          size_t vlen,
-                         shardcache_set_async_callback_t cb,
+                         time_t expire,
+                         int    if_not_exists,
+                         shardcache_async_response_callback_t cb,
                          void *priv)
 {
     if (!key || !klen)
@@ -1449,12 +1561,17 @@ int shardcache_set_async(shardcache_t *cache,
     if (cache->replica)
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, 0);
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 0, cb, priv);
+    return shardcache_set_internal(cache, key, klen, value, vlen, expire, if_not_exists, 0, cb, priv);
 }
 
 
 int
-shardcache_del_internal(shardcache_t *cache, void *key, size_t klen, int replica)
+shardcache_del_internal(shardcache_t *cache,
+                        void *key,
+                        size_t klen,
+                        int replica, 
+                        shardcache_async_response_callback_t cb,
+                        void *priv)
 {
     if (!key)
         return -1;
@@ -1496,6 +1613,9 @@ shardcache_del_internal(shardcache_t *cache, void *key, size_t klen, int replica
         ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
                    (uint32_t)arc_size(cache->arc));
 
+        if (cb)
+            cb(key, klen, rc, priv);
+
         return 0;
     } else if (!replica) {
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
@@ -1505,11 +1625,29 @@ shardcache_del_internal(shardcache_t *cache, void *key, size_t klen, int replica
         }
         char *addr = shardcache_node_get_address(peer);
         int fd = shardcache_get_connection_for_peer(cache, addr);
-        int rc = delete_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
-        if (rc == 0)
-            shardcache_release_connection_for_peer(cache, addr, fd);
-        else
-            close(fd);
+        int rc = -1;
+        if (cb) {
+            rc = delete_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 0);
+            if (rc == 0) {
+                shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
+                arg->key = malloc(klen);
+                memcpy(arg->key, key, klen);
+                arg->klen = klen;
+                arg->cb = cb;
+                arg->priv = priv;
+                arg->cache = cache;
+                arg->addr = addr;
+                arg->fd = fd;
+                arg->hdr = SHC_HDR_DELETE;
+                rc = read_message_async(fd, cache->async_mux, (char *)cache->auth, shardcache_async_command_helper, arg);
+            }
+        } else {
+            rc = delete_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
+            if (rc == 0)
+                shardcache_release_connection_for_peer(cache, addr, fd);
+            else
+                close(fd);
+        }
         return rc;
     }
 
@@ -1526,7 +1664,23 @@ shardcache_del(shardcache_t *cache, void *key, size_t klen)
     if (cache->replica)
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_DELETE, key, klen, NULL, 0, 0);
 
-    return shardcache_del_internal(cache, key, klen, 0);
+    return shardcache_del_internal(cache, key, klen, 0, NULL, NULL);
+}
+
+int
+shardcache_del_async(shardcache_t *cache,
+                     void *key,
+                     size_t klen,
+                     shardcache_async_response_callback_t cb,
+                     void *priv)
+{
+    if (!key || !key)
+        return -1;
+
+    if (cache->replica)
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_DELETE, key, klen, NULL, 0, 0);
+
+    return shardcache_del_internal(cache, key, klen, 0, cb, priv);
 }
 
 int
@@ -1707,7 +1861,7 @@ migrate(void *priv)
                         char *addr = shardcache_node_get_address(peer);
                         SHC_DEBUG("Migrator copying %s to peer %s (%s)", keystr, node_name, addr);
                         int fd = shardcache_get_connection_for_peer(cache, addr);
-                        int rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, 0, fd);
+                        int rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, 0, fd, 1);
                         if (rc == 0) {
                             shardcache_release_connection_for_peer(cache, addr, fd);
                             ATOMIC_INCREMENT(migrated_items);

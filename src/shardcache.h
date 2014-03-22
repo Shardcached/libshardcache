@@ -640,6 +640,9 @@ int shardcache_get_async(shardcache_t *cache,
                          shardcache_get_async_callback_t cb,
                          void *priv);
 
+
+typedef void (*shardcache_async_response_callback_t)(void *key, size_t klen, int res, void *priv);
+
 /**
  * @brief Check if a specific key exists on the node responsible for it
  * @param cache   A valid pointer to a shardcache_t structure
@@ -647,9 +650,11 @@ int shardcache_get_async(shardcache_t *cache,
  * @param klen    The length of the key
  * @return 1 if exists, 0 if doesn't exist, -1 in case of errors
  */
-int shardcache_exists(shardcache_t *cache,
-                      void *key,
-                      size_t klen);
+int shardcache_exists_async(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            shardcache_async_response_callback_t cb,
+                            void *priv);
 
 /**
  * @brief Load a key into the cache if not present already,
@@ -681,14 +686,14 @@ int shardcache_set(shardcache_t *cache,
                    size_t vlen);
 
 
-typedef void (*shardcache_set_async_callback_t)(void *key, size_t klen, int res, void *priv);
-
 int shardcache_set_async(shardcache_t *cache,
                          void *key,
                          size_t klen,
                          void *value,
                          size_t vlen,
-                         shardcache_set_async_callback_t cb,
+                         time_t expire,
+                         int    if_not_exists,
+                         shardcache_async_response_callback_t cb,
                          void *priv);
 
 
@@ -758,6 +763,11 @@ int shardcache_add_volatile(shardcache_t *cache,
  * @return 0 on success, -1 otherwise
  */
 int shardcache_del(shardcache_t *cache, void *key, size_t klen);
+int shardcache_del_async(shardcache_t *cache,
+                         void *key,
+                         size_t klen,
+                         shardcache_async_response_callback_t cb,
+                         void *priv);
 
 /**
  * @brief Remove the value from the cache for a key
