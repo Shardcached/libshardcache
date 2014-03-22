@@ -640,6 +640,29 @@ int shardcache_get_async(shardcache_t *cache,
                          void *priv);
 
 
+/**
+ * @brief Get partial value data value for a key asynchronously
+ * @param cache   A valid pointer to a shardcache_t structure
+ * @param key     A valid pointer to the key
+ * @param klen    The length of the key
+ * @param cb      The shardcache_get_async_callback_t which will be
+ *                called for each received chunk
+ * @param priv    A pointer which will be passed to the
+ *                shardcache_get_async_callback_t at each call
+ *
+ * @return 0 on success, -1 otherwise
+ *
+ * @note This function might return immediately if the value for the
+ *       requested key is already being downloaded (but not complete yet)
+ *       In such a case The callback function will be called by the 
+ *       thread which is actually downloading the data hence the callback
+ *       needs to be thread-safe.
+ *
+ * @note If the data requested is partially downloaded, the available data
+ *       will be immediately passed to the callback and the rest will be 
+ *       passed while it's being downloaded.
+ */
+
 int
 shardcache_get_offset_async(shardcache_t *cache,
                             void *key,
@@ -649,6 +672,15 @@ shardcache_get_offset_async(shardcache_t *cache,
                             shardcache_get_async_callback_t cb,
                             void *priv);
 
+/**
+ * @brief Callback expected by all the _async() routines returning an integer result
+ *        (basically all apart shardcache_get_async() shardcache_offset_async())
+ * @param key     A valid pointer to the key of the command this response refers to
+ * @param klen    The length of the key
+ * @param res     The integer response returned from the issued command
+ * @param priv    The 'priv' pointer previously passed to the _async() function
+ * 
+ */
 typedef void (*shardcache_async_response_callback_t)(void *key, size_t klen, int res, void *priv);
 
 /**
@@ -694,6 +726,26 @@ int shardcache_set(shardcache_t *cache,
                    size_t vlen);
 
 
+/**
+ * @brief Set the value for a key fetching the response asyncrhonously
+ * @param cache   A valid pointer to a shardcache_t structure
+ * @param key   A valid pointer to the key
+ * @param klen   The length of the key
+ * @param value   A valid pointer to the value
+ * @param vlen   The length of the value
+ * @param expire   The number of seconds after which the volatile value expires
+ *                 If 0 the value will not expire and it will be stored using the
+ *                 actual storage module (which might evntually be a presistent
+ *                 storage backend as the filesystem or database ones)
+ * @param if_not_exists If this param is true, the value will be set only
+ *                if there isn't one already stored
+ * @param cb      The shardcache_async_response_callback_t which will be
+ *                called once the result has been retreived
+ * @param priv    A pointer which will be passed to the
+ *                shardcache_async_response_callback_t when called
+ * @return 0 on success, -1 otherwise
+ * @see shardcache_set_volatile()
+ */
 int shardcache_set_async(shardcache_t *cache,
                          void *key,
                          size_t klen,
@@ -764,13 +816,20 @@ int shardcache_add_volatile(shardcache_t *cache,
                             time_t expire);
 
 /**
- * @brief Remove the value for a key
+ * @brief Remove the value for a key asynchronously
  * @param cache   A valid pointer to a shardcache_t structure
  * @param key   A valid pointer to the key
  * @param klen   The length of the key
+ * @param cb      The shardcache_async_response_callback_t which will be
+ *                called once the result has been retreived
+ * @param priv    A pointer which will be passed to the
+ *                shardcache_async_response_callback_t when called
  * @return 0 on success, -1 otherwise
+ * @see shardcache_set_volatile()
  */
+
 int shardcache_del(shardcache_t *cache, void *key, size_t klen);
+
 int shardcache_del_async(shardcache_t *cache,
                          void *key,
                          size_t klen,

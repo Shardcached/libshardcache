@@ -715,8 +715,10 @@ shardcache_destroy(shardcache_t *cache)
 
     // NOTE : should be destroyed only after
     //        the serving subsystem has been stopped
-    iomux_destroy(cache->async_mux);
-    queue_destroy(cache->async_queue);
+    if (cache->async_mux)
+        iomux_destroy(cache->async_mux);
+    if (cache->async_queue)
+        queue_destroy(cache->async_queue);
 
     if (ATOMIC_READ(cache->evict_on_delete) && cache->evictor_jobs)
     {

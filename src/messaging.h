@@ -237,6 +237,13 @@ typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         int error,
                                         void *priv);
 
+// NOTE: when the async_read_wrk_t param is provided to the following
+//       functions accepting it, they will return immediately and 
+//       initialize the given pointer so that the caller can
+//       use the callbacks and the context to create a new iomux
+//       connection and retreive the data asynchronously.
+//       If the async_read_wrk_t param is not provided the functions
+//       will block until the response has been fully retrieved
 typedef struct {
     async_read_ctx_t *ctx;
     iomux_callbacks_t cbs;
