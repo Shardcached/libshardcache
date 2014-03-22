@@ -130,8 +130,8 @@ kepaxos_connection_append_input_data(void *data,
     return 0;
 }
 
-static void
-kepaxos_connection_input(iomux_t *iomux, int fd, void *data, int len, void *priv)
+static int
+kepaxos_connection_input(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
 {
     kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
     shardcache_replica_t *replica = connection->replica;
@@ -171,20 +171,22 @@ kepaxos_connection_input(iomux_t *iomux, int fd, void *data, int len, void *priv
             iomux_close(iomux, fd);
         }
     }
-
+    return len;
 }
 
 static void 
-kepaxos_connection_output(iomux_t *iomux, int fd, void *priv)
+kepaxos_connection_output(iomux_t *iomux, int fd, unsigned char *out, int *len, void *priv)
 {
     kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
-    if (fbuf_used(&connection->output)) {
-        int wb = iomux_write(iomux, fd, fbuf_data(&connection->output), fbuf_used(&connection->output));
-        fbuf_remove(&connection->output, wb);
+    int max = *len;
+    if (fbuf_used(&connection->output) <= max) {
+        *len = fbuf_used(&connection->output);
+        memcpy(out, fbuf_data(&connection->output), *len);
     } else {
-        iomux_callbacks_t *cbs = iomux_callbacks(iomux, fd);
-        cbs->mux_output = NULL;
+        void *data = fbuf_data(&connection->output);
+        memcpy(out, data, *len);
     }
+    fbuf_remove(&connection->output, *len);
 }
 
 static void
@@ -268,7 +270,7 @@ kepaxos_commit(unsigned char type,
                                          NULL, NULL);
             break;
         case SHARDCACHE_REPLICA_OP_DELETE:
-            rc = shardcache_del_internal(replica->shc, key, klen, leader ? 0 : 1);
+            rc = shardcache_del_internal(replica->shc, key, klen, leader ? 0 : 1, NULL, NULL);
             break;
         case SHARDCACHE_REPLICA_OP_EVICT:
             rc = shardcache_evict(replica->shc, key, klen);

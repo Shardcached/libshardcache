@@ -147,7 +147,7 @@ int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
     int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return -1;
-    int rc = exists_on_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
+    int rc = exists_on_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
     if (rc == -1) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -191,9 +191,9 @@ _shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, 
 
     int rc = -1;
     if (inx)
-        rc = add_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
+        rc = add_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd, 1);
     else
-        rc = send_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd);
+        rc = send_to_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd, 1);
 
     if (rc == -1) {
         close(fd);
@@ -225,7 +225,7 @@ int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
     int fd = connections_pool_get(c->connections, node);
     if (fd < 0)
         return -1;
-    int rc = delete_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
+    int rc = delete_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;

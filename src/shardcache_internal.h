@@ -161,10 +161,15 @@ int shardcache_set_internal(shardcache_t *cache,
                             time_t expire,
                             int inx,
                             int replica,
-                            shardcache_set_async_callback_t cb,
+                            shardcache_async_response_callback_t cb,
                             void *priv);
 
-int shardcache_del_internal(shardcache_t *cache, void *key, size_t klen, int replica);
+int shardcache_del_internal(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            int replica,
+                            shardcache_async_response_callback_t cb,
+                            void *priv);
 
 int shardcache_set_migration_continuum(shardcache_t *cache, shardcache_node_t **nodes, int num_nodes);
 
