@@ -699,12 +699,15 @@ shardcache_destroy(shardcache_t *cache)
         ATOMIC_INCREMENT(cache->async_quit);
         SHC_DEBUG2("Stopping the async i/o thread");
         pthread_join(cache->async_io_th, NULL);
-        iomux_destroy(cache->async_mux);
         SHC_DEBUG2("Async i/o thread stopped");
     }
 
     if (cache->serv)
         stop_serving(cache->serv);
+
+    // NOTE : should be destroyed only after
+    //        the serving subsystem has been stopped
+    iomux_destroy(cache->async_mux);
 
     if (ATOMIC_READ(cache->evict_on_delete) && cache->evictor_jobs)
     {
