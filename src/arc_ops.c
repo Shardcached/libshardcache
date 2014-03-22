@@ -185,6 +185,8 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
                                    SHC_HDR_CSIGNATURE_SIP,
                                    obj->key,
                                    obj->klen,
+                                   0,
+                                   0,
                                    arc_ops_fetch_from_peer_async_cb,
                                    arg,
                                    fd,

@@ -765,14 +765,168 @@ shardcache_destroy(shardcache_t *cache)
     SHC_DEBUG("Shardcache node stopped");
 }
 
-size_t
-shardcache_get_offset(shardcache_t *cache,
-                      void *key,
-                      size_t klen,
-                      void *data,
-                      size_t *dlen,
-                      size_t offset,
-                      struct timeval *timestamp)
+typedef struct {
+    int stat;
+    size_t dlen;
+    size_t offset;
+    size_t len;
+    size_t sent;
+    shardcache_t *cache;
+    arc_resource_t *res;
+    shardcache_get_async_callback_t cb;
+    void *priv;
+} shardcache_get_async_helper_arg_t;
+
+static int
+shardcache_get_async_helper(void *key,
+                            size_t klen,
+                            void *data,
+                            size_t dlen,
+                            size_t total_size,
+                            struct timeval *timestamp,
+                            void *priv)
+{
+    shardcache_get_async_helper_arg_t *arg = (shardcache_get_async_helper_arg_t *)priv;
+
+    arc_t *arc = arg->cache->arc;
+
+    if (ATOMIC_READ(arg->cache->async_quit)) {
+        arc_release_resource(arc, arg->res);
+        free(arg);
+        return -1;
+    }
+
+    int rc = -1;
+    if ((arg->dlen + dlen) > arg->offset) {
+        if (arg->dlen < arg->offset) {
+            int diff = arg->offset - arg->dlen;
+            rc = arg->cb(key, klen, data + diff, dlen - diff, total_size, timestamp, arg->priv);
+            arg->sent += (dlen - diff);
+        } else {
+            if (arg->len && (arg->sent + dlen) > arg->len) {
+                int diff = arg->len - arg->sent;
+                rc = arg->cb(key, klen, data, diff, total_size, timestamp, arg->priv);
+                arg->sent += diff;
+            } else {
+                rc = arg->cb(key, klen, data, dlen, total_size, timestamp, arg->priv);
+                arg->sent += dlen;
+            }
+        }
+    }
+
+    if (rc != 0 || (!dlen && !total_size)) { // error
+        //arg->stat = -1;
+        arc_release_resource(arc, arg->res);
+        free(arg);
+        return -1;
+    }
+
+    arg->dlen += dlen;
+
+    if (total_size) {
+        arc_release_resource(arc, arg->res);
+        free(arg);
+    }
+
+    return 0;
+}
+
+int
+shardcache_get_offset_async(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            size_t offset,
+                            size_t length,
+                            shardcache_get_async_callback_t cb,
+                            void *priv)
+{
+    if (!key) {
+        return -1;
+    }
+
+    if (offset == 0)
+        ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_GETS].value);
+
+    void *obj_ptr = NULL;
+    arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 1);
+    if (!res) {
+        return -1;
+    }
+
+    if (!obj_ptr) {
+        arc_release_resource(cache->arc, res);
+        return -1;
+    }
+
+    cache_object_t *obj = (cache_object_t *)obj_ptr;
+    MUTEX_LOCK(&obj->lock);
+    if (obj->evicted) {
+        // if marked for eviction we don't want to return this object
+        MUTEX_UNLOCK(&obj->lock);
+        arc_release_resource(cache->arc, res);
+        return -1;
+    } else if (obj->complete) {
+        size_t dlen = obj->dlen;
+        void *data = NULL;
+        if (offset)
+            dlen -= offset;
+        if (dlen > length)
+            dlen = length;
+        if (dlen && obj->data) {
+            data = malloc(dlen);
+            memcpy(data, obj->data + offset, dlen);
+        }
+
+        cb(key, klen, data, dlen, dlen, &obj->ts, priv);
+        MUTEX_UNLOCK(&obj->lock);
+        arc_release_resource(cache->arc, res);
+        free(data);
+    } else {
+        if (obj->dlen) {
+            // check if we have enough so far
+            if (obj->dlen > offset) {
+
+                size_t dlen = obj->dlen;
+                void *data = NULL;
+                if (offset)
+                    dlen -= offset;
+                if (dlen > length)
+                    dlen = length;
+                if (dlen && obj->data) {
+                    void *data = malloc(dlen);
+                    memcpy(data, obj->data + offset, dlen);
+                }
+                cb(key, klen, data, dlen, 0, NULL, priv);
+            }
+        }
+
+        shardcache_get_async_helper_arg_t *arg = calloc(1, sizeof(shardcache_get_async_helper_arg_t));
+        arg->cb = cb;
+        arg->priv = priv;
+        arg->cache = cache;
+        arg->res = res;
+
+        shardcache_get_listener_t *listener = malloc(sizeof(shardcache_get_listener_t));
+        listener->cb = shardcache_get_async_helper;
+        listener->priv = arg;
+        push_value(obj->listeners, listener);
+        MUTEX_UNLOCK(&obj->lock);
+    }
+
+    arc_release_resource(cache->arc, res);
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+              (uint32_t)arc_size(cache->arc));
+    //return (offset < vlen + copied) ? (vlen - offset - copied) : 0;
+    return 0;
+}
+
+size_t shardcache_get_offset(shardcache_t *cache,
+                             void *key,
+                             size_t klen,
+                             void *data,
+                             size_t *dlen,
+                             size_t offset,
+                             struct timeval *timestamp)
 {
     size_t vlen = 0;
     size_t copied = 0;
@@ -811,54 +965,6 @@ shardcache_get_offset(shardcache_t *cache,
     return (offset < vlen + copied) ? (vlen - offset - copied) : 0;
 }
 
-
-typedef struct {
-    int stat;
-    size_t dlen;
-    shardcache_t *cache;
-    arc_resource_t *res;
-    shardcache_get_async_callback_t cb;
-    void *priv;
-} shardcache_get_async_helper_arg_t;
-
-static int
-shardcache_get_async_helper(void *key,
-                            size_t klen,
-                            void *data,
-                            size_t dlen,
-                            size_t total_size,
-                            struct timeval *timestamp,
-                            void *priv)
-{
-    shardcache_get_async_helper_arg_t *arg = (shardcache_get_async_helper_arg_t *)priv;
-
-    arc_t *arc = arg->cache->arc;
-
-    if (ATOMIC_READ(arg->cache->async_quit)) {
-        arc_release_resource(arc, arg->res);
-        free(arg);
-        return -1;
-    }
-
-    int rc = arg->cb(key, klen, data, dlen, total_size, timestamp, arg->priv);
-
-    if (rc != 0 || (!dlen && !total_size)) { // error
-        //arg->stat = -1;
-        arc_release_resource(arc, arg->res);
-        free(arg);
-        return -1;
-    }
-
-    arg->dlen += dlen;
-
-    if (total_size) {
-        arc_release_resource(arc, arg->res);
-        free(arg);
-    }
-
-    return 0;
-}
-
 int
 shardcache_get_async(shardcache_t *cache,
                      void *key,
@@ -886,6 +992,7 @@ shardcache_get_async(shardcache_t *cache,
     MUTEX_LOCK(&obj->lock);
     if (obj->evicted) {
         // if marked for eviction we don't want to return this object
+        cb(key, klen, NULL, 0, 0, NULL, priv);
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, res);
         return -1;

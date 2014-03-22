@@ -105,9 +105,21 @@ int main(int argc, char **argv)
 
     // the value is unchanged because already existing
     ut_testing("shardcache_client_offset(client, test_key2, 9, 5, &partial, 5) == value");
-    char partial[4];
+    char partial[6];
     size = shardcache_client_offset(client, "test_key2", 9, 5, &partial, 5);
     ut_validate_buffer(partial, 5, "value", 5);
+    
+    ut_testing("shardcache_client_offset(client, test_key1, 9, 5, &partial, 6) == 0");
+    size = shardcache_client_offset(client, "test_key1", 9, 5, &partial, 6);
+    ut_validate_int(size, 0);
+
+    shardcache_client_set(client, "test_key3", 9, "test_value3", 11, 0);
+    ut_testing("shardcache_client_offset(client, test_key3, 9, 5, &partial, 6) == value3");
+    size = shardcache_client_offset(client, "test_key3", 9, 5, &partial, 6);
+    ut_validate_buffer(partial, 6, "value3", 6);
+    
+
+
 
     // create now two clients each knowing exclusively about 1 server
     // (different among the two clients)

@@ -382,7 +382,15 @@ static void get_async_data(shardcache_t *cache,
                             shardcache_get_async_callback_t cb,
                             shardcache_request_t *req)
 {
-    int rc = shardcache_get_async(cache, key, klen, cb, req);
+    int rc;
+    
+    if (req->hdr == SHC_HDR_GET_OFFSET) {
+        uint32_t offset = ntohl(*((uint32_t *)fbuf_data(&req->records[1])));
+        uint32_t length = ntohl(*((uint32_t *)fbuf_data(&req->records[2])));
+        rc = shardcache_get_offset_async(cache, key, klen, offset, length, cb, req);
+    } else {
+        rc = shardcache_get_async(cache, key, klen, cb, req);
+    }
     if (rc != 0) {
         uint16_t eor = 0;
         char eom = 0;

@@ -580,7 +580,6 @@ size_t shardcache_get_offset(shardcache_t *cache,
                              size_t offset,
                              struct timeval *timestamp);
 
-
 /**
  * @brief Callback passed to shardcache_get_async() to receive the data asynchronously
  * @param key         A valid pointer to the key
@@ -640,6 +639,15 @@ int shardcache_get_async(shardcache_t *cache,
                          shardcache_get_async_callback_t cb,
                          void *priv);
 
+
+int
+shardcache_get_offset_async(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            size_t offset,
+                            size_t length,
+                            shardcache_get_async_callback_t cb,
+                            void *priv);
 
 typedef void (*shardcache_async_response_callback_t)(void *key, size_t klen, int res, void *priv);
 

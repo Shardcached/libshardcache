@@ -494,6 +494,8 @@ fetch_from_peer_async(char *peer,
                       unsigned char sig_hdr,
                       void *key,
                       size_t klen,
+                      size_t offset,
+                      size_t len,
                       fetch_from_peer_async_cb cb,
                       void *priv,
                       int fd,
@@ -506,12 +508,29 @@ fetch_from_peer_async(char *peer,
         should_close = 1;
     }
 
+    uint32_t offset_nbo = htonl(offset);
+    uint32_t len_nbo = htonl(len);
     if (fd >= 0) {
-        shardcache_record_t record = {
-            .v = key,
-            .l = klen
+        shardcache_record_t record[3] = {
+            {
+                .v = key,
+                .l = klen
+            },
+            {
+                .v = &offset_nbo,
+                .l = sizeof(uint32_t)
+            },
+            {
+                .v = &len_nbo,
+                .l = sizeof(uint32_t)
+            }
         };
-        rc = write_message(fd, auth, sig_hdr, SHC_HDR_GET_ASYNC, &record, 1);
+
+        if (!offset && !len)
+            rc = write_message(fd, auth, sig_hdr, SHC_HDR_GET_ASYNC, &record[0], 1);
+        else
+            rc = write_message(fd, auth, sig_hdr, SHC_HDR_GET_OFFSET, record, 3);
+
         if (rc == 0) {
             fetch_from_peer_helper_arg_t *arg = calloc(1, sizeof(fetch_from_peer_helper_arg_t));
             arg->peer = peer;
