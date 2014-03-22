@@ -449,6 +449,8 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     }
 
     obj = arc_object_create(cache, key, len);
+    if (!obj)
+        return NULL;
     void *ptr = cache->ops->create(key, len, async, (arc_resource_t *)obj, cache->ops->priv);
     obj->ptr = ptr;
     obj->async = async;

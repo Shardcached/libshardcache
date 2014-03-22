@@ -33,6 +33,7 @@ struct __async_read_ctx_s {
     char chunk[65536];
     uint16_t clen;
     uint16_t coff;
+    uint32_t rlen;
     int rnum;
     char state;
     int csig;
@@ -84,9 +85,12 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
     if (ctx->state == SHC_STATE_READING_DONE) {
         ctx->state = SHC_STATE_READING_NONE;
         ctx->rnum = 0;
+        ctx->rlen = 0;
         ctx->moff = 0;
         ctx->version = 0;
         ctx->csig = 0;
+        ctx->clen = 0;
+        ctx->coff = 0;
         memset(ctx->magic, 0, sizeof(ctx->magic));
     }
 
@@ -215,11 +219,12 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             if (ctx->clen > 0 && ctx->cb(ctx->chunk, ctx->clen, ctx->rnum, ctx->cb_priv) != 0) {
                 ctx->state = SHC_STATE_READING_ERR;
                 return -1;
-            }
+            } 
 
             uint16_t nlen = 0;
             rbuf_read(ctx->buf, (u_char *)&nlen, 2);
             ctx->clen = ntohs(nlen);
+            ctx->rlen += ctx->clen;
             ctx->coff = 0;
             if (ctx->shash)
                 sip_hash_update(ctx->shash, (char *)&nlen, 2);
@@ -244,16 +249,28 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 sip_hash_update(ctx->shash, (char *)&bsep, 1);
 
             if (bsep == SHARDCACHE_RSEP) {
+                if (ctx->rlen == 0) {
+                    if (ctx->cb(NULL, 0, ctx->rnum, ctx->cb_priv) != 0) {
+                        ctx->state = SHC_STATE_READING_ERR;
+                        return -1;
+                    }
+                }
                 ctx->state = SHC_STATE_READING_RECORD;
                 ctx->rnum++;
+                ctx->rlen = 0;
             } else if (bsep == 0) {
+                if (ctx->rlen == 0) {
+                    if (ctx->cb(NULL, 0, -1, ctx->cb_priv) != 0) {
+                        ctx->state = SHC_STATE_READING_ERR;
+                        return -1;
+                    }
+                }
                 if (ctx->auth)
                     ctx->state = SHC_STATE_READING_AUTH;
                 else
                     ctx->state = SHC_STATE_READING_DONE;
                 break;
             } else {
-                // unexpected response (contains more than 1 record?)
                 ctx->state = SHC_STATE_READING_ERR;
                 return -1;
             }
@@ -424,6 +441,9 @@ read_message_async(int fd,
         iomux_destroy(iomux);
 
         char state = wrk->ctx->state;
+
+        async_read_context_destroy(wrk->ctx);
+        free(wrk);
 
         if (state == SHC_STATE_READING_ERR) {
             return -1;

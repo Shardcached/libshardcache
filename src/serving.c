@@ -969,7 +969,9 @@ worker(void *priv)
                 .priv = ctx
             };
             //ht_set(wrkctx->fds, &ctx->fd, sizeof(ctx->fd), ctx, sizeof(shardcache_connection_context_t));
-            iomux_add(wrkctx->iomux, ctx->fd, &connection_callbacks);
+            if (!iomux_add(wrkctx->iomux, ctx->fd, &connection_callbacks)) {
+                shardcache_connection_context_destroy(ctx);
+            }
             ctx = queue_pop_left(jobs);
         }
 

@@ -534,8 +534,9 @@ shardcache_run_async(void *priv)
         iomux_run(cache->async_mux, &timeout);
         async_read_wrk_t *wrk = queue_pop_left(cache->async_queue);
         while (wrk) {
-            iomux_add(cache->async_mux, wrk->fd, &wrk->cbs);
-            free(wrk);
+            if (!iomux_add(cache->async_mux, wrk->fd, &wrk->cbs)) {
+                free(wrk);
+            }
             wrk = queue_pop_left(cache->async_queue);
         }
     }
@@ -1227,6 +1228,7 @@ static int shardcache_async_command_helper(void *data,
         if (!arg->done)
             arg->cb(arg->key, arg->klen, -1, arg->priv);
         if (idx == -1) {
+            iomux_remove(arg->cache->async_mux, arg->fd);
             shardcache_release_connection_for_peer(arg->cache, arg->addr, arg->fd);
         } else {
             close(arg->fd);
