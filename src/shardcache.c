@@ -810,6 +810,7 @@ shardcache_get_async_helper(void *key,
         return -1;
     }
 
+
     int rc = -1;
     if ((arg->dlen + dlen) > arg->offset) {
         if (arg->dlen < arg->offset) {
@@ -826,6 +827,8 @@ shardcache_get_async_helper(void *key,
                 arg->sent += dlen;
             }
         }
+    } else if (!dlen) {
+        rc = arg->cb(key, klen, NULL, 0, total_size, timestamp, arg->priv);
     }
 
     if (rc != 0 || (!dlen && !total_size)) { // error
