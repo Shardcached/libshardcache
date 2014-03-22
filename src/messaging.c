@@ -300,7 +300,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
     return used_bytes;
 }
 
-static int
+int
 read_async_input_data(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
@@ -350,7 +350,7 @@ async_read_context_destroy(async_read_ctx_t *ctx)
     free(ctx);
 }
 
-static void
+void
 read_async_input_eof(iomux_t *iomux, int fd, void *priv)
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
@@ -385,43 +385,34 @@ read_async_timeout(iomux_t *iomux, int fd, void *priv)
 
 int
 read_message_async(int fd,
-                   iomux_t *iomux,
                    char *auth,
                    async_read_callback_t cb,
-                   void *priv)
+                   void *priv,
+                   async_read_wrk_t **worker)
 {
     struct timeval iomux_timeout = { 0, 20000 }; // 20ms
-    async_read_ctx_t *ctx = async_read_context_create(auth, cb, priv);
 
-    iomux_callbacks_t cbs = {
-        .mux_input = read_async_input_data,
-        .mux_eof = read_async_input_eof,
-        .mux_timeout = NULL, //read_async_timeout,
-        .priv = ctx
-    };
+    async_read_wrk_t *wrk = calloc(1, sizeof(async_read_wrk_t));
+    wrk->ctx = async_read_context_create(auth, cb, priv);
+    wrk->cbs.mux_input = read_async_input_data;
+    wrk->cbs.mux_eof = read_async_input_eof;
+    wrk->cbs.priv = wrk->ctx;
+    wrk->fd = fd;
 
-    int blocking = 0;
+    wrk->ctx->blocking = (!worker);
 
-    if (!iomux) {
-        // if no iomux has been passed, we need to create
-        // one, in which case we will block until the whole
-        // message has been read
-        iomux= iomux_create();
-        if (!iomux) {
-            async_read_context_destroy(ctx);
-            return -1;
-        }
-        blocking = 1;
-    }
-
-    ctx->blocking = blocking;
-
-    iomux_add(iomux, fd, &cbs);
     //struct timeval tv = { 1, 0 };
     //iomux_set_timeout(iomux, fd, &tv);
 
-    if (blocking) {
-        iomux_add(iomux, fd, &cbs);
+    if (wrk->ctx->blocking) {
+        iomux_t *iomux = iomux_create();
+        if (!iomux) {
+            async_read_context_destroy(wrk->ctx);
+            free(wrk);
+            return -1;
+        }
+
+        iomux_add(iomux, fd, &wrk->cbs);
         // we are in blocking mode, let's wait for the job
         // to be completed
         for (;;) {
@@ -432,11 +423,13 @@ read_message_async(int fd,
 
         iomux_destroy(iomux);
 
-        char state = ctx->state;
+        char state = wrk->ctx->state;
 
         if (state == SHC_STATE_READING_ERR) {
             return -1;
         }
+    } else {
+        *worker = wrk;
     }
 
     return 0;
@@ -493,7 +486,7 @@ fetch_from_peer_async(char *peer,
                       fetch_from_peer_async_cb cb,
                       void *priv,
                       int fd,
-                      iomux_t *iomux)
+                      async_read_wrk_t **wrk)
 {
     int rc = -1;
     int should_close = 0;
@@ -534,7 +527,7 @@ fetch_from_peer_async(char *peer,
             arg->fd = should_close ? fd : -1;
             arg->cb = cb;
             arg->priv = priv;
-            rc = read_message_async(fd, iomux, auth, fetch_from_peer_helper, arg);
+            rc = read_message_async(fd, auth, fetch_from_peer_helper, arg, wrk);
         }
     }
     return rc;

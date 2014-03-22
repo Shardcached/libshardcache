@@ -10,6 +10,7 @@
 #include <linklist.h>
 #include <chash.h>
 #include <hashtable.h>
+#include <queue.h>
 #include <iomux.h>
 
 #include "connections_pool.h"
@@ -136,6 +137,7 @@ struct __shardcache_s {
                             // i/o operations
     iomux_t *async_mux;     // the iomux instance used for the asynchronous i/o;
                             // operations
+    queue_t *async_queue;
     int async_quit;
     int quit;
 };

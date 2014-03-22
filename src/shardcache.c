@@ -532,6 +532,12 @@ shardcache_run_async(void *priv)
     while (!ATOMIC_READ(cache->async_quit)) {
         struct timeval timeout = { 0, 25000 };
         iomux_run(cache->async_mux, &timeout);
+        async_read_wrk_t *wrk = queue_pop_left(cache->async_queue);
+        while (wrk) {
+            iomux_add(cache->async_mux, wrk->fd, &wrk->cbs);
+            free(wrk);
+            wrk = queue_pop_left(cache->async_queue);
+        }
     }
     return NULL;
 }
@@ -663,6 +669,7 @@ shardcache_create(char *me,
 
     cache->connections_pool = connections_pool_create(cache->tcp_timeout, num_workers + 1);
 
+    cache->async_queue = queue_create();
     cache->async_mux = iomux_create();
     iomux_set_threadsafe(cache->async_mux, 1);
 
@@ -700,6 +707,7 @@ shardcache_destroy(shardcache_t *cache)
         SHC_DEBUG2("Stopping the async i/o thread");
         pthread_join(cache->async_io_th, NULL);
         SHC_DEBUG2("Async i/o thread stopped");
+        iomux_clear(cache->async_mux);
     }
 
     if (cache->serv)
@@ -708,6 +716,7 @@ shardcache_destroy(shardcache_t *cache)
     // NOTE : should be destroyed only after
     //        the serving subsystem has been stopped
     iomux_destroy(cache->async_mux);
+    queue_destroy(cache->async_queue);
 
     if (ATOMIC_READ(cache->evict_on_delete) && cache->evictor_jobs)
     {
@@ -1287,7 +1296,11 @@ shardcache_exists_async(shardcache_t *cache,
                 arg->addr = addr;
                 arg->fd = fd;
                 arg->hdr = SHC_HDR_EXISTS;
-                rc = read_message_async(fd, cache->async_mux, (char *)cache->auth, shardcache_async_command_helper, arg);
+                async_read_wrk_t *wrk = NULL;
+                rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
+                if (rc == 0 && wrk) {
+                    queue_push_right(cache->async_queue, wrk);
+                }
             }
         } else {
             rc = exists_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
@@ -1538,7 +1551,11 @@ shardcache_set_internal(shardcache_t *cache,
                     arg->addr = addr;
                     arg->fd = fd;
                     arg->hdr = SHC_HDR_SET;
-                    rc = read_message_async(fd, cache->async_mux, (char *)cache->auth, shardcache_async_command_helper, arg);
+                    async_read_wrk_t *wrk = NULL;
+                    rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
+                    if (rc == 0 && wrk) {
+                        queue_push_right(cache->async_queue, wrk);
+                    }
                 }
             } else {
                 rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 1);
@@ -1561,7 +1578,11 @@ shardcache_set_internal(shardcache_t *cache,
                 arg->addr = addr;
                 arg->fd = fd;
                 arg->hdr = SHC_HDR_SET;
-                rc = read_message_async(fd, cache->async_mux, (char *)cache->auth, shardcache_async_command_helper, arg);
+                async_read_wrk_t *wrk = NULL;
+                rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
+                if (rc == 0 && wrk) {
+                    queue_push_right(cache->async_queue, wrk);
+                }
             }
 
         } else {
@@ -1749,7 +1770,11 @@ shardcache_del_internal(shardcache_t *cache,
                 arg->addr = addr;
                 arg->fd = fd;
                 arg->hdr = SHC_HDR_DELETE;
-                rc = read_message_async(fd, cache->async_mux, (char *)cache->auth, shardcache_async_command_helper, arg);
+                async_read_wrk_t *wrk = NULL;
+                rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
+                if (rc == 0 && wrk) {
+                    queue_push_right(cache->async_queue, wrk);
+                }
             }
         } else {
             rc = delete_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);

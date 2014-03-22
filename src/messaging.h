@@ -229,12 +229,6 @@ shardcache_hdr_t async_read_context_sig_hdr(async_read_ctx_t *ctx);
 
 int async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx);
 
-int read_message_async(int fd,
-                       iomux_t *iomux,
-                       char *auth,
-                       async_read_callback_t cb,
-                       void *priv);
-
 typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         void *key,
                                         size_t klen,
@@ -243,6 +237,11 @@ typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         int error,
                                         void *priv);
 
+typedef struct {
+    async_read_ctx_t *ctx;
+    iomux_callbacks_t cbs;
+    int fd;
+} async_read_wrk_t;
 
 int fetch_from_peer_async(char *peer,
                           char *auth,
@@ -254,6 +253,12 @@ int fetch_from_peer_async(char *peer,
                           fetch_from_peer_async_cb cb,
                           void *priv,
                           int fd,
-                          iomux_t *iomux);
+                          async_read_wrk_t **async_read_wrk_t);
 
+
+int read_message_async(int fd,
+                   char *auth,
+                   async_read_callback_t cb,
+                   void *priv,
+                   async_read_wrk_t **worker);
 #endif

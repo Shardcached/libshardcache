@@ -109,7 +109,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     }
     if (error) {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-        shardcache_release_connection_for_peer(cache, peer_addr, fd);
+        close(fd);
         free(arg);
         if (obj->evict)
             arc_ops_evict_object(cache, obj);
@@ -139,9 +139,6 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             drop = 1;
     }
 
-    MUTEX_UNLOCK(&obj->lock);
-    arc_release_resource(cache->arc, obj->res);
-
     if (complete) {
         if (total_len && !drop) {
             arc_update_size(cache->arc, key, klen, total_len);
@@ -149,6 +146,9 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             arc_remove(cache->arc, key, klen);
         }
     }
+
+    MUTEX_UNLOCK(&obj->lock);
+    arc_release_resource(cache->arc, obj->res);
 
     return !error ? 0 : -1;
 }
@@ -180,6 +180,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
         arg->cache = cache;
         arg->peer_addr = peer_addr;
         arg->fd = fd;
+        async_read_wrk_t *wrk = NULL;
         rc = fetch_from_peer_async(peer_addr,
                                    (char *)cache->auth,
                                    SHC_HDR_CSIGNATURE_SIP,
@@ -190,10 +191,11 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
                                    arc_ops_fetch_from_peer_async_cb,
                                    arg,
                                    fd,
-                                   cache->async_mux);
+                                   &wrk);
         if (rc == 0) {
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
+            queue_push_right(cache->async_queue, wrk);
 
             // Keep the remote object in the cache only 10% of the time.
             // This is the same logic applied by groupcache to determine hot keys.
