@@ -95,7 +95,8 @@ int delete_from_peer(char *peer,
                      unsigned char sig_hdr,
                      void *key,
                      size_t klen,
-                     int fd);
+                     int fd,
+                     int expect_response);
 
 int
 evict_from_peer(char *peer,
@@ -106,15 +107,6 @@ evict_from_peer(char *peer,
                 int fd,
                 int expect_response);
 
-/*
-typedef int (*send_to_peer_async_cb)(char *peer,
-                                     void *key,
-                                     size_t klen,
-                                     void *data,
-                                     size_t len,
-                                     int error,
-                                     void *priv);
-                                     */
 
 int send_to_peer(char *peer,
                  char *auth,
@@ -124,17 +116,9 @@ int send_to_peer(char *peer,
                  void *value,
                  size_t vlen,
                  uint32_t expire,
-                 int fd);
+                 int fd,
+                 int expect_response);
 
-int send_to_peer_no_response(char *peer,
-                             char *auth,
-                             unsigned char sig,
-                             void *key,
-                             size_t klen,
-                             void *value,
-                             size_t vlen,
-                             uint32_t expire,
-                             int fd);
 
 int
 add_to_peer(char *peer,
@@ -145,7 +129,8 @@ add_to_peer(char *peer,
             void *value,
             size_t vlen,
             uint32_t expire,
-            int fd);
+            int fd,
+            int expect_response);
 
 int fetch_from_peer(char *peer,
                     char *auth,
@@ -170,7 +155,8 @@ int exists_on_peer(char *peer,
                    unsigned char sig_hdr,
                    void *key,
                    size_t len,
-                   int fd);
+                   int fd,
+                   int expect_response);
 
 int
 touch_on_peer(char *peer,

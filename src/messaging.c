@@ -306,8 +306,8 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
     return 0;
 }
 
-void
-read_async_input_data(iomux_t *iomux, int fd, void *data, int len, void *priv)
+static int
+read_async_input_data(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
     async_read_context_input_data(data, len, ctx);
@@ -330,6 +330,7 @@ read_async_input_data(iomux_t *iomux, int fd, void *data, int len, void *priv)
                 inet_ntoa(saddr.sin_addr));
         iomux_close(iomux, fd);
     }
+    return len;
 }
 
 async_read_ctx_t *
@@ -951,6 +952,7 @@ _delete_from_peer_internal(char *peer,
                            int fd,
                            int expect_response)
 {
+    int rc = -1;
     int should_close = 0;
 
     SHC_DEBUG2("Sending del command to peer %s (owner: %d)", peer, owner);
@@ -971,7 +973,7 @@ _delete_from_peer_internal(char *peer,
             .v = key,
             .l = klen
         };
-        int rc = write_message(fd, auth, sig_hdr, hdr, &record, 1);
+        rc = write_message(fd, auth, sig_hdr, hdr, &record, 1);
 
         // if we are not forwarding a delete command to the owner
         // of the key, but only an eviction request to a peer,
@@ -999,10 +1001,9 @@ _delete_from_peer_internal(char *peer,
         }
         if (should_close)
             close(fd);
-        return (rc == 0) ? 0 : -1;
     }
 
-    return -1;
+    return (rc == 0) ? 0 : -1;
 }
 
 int
@@ -1011,9 +1012,10 @@ delete_from_peer(char *peer,
                  unsigned char sig,
                  void *key,
                  size_t klen,
-                 int fd)
+                 int fd,
+                 int expect_response)
 {
-    return _delete_from_peer_internal(peer, auth, sig, key, klen, 1, fd, 1);
+    return _delete_from_peer_internal(peer, auth, sig, key, klen, 1, fd, expect_response);
 }
 
 int
@@ -1122,21 +1124,6 @@ _send_to_peer_internal(char *peer,
 }
 
 int
-send_to_peer_no_response(char *peer,
-                         char *auth,
-                         unsigned char sig,
-                         void *key,
-                         size_t klen,
-                         void *value,
-                         size_t vlen,
-                         uint32_t expire,
-                         int fd)
-{
-    return _send_to_peer_internal(peer,
-            auth, sig, key, klen, value, vlen, expire, 0, fd, 0);
-}
-
-int
 send_to_peer(char *peer,
              char *auth,
              unsigned char sig,
@@ -1145,10 +1132,11 @@ send_to_peer(char *peer,
              void *value,
              size_t vlen,
              uint32_t expire,
-             int fd)
+             int fd,
+             int expect_response)
 {
     return _send_to_peer_internal(peer,
-            auth, sig, key, klen, value, vlen, expire, 0, fd, 1);
+            auth, sig, key, klen, value, vlen, expire, 0, fd, expect_response);
 }
 
 int
@@ -1160,10 +1148,11 @@ add_to_peer(char *peer,
             void *value,
             size_t vlen,
             uint32_t expire,
-            int fd)
+            int fd,
+            int expect_response)
 {
     return _send_to_peer_internal(peer, auth, sig, key, klen,
-                                  value, vlen, expire, 1, fd, 1);
+                                  value, vlen, expire, 1, fd, expect_response);
 }
 
 int
@@ -1281,8 +1270,10 @@ exists_on_peer(char *peer,
                unsigned char sig_hdr,
                void *key,
                size_t klen,
-               int fd)
+               int fd,
+               int expect_response)
 {
+    int rc = -1;
     int should_close = 0;
     if (fd < 0) {
         fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
@@ -1296,12 +1287,12 @@ exists_on_peer(char *peer,
             .v = key,
             .l = klen
         };
-        int rc = write_message(fd, auth, sig_hdr, hdr, &record, 1);
+        rc = write_message(fd, auth, sig_hdr, hdr, &record, 1);
 
         // if we are not forwarding a delete command to the owner
         // of the key, but only an eviction request to a peer,
         // we don't need to wait for the response
-        if (rc == 0) {
+        if (rc == 0 && expect_response) {
             shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
             rc = read_message(fd, auth, &resp, &hdr);
@@ -1336,7 +1327,7 @@ exists_on_peer(char *peer,
             close(fd);
         return 0;
     }
-    return -1;
+    return rc;
 }
 
 int
