@@ -738,7 +738,10 @@ shardcache_select_worker(shardcache_serving_t *serv)
     if (ATOMIC_READ(serv->leave))
         return NULL;
 
-    shardcache_worker_context_t *wrk = pick_value(serv->workers, serv->next_worker_index++%list_count(serv->workers));
+    shardcache_worker_context_t *wrk = pick_value(serv->workers,
+            __sync_fetch_and_add(&serv->next_worker_index, 1)%list_count(serv->workers));
+
+
     /*
         // create a new worker
         wrk = calloc(1, sizeof(shardcache_worker_context_t));
@@ -876,10 +879,10 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
         }
 
         int empty = (fbuf_used(&req->output) == 0);
-
+        int done = req->done;
         MUTEX_UNLOCK(&req->lock);
 
-        if (ATOMIC_READ(req->done) && empty) {
+        if (done && empty) {
             shift_value(ctx->requests);
             shardcache_request_destroy(req);
         } else if (empty) {
@@ -998,12 +1001,16 @@ worker(void *priv)
             int pending = list_count(to_prune->requests);
             while (pending--) {
                 shardcache_request_t *req = shift_value(to_prune->requests);
-                if (ATOMIC_READ(req->done)) {
+                MUTEX_LOCK(&req->lock);
+                if (req->done) {
+                    // the request is served, we can destroy it
+                    MUTEX_UNLOCK(&req->lock);
                     shardcache_request_destroy(req);
-                } else {
-                    // put it back;
-                    push_value(to_prune->requests, req);
-                }
+                    continue;
+                } 
+                // put it back;
+                push_value(to_prune->requests, req);
+                MUTEX_UNLOCK(&req->lock);
             }
             if (!list_count(to_prune->requests)) {
                 shardcache_connection_context_destroy(to_prune);
