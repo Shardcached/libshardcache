@@ -667,7 +667,7 @@ shardcache_create(char *me,
     srand(time(NULL));
     cache->volatile_storage = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)destroy_volatile);
 
-    cache->connections_pool = connections_pool_create(cache->tcp_timeout, num_workers + 1);
+    cache->connections_pool = connections_pool_create(cache->tcp_timeout, (num_workers/2)+1);
 
     cache->async_queue = queue_create();
     cache->async_mux = iomux_create();
@@ -832,7 +832,7 @@ shardcache_get_async_helper(void *key,
     }
 
     if (rc != 0 || (!dlen && !total_size)) { // error
-        //arg->stat = -1;
+        arg->stat = -1;
         arc_release_resource(arc, arg->res);
         free(arg);
         return -1;
