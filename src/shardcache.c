@@ -530,7 +530,7 @@ shardcache_run_async(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     while (!ATOMIC_READ(cache->async_quit)) {
-        struct timeval timeout = { 0, 500000 };
+        struct timeval timeout = { 0, 25000 };
         iomux_run(cache->async_mux, &timeout);
     }
     return NULL;
