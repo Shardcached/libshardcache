@@ -534,7 +534,8 @@ shardcache_run_async(void *priv)
         iomux_run(cache->async_mux, &timeout);
         async_read_wrk_t *wrk = queue_pop_left(cache->async_queue);
         while (wrk) {
-            if (!iomux_add(cache->async_mux, wrk->fd, &wrk->cbs)) {
+            if (wrk->fd < 0 || !iomux_add(cache->async_mux, wrk->fd, &wrk->cbs))
+            {
                 free(wrk);
             }
             wrk = queue_pop_left(cache->async_queue);
@@ -1204,23 +1205,25 @@ static int shardcache_async_command_helper(void *data,
     shardcache_async_command_helper_arg_t *arg =
         (shardcache_async_command_helper_arg_t *)priv;
 
-    if (idx == 0 && data && len == 1) {
-        int rc = (int)*((char *)data);
-        // mangle the return code to conform
-        // to the specific command (if necessary)
-        if (arg->hdr == SHC_HDR_EXISTS) {
-           switch(rc) {
-                case SHC_RES_YES:
-                    rc = 1;
-                    break;
-                case SHC_RES_NO:
-                    rc = 0;
-                    break;
-                default:
-                    rc = -1;
-                    break;
-           }
-      
+    if (idx == 0) {
+        int rc = -1;
+        if (data && len == 1) {
+            rc = (int)*((char *)data);
+            // mangle the return code to conform
+            // to the specific command (if necessary)
+            if (arg->hdr == SHC_HDR_EXISTS) {
+               switch(rc) {
+                    case SHC_RES_YES:
+                        rc = 1;
+                        break;
+                    case SHC_RES_NO:
+                        rc = 0;
+                        break;
+                    default:
+                        rc = -1;
+                        break;
+               }
+            }
         }
         arg->cb(arg->key, arg->klen, rc, arg->priv);
         arg->done = 1;
