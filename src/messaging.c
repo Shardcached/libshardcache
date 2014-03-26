@@ -409,6 +409,9 @@ read_message_async(int fd,
 {
     struct timeval iomux_timeout = { 0, 20000 }; // 20ms
 
+    if (fd < 0)
+        return -1;
+
     async_read_wrk_t *wrk = calloc(1, sizeof(async_read_wrk_t));
     wrk->ctx = async_read_context_create(auth, cb, priv);
     wrk->cbs.mux_input = read_async_input_data;
@@ -480,7 +483,7 @@ fetch_from_peer_helper(void *data,
     if (idx == 0)
         ret = arg->cb(arg->peer, arg->key, arg->klen, data, len, 0, arg->priv);
     else
-        ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx != -1), arg->priv);
+        ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx == -2), arg->priv);
 
     if (idx < 0) {
         // if the reading is finished or there was an error
