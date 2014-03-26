@@ -107,6 +107,7 @@ struct __shardcache_connection_context_s {
     rbuf_t *input;
     shardcache_worker_context_t *worker;
     int closed;
+    struct timeval in_prune_since;
 };
 
 static int
@@ -921,6 +922,7 @@ shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
     if (ctx) {
         if (list_count(ctx->requests)) {
             ctx->closed = 1;
+            gettimeofday(&ctx->in_prune_since, NULL);
             push_value(ctx->worker->prune, ctx);
             return;
         }
@@ -996,7 +998,11 @@ worker(void *priv)
                 push_value(to_prune->requests, req);
                 MUTEX_UNLOCK(&req->lock);
             }
-            if (!list_count(to_prune->requests)) {
+            struct timeval quarantine = { 30, 0 };
+            struct timeval now, diff;
+            gettimeofday(&now, NULL);
+            timersub(&now, &to_prune->in_prune_since, &diff);
+            if (!list_count(to_prune->requests) || timercmp(&diff, &quarantine, >)) {
                 shardcache_connection_context_destroy(to_prune);
             } else {
                 push_value(wrkctx->prune, to_prune);
