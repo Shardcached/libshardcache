@@ -102,11 +102,13 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
 
     MUTEX_LOCK(&obj->lock);
     if (!obj->res) {
+        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         MUTEX_UNLOCK(&obj->lock);
         return -1;
     }
     arc_retain_resource(cache->arc, obj->res);
     if (!obj->listeners) {
+        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, obj->res);
         return -1;
