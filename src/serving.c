@@ -936,12 +936,11 @@ shardcache_connection_handler(iomux_t *iomux, int fd, void *priv)
     shardcache_serving_t *serv = (shardcache_serving_t *)priv;
 
     if (!ATOMIC_READ(serv->leave)) {
-        shardcache_connection_context_t *ctx =
-            shardcache_connection_context_create(serv, fd);
-
-
         shardcache_worker_context_t *wrkctx = shardcache_select_worker(serv);
         if (wrkctx) {
+            shardcache_connection_context_t *ctx =
+                shardcache_connection_context_create(serv, fd);
+
             ctx->worker = wrkctx;
             queue_push_right(wrkctx->jobs, ctx);
             ATOMIC_INCREMENT(serv->num_connections);
