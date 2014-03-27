@@ -534,10 +534,9 @@ shardcache_run_async(void *priv)
         iomux_run(cache->async_mux, &timeout);
         async_read_wrk_t *wrk = queue_pop_left(cache->async_queue);
         while (wrk) {
-            if (wrk->fd < 0 || !iomux_add(cache->async_mux, wrk->fd, &wrk->cbs))
-            {
-                free(wrk);
-            }
+            if (wrk->fd >= 0)
+                iomux_add(cache->async_mux, wrk->fd, &wrk->cbs);
+            free(wrk);
             wrk = queue_pop_left(cache->async_queue);
         }
     }
