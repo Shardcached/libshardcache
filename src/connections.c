@@ -250,12 +250,23 @@ open_connection(const char *host, int port, unsigned int timeout)
     }
 
     if (timeout > 0) {
-        connect(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
-        fd_set fdset;
-        FD_ZERO(&fdset);
-        FD_SET(sock, &fdset);
+        int rc = connect(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
+        if (rc == 0 || errno == EISCONN) {
+            flags &= ~O_NONBLOCK;
+            fcntl(sock, F_SETFL, flags);
+            fcntl(sock, F_SETFD, FD_CLOEXEC);
+           return sock;
+        } else if (rc == -1 && errno != EINPROGRESS) {
+            close(sock);
+            return -1;
+        }
 
-        if (select(sock + 1, NULL, &fdset, NULL, &tv) == 1)
+        // XXX - hack to overcome the 1024 FD_SETSIZE limit on some
+        //       system's select() implementation (notably linux)
+        void *fdset = calloc(1, sizeof(fd_set) * 8); // we want to fit at most 8192 filedescriptors
+        FD_SET(sock, (fd_set *)fdset);
+
+        if (select(sock + 1, NULL, (fd_set *)fdset, NULL, &tv) == 1)
         {
             int err;
             socklen_t len = sizeof err;
@@ -265,10 +276,12 @@ open_connection(const char *host, int port, unsigned int timeout)
                 flags &= ~O_NONBLOCK;
                 fcntl(sock, F_SETFL, flags);
                 fcntl(sock, F_SETFD, FD_CLOEXEC);
+                free(fdset);
                 return sock;
             }
         }
 
+        free(fdset);
         close(sock);
         return -1;
     }
