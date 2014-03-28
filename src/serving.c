@@ -675,7 +675,7 @@ process_request(shardcache_request_t *req)
                 MUTEX_LOCK(&req->lock);
                 fbuf_add_binary(&req->output, fbuf_data(&out), fbuf_used(&out));
                 req->done = 1;
-                MUTEX_LOCK(&req->lock);
+                MUTEX_UNLOCK(&req->lock);
             } else {
                 fbuf_destroy(&buf);
                 write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
