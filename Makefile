@@ -37,6 +37,8 @@ ifeq ("$(SHARDCACHE_INSTALL_INCDIR)", "")
 SHARDCACHE_INSTALL_INCDIR=$(INCDIR)
 endif
 
+IS_CLANG := $(shell $(CC) --version | grep clang)
+
 TARGETS = $(patsubst %.c, %.o, $(wildcard src/*.c))
 TESTS = $(patsubst %.c, %, $(wildcard test/*.c))
 
@@ -85,7 +87,13 @@ $(DEPS): build_deps
 objects: $(TARGETS)
 
 EXTRA_CFLAGS=-Wno-parentheses -Wno-pointer-sign
+
+
+ifneq ("$(IS_CLANG)", "")
 SQLITE_CFLAGS=-Wno-array-bounds -Wno-unused-const-variable -Wno-unknown-warning-option -DSQLITE_THREADSAFE=1
+else
+SQLITE_CFLAGS=-fno-strict-aliasing -DSQLITE_THREADSAFE=1
+endif
 
 $(TARGETS): CFLAGS += -fPIC -Isrc -Wall -Werror $(EXTRA_CFLAGS) $(SQLITE_CFLAGS) -O3 -g
 
