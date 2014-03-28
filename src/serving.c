@@ -846,7 +846,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
             offset += rb;
         }
     }
-    while (offset <= max) {
+    while (offset < max) {
         shardcache_request_t *req = pick_value(ctx->requests, 0);
         if (!req) {
             break;
