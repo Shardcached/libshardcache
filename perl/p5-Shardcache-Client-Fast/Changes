@@ -1,13 +1,18 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.07  Fri Mar 28 09:46:07 CET 2014
+        - updated to be conform to the new libshardcache API (0.10)
+
 0.06  Fri Feb  7 00:09:52 CET 2014
         - new methods: 'get_multi' and 'set_multi' imported from libshardcache
         - extended names (short names are now deprecated)
         - various bugfixes
+
 0.05  Tue Jan 21 00:54:22 CET 2014
         - Change in libshardcache and in the protocol
         - new methods: 'add', 'offset', 'exists'
         - asynchronous api
+
 0.04  Thu Jan  9 16:45:25 CET 2014
         - Changes to be consistent with the API exposed by
           the pure-perl implementation (Shardcache::Client)
