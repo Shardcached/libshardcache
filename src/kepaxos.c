@@ -367,8 +367,6 @@ kepaxos_command_create(kepaxos_t *ke,
     MUTEX_INIT(&cmd->lock);
     CONDITION_INIT(&cmd->condition);
 
-    // this will release/abort the previous command on the same key(if any)
-    kepaxos_cmd_t *prev_cmd =  NULL;
     // an eventually uncommitted command for K would be overwritten here
     // hence it will be ignored and will fail silently
     // (NOTE: in libshardcache we only care about the most recent command for a key 
@@ -387,8 +385,11 @@ kepaxos_command_create(kepaxos_t *ke,
     cmd->timeout = ke->timeout;
     cmd->ballot = ATOMIC_READ(ke->ballot);
 
-    ht_get_and_set(ke->commands, key, klen, cmd, sizeof(kepaxos_cmd_t), (void **)&prev_cmd, NULL);
-    if (prev_cmd) {
+    // this will release/abort the previous command on the same key(if any)
+    void *prev_ptr;
+    ht_get_and_set(ke->commands, key, klen, cmd, sizeof(kepaxos_cmd_t), &prev_ptr, NULL);
+    if (prev_ptr) {
+        kepaxos_cmd_t *prev_cmd = (kepaxos_cmd_t *)prev_ptr;
         uint64_t interfering_seq = prev_cmd->seq; 
         MUTEX_LOCK(&cmd->lock);
         cmd->seq = MAX(seq, interfering_seq+1);
@@ -675,9 +676,12 @@ kepaxos_handle_preaccept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
         if (cmd->seq > cmd->max_seq || (cmd->seq == cmd->max_seq && !cmd->max_seq_committed))
         {
             // commit (short path)
-            ht_delete(ke->commands, msg->key, msg->klen, (void **)&cmd, NULL);
+            void *cmd_ptr = NULL;
+            ht_delete(ke->commands, msg->key, msg->klen, &cmd_ptr, NULL);
             MUTEX_UNLOCK(&ke->lock);
-            return kepaxos_commit(ke, cmd);
+            if (cmd_ptr == cmd)
+                return kepaxos_commit(ke, cmd);
+            return -1;
         } else {
             // run the paxos-like protocol (long path)
             MUTEX_LOCK(&cmd->lock);
@@ -837,9 +841,12 @@ kepaxos_handle_accept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
 
         MUTEX_UNLOCK(&cmd->lock);
         // the command has been accepted by a quorum
-        ht_delete(ke->commands, msg->key, msg->klen, (void **)&cmd, NULL);
+        void *cmd_ptr = NULL;
+        ht_delete(ke->commands, msg->key, msg->klen, &cmd_ptr, NULL);
         MUTEX_UNLOCK(&ke->lock);
-        return kepaxos_commit(ke, cmd);
+        if (cmd == cmd_ptr)
+            return kepaxos_commit(ke, cmd);
+        return -1;
     }
     MUTEX_UNLOCK(&ke->lock);
     return 0;

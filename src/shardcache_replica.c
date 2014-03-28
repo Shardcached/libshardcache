@@ -250,10 +250,10 @@ kepaxos_commit(unsigned char type,
     shardcache_replica_t *replica = (shardcache_replica_t *)priv;
     int rc = -1;
 
-    shardcache_item_to_recover_t *item = NULL;
-    ht_delete(replica->recovery, key, klen, (void **)&item, NULL);
+    void *item = NULL;
+    ht_delete(replica->recovery, key, klen, &item, NULL);
     if (item)
-        free_item_to_recover(item);
+        free_item_to_recover((shardcache_item_to_recover_t *)item);
 
     kepaxos_data_t *kdata = (kepaxos_data_t *)data;
 
@@ -524,13 +524,13 @@ shardcache_replica_recover(void *priv)
         //        can be stopped earlier if the recovery is aborted
         rc = fetch_from_peer(item->peer, (char *)replica->shc->auth, 0, item->key, item->klen, &data, fd);
         if (rc == 0) {
-            shardcache_item_to_recover_t *check = NULL;
-            rc = ht_delete(replica->recovery, item->key, item->klen, (void **)&check, NULL);
+            void *check = NULL;
+            rc = ht_delete(replica->recovery, item->key, item->klen, &check, NULL);
             if (rc != 0) {
                 SHC_ERROR("Can't delete item from the recovery table");
             }
 
-            if (check == item || (check && check->seq == item->seq))
+            if (check == item || (check && ((shardcache_item_to_recover_t *)check)->seq == item->seq))
             {
                 rc = kepaxos_recovered(replica->kepaxos,
                                        item->key,
@@ -548,19 +548,19 @@ shardcache_replica_recover(void *priv)
                         SHC_ERROR("Can't set value for the recovered item");
                     }
                 }
-                free_item_to_recover(check);
+                free_item_to_recover((shardcache_item_to_recover_t *)check);
                 continue;
             } else if (check) {
                 // put it back
                 int rc = ht_set_if_not_exists(replica->recovery,
-                                              check->key,
-                                              check->klen,
-                                              check,
+                                              ((shardcache_item_to_recover_t *)check)->key,
+                                              ((shardcache_item_to_recover_t *)check)->klen,
+                                              (shardcache_item_to_recover_t *)check,
                                               sizeof(shardcache_item_to_recover_t));
                 if (rc == 1) {
                     // a new entry has been added to the recovery table in the meanwhile
                     // we can drop this one
-                    free_item_to_recover(check);
+                    free_item_to_recover((shardcache_item_to_recover_t *)check);
                 }
             }
         } else {
@@ -786,9 +786,6 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
                             size_t dlen,
                             uint32_t expire)
 {
-    shardcache_item_to_recover_t *item = NULL;
-
-    // XXX - big hack : special meaning for the NULL key
     //       (and later for the 0-key in using kepaxos)
     //       We still want migration commands to run into
     //       kepaxos to ensure accepting a migration request
@@ -803,10 +800,12 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
         return -1;
     }
 
+    void *item = NULL;
+    // XXX - big hack : special meaning for the NULL key
     // stop any recovery process for this key if in progress
-    ht_delete(replica->recovery, key, klen, (void **)&item, NULL);
+    ht_delete(replica->recovery, key, klen, &item, NULL);
     if (item)
-        free_item_to_recover(item);
+        free_item_to_recover((shardcache_item_to_recover_t *)item);
 
     size_t kdlen = sizeof(kepaxos_data_t) + dlen;
     kepaxos_data_t *kdata = malloc(kdlen);

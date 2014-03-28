@@ -380,8 +380,10 @@ void arc_destroy(arc_t *cache)
 void arc_remove(arc_t *cache, const void *key, size_t len)
 {
     arc_object_t *obj = NULL;
-    ht_delete(cache->hash, (void *)key, len, (void **)&obj, NULL);
-    if (obj) {
+    void *objptr = NULL;
+    ht_delete(cache->hash, (void *)key, len, &objptr, NULL);
+    if (objptr) {
+        obj = (arc_object_t *)objptr;
         MUTEX_LOCK(&obj->lock);
         if (obj && obj->state) {
             MUTEX_UNLOCK(&obj->lock);
