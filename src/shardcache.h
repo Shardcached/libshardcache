@@ -645,6 +645,8 @@ int shardcache_get_async(shardcache_t *cache,
  * @param cache   A valid pointer to a shardcache_t structure
  * @param key     A valid pointer to the key
  * @param klen    The length of the key
+ * @param offset  The offset from where to start retrieving data
+ * @param length  The amount of data to fetch
  * @param cb      The shardcache_get_async_callback_t which will be
  *                called for each received chunk
  * @param priv    A pointer which will be passed to the
@@ -688,6 +690,10 @@ typedef void (*shardcache_async_response_callback_t)(void *key, size_t klen, int
  * @param cache   A valid pointer to a shardcache_t structure
  * @param key     A valid pointer to the key
  * @param klen    The length of the key
+ * @param cb      The shardcache_async_response_callback_t which will be
+ *                called once the response is completely retrieved
+ * @param priv    A pointer which will be passed to the
+ *                shardcache_async_response_callback_t when called
  * @return 1 if exists, 0 if doesn't exist, -1 in case of errors
  */
 int shardcache_exists_async(shardcache_t *cache,
@@ -796,15 +802,15 @@ int shardcache_set_volatile(shardcache_t *cache,
 
 /**
  * @brief Set the volatile value for a key if it doesn't already exist 
- * @param cache   A valid pointer to a shardcache_t structure
+ * @param cache A valid pointer to a shardcache_t structure
  * @param key   A valid pointer to the key
- * @param klen   The length of the key
- * @param value   A valid pointer to the value
- * @param vlen   The length of the value
- * @param expire   The number of seconds after which the volatile value expires
- *                 If 0 the value will not expire and it will be stored using the
- *                 actual storage module (which might evntually be a presistent
- *                 storage backend as the filesystem or database ones)
+ * @param klen  The length of the key
+ * @param value A valid pointer to the value
+ * @param vlen  The length of the value
+ * @param expire The number of seconds after which the volatile value expires
+ *               If 0 the value will not expire and it will be stored using the
+ *               actual storage module (which might evntually be a presistent
+ *               storage backend as the filesystem or database ones)
  * @return 0 on success, 1 if the key already exists, -1 in case of error
  * @see shardcache_set_volatile()
  */
@@ -816,20 +822,27 @@ int shardcache_add_volatile(shardcache_t *cache,
                             time_t expire);
 
 /**
- * @brief Remove the value for a key asynchronously
- * @param cache   A valid pointer to a shardcache_t structure
+ * @brief Remove the value for a key
+ * @param cache A valid pointer to a shardcache_t structure
  * @param key   A valid pointer to the key
- * @param klen   The length of the key
- * @param cb      The shardcache_async_response_callback_t which will be
- *                called once the result has been retreived
- * @param priv    A pointer which will be passed to the
- *                shardcache_async_response_callback_t when called
+ * @param klen  The length of the key
  * @return 0 on success, -1 otherwise
  * @see shardcache_set_volatile()
  */
-
 int shardcache_del(shardcache_t *cache, void *key, size_t klen);
 
+/**
+ * @brief Remove the value for a key asynchronously
+ * @param cache A valid pointer to a shardcache_t structure
+ * @param key   A valid pointer to the key
+ * @param klen  The length of the key
+ * @param cb    The shardcache_async_response_callback_t which will be
+ *              called once the result has been retreived
+ * @param priv  A pointer which will be passed to the
+ *              shardcache_async_response_callback_t when called
+ * @return 0 on success, -1 otherwise
+ * @see shardcache_set_volatile()
+ */
 int shardcache_del_async(shardcache_t *cache,
                          void *key,
                          size_t klen,
@@ -920,10 +933,46 @@ int shardcache_migration_end(shardcache_t *cache);
  *******************************************************************************
  */
 
+/**
+ * @brief Initialize the internal log subsystem
+ * @param ident The ident used in syslog messages
+ * @param loglevel The loglevel to use
+ */
 void shardcache_log_init(char *ident, int loglevel);
+
+/**
+ * @brief Returns the actually configured log lovel
+ * @return The loglevel configured at initialization time
+ */
 unsigned int shardcache_log_level();
+
+/**
+ * @brief Log a message at the specified prio and for the specified loglevel
+ * @param prio The priority of the message
+ * @param dbglevel The debuglevel of this message
+ * @param fmt The message
+ */
 void shardcache_log_message(int prio, int dbglevel, const char *fmt, ...);
+
+/**
+ * @brief Convert a binary buffer to an hexstring
+ * @param buf The buffer
+ * @param len The size of the input buffer
+ * @param limit Don't output more than 'limit' bytes
+ */
 char *shardcache_hex_escape(const char *buf, int len, int limit);
+
+/**
+ * @brief Escape all occurences of a specific byte using the provided escape character
+ * @param ch The byte to escape
+ * @param esc The escape byte to use when 'ch' is encountered
+ * @param buffer The input buffer to scan
+ * @param len The size of the input buffer
+ * @param dest Where to store the escaped string
+ * @param newlen The size of the escaped string
+ * @return The number of input bytes scanned
+ * @note  The caller MUST release the memory used of the output string when done
+ */
 unsigned long shardcache_byte_escape(char ch, char esc, char *buffer, unsigned long len, char **dest, unsigned long *newlen);
 
 #define SHC_ERROR(__fmt, __args...)      do { shardcache_log_message(LOG_ERR,     0, __fmt, ## __args); } while (0)
