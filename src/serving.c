@@ -997,7 +997,7 @@ worker(void *priv)
                 push_value(to_prune->requests, req);
                 MUTEX_UNLOCK(&req->lock);
             }
-            struct timeval quarantine = { 30, 0 };
+            struct timeval quarantine = { 60, 0 };
             struct timeval now, diff;
             gettimeofday(&now, NULL);
             timersub(&now, &to_prune->in_prune_since, &diff);
