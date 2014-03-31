@@ -1564,7 +1564,13 @@ shardcache_set_internal(shardcache_t *cache,
                     rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
                     if (rc == 0 && wrk) {
                         queue_push_right(cache->async_queue, wrk);
+                    } else {
+                        free(arg->key);
+                        free(arg);
+                        cb(key, klen, -1, priv);
                     }
+                } else {
+                    cb(key, klen, -1, priv);
                 }
             } else {
                 rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 1);
@@ -1591,9 +1597,14 @@ shardcache_set_internal(shardcache_t *cache,
                 rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
                 if (rc == 0 && wrk) {
                     queue_push_right(cache->async_queue, wrk);
+                } else {
+                    free(arg->key);
+                    free(arg);
+                    cb(key, klen, -1, priv);
                 }
+            } else {
+                cb(key, klen, -1, priv);
             }
-
         } else {
             rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 1);
             if (rc == 0) {
@@ -1783,7 +1794,13 @@ shardcache_del_internal(shardcache_t *cache,
                 rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
                 if (rc == 0 && wrk) {
                     queue_push_right(cache->async_queue, wrk);
+                } else {
+                    free(arg->key);
+                    free(arg);
+                    cb(key, klen, -1, priv);
                 }
+            } else {
+                cb(key, klen, -1, priv);
             }
         } else {
             rc = delete_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
