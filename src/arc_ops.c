@@ -14,7 +14,7 @@
  * */
 
 typedef struct {
-    cache_object_t *obj;
+    cached_object_t *obj;
     void *data;
     size_t len;
 } shardcache_fetch_from_peer_notify_arg;
@@ -24,7 +24,7 @@ arc_ops_fetch_from_peer_notify_listener (void *item, uint32_t idx, void *user)
 {
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
     shardcache_fetch_from_peer_notify_arg *arg = (shardcache_fetch_from_peer_notify_arg *)user;
-    cache_object_t *obj = arg->obj;
+    cached_object_t *obj = arg->obj;
     int rc = (listener->cb(obj->key, obj->klen, arg->data, arg->len, 0, NULL, listener->priv) == 0);
     if (!rc) {
         free(listener);
@@ -37,7 +37,7 @@ static int
 arc_ops_fetch_from_peer_notify_listener_complete(void *item, uint32_t idx, void *user)
 {
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
-    cache_object_t *obj = (cache_object_t *)user;
+    cached_object_t *obj = (cached_object_t *)user;
     listener->cb(obj->key, obj->klen, NULL, 0, obj->dlen, &obj->ts, listener->priv);
     free(listener);
     return -1;
@@ -47,14 +47,14 @@ static int
 arc_ops_fetch_from_peer_notify_listener_error(void *item, uint32_t idx, void *user)
 {
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
-    cache_object_t *obj = (cache_object_t *)user;
+    cached_object_t *obj = (cached_object_t *)user;
     listener->cb(obj->key, obj->klen, NULL, 0, 0, NULL, listener->priv);
     free(listener);
     return -1;
 }
 
 static void
-arc_ops_evict_object(shardcache_t *cache, cache_object_t *obj)
+arc_ops_evict_object(shardcache_t *cache, cached_object_t *obj)
 {
     if (list_count(obj->listeners)) {
         obj->evict = 1;
@@ -76,7 +76,7 @@ arc_ops_evict_object(shardcache_t *cache, cache_object_t *obj)
 
 typedef struct
 {
-    cache_object_t *obj;
+    cached_object_t *obj;
     shardcache_t *cache;
     char *peer_addr;
     int fd;
@@ -92,7 +92,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
                                  void *priv)
 {
     shc_fetch_async_arg_t *arg = (shc_fetch_async_arg_t *)priv;
-    cache_object_t *obj = arg->obj;
+    cached_object_t *obj = arg->obj;
     shardcache_t *cache = arg->cache;
     char *peer_addr = arg->peer_addr;
     int fd = arg->fd;
@@ -163,7 +163,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
 
 
 static int
-arc_ops_fetch_from_peer(shardcache_t *cache, cache_object_t *obj, char *peer)
+arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
 {
     int rc = -1;
     if (shardcache_log_level() >= LOG_DEBUG) {
@@ -255,7 +255,7 @@ void *
 arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
-    cache_object_t *obj = calloc(1, sizeof(cache_object_t));
+    cached_object_t *obj = calloc(1, sizeof(cached_object_t));
 
     obj->klen = len;
     obj->key = malloc(len);
@@ -289,7 +289,7 @@ arc_ops_fetch_copy_volatile_object_cb(void *ptr, size_t len)
 int
 arc_ops_fetch(void *item, size_t *size, void * priv)
 {
-    cache_object_t *obj = (cache_object_t *)item;
+    cached_object_t *obj = (cached_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
 
     MUTEX_LOCK(&obj->lock);
@@ -403,7 +403,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
 void
 arc_ops_evict(void *item, void *priv)
 {
-    cache_object_t *obj = (cache_object_t *)item;
+    cached_object_t *obj = (cached_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
     MUTEX_LOCK(&obj->lock);
     arc_ops_evict_object(cache, obj);
@@ -413,7 +413,7 @@ arc_ops_evict(void *item, void *priv)
 void
 arc_ops_destroy(void *item, void *priv)
 {
-    cache_object_t *obj = (cache_object_t *)item;
+    cached_object_t *obj = (cached_object_t *)item;
 
     MUTEX_LOCK(&obj->lock); // XXX - this is not really necessary
     if (obj->listeners) {

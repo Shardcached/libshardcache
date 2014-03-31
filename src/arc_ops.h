@@ -28,8 +28,8 @@ typedef struct {
 
     int evict;   // true if the object should be evicted as soon as possible
 
-    int drop;    // true if the object will not be cached cached but dropped 
-                 // just after it has been returned to the requester
+    int drop;    // true if the object will not be cached cached but instead
+                 // dropped just after being returned to the requester
 
     pthread_mutex_t lock; // All operations on this structure should be
                           // synchronized using this lock
@@ -37,7 +37,7 @@ typedef struct {
                           // might be locked for long time if involved in a
                           // fetch or store operation
     arc_resource_t *res;
-} cache_object_t;
+} cached_object_t;
 
 typedef struct {
     shardcache_get_async_callback_t cb;

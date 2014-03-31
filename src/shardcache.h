@@ -33,11 +33,11 @@ extern const char *LIBSHARDCACHE_VERSION;
  *        The shardcache instance will call this callback
  *        if the value has not been found in the cache.
  *
- * @param key     A valid pointer to the key
- * @param klen    The length of the key
- * @param vlen    If provided the length of the returned value will be stored
+ * @param key   A valid pointer to the key
+ * @param klen  The length of the key
+ * @param vlen  If provided the length of the returned value will be stored
  *              at the location pointed by vlen
- * @param priv    The 'priv' pointer previously stored in the shardcache_storage_t
+ * @param priv  The 'priv' pointer previously stored in the shardcache_storage_t
  *              structure at initialization time
  * @return A pointer to initialized memory containing the stored value.
  *         A NULL pointer if not found.
@@ -53,12 +53,12 @@ typedef void *(*shardcache_fetch_item_callback_t)
  *        The shardcache instance will call this callback
  *        if a new value needs to be set in the underlying storage
  *
- * @param key      A valid pointer to the key
- * @param klen     The length of the key
- * @param value    A valid pointer to the value to store
- * @param vlen     The length of the value
- * @param priv     The 'priv' pointer previously stored in the shardcache_storage_t
- *               structure at initialization time
+ * @param key   A valid pointer to the key
+ * @param klen  The length of the key
+ * @param value A valid pointer to the value to store
+ * @param vlen  The length of the value
+ * @param priv  The 'priv' pointer previously stored in the shardcache_storage_t
+ *              structure at initialization time
  * @return 0 if success, -1 otherwise
  */
 typedef int (*shardcache_store_item_callback_t)
@@ -71,10 +71,10 @@ typedef int (*shardcache_store_item_callback_t)
  *        if the value for a given key needs to be removed
  *        from the underlying storage
  *
- * @param key      A valid pointer to the key
- * @param klen     The length of the key
- * @param priv     The 'priv' pointer previously stored in the shardcache_storage_t
- *               structure at initialization time
+ * @param key  A valid pointer to the key
+ * @param klen The length of the key
+ * @param priv The 'priv' pointer previously stored in the shardcache_storage_t
+ *             structure at initialization time
  * @return 0 if success, -1 otherwise
  */
 typedef int
@@ -82,10 +82,10 @@ typedef int
 
 /**
  * @brief Callback to check if a specific key exists on the storage
- * @param key      A valid pointer to the key
- * @param klen     The length of the key
- * @param priv     The 'priv' pointer previously stored in the shardcache_storage_t
- *                 structure at initialization time
+ * @param key  A valid pointer to the key
+ * @param klen The length of the key
+ * @param priv The 'priv' pointer previously stored in the shardcache_storage_t
+ *             structure at initialization time
  * @return 1 if exists, 0 otherwise
  */
 typedef int
@@ -126,7 +126,7 @@ typedef struct __shardcache_storage_index_s {
 /**
  * @brief Callback returning the number of items in the index
  *
- * @param priv     The priv pointer owned by the storage
+ * @param priv The priv pointer owned by the storage
  *
  * @return The total number of items in the storage
  * @note This callback is mandatory if the index callback is set, otherwise it's optional
@@ -142,10 +142,10 @@ typedef size_t (*shardcache_count_items_callback_t)(void *priv);
  *        when it will need to retrieve the full index of the keys
  *        owned (and stored) by the instance
  *
- * @param index    An array of shardcache_storage_index_item_t structures
- *               to hold the index
- * @param isize    The number of slots in the provided index array
- * @param priv     The priv pointer owned by the storage
+ * @param index An array of shardcache_storage_index_item_t structures
+ *              to hold the index
+ * @param isize The number of slots in the provided index array
+ * @param priv  The priv pointer owned by the storage
  *
  * @return The number of items in the index, 0 if none or errors
  * @note If the caller didn't previously check the number of items
@@ -229,7 +229,7 @@ typedef struct __shardcache_storage_s {
  *        to let the storage initialize and create the shardcache_storage_t
  *        structure and its internals
  *
- * @param options   A null-termianted array of strings holding the options
+ * @param options A null-termianted array of strings holding the options
  *                specific to the storage module
  *
  * @return A newly initialized shardcache_storage_t structure usable by the
@@ -242,7 +242,7 @@ typedef shardcache_storage_t *
  * @brief Callback used to dispose all resources associated to a previously
  *        initialized storage module
  *
- * @param storage   A pointer to a valid (and previously initialized)
+ * @param storage A pointer to a valid (and previously initialized)
  *                shardcache_storage_t structure
  */
 typedef void (*shardcache_storage_destructor)(shardcache_storage_t *storage);
@@ -278,11 +278,11 @@ typedef struct __shardcache_s shardcache_t;
 
 /**
  * @brief Returns the list of registered counters with their actual value
- * @param cache     A valid pointer to a shardcache_t structure
- * @param counters  A reference to a pointer which will be set to the initialized
- *                  memory holding the array of counters
- * @note            The counters array needs to be released using
- *                  free() once not necessary anymore.
+ * @param cache    A valid pointer to a shardcache_t structure
+ * @param counters A reference to a pointer which will be set to the initialized
+ *                 memory holding the array of counters
+ * @note           The counters array needs to be released using
+ *                 free() once not necessary anymore.
  * @return The number of counters contained in the counters array
  */
 int shardcache_get_counters(shardcache_t *cache,
@@ -290,7 +290,7 @@ int shardcache_get_counters(shardcache_t *cache,
 
 /**
  * @brief Resets all the counters to 0
- * @param cache   A valid pointer to a shardcache_t structure
+ * @param cache A valid pointer to a shardcache_t structure
  */
 void shardcache_clear_counters(shardcache_t *cache);
 

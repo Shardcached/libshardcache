@@ -876,7 +876,7 @@ shardcache_get_offset_async(shardcache_t *cache,
         return -1;
     }
 
-    cache_object_t *obj = (cache_object_t *)obj_ptr;
+    cached_object_t *obj = (cached_object_t *)obj_ptr;
     MUTEX_LOCK(&obj->lock);
     if (obj->evicted) {
         // if marked for eviction we don't want to return this object
@@ -960,7 +960,7 @@ size_t shardcache_get_offset(shardcache_t *cache,
         return 0;
 
     if (obj_ptr) {
-        cache_object_t *obj = (cache_object_t *)obj_ptr;
+        cached_object_t *obj = (cached_object_t *)obj_ptr;
         MUTEX_LOCK(&obj->lock);
         if (obj->data) {
             if (dlen && data) {
@@ -1006,7 +1006,7 @@ shardcache_get_async(shardcache_t *cache,
         return -1;
     }
 
-    cache_object_t *obj = (cache_object_t *)obj_ptr;
+    cached_object_t *obj = (cached_object_t *)obj_ptr;
     MUTEX_LOCK(&obj->lock);
     if (obj->evicted) {
         // if marked for eviction we don't want to return this object
@@ -1347,7 +1347,7 @@ shardcache_touch(shardcache_t *cache, void *key, size_t klen)
         void *obj_ptr = NULL;
         arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 0);
         if (res) {
-            cache_object_t *obj = (cache_object_t *)obj_ptr;
+            cached_object_t *obj = (cached_object_t *)obj_ptr;
             MUTEX_LOCK(&obj->lock);
             gettimeofday(&obj->ts, NULL);
             MUTEX_UNLOCK(&obj->lock);
