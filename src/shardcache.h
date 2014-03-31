@@ -437,7 +437,7 @@ char **shardcache_get_node_labels(shardcache_t *cache, int *num_labels);
 /**
  * @brief Release resources for a list of labels
  *
- * @param labels     A valid list of labels (as returned by shardcache_get_nodes())
+ * @param labels     A valid list of labels (as returned by shardcache_get_node_labels())
  * @param num_labels The number of nodes in the array
  */
 void shardcache_free_labels(shardcache_node_t **labels, int num_labels);
@@ -480,8 +480,8 @@ shardcache_t *shardcache_create(char *me,
  *                    but the actual value will still be returned
  *                    (effectively querying the actual status).
  * @return the previous value for the use_persistent_connections setting
- * @note when evict-on-delete is true, an evict command is sent to all nodes if an item
- *       is removed from the storage
+ * @note if evict-on-delete is true, an evict command is sent to all other nodes
+ *       when an item is removed from the storage
  * @note defaults to 1
  */
 int shardcache_use_persistent_connections(shardcache_t *cache, int new_value);
@@ -599,7 +599,7 @@ size_t shardcache_get_offset(shardcache_t *cache,
  *       The callback will not be called anymore once this parameter has been
  *       provided
  * @param priv        The priv pointer passed to shardcache_get_async()
- * @return 0 if no errors occurred and more data can be provided safely
+ * @return 0 if no errors occurred and more data can be provided safely;\n
  *         -1 if an error occurs and we don't want the callback to be called
  *         again (which could eventually abort the fetch operation)
  */
@@ -734,21 +734,21 @@ int shardcache_set(shardcache_t *cache,
 
 /**
  * @brief Set the value for a key fetching the response asyncrhonously
- * @param cache   A valid pointer to a shardcache_t structure
- * @param key   A valid pointer to the key
+ * @param cache  A valid pointer to a shardcache_t structure
+ * @param key    A valid pointer to the key
  * @param klen   The length of the key
- * @param value   A valid pointer to the value
+ * @param value  A valid pointer to the value
  * @param vlen   The length of the value
- * @param expire   The number of seconds after which the volatile value expires
- *                 If 0 the value will not expire and it will be stored using the
- *                 actual storage module (which might evntually be a presistent
- *                 storage backend as the filesystem or database ones)
+ * @param expire The number of seconds after which the volatile value expires
+ *               If 0 the value will not expire and it will be stored using the
+ *               actual storage module (which might evntually be a presistent
+ *               storage backend as the filesystem or database ones)
  * @param if_not_exists If this param is true, the value will be set only
- *                if there isn't one already stored
- * @param cb      The shardcache_async_response_callback_t which will be
- *                called once the result has been retreived
- * @param priv    A pointer which will be passed to the
- *                shardcache_async_response_callback_t when called
+ *                      if there isn't one already stored
+ * @param cb     The shardcache_async_response_callback_t which will be
+ *               called once the result has been retreived
+ * @param priv   A pointer which will be passed to the
+ *               shardcache_async_response_callback_t when called
  * @return 0 on success, -1 otherwise
  * @see shardcache_set_volatile()
  */
@@ -765,11 +765,11 @@ int shardcache_set_async(shardcache_t *cache,
 
 /**
  * @brief Set the value for a key if it doesn't already exist 
- * @param cache   A valid pointer to a shardcache_t structure
+ * @param cache A valid pointer to a shardcache_t structure
  * @param key   A valid pointer to the key
- * @param klen   The length of the key
- * @param value   A valid pointer to the value
- * @param vlen   The length of the value
+ * @param klen  The length of the key
+ * @param value A valid pointer to the value
+ * @param vlen  The length of the value
  * @return 0 on success, 1 if the key already exists, -1 in case of error
  * @see shardcache_set_volatile()
  */
@@ -781,15 +781,15 @@ int shardcache_add(shardcache_t *cache,
 
 /**
  * @brief Set a volatile value for a key
- * @param cache    A valid pointer to a shardcache_t structure
- * @param key      A valid pointer to the key
- * @param klen     The length of the key
- * @param value    A valid pointer to the value
- * @param vlen     The length of the value
- * @param expire   The number of seconds after which the volatile value expires
- *                 If 0 the value will not expire and it will be stored using the
- *                 actual storage module (which might evntually be a presistent
- *                 storage backend as the filesystem or database ones)
+ * @param cache  A valid pointer to a shardcache_t structure
+ * @param key    A valid pointer to the key
+ * @param klen   The length of the key
+ * @param value  A valid pointer to the value
+ * @param vlen   The length of the value
+ * @param expire The number of seconds after which the volatile value expires
+ *               If 0 the value will not expire and it will be stored using the
+ *               actual storage module (which might evntually be a presistent
+ *               storage backend as the filesystem or database ones)
  * @return 0 on success, -1 otherwise
  * @see shardcache_set()
  */
@@ -802,11 +802,11 @@ int shardcache_set_volatile(shardcache_t *cache,
 
 /**
  * @brief Set the volatile value for a key if it doesn't already exist 
- * @param cache A valid pointer to a shardcache_t structure
- * @param key   A valid pointer to the key
- * @param klen  The length of the key
- * @param value A valid pointer to the value
- * @param vlen  The length of the value
+ * @param cache  A valid pointer to a shardcache_t structure
+ * @param key    A valid pointer to the key
+ * @param klen   The length of the key
+ * @param value  A valid pointer to the value
+ * @param vlen   The length of the value
  * @param expire The number of seconds after which the volatile value expires
  *               If 0 the value will not expire and it will be stored using the
  *               actual storage module (which might evntually be a presistent
@@ -852,22 +852,22 @@ int shardcache_del_async(shardcache_t *cache,
 /**
  * @brief Remove the value from the cache for a key
  * @note the value will not be removed from the underlying storage
- * @param cache   A valid pointer to a shardcache_t structure
+ * @param cache A valid pointer to a shardcache_t structure
  * @param key   A valid pointer to the key
- * @param klen   The length of the key
+ * @param klen  The length of the key
  * @return 0 on success, -1 otherwise
  */
 int shardcache_evict(shardcache_t *cache, void *key, size_t klen);
 
 /**
  * @brief Get the node owning a specific key
- * @param cache   A valid pointer to a shardcache_t structure
+ * @param cache A valid pointer to a shardcache_t structure
  * @param key   A valid pointer to the key
- * @param klen The length of the key
+ * @param klen  The length of the key
  * @param owner If provided the pointed pointer will be set to the name
  *              (<address:port>) of the node owning the key
- * @param len If not NULL, the size of the owner string will be stored
- *            in the memory pointed by 'len'
+ * @param len   If not NULL, the size of the owner string will be stored
+ *              in the memory pointed by 'len'
  * @return 1 if the current node (represented by cache) is the owner
  *           of the key, 0 otherwise
  */
@@ -889,17 +889,17 @@ shardcache_storage_index_t *shardcache_get_index(shardcache_t *cache);
 
 /**
  * @brief Release all resources used by the index provided as argument
- * @param index   A pointer to a valid shardcache_storage_index_t structure
+ * @param index A pointer to a valid shardcache_storage_index_t structure
  *              previously obtained via the shardcache_get_index() function
  */
 void shardcache_free_index(shardcache_storage_index_t *index);
 
 /**
  * @brief   Start a migration process
- * @param cache       A valid pointer to a shardcache_t structure
- * @param nodes       The list of nodes representing the new group to migrate to
- * @param num_nodes   The number of nodes in the list
- * @param forward     A boolean flag indicating if the migration command needs to be
+ * @param cache     A valid pointer to a shardcache_t structure
+ * @param nodes     The list of nodes representing the new group to migrate to
+ * @param num_nodes The number of nodes in the list
+ * @param forward   A boolean flag indicating if the migration command needs to be
  *                  forwarded to all other peers
  * @return 0 on success, -1 otherwise
  */
@@ -910,7 +910,7 @@ int shardcache_migration_begin(shardcache_t *cache,
 
 /**
  * @brief   Abort the current migration process
- * @param cache       A valid pointer to a shardcache_t structure
+ * @param cache A valid pointer to a shardcache_t structure
  * @return 0 on success, -1 in case of errors
  *         (for instance if no migration is in progress
  *         when this function is called)
@@ -920,7 +920,7 @@ int shardcache_migration_abort(shardcache_t *cache);
 /**
  * @brief   End the current migration process by swapping the two continua
  *          and releasing resources for the old one
- * @param cache       A valid pointer to a shardcache_t structure
+ * @param cache A valid pointer to a shardcache_t structure
  * @return 0 on success, -1 in case of errors
  *         (for instance if no migration is in progress
  *         when this function is called)
@@ -964,11 +964,11 @@ char *shardcache_hex_escape(const char *buf, int len, int limit);
 
 /**
  * @brief Escape all occurences of a specific byte using the provided escape character
- * @param ch The byte to escape
- * @param esc The escape byte to use when 'ch' is encountered
+ * @param ch     The byte to escape
+ * @param esc    The escape byte to use when 'ch' is encountered
  * @param buffer The input buffer to scan
- * @param len The size of the input buffer
- * @param dest Where to store the escaped string
+ * @param len    The size of the input buffer
+ * @param dest   Where to store the escaped string
  * @param newlen The size of the escaped string
  * @return The number of input bytes scanned
  * @note  The caller MUST release the memory used of the output string when done
