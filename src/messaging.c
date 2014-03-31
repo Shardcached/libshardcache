@@ -1637,5 +1637,7 @@ int
 connect_to_peer(char *address_string, unsigned int timeout)
 {
     int fd = open_connection(address_string, SHARDCACHE_PORT_DEFAULT, timeout);
+    if (fd < 0)
+        SHC_DEBUG("Can't connect to %s", address_string);
     return fd;
 }
