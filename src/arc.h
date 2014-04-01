@@ -80,6 +80,7 @@ void arc_destroy(arc_t *cache);
  * @param klen   : The length of the key
  * @param valuep : a reference to the pointer where to copy the retrieved value
  * @return An opaque ARC resource which needs to be released using arc_release_resource()
+ *         once the object is not going to be referenced anymore
  *
  * @note ARC resources are internally reference counted. So when giving back to the caller
  *       a cached object (which is contained in an ARC resource) it will be retained until
@@ -89,10 +90,21 @@ arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t klen, void **val
 
 /**
  * @brief Release the resource previously alloc'd by arc_lookup()
+ * @note  The retain count will be decreased by 1.\nThe underlying
+ *        resources will be free'd if the retain reaches 0
  * @param cache  : A valid pointer to an initialized arc_t structure
  * @param res    : An opaque ARC resource previously returned by arc_lookup()
  */
 void arc_release_resource(arc_t *cache, arc_resource_t *res);
+
+/**
+ * @brief Retain an ARC resource preventing it from being released
+ * @note  The retain count will be increased by 1
+ * @param cache  : A valid pointer to an initialized arc_t structure
+ * @param res    : An opaque ARC resource to retain
+ * @note Retained resources MUST be released calling arc_release_resource()
+ *       once it is not going to be referenced anymore
+ */
 void arc_retain_resource(arc_t *cache, arc_resource_t *res);
 
 /**
