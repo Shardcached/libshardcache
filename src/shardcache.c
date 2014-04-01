@@ -1727,8 +1727,13 @@ shardcache_del_internal(shardcache_t *cache,
                         shardcache_async_response_callback_t cb,
                         void *priv)
 {
-    if (!key)
-        return -1;
+    int rc = -1;
+
+    if (!key) {
+        if (cb)
+            cb(key, klen, -1, priv);
+        return rc;
+    }
 
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_DELS].value);
 
@@ -1744,11 +1749,21 @@ shardcache_del_internal(shardcache_t *cache,
     if (is_mine == 1)
     {
         void *prev_ptr;
-        int rc = ht_delete(cache->volatile_storage, key, klen, &prev_ptr, NULL);
+        rc = ht_delete(cache->volatile_storage, key, klen, &prev_ptr, NULL);
 
         if (rc != 0) {
-            if (cache->use_persistent_storage && cache->storage.remove)
-                cache->storage.remove(key, klen, cache->storage.priv);
+            if (cache->use_persistent_storage) {
+                if (cache->storage.remove) {
+                    rc = cache->storage.remove(key, klen, cache->storage.priv);
+                } else {
+                    // if there is a readonly persistent storage
+                    // we want to return a 'success' return code,
+                    // since eviction is going to be commenced anyway
+                    // which is what expected when sending a delete command
+                    // to a node using a readonly persistent storage
+                    rc = 0;
+                }
+            }
         } else if (prev_ptr) {
             volatile_object_t *prev_item = (volatile_object_t *)prev_ptr;
             ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
@@ -1770,11 +1785,12 @@ shardcache_del_internal(shardcache_t *cache,
         if (cb)
             cb(key, klen, rc, priv);
 
-        return 0;
     } else if (!replica) {
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
         if (!peer) {
             SHC_ERROR("Can't find address for node %s\n", peer);
+            if (cb)
+                cb(key, klen, -1, priv);
             return -1;
         }
         char *addr = shardcache_node_get_address(peer);
@@ -1812,11 +1828,9 @@ shardcache_del_internal(shardcache_t *cache,
             else
                 close(fd);
         }
-        return rc;
     }
 
-    return -1;
-
+    return rc;
 }
 
 int
