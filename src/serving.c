@@ -509,18 +509,18 @@ process_request(shardcache_request_t *req)
                 memcpy(&expire, fbuf_data(&req->records[2]), sizeof(uint32_t));
                 expire = ntohl(expire);
             }
-            rc = shardcache_set_async(cache, key, klen,
-                                      fbuf_data(&req->records[1]),
-                                      fbuf_used(&req->records[1]),
-                                      expire,
-                                      req->hdr == SHC_HDR_SET ? 0 : 1,
-                                      shardcache_async_command_response,
-                                      req);
+            shardcache_set_async(cache, key, klen,
+                                 fbuf_data(&req->records[1]),
+                                 fbuf_used(&req->records[1]),
+                                 expire,
+                                 req->hdr == SHC_HDR_SET ? 0 : 1,
+                                 shardcache_async_command_response,
+                                 req);
             break;
         }
         case SHC_HDR_EXISTS:
         {
-            rc = shardcache_exists_async(cache, key, klen, shardcache_async_command_response, req);
+            shardcache_exists_async(cache, key, klen, shardcache_async_command_response, req);
             break;
         }
         case SHC_HDR_TOUCH:
@@ -531,7 +531,7 @@ process_request(shardcache_request_t *req)
         }
         case SHC_HDR_DELETE:
         {
-            rc = shardcache_del_async(cache, key, klen, shardcache_async_command_response, req);
+            shardcache_del_async(cache, key, klen, shardcache_async_command_response, req);
             break;
         }
         case SHC_HDR_EVICT:
