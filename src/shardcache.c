@@ -911,10 +911,12 @@ shardcache_get_offset_async(shardcache_t *cache,
                 if (dlen > length)
                     dlen = length;
                 if (dlen && obj->data) {
-                    void *data = malloc(dlen);
+                    data = malloc(dlen);
                     memcpy(data, obj->data + offset, dlen);
                 }
                 cb(key, klen, data, dlen, 0, NULL, priv);
+                if (data)
+                    free(data);
             }
         }
 
@@ -934,7 +936,6 @@ shardcache_get_offset_async(shardcache_t *cache,
     arc_release_resource(cache->arc, res);
     ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
               (uint32_t)arc_size(cache->arc));
-    //return (offset < vlen + copied) ? (vlen - offset - copied) : 0;
     return 0;
 }
 
