@@ -74,8 +74,10 @@ typedef enum {
 
 int global_tcp_timeout(int tcp_timeout);
 
+// synchronously read a message (blocking)
 int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr);
 
+// synchronously write a message (blocking)
 int write_message(int fd,
                   char *auth,
                   unsigned char sig_hdr,
@@ -83,6 +85,7 @@ int write_message(int fd,
                   shardcache_record_t *records,
                   int num_records);
 
+// build a valid shardcache message containing the provided records
 int build_message(char *auth,
                   unsigned char sig_hdr,
                   unsigned char hdr,
@@ -90,6 +93,7 @@ int build_message(char *auth,
                   int num_records,
                   fbuf_t *out);
 
+// delete a key from a peer
 int delete_from_peer(char *peer,
                      char *auth,
                      unsigned char sig_hdr,
@@ -98,6 +102,7 @@ int delete_from_peer(char *peer,
                      int fd,
                      int expect_response);
 
+// evict a key from a peer
 int
 evict_from_peer(char *peer,
                 char *auth,
@@ -108,6 +113,7 @@ evict_from_peer(char *peer,
                 int expect_response);
 
 
+// send a new value for a given key to a peer
 int send_to_peer(char *peer,
                  char *auth,
                  unsigned char sig_hdr,
@@ -120,6 +126,7 @@ int send_to_peer(char *peer,
                  int expect_response);
 
 
+// add a new value (set if not exists) for a given key to a peer 
 int
 add_to_peer(char *peer,
             char *auth,
@@ -132,6 +139,7 @@ add_to_peer(char *peer,
             int fd,
             int expect_response);
 
+// fetch the value for a given key from a peer
 int fetch_from_peer(char *peer,
                     char *auth,
                     unsigned char sig_hdr,
@@ -140,6 +148,7 @@ int fetch_from_peer(char *peer,
                     fbuf_t *out,
                     int fd);
 
+// fetch part of the value for a given key from a peer
 int offset_from_peer(char *peer,
                      char *auth,
                      unsigned char sig_hdr,
@@ -150,6 +159,7 @@ int offset_from_peer(char *peer,
                      fbuf_t *out,
                      int fd);
 
+// check if a key exists on a peer
 int exists_on_peer(char *peer,
                    char *auth,
                    unsigned char sig_hdr,
@@ -158,6 +168,7 @@ int exists_on_peer(char *peer,
                    int fd,
                    int expect_response);
 
+// touch a key on a peer (loads into cache if responsible and timestamp is updated)
 int
 touch_on_peer(char *peer,
               char *auth,
@@ -166,6 +177,7 @@ touch_on_peer(char *peer,
               size_t klen,
               int fd);
 
+// retrieve all the stats counters from a peer
 int stats_from_peer(char *peer,
                     char *auth,
                     unsigned char sig_hdr,
@@ -173,11 +185,13 @@ int stats_from_peer(char *peer,
                     size_t *len,
                     int fd);
 
+// check if a peer is alive (using the CHK command)
 int check_peer(char *peer,
                char *auth,
                unsigned char sig_hdr,
                int fd);
 
+// start migration
 int migrate_peer(char *peer,
                  char *auth,
                  unsigned char sig_hdr,
@@ -185,9 +199,14 @@ int migrate_peer(char *peer,
                  size_t len,
                  int fd);
 
+// abort migration
 int abort_migrate_peer(char *peer, char *auth, unsigned char sig_hdr, int fd);
 
+
+// connect to a given peer and return the opened filedescriptor
 int connect_to_peer(char *address_string, unsigned int timeout);
+
+// retrieve the index of keys stored in a given peer
 // NOTE: caller must use shardcache_free_index() to release memory used
 //       by the returned shardcache_storage_index_t pointer
 shardcache_storage_index_t *index_from_peer(char *peer,
@@ -268,4 +287,5 @@ int read_message_async(int fd,
                    async_read_callback_t cb,
                    void *priv,
                    async_read_wrk_t **worker);
+
 #endif

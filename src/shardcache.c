@@ -23,7 +23,7 @@
 #include "messaging.h"
 #include "shardcache_replica.h"
 
-const char *LIBSHARDCACHE_VERSION = "0.10";
+const char *LIBSHARDCACHE_VERSION = "0.11";
 
 extern int shardcache_log_initialized;
 
@@ -1310,6 +1310,8 @@ shardcache_exists_async(shardcache_t *cache,
                 if (rc == 0 && wrk) {
                     queue_push_right(cache->async_queue, wrk);
                 }
+            } else {
+                cb(key, klen, -1, priv);
             }
         } else {
             rc = exists_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
