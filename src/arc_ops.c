@@ -368,16 +368,20 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         }
     }
 
+    gettimeofday(&obj->ts, NULL);
+
+    obj->complete = 1;
+
     if (!obj->data) {
+        if (obj->async && obj->listeners)
+            foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
+
         MUTEX_UNLOCK(&obj->lock);
         if (shardcache_log_level() >= LOG_DEBUG)
             SHC_DEBUG("Item not found for key %s", keystr);
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value);
         return -1;
     }
-    gettimeofday(&obj->ts, NULL);
-
-    obj->complete = 1;
 
     if (obj->async) {
         shardcache_fetch_from_peer_notify_arg arg = {
