@@ -872,6 +872,10 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
         if (done && empty) {
             shift_value(ctx->requests);
             shardcache_request_destroy(req);
+            // if we have pending input data this is time
+            // to process it and move to the next request
+            if (rbuf_len(ctx->input))
+                shardcache_update_context_state(iomux, fd, ctx);
         } else if (empty) {
             break;
         }
