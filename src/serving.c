@@ -256,11 +256,26 @@ static int get_async_data_handler(void *key,
     if (dlen == 0 && total_size == 0) {
         // error
         req->fetch_error = 1;
+        uint16_t eor = 0;
+        char eom = 0;
+        fbuf_add_binary(&req->output, (void *)&eor, 2);
+        fbuf_add_binary(&req->output, &eom, 1);
         if (req->fetch_shash) {
+            uint64_t digest;
+            sip_hash_update(req->fetch_shash, (void *)&eor, 2);
+            sip_hash_update(req->fetch_shash, &eom, 1);
+            if (sip_hash_final_integer(req->fetch_shash, &digest)) {
+                fbuf_add_binary(&req->output, (void *)&digest, sizeof(digest));
+            } else {
+                SHC_ERROR("Can't compute the siphash digest!\n");
+                ATOMIC_INCREMENT(req->fetch_error);
+            }
             sip_hash_free(req->fetch_shash);
             req->fetch_shash = NULL;
         }
+
         req->done = 1;
+
         MUTEX_UNLOCK(&req->lock);
         return -1;
     }
@@ -331,6 +346,7 @@ static int get_async_data_handler(void *key,
                 sip_hash_free(req->fetch_shash);
                 req->fetch_shash = NULL;
                 req->done = 1;
+                req->fetch_error = 1;
                 MUTEX_UNLOCK(&req->lock);
                 ATOMIC_INCREMENT(req->fetch_error);
                 return -1;
@@ -369,6 +385,7 @@ static int get_async_data_handler(void *key,
                         sip_hash_free(req->fetch_shash);
                         req->fetch_shash = NULL;
                         req->done = 1;
+                        req->fetch_error = 1;
                         MUTEX_UNLOCK(&req->lock);
                         return -1;
                     }
@@ -385,6 +402,7 @@ static int get_async_data_handler(void *key,
             if (sip_hash_final_integer(req->fetch_shash, &digest)) {
                 fbuf_add_binary(&req->output, (void *)&digest, sizeof(digest));
             } else {
+                req->fetch_error = 1;
                 SHC_ERROR("Can't compute the siphash digest!\n");
                 ATOMIC_INCREMENT(req->fetch_error);
             }
@@ -851,6 +869,12 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
             break;
         }
         MUTEX_LOCK(&req->lock);
+        if (req->fetch_error) {
+            // abort the request and close the connection
+            // if there was an error while fetching a remote object
+            iomux_close(iomux, fd);
+            return;
+        }
         void *req_output = fbuf_data(&req->output);
         int req_outlen = fbuf_used(&req->output);
         if (req_outlen > (max - offset)) {
