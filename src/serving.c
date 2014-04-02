@@ -254,8 +254,6 @@ static int get_async_data_handler(void *key,
     MUTEX_LOCK(&req->lock);
 
     if (dlen == 0 && total_size == 0) {
-        // error
-        req->fetch_error = 1;
         uint16_t eor = 0;
         char eom = 0;
         fbuf_add_binary(&req->output, (void *)&eor, 2);
@@ -268,7 +266,7 @@ static int get_async_data_handler(void *key,
                 fbuf_add_binary(&req->output, (void *)&digest, sizeof(digest));
             } else {
                 SHC_ERROR("Can't compute the siphash digest!\n");
-                ATOMIC_INCREMENT(req->fetch_error);
+                req->fetch_error = 1;
             }
             sip_hash_free(req->fetch_shash);
             req->fetch_shash = NULL;
@@ -277,7 +275,7 @@ static int get_async_data_handler(void *key,
         req->done = 1;
 
         MUTEX_UNLOCK(&req->lock);
-        return -1;
+	return 0;
     }
 
     uint32_t offset = 0;
@@ -348,7 +346,6 @@ static int get_async_data_handler(void *key,
                 req->done = 1;
                 req->fetch_error = 1;
                 MUTEX_UNLOCK(&req->lock);
-                ATOMIC_INCREMENT(req->fetch_error);
                 return -1;
             }
             fbuf_add_binary(&req->output, (void *)&digest, sizeof(digest));
@@ -404,7 +401,6 @@ static int get_async_data_handler(void *key,
             } else {
                 req->fetch_error = 1;
                 SHC_ERROR("Can't compute the siphash digest!\n");
-                ATOMIC_INCREMENT(req->fetch_error);
             }
             sip_hash_free(req->fetch_shash);
             req->fetch_shash = NULL;
@@ -446,7 +442,7 @@ static void get_async_data(shardcache_t *cache,
                 fbuf_add_binary(&req->output, (void *)&digest, sizeof(digest));
             } else {
                 SHC_ERROR("Can't compute the siphash digest!\n");
-                ATOMIC_INCREMENT(req->fetch_error);
+		req->fetch_error = 1;
                 sip_hash_free(req->fetch_shash);
                 req->fetch_shash = NULL;
             }
