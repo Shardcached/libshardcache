@@ -2320,9 +2320,3 @@ shardcache_tcp_timeout(shardcache_t *cache, int new_value)
     return connections_pool_tcp_timeout(cache->connections_pool, new_value);
 }
 
-int
-shardcache_max_workers(shardcache_t *cache, int new_value)
-{
-    return max_serving_workers(cache->serv, new_value);
-}
-

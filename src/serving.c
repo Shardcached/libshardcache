@@ -56,7 +56,6 @@ struct __shardcache_serving_s {
     const char *auth;
     const char *me;
     int num_workers;
-    int max_workers;
     int next_worker_index;
     linked_list_t *workers;
     int worker_index;
@@ -1089,7 +1088,6 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
     s->me = me;
     s->auth = auth;
     s->num_workers = num_workers;
-    s->max_workers = s->num_workers * 2;
     s->counters = counters;
 
     // open the listening socket
@@ -1232,30 +1230,3 @@ stop_serving(shardcache_serving_t *s)
     free(s);
 }
 
-int
-max_serving_workers(shardcache_serving_t *s, int new_value)
-{
-    int old_value = ATOMIC_READ(s->max_workers);
-    if (new_value >= 0) {
-        if (new_value > ATOMIC_READ(s->num_workers)) {
-            ATOMIC_SET(s->max_workers, new_value);
-        } else {
-            ATOMIC_SET(s->max_workers, ATOMIC_READ(s->num_workers));
-        }
-    }
-    return old_value;
-}
-
-int
-min_serving_workers(shardcache_serving_t *s, int new_value)
-{
-    int old_value = ATOMIC_READ(s->num_workers);
-    if (new_value >= 0) {
-        if (new_value > ATOMIC_READ(s->max_workers)) {
-            ATOMIC_SET(s->max_workers, new_value);
-            ATOMIC_SET(s->num_workers, new_value);
-        } else {
-            ATOMIC_SET(s->num_workers, new_value);
-        }
-    }   return old_value;
-}

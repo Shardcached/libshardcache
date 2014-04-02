@@ -14,7 +14,4 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
                                     shardcache_counters_t *counters);
 void stop_serving(shardcache_serving_t *s);
 
-int max_serving_workers(shardcache_serving_t *s, int new_value);
-int min_serving_workers(shardcache_serving_t *s, int new_value);
-
 #endif
