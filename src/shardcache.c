@@ -36,7 +36,7 @@ shardcache_check_address_string(char *str)
     if (rc != 0) {
         char errbuf[1024];
         regerror(rc, &addr_regexp, errbuf, sizeof(errbuf));
-        fprintf(stderr, "Can't compile regexp %s: %s\n", ADDR_REGEXP, errbuf);
+        SHC_ERROR("Can't compile regexp %s: %s", ADDR_REGEXP, errbuf);
         return -1;
     }
 
@@ -599,11 +599,11 @@ shardcache_create(char *me,
             for (n = 0; n < nodes[i]->num_replicas; n++) {
                 int fd = open_socket(nodes[i]->address[n], 0);
                 if (fd >= 0) {
-                    SHC_DEBUG("Using address %s\n", nodes[i]->address[n]);
+                    SHC_DEBUG("Using address %s", nodes[i]->address[n]);
                     cache->addr = strdup(nodes[i]->address[n]);
                     close(fd);
                 } else {
-                    SHC_DEBUG("Skipping address %s\n", nodes[i]->address[n]);
+                    SHC_DEBUG("Skipping address %s", nodes[i]->address[n]);
                 }
             }
             if (nodes[i]->num_replicas > 1)
@@ -613,9 +613,9 @@ shardcache_create(char *me,
 
     if (!cache->addr) {
         if (me_found) {
-            SHC_ERROR("Can't bind any address configured for node %s\n", me);
+            SHC_ERROR("Can't bind any address configured for node %s", me);
         } else {
-            SHC_ERROR("Can't find my address (%s) among the configured nodes\n", cache->me);
+            SHC_ERROR("Can't find my address (%s) among the configured nodes", cache->me);
         }
         shardcache_destroy(cache);
         return NULL;
@@ -631,7 +631,7 @@ shardcache_create(char *me,
     // check if there is already signal handler registered on SIGPIPE
     struct sigaction sa;
     if (sigaction(SIGPIPE, NULL, &sa) != 0) {
-        fprintf(stderr, "Can't check signal handlers: %s\n", strerror(errno)); 
+        SHC_ERROR("Can't check signal handlers: %s", strerror(errno)); 
         shardcache_destroy(cache);
         return NULL;
     }
@@ -646,7 +646,7 @@ shardcache_create(char *me,
     } 
 
     if (secret && *secret) {
-        SHC_DEBUG("AUTH KEY (secret: %s) : %s\n", secret,
+        SHC_DEBUG("AUTH KEY (secret: %s) : %s", secret,
                   shardcache_hex_escape(cache->auth, SHARDCACHE_MSG_SIG_LEN, DEBUG_DUMP_MAXSIZE));
     }
 
@@ -679,14 +679,14 @@ shardcache_create(char *me,
     iomux_set_threadsafe(cache->async_mux, 1);
 
     if (pthread_create(&cache->async_io_th, NULL, shardcache_run_async, cache) != 0) {
-        fprintf(stderr, "Can't create the async i/o thread: %s\n", strerror(errno));
+        SHC_ERROR("Can't create the async i/o thread: %s", strerror(errno));
         shardcache_destroy(cache);
         return NULL;
     }
 
     cache->serv = start_serving(cache, cache->auth, cache->addr, num_workers, cache->counters); 
     if (!cache->serv) {
-        fprintf(stderr, "Can't start the communication engine\n");
+        SHC_ERROR("Can't start the communication engine");
         shardcache_destroy(cache);
         return NULL;
     }
@@ -1235,6 +1235,14 @@ static int shardcache_async_command_helper(void *data,
         if (!arg->done)
             arg->cb(arg->key, arg->klen, -1, arg->priv);
         if (idx == -1) {
+            // XXX - in theory we shuould let read_message_async() and its input data handler
+            //       (who is calling us) take care of calling iomux_close() on this fd and hence
+            //       removing it from the async mux. We need to do it now (earlier) only because
+            //       we want to put back the filedescriptor into the connections pool (for further usage)
+            //       which would create issues if we do it before removing it from the async mux.
+            //       This means that when our caller will try using iomux_close() on this fd, the attempt
+            //       will fail but it will stil need to take care of releasing the async_read context. 
+            //       (check commit 792760ada8e655d7b87996788b490c9718177bc7)
             iomux_remove(arg->cache->async_mux, arg->fd);
             shardcache_release_connection_for_peer(arg->cache, arg->addr, arg->fd);
         } else {
@@ -1290,7 +1298,7 @@ shardcache_exists_async(shardcache_t *cache,
     } else {
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name); 
         if (!peer) {
-            SHC_ERROR("Can't find address for node %s\n", peer);
+            SHC_ERROR("Can't find address for node %s", peer);
             if (cb)
                 cb(key, klen, -1, priv);
             return -1;
@@ -1364,7 +1372,7 @@ shardcache_touch(shardcache_t *cache, void *key, size_t klen)
     } else {
         shardcache_node_t *peer = shardcache_node_select(cache, node_name);
         if (!peer) {
-            SHC_ERROR("Can't find address for node %s\n", peer);
+            SHC_ERROR("Can't find address for node %s", peer);
             return -1;
         }
         char *addr = shardcache_node_get_address(peer);
@@ -1543,7 +1551,7 @@ shardcache_set_internal(shardcache_t *cache,
 
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
         if (!peer) {
-            SHC_ERROR("Can't find address for node %s\n", peer);
+            SHC_ERROR("Can't find address for node %s", peer);
             if (cb)
                 cb(key, klen, -1, priv);
             return -1;
@@ -1792,7 +1800,7 @@ shardcache_del_internal(shardcache_t *cache,
     } else if (!replica) {
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
         if (!peer) {
-            SHC_ERROR("Can't find address for node %s\n", peer);
+            SHC_ERROR("Can't find address for node %s", peer);
             if (cb)
                 cb(key, klen, -1, priv);
             return -1;
@@ -1972,7 +1980,7 @@ expire_migrated(hashtable_t *table, void *key, size_t klen, void *value, size_t 
     memset(node_name, 0, node_len);
     int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
     if (is_mine == -1) {
-        fprintf(stderr, "expire_migrated running while no migration continuum present ... aborting\n");
+        SHC_WARNING("expire_migrated running while no migration continuum present ... aborting");
         return 0;
     } else if (!is_mine) {
         char keystr[1024];
@@ -2026,7 +2034,7 @@ migrate(void *priv)
             int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
             
             if (is_mine == -1) {
-                fprintf(stderr, "Migrator running while no migration continuum present ... aborting\n");
+                SHC_WARNING("Migrator running while no migration continuum present ... aborting");
                 ATOMIC_INCREMENT(errors);
                 aborted = 1;
                 break;
@@ -2050,11 +2058,11 @@ migrate(void *priv)
                             push_value(to_delete, &index->items[i]);
                         } else {
                             close(fd);
-                            fprintf(stderr, "Errors copying %s to peer %s (%s)\n", keystr, node_name, addr);
+                            SHC_WARNING("Errors copying %s to peer %s (%s)", keystr, node_name, addr);
                             ATOMIC_INCREMENT(errors);
                         }
                     } else {
-                        fprintf(stderr, "Can't find address for peer %s (me : %s)\n", node_name, cache->me);
+                        SHC_ERROR("Can't find address for peer %s (me : %s)", node_name, cache->me);
                         ATOMIC_INCREMENT(errors);
                     }
                 }
@@ -2214,8 +2222,8 @@ shardcache_migration_begin_internal(shardcache_t *cache,
                                       fbuf_used(&mgb_message), fd);
                 shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
                 if (rc != 0) {
-                    fprintf(stderr, "Node %s (%s) didn't aknowledge the migration\n",
-                            cache->shards[i]->label, cache->shards[i]->address[rindex]);
+                    SHC_ERROR("Node %s (%s) didn't aknowledge the migration",
+                              cache->shards[i]->label, cache->shards[i]->address[rindex]);
                 }
             }
         }
