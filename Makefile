@@ -92,7 +92,7 @@ EXTRA_CFLAGS=-Wno-parentheses -Wno-pointer-sign
 ifneq ("$(IS_CLANG)", "")
 SQLITE_CFLAGS=-Wno-array-bounds -Wno-unused-const-variable -Wno-unknown-warning-option -DSQLITE_THREADSAFE=1
 else
-GCC_ISOLD := $(shell gcc --version  | head -1 | awk '{ if ($3 < 4.3) print YES }')
+GCC_ISOLD := $(shell gcc --version  | head -1 | awk '{ if ("$3" < "4.3") print YES }')
 ifneq ($(GCC_ISOLD), "")
 SQLITE_CFLAGS=-fno-strict-aliasing -DSQLITE_THREADSAFE=1
 else
