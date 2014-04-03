@@ -355,7 +355,7 @@ evictor(void *priv)
     shardcache_t *cache = (shardcache_t *)priv;
     hashtable_t *jobs = cache->evictor_jobs;
 
-    connections_pool_t *connections = connections_pool_create(5000, 1);
+    connections_pool_t *connections = connections_pool_create(ATOMIC_READ(cache->tcp_timeout), 1);
 
     while (!ATOMIC_READ(cache->quit))
     {
@@ -672,7 +672,8 @@ shardcache_create(char *me,
     srand(time(NULL));
     cache->volatile_storage = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)destroy_volatile);
 
-    cache->connections_pool = connections_pool_create(cache->tcp_timeout, (num_workers/2)+1);
+    cache->connections_pool = connections_pool_create(cache->tcp_timeout, (num_workers/2)+ 1);
+    global_tcp_timeout(cache->tcp_timeout);
 
     cache->async_queue = queue_create();
     cache->async_mux = iomux_create();
@@ -2329,6 +2330,8 @@ shardcache_evict_on_delete(shardcache_t *cache, int new_value)
 int
 shardcache_tcp_timeout(shardcache_t *cache, int new_value)
 {
+    if (new_value >= 0)
+        global_tcp_timeout(new_value);
     return connections_pool_tcp_timeout(cache->connections_pool, new_value);
 }
 
