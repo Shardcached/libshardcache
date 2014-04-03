@@ -322,25 +322,30 @@ read_async_input_data(iomux_t *iomux, int fd, unsigned char *data, int len, void
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
     async_read_context_input_data(data, len, ctx);
-    if (ctx->state == SHC_STATE_READING_DONE || ctx->state == SHC_STATE_READING_NONE) {
-        iomux_close(iomux, fd);
-    } else if (ctx->state == SHC_STATE_READING_ERR) {
+    int close = (ctx->state == SHC_STATE_READING_DONE ||
+                 ctx->state == SHC_STATE_READING_NONE ||
+                 ctx->state == SHC_STATE_READING_ERR ||
+                 ctx->state == SHC_STATE_AUTH_ERR);
+
+    if (ctx->state == SHC_STATE_READING_ERR) {
         struct sockaddr_in saddr;
         socklen_t addr_len = sizeof(struct sockaddr_in);
         getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
         fprintf(stderr, "Bad message %02x from %s\n", ctx->hdr, inet_ntoa(saddr.sin_addr));
-        iomux_close(iomux, fd);
     } else if (ctx->state == SHC_STATE_AUTH_ERR) {
         // AUTH FAILED
         struct sockaddr_in saddr;
         socklen_t addr_len = sizeof(struct sockaddr_in);
-
         getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
-
         fprintf(stderr, "Unauthorized request from %s\n",
                 inet_ntoa(saddr.sin_addr));
-        iomux_close(iomux, fd);
     }
+
+    if (close && !iomux_close(iomux, fd)) {
+        // if the filedescriptor has been already removed from the mux
+        // by the async_read_context callback, we need to release the context
+        async_read_context_destroy(ctx);
+    } 
     return len;
 }
 
@@ -551,6 +556,12 @@ fetch_from_peer_async(char *peer,
             arg->cb = cb;
             arg->priv = priv;
             rc = read_message_async(fd, auth, fetch_from_peer_helper, arg, wrk);
+            if (rc != 0) {
+                if (should_close)
+                    close(fd);
+                free(arg->key);
+                free(arg);
+            }
         }
     }
     return rc;
