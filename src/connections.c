@@ -257,6 +257,7 @@ open_connection(const char *host, int port, unsigned int timeout)
             fcntl(sock, F_SETFD, FD_CLOEXEC);
            return sock;
         } else if (rc == -1 && errno != EINPROGRESS) {
+            fprintf(stderr, "Can't connect to %s:%d : %s\n", host, port, strerror(errno));
             close(sock);
             return -1;
         }
@@ -266,7 +267,10 @@ open_connection(const char *host, int port, unsigned int timeout)
         void *fdset = calloc(1, sizeof(fd_set) * 8); // we want to fit at most 8192 filedescriptors
         FD_SET(sock, (fd_set *)fdset);
 
-        if (select(sock + 1, NULL, (fd_set *)fdset, NULL, &tv) == 1)
+        struct timeval timeout = { tv.tv_sec, tv.tv_usec };
+        struct timeval before;
+        gettimeofday(&before, NULL);
+        while (select(sock + 1, NULL, (fd_set *)fdset, NULL, &timeout) >= 0)
         {
             int err;
             socklen_t len = sizeof err;
@@ -279,7 +283,17 @@ open_connection(const char *host, int port, unsigned int timeout)
                 free(fdset);
                 return sock;
             }
+            struct timeval now;
+            struct timeval diff = { 0, 0 };
+            gettimeofday(&now, NULL);
+            timersub(&now, &before, &diff);
+            if (timercmp(&diff, &tv, >)) {
+                fprintf(stderr, "Can't connect to %s:%d : Timeout occurred\n", host, port);
+                break;
+            }
+            memcpy(&timeout, &tv, sizeof(struct timeval));
         }
+        fprintf(stderr, "Can't connect to %s:%d : %s\n", host, port, strerror(errno));
 
         free(fdset);
         close(sock);
