@@ -450,7 +450,9 @@ read_message_async(int fd,
 
         char state = wrk->ctx->state;
 
-        async_read_context_destroy(wrk->ctx);
+        // NOTE: the read context (wrk->ctx) has been already
+        //       released in the eof callback, so we don't
+        //       need to release it here
         free(wrk);
 
         if (state == SHC_STATE_READING_ERR) {
