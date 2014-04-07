@@ -437,13 +437,16 @@ read_message_async(int fd,
             return -1;
         }
 
-        iomux_add(iomux, fd, &wrk->cbs);
-        // we are in blocking mode, let's wait for the job
-        // to be completed
-        for (;;) {
-            iomux_run(iomux, &iomux_timeout);
-            if (iomux_isempty(iomux))
-                break;
+        if (iomux_add(iomux, fd, &wrk->cbs)) {
+            // we are in blocking mode, let's wait for the job
+            // to be completed
+            for (;;) {
+                iomux_run(iomux, &iomux_timeout);
+                if (iomux_isempty(iomux))
+                    break;
+            }
+        } else {
+            async_read_context_destroy(wrk->ctx);
         }
 
         iomux_destroy(iomux);
