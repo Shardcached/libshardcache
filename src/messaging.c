@@ -437,6 +437,7 @@ read_message_async(int fd,
             return -1;
         }
 
+        char state = SHC_STATE_READING_ERR;
         if (iomux_add(iomux, fd, &wrk->cbs)) {
             // we are in blocking mode, let's wait for the job
             // to be completed
@@ -445,13 +446,12 @@ read_message_async(int fd,
                 if (iomux_isempty(iomux))
                     break;
             }
+            state = wrk->ctx->state;
         } else {
             async_read_context_destroy(wrk->ctx);
         }
 
         iomux_destroy(iomux);
-
-        char state = wrk->ctx->state;
 
         // NOTE: the read context (wrk->ctx) has been already
         //       released in the eof callback, so we don't
