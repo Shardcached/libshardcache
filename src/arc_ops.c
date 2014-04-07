@@ -209,8 +209,6 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
                                    fd,
                                    &wrk);
         if (rc == 0) {
-            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
-            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
             queue_push_right(cache->async_queue, wrk);
 
             // Keep the remote object in the cache only 10% of the time.
@@ -241,8 +239,6 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
         if (rc == 0 && fbuf_used(&value)) {
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
-            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
-            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
             obj->complete = 1;
             if (rand() % 10 != 0)
                 obj->drop = 1;
@@ -300,6 +296,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     cached_object_t *obj = (cached_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
 
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
+
     MUTEX_LOCK(&obj->lock);
     if (obj->data) { // the value is already loaded, we don't need to fetch
         *size = obj->dlen;
@@ -322,10 +320,14 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                                                             obj->klen,
                                                             node_name,
                                                             &node_len);
-            if (check == 0)
+            if (check == 0) {
+                ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
                 ret = arc_ops_fetch_from_peer(cache, obj, node_name);
-            else if (check == 1 || cache->storage.global)
+            } else if (check == 1 || cache->storage.global) {
+                // if it's a global storage or we are responsible in the
+                // migration context, we don't want to return earlier
                 done = 0;
+            }
         }
         if (done) {
             if (ret == 0) {
@@ -342,6 +344,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     char keystr[1024];
     if (shardcache_log_level() >= LOG_DEBUG)
         KEY2STR(obj->key, obj->klen, keystr, sizeof(keystr));
+
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_LOCAL].value);
 
     // we are responsible for this item ... 
     // let's first check if it's among the volatile keys otherwise
@@ -406,8 +410,6 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     *size = obj->dlen;
 
     MUTEX_UNLOCK(&obj->lock);
-    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
-    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_LOCAL].value);
 
     return 0;
 }
