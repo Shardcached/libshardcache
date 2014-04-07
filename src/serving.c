@@ -254,6 +254,13 @@ static int get_async_data_handler(void *key,
     MUTEX_LOCK(&req->lock);
 
     if (dlen == 0 && total_size == 0) {
+        if (!timestamp) {
+            // if there is no timestamp here it means there was an
+            // error (and not just an empty item)
+            MUTEX_UNLOCK(&req->lock);
+            write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+            return -1;
+        }
         uint16_t eor = 0;
         char eom = 0;
         fbuf_add_binary(&req->output, (void *)&eor, 2);
@@ -273,9 +280,8 @@ static int get_async_data_handler(void *key,
         }
 
         req->done = 1;
-
         MUTEX_UNLOCK(&req->lock);
-	return 0;
+        return 0;
     }
 
     uint32_t offset = 0;
