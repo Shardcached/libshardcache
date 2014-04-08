@@ -88,8 +88,6 @@ connections_pool_get(connections_pool_t *cc, char *addr)
         if (write(*fd, &noop, 1) == 1) {
             int rfd = *fd;
             free(fd);
-
-        
             return rfd;
         } else {
             close(*fd);
