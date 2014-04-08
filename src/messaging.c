@@ -428,7 +428,7 @@ read_message_async(int fd,
     //iomux_set_timeout(iomux, fd, &tv);
 
     if (wrk->ctx->blocking) {
-        iomux_t *iomux = iomux_create();
+        iomux_t *iomux = iomux_create(0, 0, 0);
         if (!iomux) {
             async_read_context_destroy(wrk->ctx);
             free(wrk);

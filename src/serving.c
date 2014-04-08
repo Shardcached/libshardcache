@@ -1160,14 +1160,13 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
         MUTEX_INIT(&wrk->wakeup_lock);
         CONDITION_INIT(&wrk->wakeup_cond);
         //wrk->fds = ht_create(1024, 65535, NULL);
-        wrk->iomux = iomux_create();
+        wrk->iomux = iomux_create(0, 0, 0);
         pthread_create(&wrk->thread, NULL, worker, wrk);
         push_value(s->workers, wrk);
         ATOMIC_INCREMENT(s->total_workers);
     }
 
-    s->io_mux = iomux_create();
-    iomux_set_threadsafe(s->io_mux, 1); 
+    s->io_mux = iomux_create(0, 0, 1);
 
     // and start a background thread to handle incoming connections
     int rc = pthread_create(&s->io_thread, NULL, serve_cache, s);

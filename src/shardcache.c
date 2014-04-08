@@ -676,8 +676,7 @@ shardcache_create(char *me,
     global_tcp_timeout(cache->tcp_timeout);
 
     cache->async_queue = queue_create();
-    cache->async_mux = iomux_create();
-    iomux_set_threadsafe(cache->async_mux, 1);
+    cache->async_mux = iomux_create(0, 0, 1);
 
     if (pthread_create(&cache->async_io_th, NULL, shardcache_run_async, cache) != 0) {
         SHC_ERROR("Can't create the async i/o thread: %s", strerror(errno));
