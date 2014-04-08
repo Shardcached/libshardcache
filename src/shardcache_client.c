@@ -89,8 +89,11 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
         return 0;
+    }
 
     fbuf_t value = FBUF_STATIC_INITIALIZER;
     int rc = fetch_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, &value, fd);
@@ -116,8 +119,11 @@ size_t shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, 
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
         return 0;
+    }
 
     fbuf_t value = FBUF_STATIC_INITIALIZER;
     int rc = offset_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, offset, dlen, &value, fd);
@@ -145,8 +151,11 @@ int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
         return -1;
+    }
     int rc = exists_on_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
     if (rc == -1) {
         close(fd);
@@ -165,8 +174,11 @@ int shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
         return -1;
+    }
     int rc = touch_on_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
     if (rc == -1) {
         close(fd);
@@ -186,8 +198,11 @@ _shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, 
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
         return -1;
+    }
 
     int rc = -1;
     if (inx)
@@ -223,8 +238,11 @@ int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
         return -1;
+    }
     int rc = delete_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
     if (rc != 0) {
         close(fd);
@@ -242,8 +260,11 @@ int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
         return -1;
+    }
 
     int rc = evict_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
     if (rc != 0) {
@@ -288,8 +309,11 @@ int shardcache_client_stats(shardcache_client_t *c, char *node_name, char **buf,
 
     char *addr = shardcache_node_get_address(node);
     int fd = connections_pool_get(c->connections, addr);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
         return -1;
+    }
 
     int rc = stats_from_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, buf, len, fd);
     if (rc != 0) {
@@ -313,8 +337,11 @@ int shardcache_client_check(shardcache_client_t *c, char *node_name) {
 
     char *addr = shardcache_node_get_address(node);
     int fd = connections_pool_get(c->connections, addr);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
         return -1;
+    }
 
     int rc = check_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, fd);
     if (rc != 0) {
@@ -358,8 +385,11 @@ shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char
 
     char *addr = shardcache_node_get_address(node);
     int fd = connections_pool_get(c->connections, addr);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
         return NULL;
+    }
 
     shardcache_storage_index_t *index = index_from_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, fd);
     if (!index) {
@@ -391,6 +421,8 @@ int shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t 
         char *addr = shardcache_node_get_address(c->shards[i]);
         int fd = connections_pool_get(c->connections, addr);
         if (fd < 0) {
+            c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+            snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
             fbuf_destroy(&mgb_message);
             return -1;
         }
@@ -428,6 +460,8 @@ int shardcache_client_migration_abort(shardcache_client_t *c)
 
         int fd = connections_pool_get(c->connections, addr);
         if (fd < 0) {
+            c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+            snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
             return -1;
         }
 
@@ -457,8 +491,11 @@ int shardcache_client_get_async(shardcache_client_t *c,
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
-    if (fd < 0)
+    if (fd < 0) {
+        c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+        snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
         return -1;
+    }
 
     return fetch_from_peer_async(node, (char *)c->auth, SHC_HDR_CSIGNATURE_SIP, key, klen, 0, 0, data_cb, priv, fd, NULL);
 }
