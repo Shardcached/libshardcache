@@ -270,7 +270,8 @@ open_connection(const char *host, int port, unsigned int timeout)
         struct timeval timeout = { tv.tv_sec, tv.tv_usec };
         struct timeval before;
         gettimeofday(&before, NULL);
-        while (select(sock + 1, NULL, (fd_set *)fdset, NULL, &timeout) >= 0)
+        rc = select(sock + 1, NULL, (fd_set *)fdset, NULL, &timeout);
+        while (rc >= 0)
         {
             int err;
             socklen_t len = sizeof err;
@@ -282,6 +283,9 @@ open_connection(const char *host, int port, unsigned int timeout)
                 fcntl(sock, F_SETFD, FD_CLOEXEC);
                 free(fdset);
                 return sock;
+            } else if (err != EINPROGRESS) {
+                errno = err;
+                return -1;
             }
             struct timeval now;
             struct timeval diff = { 0, 0 };
@@ -292,6 +296,7 @@ open_connection(const char *host, int port, unsigned int timeout)
                 break;
             }
             memcpy(&timeout, &tv, sizeof(struct timeval));
+            rc = select(sock + 1, NULL, (fd_set *)fdset, NULL, &timeout);
         }
         fprintf(stderr, "Can't connect to %s:%d : %s\n", host, port, strerror(errno));
 
