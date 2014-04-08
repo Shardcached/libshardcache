@@ -1,6 +1,8 @@
 use v5.10;
 use ExtUtils::MakeMaker;
 
+use POSIX qw(getcwd);
+
 my $INC = "-I. ";
 my $LIBS = "-lshardcache ";
 my $DEFINE = ""; 
@@ -16,13 +18,16 @@ if (-f "/usr/include/shardcache.h") {
 } elsif (-f "/opt/local/include/shardcache.h") {
     $SHC_INCDIR = "/opt/local/include";
     $SHC_LIBDIR = "/opt/local/lib";
+} elsif (-f "../../src/shardcache.h") {
+    $SHC_INCDIR = getcwd() . "/../../src" ;
+    $SHC_LIBDIR = getcwd() . "/../.." ;
 } else {
     die "No libshardcache installed"
 }
 
 $INC .= "-I$SHC_INCDIR"
     if ($SHC_INCDIR);
-$LIBS .= "-L$SHC_LIBDIR"
+$LIBS = "-L$SHC_LIBDIR $LIBS"
     if ($SHC_LIBDIR);
 
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
