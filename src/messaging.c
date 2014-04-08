@@ -355,9 +355,7 @@ async_read_context_create(char *auth,
                           void *priv)
 {
     async_read_ctx_t *ctx = calloc(1, sizeof(async_read_ctx_t));
-    // NOTE: we will accumulate accumulate at most two chunks because
-    //       of misalignment
-    ctx->buf = rbuf_create(1<<17);
+    ctx->buf = rbuf_create(1<<16);
     ctx->cb = cb;
     ctx->cb_priv = priv;
     ctx->auth = auth;
