@@ -377,7 +377,7 @@ int main (int argc, char **argv) {
     }
 
     if (shardcache_client_errno(client) != SHARDCACHE_CLIENT_OK) {
-        fprintf(stderr, "errorno: %d, errstr: %s\n",
+        fprintf(stderr, "errno: %d, errstr: %s\n",
                 shardcache_client_errno(client), shardcache_client_errstr(client));
     }
 
