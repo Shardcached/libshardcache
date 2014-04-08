@@ -381,6 +381,7 @@ evictor(void *priv)
                     if (fd < 0)
                         break;
 
+                    int retries = 0;
                     for (;;) {
                         int flags = fcntl(fd, F_GETFL, 0);
                         if (flags == -1) {
@@ -405,7 +406,8 @@ evictor(void *priv)
                             fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
                             if (fd < 0)
                                 break;
-                            continue;
+                            if (retries++ < 5)
+                                continue;
                         }
                         flags &= ~O_NONBLOCK;
                         fcntl(fd, F_SETFL, flags);
