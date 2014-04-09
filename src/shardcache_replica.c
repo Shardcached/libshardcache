@@ -136,12 +136,10 @@ kepaxos_connection_input(iomux_t *iomux, int fd, unsigned char *data, int len, v
     kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
     shardcache_replica_t *replica = connection->replica;
 
+    int processed = 0;
     fbuf_t out = FBUF_STATIC_INITIALIZER;
-    int rc = async_read_context_input_data(data, len, connection->ctx);
-    if (rc < 0) {
-    }
 
-    int read_state = async_read_context_state(connection->ctx);
+    int read_state = async_read_context_input_data(connection->ctx, data, len, &processed);
     if (read_state == SHC_STATE_READING_DONE ||
         read_state == SHC_STATE_READING_ERR  ||
         read_state == SHC_STATE_AUTH_ERR)
@@ -171,7 +169,7 @@ kepaxos_connection_input(iomux_t *iomux, int fd, unsigned char *data, int len, v
             iomux_close(iomux, fd);
         }
     }
-    return len;
+    return processed;
 }
 
 static void 

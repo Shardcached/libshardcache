@@ -131,7 +131,6 @@ shardcache_connection_context_create(shardcache_serving_t *serv, int fd)
     shardcache_connection_context_t *ctx =
         calloc(1, sizeof(shardcache_connection_context_t));
 
-    ctx->output = rbuf_create(1<<16);
     ctx->input = rbuf_create(1<<16);
 
     ctx->serv = serv;
@@ -161,7 +160,6 @@ shardcache_request_destroy(shardcache_request_t *req)
 static void
 shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
 {
-    rbuf_destroy(ctx->output);
     rbuf_destroy(ctx->input);
     int i;
     for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
@@ -292,14 +290,20 @@ static int get_async_data_handler(void *key,
             memcpy(&offset, fbuf_data(&req->records[1]), sizeof(uint32_t));
             offset = ntohl(offset);
         } else {
-            // TODO - Error Messages
+            SHC_WARNING("Bad record (1) format for message GET_OFFSET");
+            MUTEX_UNLOCK(&req->lock);
+            write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+            return -1;
         }
 
         if (fbuf_used(&req->records[2]) == 4) {
             memcpy(&size, fbuf_data(&req->records[2]), sizeof(uint32_t));
             size = ntohl(size);
         } else {
-            // TODO - Error Messages
+            SHC_WARNING("Bad record (1) format for message GET_OFFSET");
+            MUTEX_UNLOCK(&req->lock);
+            write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+            return -1;
         }
     }
 
@@ -311,15 +315,11 @@ static int get_async_data_handler(void *key,
 
     static int max_chunk_size = (1<<16)-1;
 
-    uint16_t accumulated_size = rbuf_len(req->fetch_accumulator);
+    uint16_t accumulated_size = rbuf_used(req->fetch_accumulator);
     size_t to_process = accumulated_size + dlen;
     size_t data_offset = 0;
     while(to_process >= max_chunk_size) {
         size_t copy_size = max_chunk_size;
-        /* TODO - implement offset
-        if (size && data_offset + req->copied + max_chunk_size > size)
-            copy_size = max_chunk_size - (size - (data_offset + req->copied));
-            */
 
         uint16_t clen = htons((uint16_t)copy_size);
 
@@ -576,9 +576,8 @@ process_request(shardcache_request_t *req)
                 } 
             }
             rc = shardcache_migration_begin(cache, nodes, num_shards, 0);
-            if (rc != 0) {
-                // TODO - Error messages
-            }
+            if (rc != 0)
+                SHC_WARNING("Can't begin the migration");
             int i;
             for (i = 0; i < num_shards; i++)
                 shardcache_node_destroy(nodes[i]);
@@ -589,12 +588,16 @@ process_request(shardcache_request_t *req)
         case SHC_HDR_MIGRATION_ABORT:
         {
             rc = shardcache_migration_abort(cache);
+            if (rc != 0)
+                SHC_WARNING("Can't abort the migration");
             write_status(req, rc, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
         case SHC_HDR_MIGRATION_END:
         {
             rc = shardcache_migration_end(cache);
+            if (rc != 0)
+                SHC_WARNING("Can't end the migration");
             write_status(req, rc, WRITE_STATUS_MODE_SIMPLE);
             break;
         }
@@ -644,7 +647,7 @@ process_request(shardcache_request_t *req)
                             fbuf_data(&out), fbuf_used(&out));
                     MUTEX_UNLOCK(&req->lock);
                 } else {
-                    // TODO - Error Messages
+                    SHC_ERROR("Can't build the STATS response");
                 }
                 fbuf_destroy(&out);
                 free(counters);
@@ -698,7 +701,7 @@ process_request(shardcache_request_t *req)
             } else {
                 fbuf_destroy(&buf);
                 write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
-                // TODO - Error Messages
+                SHC_ERROR("Can't build the INDEX response");
             }
             fbuf_destroy(&out);
             break;
@@ -738,7 +741,7 @@ process_request(shardcache_request_t *req)
                     MUTEX_UNLOCK(&req->lock);
                 } else {
                     free(response);
-                    // TODO - Error Messages
+                    SHC_ERROR("Can't build the REPLICA command response");
                 }
                 fbuf_destroy(&out);
             } else {
@@ -813,17 +816,11 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
 }
 
 static int
-shardcache_update_context_state(iomux_t *iomux, int fd, shardcache_connection_context_t *ctx)
+shardcache_check_context_state(iomux_t *iomux,
+                               int fd,
+                               shardcache_connection_context_t *ctx,
+                               async_read_context_state_t state)
 {
-    int len = rbuf_len(ctx->input);
-    // TODO - avoid this copy
-    char *input = malloc(len);
-    rbuf_read(ctx->input, input, len);
-    int processed = async_read_context_input_data(input, len, ctx->reader_ctx);
-    if (processed < len)
-        rbuf_write(ctx->input, input + processed, len - processed);
-    free(input);
-    int state = async_read_context_state(ctx->reader_ctx);
     if (state == SHC_STATE_READING_DONE) {
         // create a new request
         ctx->retries = 0;
@@ -857,14 +854,6 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
 
     int max = *len;
     int offset = 0;
-    if (rbuf_len(ctx->output)) {
-        char buf[max];
-        int rb = rbuf_read(ctx->output, buf, max);
-        if (rb) {
-            memcpy(out, buf, rb);
-            offset += rb;
-        }
-    }
     while (offset < max) {
         shardcache_request_t *req = pick_value(ctx->requests, 0);
         if (!req) {
@@ -886,6 +875,10 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
             offset += to_copy;
         } else if (req_outlen > 0) {
             memcpy(out + offset, req_output, req_outlen);
+            // NOTE: the buffer is already empty but calling
+            // fbuf_clear() forces the fbuf to reset its
+            // internal indexes and avoid wasting some memory
+            // or doing a memmove later
             fbuf_clear(&req->output);
             offset += req_outlen;
         }
@@ -899,8 +892,10 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
             shardcache_request_destroy(req);
             // if we have pending input data this is time
             // to process it and move to the next request
-            if (rbuf_len(ctx->input))
-                shardcache_update_context_state(iomux, fd, ctx);
+            if (rbuf_used(ctx->input)) {
+                int state = async_read_context_update(ctx->reader_ctx);
+                shardcache_check_context_state(iomux, fd, ctx, state);
+            }
         } else if (empty) {
             break;
         }
@@ -915,19 +910,20 @@ shardcache_input_handler(iomux_t *iomux,
                          int len,
                          void *priv)
 {
+    int processed = 0;
+
     shardcache_connection_context_t *ctx =
         (shardcache_connection_context_t *)priv;
 
 
-    if (!ctx)
-        return 0;
+    if (ctx) {
+        async_read_context_state_t state = async_read_context_input_data(ctx->reader_ctx, data, len, &processed);
+        // updating the context state might eventually push a new requeset
+        // (if entirely dowloaded) to a worker
+        shardcache_check_context_state(iomux, fd, ctx, state);
+    }
 
-    int wb = rbuf_write(ctx->input, data, len);
-
-    // updating the context state might eventually push a new requeset
-    // (if entirely dowloaded) to a worker
-    shardcache_update_context_state(iomux, fd, ctx);
-    return wb;
+    return processed;
 }
 
 static void
@@ -975,7 +971,7 @@ shardcache_connection_handler(iomux_t *iomux, int fd, void *priv)
             ATOMIC_INCREMENT(serv->num_connections);
         } else {
             close(fd);
-            // TODO - Error messages
+            SHC_WARNING("Can't find any usable worker to handle the new connection");
         }
     }
 }
@@ -1005,7 +1001,7 @@ worker(void *priv)
             ctx = queue_pop_left(jobs);
         }
 
-        struct timeval tv = { 0, 20000 };
+        struct timeval tv = { 0, 80000 };
 
         iomux_run(wrkctx->iomux, &tv);
 
@@ -1046,9 +1042,8 @@ worker(void *priv)
             // us up if new filedescriptors arrive
             struct timespec abstime;
             struct timeval now;
-            int rc = 0;
 
-            rc = gettimeofday(&now, NULL);
+            int rc = gettimeofday(&now, NULL);
             if (rc == 0) {
                 struct timeval wait_time = { 0, 250000 };
                 timeradd(&now, &wait_time, &wait_time);
@@ -1058,8 +1053,6 @@ worker(void *priv)
                                     &wrkctx->wakeup_lock,
                                     &abstime);
 
-            } else {
-                // TODO - Error messsages
             }
         }
     }

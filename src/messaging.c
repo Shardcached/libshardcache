@@ -76,10 +76,9 @@ async_read_context_sig_hdr(async_read_ctx_t *ctx)
     return ctx->sig_hdr;
 }
 
-int
-async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
+async_read_context_state_t
+async_read_context_update(async_read_ctx_t *ctx)
 {
-    int used_bytes = 0;
     gettimeofday(&ctx->last_update, NULL);
 
     if (ctx->state == SHC_STATE_READING_DONE) {
@@ -94,29 +93,26 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
         memset(ctx->magic, 0, sizeof(ctx->magic));
     }
 
-    if (data && len)
-        used_bytes = rbuf_write(ctx->buf, data, len);
-
-    if (!rbuf_len(ctx->buf))
-        return 0;
+    if (!rbuf_used(ctx->buf))
+        return ctx->state;
 
     if (ctx->state == SHC_STATE_READING_NONE || ctx->state == SHC_STATE_READING_MAGIC)
     {
         ctx->hdr = 0;
         unsigned char byte;
         rbuf_read(ctx->buf, &byte, 1);
-        while (byte == SHC_HDR_NOOP && rbuf_len(ctx->buf) > 0)
+        while (byte == SHC_HDR_NOOP && rbuf_used(ctx->buf) > 0)
             rbuf_read(ctx->buf, &byte, 1); // skip
 
-        if (byte == SHC_HDR_NOOP && !rbuf_len(ctx->buf))
-            return used_bytes;
+        if (byte == SHC_HDR_NOOP && !rbuf_used(ctx->buf))
+            return ctx->state;
 
         ctx->magic[0] = byte;
         ctx->state = SHC_STATE_READING_MAGIC;
         ctx->moff = 1;
 
-        if (rbuf_len(ctx->buf) < sizeof(uint32_t) - ctx->moff) {
-            return used_bytes;
+        if (rbuf_used(ctx->buf) < sizeof(uint32_t) - ctx->moff) {
+            return ctx->state;
         }
 
         rbuf_read(ctx->buf, &ctx->magic[ctx->moff], sizeof(uint32_t) - ctx->moff);
@@ -124,13 +120,13 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
         memcpy((char *)&rmagic, ctx->magic, sizeof(uint32_t));
         if ((rmagic&0xFFFFFF00) != (htonl(SHC_MAGIC)&0xFFFFFF00)) {
             ctx->state = SHC_STATE_READING_ERR;
-            return -1;
+            return ctx->state;
         }
         ctx->version = ctx->magic[3];
         if (ctx->version > SHC_PROTOCOL_VERSION) {
             SHC_WARNING("Unsupported protocol version %02x", ctx->version);
             ctx->state = SHC_STATE_READING_ERR;
-            return -1;
+            return ctx->state;
         }
 
         ctx->state = SHC_STATE_READING_SIG_HDR;
@@ -139,14 +135,14 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
     if (ctx->state == SHC_STATE_READING_SIG_HDR || ctx->state == SHC_STATE_READING_HDR)
     {
         if (ctx->state == SHC_STATE_READING_SIG_HDR) {
-            if (rbuf_len(ctx->buf) < 1)
-                return used_bytes;
+            if (rbuf_used(ctx->buf) < 1)
+                return ctx->state;
             rbuf_read(ctx->buf, (unsigned char *)&ctx->sig_hdr, 1);
             if (ctx->sig_hdr == SHC_HDR_SIGNATURE_SIP || ctx->sig_hdr == SHC_HDR_CSIGNATURE_SIP)
             {
                 if (!ctx->auth) {
                     ctx->state = SHC_STATE_AUTH_ERR;
-                    return -1;
+                    return ctx->state;
                 }
 
                 ctx->state = SHC_STATE_READING_HDR;
@@ -157,7 +153,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             } else if (ctx->auth) {
                 // we are expecting the signature header
                 ctx->state = SHC_STATE_AUTH_ERR;
-                return -1;
+                return ctx->state;
             } else {
                 ctx->hdr = ctx->sig_hdr;
                 ctx->sig_hdr = 0;
@@ -165,8 +161,8 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             }
         }
         if (ctx->state == SHC_STATE_READING_HDR) {
-            if (rbuf_len(ctx->buf) < 1)
-                return used_bytes;
+            if (rbuf_used(ctx->buf) < 1)
+                return ctx->state;
             rbuf_read(ctx->buf, (unsigned char *)&ctx->hdr, 1);
         }
 
@@ -182,42 +178,42 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             break;
 
         if (ctx->coff == ctx->clen && ctx->state == SHC_STATE_READING_RECORD) {
-            if (rbuf_len(ctx->buf) < 2)
+            if (rbuf_used(ctx->buf) < 2)
                 break;
 
             if (ctx->csig) {
-                if (rbuf_len(ctx->buf) < SHARDCACHE_MSG_SIG_LEN + 2) // truncated
+                if (rbuf_used(ctx->buf) < SHARDCACHE_MSG_SIG_LEN + 2) // truncated
                     break;
 
                 if (!ctx->shash) {
                     SHC_ERROR("No siphash context when signature needed");
                     ctx->state = SHC_STATE_READING_ERR;
-                    return -1;
+                    return ctx->state;
                 }
 
                 uint64_t digest;
                 if (!sip_hash_final_integer(ctx->shash, &digest)) {
                     SHC_WARNING("Bad signature in received message");
                     ctx->state = SHC_STATE_AUTH_ERR;
-                    return -1;
+                    return ctx->state;
                 }
 
                 uint64_t received_digest;
-                if (rbuf_len(ctx->buf) < sizeof(digest))
+                if (rbuf_used(ctx->buf) < sizeof(digest))
                     break;
 
                 rbuf_read(ctx->buf, (u_char *)&received_digest, sizeof(digest));
 
                 if (memcmp(&digest, &received_digest, sizeof(digest)) != 0) {
                     ctx->state = SHC_STATE_AUTH_ERR;
-                    return -1;
+                    return ctx->state;
                 }
             }
 
             // let's call the read_async callback
             if (ctx->clen > 0 && ctx->cb(ctx->chunk, ctx->clen, ctx->rnum, ctx->cb_priv) != 0) {
                 ctx->state = SHC_STATE_READING_ERR;
-                return -1;
+                return ctx->state;
             } 
 
             uint16_t nlen = 0;
@@ -233,10 +229,10 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             if (ctx->shash)
                 sip_hash_update(ctx->shash, ctx->chunk + ctx->coff, rb);
             ctx->coff += rb;
-            if (!rbuf_len(ctx->buf))
+            if (!rbuf_used(ctx->buf))
                 break; // TRUNCATED - we need more data
         } else {
-            if (rbuf_len(ctx->buf) < 1) {
+            if (rbuf_used(ctx->buf) < 1) {
                 // TRUNCATED - we need more data
                 ctx->state = SHC_STATE_READING_RSEP;
                 break;
@@ -251,7 +247,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 if (ctx->rlen == 0) {
                     if (ctx->cb(NULL, 0, ctx->rnum, ctx->cb_priv) != 0) {
                         ctx->state = SHC_STATE_READING_ERR;
-                        return -1;
+                        return ctx->state;
                     }
                 }
                 ctx->state = SHC_STATE_READING_RECORD;
@@ -261,7 +257,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 if (ctx->rlen == 0) {
                     if (ctx->cb(NULL, 0, -1, ctx->cb_priv) != 0) {
                         ctx->state = SHC_STATE_READING_ERR;
-                        return -1;
+                        return ctx->state;
                     }
                 }
                 if (ctx->auth)
@@ -271,14 +267,14 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 break;
             } else {
                 ctx->state = SHC_STATE_READING_ERR;
-                return -1;
+                return ctx->state;
             }
         }
     }
 
     if (ctx->state == SHC_STATE_READING_AUTH) {
-        if (rbuf_len(ctx->buf) < SHARDCACHE_MSG_SIG_LEN)
-            return used_bytes;
+        if (rbuf_used(ctx->buf) < SHARDCACHE_MSG_SIG_LEN)
+            return ctx->state;
 
         if (ctx->shash) {
             uint64_t digest;
@@ -286,7 +282,7 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                 // TODO - Error Messages
                 fprintf(stderr, "Bad signature\n");
                 ctx->state = SHC_STATE_AUTH_ERR;
-                return -1;
+                return ctx->state;
             }
 
             uint64_t received_digest;
@@ -306,32 +302,54 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
 
             if (!match) {
                 ctx->state = SHC_STATE_AUTH_ERR;
-                return -1;
+                return ctx->state;
             }
             sip_hash_free(ctx->shash);
             ctx->shash = NULL;
         }
         ctx->state = SHC_STATE_READING_DONE;
     }
-    return used_bytes;
+    return ctx->state;
+}
+
+async_read_context_state_t
+async_read_context_consume_data(async_read_ctx_t *ctx, rbuf_t *in)
+{
+    int used_bytes = rbuf_move(in, ctx->buf, rbuf_used(in));
+    if (used_bytes)
+        return async_read_context_update(ctx);
+    return ctx->state;
+}
+
+async_read_context_state_t
+async_read_context_input_data(async_read_ctx_t *ctx, void *data, int len, int *processed)
+{
+    int used_bytes = rbuf_write(ctx->buf, data, len);
+    if (used_bytes)
+        async_read_context_update(ctx);
+    if (processed)
+        *processed = used_bytes;
+    return ctx->state;
 }
 
 int
 read_async_input_data(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
-    async_read_context_input_data(data, len, ctx);
-    int close = (ctx->state == SHC_STATE_READING_DONE ||
-                 ctx->state == SHC_STATE_READING_NONE ||
-                 ctx->state == SHC_STATE_READING_ERR ||
-                 ctx->state == SHC_STATE_AUTH_ERR);
+    int processed = 0;
+    async_read_context_state_t state = async_read_context_input_data(ctx, data, len, &processed);
 
-    if (ctx->state == SHC_STATE_READING_ERR) {
+    int close = (state == SHC_STATE_READING_DONE ||
+                 state == SHC_STATE_READING_NONE ||
+                 state == SHC_STATE_READING_ERR ||
+                 state == SHC_STATE_AUTH_ERR);
+
+    if (state == SHC_STATE_READING_ERR) {
         struct sockaddr_in saddr;
         socklen_t addr_len = sizeof(struct sockaddr_in);
         getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
         fprintf(stderr, "Bad message %02x from %s\n", ctx->hdr, inet_ntoa(saddr.sin_addr));
-    } else if (ctx->state == SHC_STATE_AUTH_ERR) {
+    } else if (state == SHC_STATE_AUTH_ERR) {
         // AUTH FAILED
         struct sockaddr_in saddr;
         socklen_t addr_len = sizeof(struct sockaddr_in);

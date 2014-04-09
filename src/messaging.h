@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <iomux.h>
 #include <fbuf.h>
+#include <rbuf.h>
 #include "shardcache.h"
 
 /* For the protocol specification check the 'docs/protocol.txt' file
@@ -246,7 +247,9 @@ int async_read_context_state(async_read_ctx_t *ctx);
 shardcache_hdr_t async_read_context_hdr(async_read_ctx_t *ctx);
 shardcache_hdr_t async_read_context_sig_hdr(async_read_ctx_t *ctx);
 
-int async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx);
+async_read_context_state_t async_read_context_consume_data(async_read_ctx_t *ctx, rbuf_t *input);
+async_read_context_state_t async_read_context_input_data(async_read_ctx_t *ctx, void *data, int len, int *processed);
+async_read_context_state_t async_read_context_update(async_read_ctx_t *ctx);
 
 typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         void *key,
