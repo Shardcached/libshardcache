@@ -224,7 +224,9 @@ open_connection(const char *host, int port, unsigned int timeout)
     if (sock == -1)
         return -1;
 
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &val,  sizeof(val));
+
     if (timeout > 0) {
         if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == -1
             || setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1)
