@@ -100,7 +100,7 @@ SQLITE_CFLAGS=-Wno-array-bounds -fno-strict-aliasing -DSQLITE_THREADSAFE=1
 endif
 endif
 
-$(TARGETS): CFLAGS += -fPIC -Isrc -Wall -Werror $(EXTRA_CFLAGS) $(SQLITE_CFLAGS) -O3 -g
+$(TARGETS): CFLAGS += -fPIC -Isrc -Wall $(EXTRA_CFLAGS) $(SQLITE_CFLAGS) -O3 -g
 
 .PHONY: utils
 utils: 
