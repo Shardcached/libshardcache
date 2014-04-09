@@ -148,7 +148,7 @@ shardcache_client_evict(c, key)
     CODE:
 	STRLEN	klen = 0;
         char *k = SvPVbyte(key, klen);
-        RETVAL = shardcache_client_del(c, k, klen);
+        RETVAL = shardcache_client_evict(c, k, klen);
     OUTPUT:
         RETVAL
 
