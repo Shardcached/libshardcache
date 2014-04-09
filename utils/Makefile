@@ -19,11 +19,11 @@ all: shardcachec
 
 dynamic: CFLAGS += -fPIC -I../src -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
 dynamic: shardcachec.c
-	gcc shardcachec.c $(CFLAGS) $(LDFLAGS) -lshardcache -o shardcachec
+	gcc shardcachec.c $(CFLAGS) -lshardcache $(LDFLAGS)  -o shardcachec
 
 shardcachec: CFLAGS += -fPIC -I../src -I../deps/.incs -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
 shardcachec: shardcachec.c $(DEPS)
-	gcc shardcachec.c $(CFLAGS) $(LDFLAGS) $(DEPS) -o shardcachec
+	gcc shardcachec.c $(CFLAGS) $(DEPS) $(LDFLAGS) -o shardcachec
 
 clean:
 	rm -f shardcachec
