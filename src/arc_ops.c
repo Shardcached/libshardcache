@@ -312,6 +312,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     // if we are not the owner try asking to the peer responsible for this data
     if (!shardcache_test_ownership(cache, obj->key, obj->klen, node_name, &node_len))
     {
+        ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
         int done = 1;
         int ret = arc_ops_fetch_from_peer(cache, obj, node_name);
         if (ret == -1) {
@@ -321,7 +322,6 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                                                             node_name,
                                                             &node_len);
             if (check == 0) {
-                ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
                 ret = arc_ops_fetch_from_peer(cache, obj, node_name);
             } else if (check == 1 || cache->storage.global) {
                 // if it's a global storage or we are responsible in the
