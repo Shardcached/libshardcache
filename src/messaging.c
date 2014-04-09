@@ -190,15 +190,14 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
                     break;
 
                 if (!ctx->shash) {
-                    // TODO - Error Messages;
+                    SHC_ERROR("No siphash context when signature needed");
                     ctx->state = SHC_STATE_READING_ERR;
                     return -1;
                 }
 
                 uint64_t digest;
                 if (!sip_hash_final_integer(ctx->shash, &digest)) {
-                    // TODO - Error Messages
-                    fprintf(stderr, "Bad signature\n");
+                    SHC_WARNING("Bad signature in received message");
                     ctx->state = SHC_STATE_AUTH_ERR;
                     return -1;
                 }
@@ -296,11 +295,11 @@ async_read_context_input_data(void *data, int len, async_read_ctx_t *ctx)
             int match = (memcmp(&digest, &received_digest, sizeof(digest)) == 0);
 
             if (shardcache_log_level() >= LOG_DEBUG) {
-                SHC_DEBUG2("computed digest for received data: %s",
+                SHC_DEBUG3("computed digest for received data: %s",
                           shardcache_hex_escape((char *)&digest, sizeof(digest), 0));
 
                 uint8_t *remote = (uint8_t *)&received_digest;
-                SHC_DEBUG2("digest from received data: %s (%s)",
+                SHC_DEBUG3("digest from received data: %s (%s)",
                           shardcache_hex_escape(remote, sizeof(digest), 0),
                           match ? "MATCH" : "MISMATCH");
             }
