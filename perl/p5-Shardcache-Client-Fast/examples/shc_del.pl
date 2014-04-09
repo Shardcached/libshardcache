@@ -29,7 +29,7 @@ die "SHC_HOSTS environment variable MUST be defined if no --hosts argument is pr
 
 my @hosts = split(',', $hosts_param);
 
-my $c = Shardcache::Client::Fast->new((@hosts > 1) ? \@hosts : $hosts[0], $secret);
+my $c = Shardcache::Client::Fast->new(\@hosts, $secret);
 
 
 unless($c->del($key)) {
