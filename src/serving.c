@@ -662,7 +662,9 @@ process_request(shardcache_request_t *req)
         {
             fbuf_t buf = FBUF_STATIC_INITIALIZER;
             fbuf_t out = FBUF_STATIC_INITIALIZER;
+            SHC_DEBUG("Fetching index");
             shardcache_storage_index_t *index = shardcache_get_index(cache);
+            SHC_DEBUG("Index got");
             if (index) {
                 int i;
                 for (i = 0; i < index->size; i++) {
@@ -693,16 +695,16 @@ process_request(shardcache_request_t *req)
                               &record, 1, &out) == 0)
             {
                 // destroy it early ... since we still need one more copy
-                fbuf_destroy(&buf);
                 MUTEX_LOCK(&req->lock);
                 fbuf_add_binary(&req->output, fbuf_data(&out), fbuf_used(&out));
                 req->done = 1;
+                SHC_DEBUG("Index response sent (%d)", fbuf_used(&req->output));
                 MUTEX_UNLOCK(&req->lock);
             } else {
-                fbuf_destroy(&buf);
                 write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
-                SHC_ERROR("Can't build the INDEX response");
+                SHC_ERROR("Can't build the index response");
             }
+            fbuf_destroy(&buf);
             fbuf_destroy(&out);
             break;
         }
@@ -856,9 +858,9 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
     int offset = 0;
     while (offset < max) {
         shardcache_request_t *req = pick_value(ctx->requests, 0);
-        if (!req) {
+        if (!req)
             break;
-        }
+
         MUTEX_LOCK(&req->lock);
         if (req->fetch_error) {
             // abort the request and close the connection
@@ -1140,9 +1142,10 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
         shardcache_worker_context_t *wrk = calloc(1, sizeof(shardcache_worker_context_t));
         wrk->serv = s;
         wrk->jobs = queue_create();
-        wrk->prune = create_list();
         queue_set_free_value_callback(wrk->jobs,
                 (queue_free_value_callback_t)shardcache_connection_context_destroy);
+        wrk->prune = create_list();
+        set_free_value_callback(wrk->prune, (free_value_callback_t)shardcache_connection_context_destroy);
 
         char label[64];
         snprintf(label, sizeof(label), "worker[%d].numfds", i);
