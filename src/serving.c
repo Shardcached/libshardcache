@@ -1159,7 +1159,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
         ATOMIC_INCREMENT(s->total_workers);
     }
 
-    s->io_mux = iomux_create(0, 0, 1);
+    s->io_mux = iomux_create(1<<13, 1<<13, 0);
 
     // and start a background thread to handle incoming connections
     int rc = pthread_create(&s->io_thread, NULL, serve_cache, s);
