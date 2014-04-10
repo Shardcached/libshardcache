@@ -100,7 +100,7 @@ SQLITE_CFLAGS=-Wno-array-bounds -fno-strict-aliasing -DSQLITE_THREADSAFE=1
 endif
 endif
 
-$(TARGETS): CFLAGS += -fPIC -Isrc -Wall $(EXTRA_CFLAGS) $(SQLITE_CFLAGS) -O3 -g
+$(TARGETS): CFLAGS += -fPIC -Isrc -Wall $(EXTRA_CFLAGS) $(SQLITE_CFLAGS) -g -O3
 
 .PHONY: utils
 utils: 
@@ -119,7 +119,7 @@ clean:
 	make -C utils clean
 
 .PHONY: buld_tests
-build_tests: CFLAGS += -Isrc -Ideps/.incs -Wall -Werror -O3 -g
+build_tests: CFLAGS += -Isrc -Ideps/.incs -Wall -Werror -g -O3
 build_tests: static shared
 	@for i in $(TESTS); do\
 	  if [ "X$(UNAME)" = "XDarwin" ]; then \
