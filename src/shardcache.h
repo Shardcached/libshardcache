@@ -499,6 +499,19 @@ int shardcache_use_persistent_connections(shardcache_t *cache, int new_value);
 int shardcache_evict_on_delete(shardcache_t *cache, int new_value);
 
 /*
+ * @brief Allows to force caching of remote items
+ *        (as opposed to the default behaviour  of caching only hot items)
+ * @param cache       A valid pointer to a shardcache_t structure
+ * @param new_value   1 if force_caching is desired, 0 otherwise
+ *                    If -1 is provided as new_value, no change will be applied
+ *                    but the actual value will still be returned
+ *                    (effectively querying the actual status).
+ * @return the previous value for the force_caching setting
+ * @note defaults to 1
+ */
+int shardcache_force_caching(shardcache_t *cache, int new_value);
+
+/*
  * @brief Allows to change the timeout used when creating tcp connections
  * @param cache       A valid pointer to a shardcache_t structure
  * @param new_value   the amount of seconds to use as timeout

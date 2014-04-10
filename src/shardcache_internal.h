@@ -91,6 +91,9 @@ struct __shardcache_s {
     int use_persistent_connections; // boolean flag indicating if connections should be persistent
                                     // instead of being closed after serving/sending one complete message
 
+    int force_caching; // boolean flag indicating if the items fetched from remote peers should be
+                       // always cached instead of applying th 10% chance of being kept
+
     shardcache_serving_t *serv;     // the serving-subsystem instance
 
     const char *auth;     // the secret to use for signing messages

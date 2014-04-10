@@ -214,7 +214,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
             // Keep the remote object in the cache only 10% of the time.
             // This is the same logic applied by groupcache to determine hot keys.
             // Better approaches are possible but maybe unnecessary.
-            if (rand() % 10 != 0)
+            if (!cache->force_caching && rand() % 10 != 0)
                 obj->drop = 1;
             else
                 obj->drop = 0;
@@ -240,7 +240,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
             obj->complete = 1;
-            if (rand() % 10 != 0)
+            if (!cache->force_caching && rand() % 10 != 0)
                 obj->drop = 1;
             else
                 obj->drop = 0;

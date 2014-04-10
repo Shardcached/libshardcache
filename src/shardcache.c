@@ -2339,3 +2339,12 @@ shardcache_tcp_timeout(shardcache_t *cache, int new_value)
     return connections_pool_tcp_timeout(cache->connections_pool, new_value);
 }
 
+int
+shardcache_force_caching(shardcache_t *cache, int new_value)
+{
+    int old_value = ATOMIC_READ(cache->force_caching);
+    if (new_value >= 0)
+        ATOMIC_SET(cache->force_caching, new_value);
+    return old_value;
+}
+
