@@ -1087,7 +1087,10 @@ serve_cache(void *priv)
         .priv = serv
     };
 
-    iomux_add(serv->io_mux, serv->sock, &connection_callbacks);
+    if (!iomux_add(serv->io_mux, serv->sock, &connection_callbacks)) {
+        SHC_ERROR("Can't add the listening socket to the mux");
+        return NULL;
+    }
     iomux_listen(serv->io_mux, serv->sock);
 
     while (!ATOMIC_READ(serv->leave)) {
