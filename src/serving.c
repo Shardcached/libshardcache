@@ -77,7 +77,7 @@ typedef struct {
     shardcache_connection_context_t *ctx;
     queue_t *output;
     sip_hash *fetch_shash;
-    int fetch_error;
+    int error;
     int skipped;
     int copied;
     int done;
@@ -270,7 +270,7 @@ static int get_async_data_handler(void *key,
             } else {
                 SHC_ERROR("Can't compute the siphash digest!\n");
                 fbuf_free(output);
-                ATOMIC_INCREMENT(req->fetch_error);
+                ATOMIC_INCREMENT(req->error);
                 write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
                 return -1;
             }
@@ -349,8 +349,7 @@ static int get_async_data_handler(void *key,
                 sip_hash_free(req->fetch_shash);
                 req->fetch_shash = NULL;
                 fbuf_free(output);
-                ATOMIC_INCREMENT(req->fetch_error);
-                write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                ATOMIC_INCREMENT(req->error);
                 return -1;
             }
             fbuf_add_binary(output, (void *)&digest, sizeof(digest));
@@ -386,8 +385,7 @@ static int get_async_data_handler(void *key,
                         SHC_ERROR("Can't compute the siphash digest!\n");
                         sip_hash_free(req->fetch_shash);
                         req->fetch_shash = NULL;
-                        ATOMIC_INCREMENT(req->fetch_error);
-                        write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                        ATOMIC_INCREMENT(req->error);
                         return -1;
                     }
                     fbuf_add_binary(output, (void *)&digest, sizeof(digest));
@@ -404,8 +402,7 @@ static int get_async_data_handler(void *key,
                 fbuf_add_binary(output, (void *)&digest, sizeof(digest));
             } else {
                 fbuf_free(output);
-                ATOMIC_INCREMENT(req->fetch_error);
-                write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                ATOMIC_INCREMENT(req->error);
                 SHC_ERROR("Can't compute the siphash digest!\n");
                 return -1;
             }
@@ -449,9 +446,10 @@ static void get_async_data(shardcache_t *cache,
                 fbuf_add_binary(output, (void *)&digest, sizeof(digest));
             } else {
                 SHC_ERROR("Can't compute the siphash digest!\n");
-		ATOMIC_INCREMENT(req->fetch_error);
+		ATOMIC_INCREMENT(req->error);
                 sip_hash_free(req->fetch_shash);
                 req->fetch_shash = NULL;
+                return;
             }
             sip_hash_free(req->fetch_shash);
             req->fetch_shash = NULL;
@@ -512,7 +510,7 @@ process_request(shardcache_request_t *req)
                     uint64_t digest;
                     if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
                         fbuf_free(output);
-                        write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                        ATOMIC_INCREMENT(req->error);
                         SHC_ERROR("Can't compute the siphash digest!\n");
                         break;
                     }
@@ -861,6 +859,13 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
         if (!req)
             break;
 
+        if (ATOMIC_READ(req->error)) {
+            // abort the request and close the connection
+            // if there was an error while fetching a remote object
+            iomux_close(iomux, fd);
+            return;
+        }
+
         fbuf_t *output = queue_pop_left(req->output);
         if(output) {
             void *req_output = fbuf_data(output);
@@ -880,13 +885,6 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
                 fbuf_free(output);
                 offset += req_outlen;
             }
-        }
-
-        if (ATOMIC_READ(req->fetch_error)) {
-            // abort the request and close the connection
-            // if there was an error while fetching a remote object
-            iomux_close(iomux, fd);
-            return;
         }
 
         int empty = (!output || fbuf_used(output) == 0);
