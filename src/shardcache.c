@@ -2375,8 +2375,12 @@ shardcache_migration_end(shardcache_t *cache)
 int
 shardcache_tcp_timeout(shardcache_t *cache, int new_value)
 {
-    if (new_value >= 0)
+    if (new_value == 0)
+        new_value = SHARDCACHE_TCP_TIMEOUT_DEFAULT;
+
+    if (new_value > 0)
         global_tcp_timeout(new_value);
+
     return connections_pool_tcp_timeout(cache->connections_pool, new_value);
 }
 
@@ -2412,12 +2416,16 @@ shardcache_force_caching(shardcache_t *cache, int new_value)
 int
 shardcache_iomux_run_timeout_low(shardcache_t *cache, int new_value)
 {
+    if (new_value == 0)
+        new_value = SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW;
     return shardcache_get_set_option(&cache->iomux_run_timeout_low, new_value);
 }
 
 int
 shardcache_iomux_run_timeout_high(shardcache_t *cache, int new_value)
 {
+    if (new_value == 0)
+        new_value = SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH;
     return shardcache_get_set_option(&cache->iomux_run_timeout_high, new_value);
 }
 
@@ -2425,4 +2433,10 @@ int
 shardcache_expire_time(shardcache_t *cache, int new_value)
 {
     return shardcache_get_set_option(&cache->expire_time, new_value);
+}
+
+int
+shardcache_lazy_expiration(shardcache_t *cache, int new_value)
+{
+    return shardcache_get_set_option(&cache->lazy_expiration, new_value);
 }

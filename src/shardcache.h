@@ -568,6 +568,21 @@ int shardcache_iomux_run_timeout_high(shardcache_t *cache, int new_value);
  */
 int shardcache_expire_time(shardcache_t *cache, int new_value);
 
+/*
+ * @brief Allows to enable/disable the 'lazy_expiration' mode
+ * @param cache       A valid pointer to a shardcache_t structure
+ * @param new_value   1 if lazy_expiration is desired, 0 otherwise.\n
+ *                    If -1 is provided as new_value, no change will be applied
+ *                    but the actual value will still be returned
+ *                    (effectively querying the actual status).
+ * @return the previous value for the lazy_expiration setting
+ * @note When lazy expiration is enabled, cached items will be expired
+ *       only when fetched, otherwise the expirer thread will take care
+ *       of expiring the cached items as well as volatile items
+ * @note defaults to 0
+ */
+int shardcache_lazy_expiration(shardcache_t *cache, int new_value);
+
 /**
  * @brief Release all the resources used by the shardcache instance
  * @param cache   the instance to release
