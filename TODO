@@ -1,3 +1,8 @@
+ * minimize the usage of the NOOP to verify the connection status.
+   When connections are reused quickly there is no point in checking the status again,
+   so a threshold should be added which controls whether we need to check the status
+   or we can avoid since it has been just used
+
  * refactor the API actually exposed to set internal shardcache flags and options
    once an instance has been created. The way it's actually implemented is suboptimal
    because adding a new option requires to add both a member to the shardcache_t structure
