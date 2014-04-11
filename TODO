@@ -1,10 +1,12 @@
- * don't use synchronous i/o when handling requests in serving.c
-   it leads to a dead-lock situation if all the available workers are busy
+ * refactor the API actually exposed to set internal shardcache flags and options
+   once an instance has been created. The way it's actually implemented is suboptimal
+   because adding a new option requires to add both a member to the shardcache_t structure
+   and a new function exposed by the shardcache library. Since options and flags are growing
+   and there will be probably more in the future, there is already the need of a proper
+   API to allow getting/setting internal flags and params and a better way of storing
+   those within the shardcache_t structure
 
- * optimize eviction by using a different datastructure which allows getting rid
-   of duplicates
-
- * support replicas
+ * complete and test the replica support
 
  * support message compression
 
