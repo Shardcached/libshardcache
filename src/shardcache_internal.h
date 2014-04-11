@@ -80,21 +80,38 @@ struct __shardcache_s {
 
     hashtable_t *volatile_storage; // an hashtable used as volatile storage
 
-    uint32_t next_expire; // the expiration time of the volatile item (if any).
-                          // in seconds (epoch)
+    hashtable_t *cache_timeouts; // hashtable holding the timeout_id of the expiration timers
+                                 // for cached objects
+    hashtable_t *volatile_timeouts; // hashtable holding the timeout_id for the expiration timers
+                                    // for volatile items
+
+    iomux_t *expirer_mux; // iomux used to handle the expiration timers
     pthread_t expirer_th; // the thread taking care of propagating expiration commands
-    int expirer_started;  // flag indicating the the expirer thread has started
+
 
     int evict_on_delete;  // boolean flag indicating if eviction will be automatically
                           // triggered when deleting an existing key 
 
     int use_persistent_connections; // boolean flag indicating if connections should be persistent
                                     // instead of being closed after serving/sending one complete message
+    
+    int lazy_expiration; // determines if lazy expiration is on. If on keys are checked for expiration
+                         // only when a get() operation occurs, if off they will be expired asynchronously
+                         // by a background thread
 
     int force_caching; // boolean flag indicating if the items fetched from remote peers should be
                        // always cached instead of applying th 10% chance of being kept
 
-    shardcache_serving_t *serv;     // the serving-subsystem instance
+    int expire_time;   // global expire time for cached items, if 0 items in the cache will never
+                       // expire and will need to be either explicitly or naturally evicted to be
+                       // removed from the cache
+    
+    int iomux_run_timeout_low;  // timeout passed to iomux_run()
+                                // by both the expirer and the listener
+    int iomux_run_timeout_high; // timeout passed to iomux_run()
+                                // by both the async reader and the serving workers
+
+    shardcache_serving_t *serv; // the serving-subsystem instance
 
     const char *auth;     // the secret to use for signing messages
                           // (NULL if messages are expected to be unsigned)
@@ -178,3 +195,5 @@ int shardcache_del_internal(shardcache_t *cache,
 
 int shardcache_set_migration_continuum(shardcache_t *cache, shardcache_node_t **nodes, int num_nodes);
 
+int shardcache_schedule_expiration(shardcache_t *cache, void *key, size_t klen, time_t expire, int is_volatile);
+int shardcache_unschedule_expiration(shardcache_t *cache, void *key, size_t klen, int is_volatile);

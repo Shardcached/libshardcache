@@ -1003,8 +1003,9 @@ worker(void *priv)
             ctx = queue_pop_left(jobs);
         }
 
-        struct timeval tv = { 0, 80000 };
 
+        int timeout = ATOMIC_READ(wrkctx->serv->cache->iomux_run_timeout_low);
+        struct timeval tv = { timeout/1e6, timeout%(int)1e6 };
         iomux_run(wrkctx->iomux, &tv);
 
         int to_check = list_count(wrkctx->prune);
@@ -1090,8 +1091,8 @@ serve_cache(void *priv)
     iomux_listen(serv->io_mux, serv->sock);
 
     while (!ATOMIC_READ(serv->leave)) {
-        struct timeval tv = { 0, 100000 };
-
+        int timeout = ATOMIC_READ(serv->cache->iomux_run_timeout_high);
+        struct timeval tv = { timeout/1e6, timeout%(int)1e6 };
         iomux_run(serv->io_mux, &tv);
     }
 

@@ -12,7 +12,6 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <siphash.h>
 #include <limits.h>
 #include <regex.h>
 
@@ -319,6 +318,12 @@ typedef struct {
     size_t klen;
 } shardcache_key_t;
 
+typedef struct {
+    shardcache_t *cache;
+    shardcache_key_t item;
+    int is_volatile;
+} expire_key_ctx_t;
+
 typedef shardcache_key_t shardcache_evictor_job_t;
 
 static void
@@ -455,74 +460,47 @@ destroy_volatile(volatile_object_t *obj)
     free(obj);
 }
 
-typedef struct {
-    linked_list_t *list;
-    time_t now;
-    uint32_t next;
-} expire_volatile_arg_t;
-
-typedef shardcache_key_t expire_volatile_item_t;
-
-static int
-expire_volatile(hashtable_t *table, void *key, size_t klen, void *value, size_t vlen, void *user)
+static void
+shardcache_expire_key_cb(iomux_t *iomux, void *priv)
 {
-    expire_volatile_arg_t *arg = (expire_volatile_arg_t *)user;
-    volatile_object_t *v = (volatile_object_t *)value;
-    if (v->expire && v->expire < arg->now) {
-        char keystr[1024];
-        KEY2STR(key, klen, keystr, sizeof(keystr));
-        SHC_DEBUG("Key %s expired", keystr);
-        expire_volatile_item_t *item = malloc(sizeof(expire_volatile_item_t));
-        item->key = malloc(klen);
-        memcpy(item->key, key, klen);
-        item->klen = klen;
-        push_value(arg->list, item);
-    } else if (v->expire && (!arg->next || v->expire < arg->next)) {
-        arg->next = v->expire;
+    expire_key_ctx_t *ctx = (expire_key_ctx_t *)priv;
+    void *ptr = NULL;
+    if (ctx->is_volatile) {
+        ht_delete(ctx->cache->volatile_timeouts, ctx->item.key, ctx->item.klen, &ptr, NULL);
+        if (!ptr) {
+            free(ctx->item.key);
+            free(ctx);
+            return;
+        }
+        free(ptr);
+        ht_delete(ctx->cache->volatile_storage, ctx->item.key, ctx->item.klen, &ptr, NULL);
+        volatile_object_t *prev = (volatile_object_t *)ptr;
+        ATOMIC_DECREASE(ctx->cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
+                        prev->dlen);
+        destroy_volatile(prev);
+    } else {
+        ht_delete(ctx->cache->cache_timeouts, ctx->item.key, ctx->item.klen, &ptr, NULL);
+        if (!ptr) {
+            free(ctx->item.key);
+            free(ctx);
+            return;
+        }
+        free(ptr);
     }
-    return 1;
+    arc_remove(ctx->cache->arc, (const void *)ctx->item.key, ctx->item.klen);
+    free(ctx->item.key);
+    free(ctx);
 }
 
 void *
-shardcache_expire_volatile_keys(void *priv)
+shardcache_expire_keys(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     while (!ATOMIC_READ(cache->quit))
     {
-        time_t now = time(NULL);
-
-        uint32_t next_expire = ATOMIC_READ(cache->next_expire);
-        if (next_expire && now >= next_expire && ht_count(cache->volatile_storage)) {
-            expire_volatile_arg_t arg = {
-                .list = create_list(),
-                .now = time(NULL),
-                .next = 0
-            };
-
-            ht_foreach_pair(cache->volatile_storage, expire_volatile, &arg);
-
-            ATOMIC_SET_IF(cache->next_expire, >, arg.next, uint32_t);
-
-            expire_volatile_item_t *item = shift_value(arg.list);
-            while (item) {
-                void *prev_ptr = NULL;
-                ht_delete(cache->volatile_storage, item->key, item->klen, &prev_ptr, NULL);
-                if (prev_ptr) {
-                    volatile_object_t *prev = (volatile_object_t *)prev_ptr;
-                    ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
-                                    prev->dlen);
-                    destroy_volatile(prev);
-                }
-                arc_remove(cache->arc, (const void *)item->key, item->klen);
-                free(item->key);
-                free(item);
-                item = shift_value(arg.list);
-            }
-
-            destroy_list(arg.list);
-
-        }
-        sleep(1);
+        int timeout = ATOMIC_READ(cache->iomux_run_timeout_high);
+        struct timeval tv = { timeout/1e6, timeout%(int)1e6 };
+        iomux_run(cache->expirer_mux, &tv);
     }
     return NULL;
 }
@@ -532,8 +510,9 @@ shardcache_run_async(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     while (!ATOMIC_READ(cache->async_quit)) {
-        struct timeval timeout = { 0, 25000 };
-        iomux_run(cache->async_mux, &timeout);
+        int timeout = ATOMIC_READ(cache->iomux_run_timeout_low);
+        struct timeval tv = { timeout/1e6, timeout%(int)1e6 };
+        iomux_run(cache->async_mux, &tv);
         async_read_wrk_t *wrk = queue_pop_left(cache->async_queue);
         while (wrk) {
             if (wrk->fd < 0 || !iomux_add(cache->async_mux, wrk->fd, &wrk->cbs)) {
@@ -567,6 +546,9 @@ shardcache_create(char *me,
     cache->evict_on_delete = 1;
     cache->use_persistent_connections = 1;
     cache->tcp_timeout = SHARDCACHE_TCP_TIMEOUT_DEFAULT;
+    cache->expire_time = SHARDCACHE_EXPIRE_TIME_DEFAULT;
+    cache->iomux_run_timeout_low = SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW;
+    cache->iomux_run_timeout_high = SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH;
 
     SPIN_INIT(&cache->migration_lock);
 
@@ -693,8 +675,10 @@ shardcache_create(char *me,
         return NULL;
     }
 
-    pthread_create(&cache->expirer_th, NULL, shardcache_expire_volatile_keys, cache);
-    cache->expirer_started = 1;
+    cache->cache_timeouts = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)free);
+    cache->volatile_timeouts = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)free);
+    cache->expirer_mux = iomux_create(0, 0, 1);
+    pthread_create(&cache->expirer_th, NULL, shardcache_expire_keys, cache);
 
     if (!shardcache_log_initialized)
         shardcache_log_init("libshardcache", LOG_WARNING);
@@ -746,11 +730,20 @@ shardcache_destroy(shardcache_t *cache)
     SPIN_UNLOCK(&cache->migration_lock);
     SPIN_DESTROY(&cache->migration_lock);
 
-    if (cache->expirer_started) {
+    if (cache->expirer_th) {
         SHC_DEBUG2("Stopping expirer thread");
         pthread_join(cache->expirer_th, NULL);
         SHC_DEBUG2("Expirer thread stopped");
     }
+
+    if (cache->expirer_mux)
+        iomux_destroy(cache->expirer_mux);
+
+    if (cache->cache_timeouts)
+        ht_destroy(cache->cache_timeouts);
+
+    if (cache->volatile_timeouts)
+        ht_destroy(cache->volatile_timeouts);
 
     if (cache->replica)
         shardcache_replica_destroy(cache->replica);
@@ -902,7 +895,13 @@ shardcache_get_offset_async(shardcache_t *cache,
         }
 
         cb(key, klen, data, dlen, dlen, &obj->ts, priv);
+        time_t obj_expiration = (obj->drop || obj->evict) ? 0 : obj->ts.tv_sec + cache->expire_time;
         MUTEX_UNLOCK(&obj->lock);
+        if (cache->lazy_expiration && obj_expiration &&
+            cache->expire_time > 0 && __builtin_expect(obj_expiration > time(NULL), 0))
+        {
+            arc_remove(cache->arc, key, klen);
+        }
         arc_release_resource(cache->arc, res);
         free(data);
     } else {
@@ -1020,7 +1019,7 @@ shardcache_get_async(shardcache_t *cache,
 
     cached_object_t *obj = (cached_object_t *)obj_ptr;
     MUTEX_LOCK(&obj->lock);
-    if (obj->evicted) {
+    if (__builtin_expect(obj->evicted, 0)) {
         // if marked for eviction we don't want to return this object
         cb(key, klen, NULL, 0, 0, NULL, priv);
         MUTEX_UNLOCK(&obj->lock);
@@ -1028,7 +1027,13 @@ shardcache_get_async(shardcache_t *cache,
         return -1;
     } else if (obj->complete) {
         cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
+        time_t obj_expiration = (obj->drop || obj->evict) ? 0 : obj->ts.tv_sec + cache->expire_time;
         MUTEX_UNLOCK(&obj->lock);
+        if (cache->lazy_expiration && obj_expiration &&
+            cache->expire_time > 0 && __builtin_expect(obj_expiration > time(NULL), 0))
+        {
+            arc_remove(cache->arc, key, klen);
+        }
         arc_release_resource(cache->arc, res);
     } else {
         if (obj->dlen) // let's send what we have so far
@@ -1412,19 +1417,72 @@ shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
     MUTEX_UNLOCK(&cache->evictor_lock);
 }
 
+int
+shardcache_unschedule_expiration(shardcache_t *cache, void *key, size_t klen, int is_volatile)
+{
+    void *ptr = NULL;
+    hashtable_t *table = is_volatile ? cache->volatile_timeouts : cache->cache_timeouts;
 
+    ht_delete(table, key, klen, &ptr, NULL);
+    if (ptr) {
+        iomux_timeout_id_t *tid = (iomux_timeout_id_t *)ptr;
+        iomux_unschedule(cache->expirer_mux, *tid);
+        free(tid);
+        return 0;
+    }
+    return -1;
+}
+
+int
+shardcache_schedule_expiration(shardcache_t *cache,
+                               void *key,
+                               size_t klen,
+                               time_t expire,
+                               int is_volatile)
+{
+
+    expire_key_ctx_t *ctx = calloc(1, sizeof(expire_key_ctx_t));
+    ctx->item.key = malloc(klen);
+    memcpy(ctx->item.key, key, klen);
+    ctx->item.klen = klen;
+    ctx->cache = cache;
+    ctx->is_volatile = is_volatile;
+    hashtable_t *table = is_volatile ? cache->volatile_timeouts : cache->cache_timeouts;
+    struct timeval timeout = { expire, (int)rand()%(int)1e6 };
+    iomux_timeout_id_t *tid_ptr = NULL;
+    void *prev = NULL;
+    iomux_timeout_id_t tid = 0;
+    ht_delete(table, key, klen, &prev, NULL);
+    if (prev) {
+        tid_ptr = (iomux_timeout_id_t *)prev;
+        tid = iomux_reschedule(cache->expirer_mux, *tid_ptr, &timeout, shardcache_expire_key_cb, ctx);
+        *tid_ptr = tid;
+    } else {
+        tid = iomux_schedule(cache->expirer_mux, &timeout, shardcache_expire_key_cb, ctx);
+        tid_ptr = malloc(sizeof(iomux_timeout_id_t));
+        *tid_ptr = tid;
+    }
+    if (tid && tid_ptr) {
+        ht_set(table, key, klen, tid_ptr, sizeof(iomux_timeout_id_t));
+        return 0;
+    }
+
+    free(ctx->item.key);
+    free(ctx);
+    return -1;
+}
 
 int
 shardcache_set_internal(shardcache_t *cache,
-                         void *key,
-                         size_t klen,
-                         void *value,
-                         size_t vlen,
-                         time_t expire,
-                         int inx,
-                         int replica,
-                         shardcache_async_response_callback_t cb,
-                         void *priv)
+                        void *key,
+                        size_t klen,
+                        void *value,
+                        size_t vlen,
+                        time_t expire,
+                        int inx,
+                        int replica,
+                        shardcache_async_response_callback_t cb,
+                        void *priv)
 {
     // if we are not the owner try propagating the command to the responsible peer
     
@@ -1472,10 +1530,12 @@ shardcache_set_internal(shardcache_t *cache,
             obj->data = malloc(vlen);
             memcpy(obj->data, value, vlen);
             obj->dlen = vlen;
-            obj->expire = expire;
+            time_t now = time(NULL);
+            time_t real_expire = expire ? time(NULL) + expire : 0;
+            obj->expire = real_expire;
 
             SHC_DEBUG2("Setting volatile item %s to expire %d (now: %d)", 
-                keystr, obj->expire, (int)time(NULL));
+                keystr, obj->expire, (int)now);
 
             void *prev_ptr = NULL;
             if (inx) {
@@ -1504,8 +1564,8 @@ shardcache_set_internal(shardcache_t *cache,
                 ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, vlen);
             }
 
-            if (obj->expire && !ATOMIC_CAS(cache->next_expire, 0, obj->expire))
-                ATOMIC_SET_IF(cache->next_expire, >, obj->expire, uint32_t)
+            if (obj->expire)
+                shardcache_schedule_expiration(cache, key, klen, expire, 1);
         }
         else if (cache->use_persistent_storage && cache->storage.store)
         {
@@ -1659,11 +1719,12 @@ shardcache_set_volatile(shardcache_t *cache,
     if (!key || !klen)
         return -1;
 
-    time_t real_expire = expire ? time(NULL) + expire : 0;
-    if (cache->replica)
+    if (cache->replica) {
+        time_t real_expire = expire ? time(NULL) + expire : 0;
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, real_expire);
+    }
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, real_expire, 0, 0, NULL, NULL);
+    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 0, 0, NULL, NULL);
 }
 
 int
@@ -1677,11 +1738,12 @@ shardcache_add_volatile(shardcache_t *cache,
     if (!key || !klen)
         return -1;
 
-    time_t real_expire = expire ? time(NULL) + expire : 0;
-    if (cache->replica)
+    if (cache->replica) {
+        time_t real_expire = expire ? time(NULL) + expire : 0;
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, real_expire);
+    }
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, real_expire, 1, 0, NULL, NULL);
+    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 1, 0, NULL, NULL);
 }
 
 int
@@ -1782,6 +1844,7 @@ shardcache_del_internal(shardcache_t *cache,
                 }
             }
         } else if (prev_ptr) {
+            shardcache_unschedule_expiration(cache, key, klen, 1);
             volatile_object_t *prev_item = (volatile_object_t *)prev_ptr;
             ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
                             prev_item->dlen);
@@ -2310,28 +2373,6 @@ shardcache_migration_end(shardcache_t *cache)
 }
 
 int
-shardcache_use_persistent_connections(shardcache_t *cache, int new_value)
-{
-    int old_value = ATOMIC_READ(cache->use_persistent_connections);
-
-    if (new_value >= 0)
-        ATOMIC_SET(cache->use_persistent_connections, new_value);
-
-    return old_value;
-}
-
-int
-shardcache_evict_on_delete(shardcache_t *cache, int new_value)
-{
-    int old_value = ATOMIC_READ(cache->evict_on_delete);
-
-    if (new_value >= 0)
-        ATOMIC_SET(cache->evict_on_delete, new_value);
-
-    return old_value;
-}
-
-int
 shardcache_tcp_timeout(shardcache_t *cache, int new_value)
 {
     if (new_value >= 0)
@@ -2339,12 +2380,49 @@ shardcache_tcp_timeout(shardcache_t *cache, int new_value)
     return connections_pool_tcp_timeout(cache->connections_pool, new_value);
 }
 
-int
-shardcache_force_caching(shardcache_t *cache, int new_value)
+static inline int
+shardcache_get_set_option(int *option, int new_value)
 {
-    int old_value = ATOMIC_READ(cache->force_caching);
+    int old_value = ATOMIC_READ(*option);
+
     if (new_value >= 0)
-        ATOMIC_SET(cache->force_caching, new_value);
+        ATOMIC_SET(*option, new_value);
+
     return old_value;
 }
 
+int
+shardcache_use_persistent_connections(shardcache_t *cache, int new_value)
+{
+    return shardcache_get_set_option(&cache->use_persistent_connections, new_value);
+}
+
+int
+shardcache_evict_on_delete(shardcache_t *cache, int new_value)
+{
+    return shardcache_get_set_option(&cache->evict_on_delete, new_value);
+}
+
+int
+shardcache_force_caching(shardcache_t *cache, int new_value)
+{
+    return shardcache_get_set_option(&cache->force_caching, new_value);
+}
+
+int
+shardcache_iomux_run_timeout_low(shardcache_t *cache, int new_value)
+{
+    return shardcache_get_set_option(&cache->iomux_run_timeout_low, new_value);
+}
+
+int
+shardcache_iomux_run_timeout_high(shardcache_t *cache, int new_value)
+{
+    return shardcache_get_set_option(&cache->iomux_run_timeout_high, new_value);
+}
+
+int
+shardcache_expire_time(shardcache_t *cache, int new_value)
+{
+    return shardcache_get_set_option(&cache->expire_time, new_value);
+}

@@ -17,7 +17,10 @@
 
 
 #define SHARDCACHE_PORT_DEFAULT 4444
-#define SHARDCACHE_TCP_TIMEOUT_DEFAULT 5000 // 5 secs
+#define SHARDCACHE_TCP_TIMEOUT_DEFAULT 5000 // (in millisecs) == 5 secs
+#define SHARDCACHE_EXPIRE_TIME_DEFAULT 0 // don't expire keys by default
+#define SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW 100000 // (in microsecs)
+#define SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH 500000 // (in microsecs)
 
 extern const char *LIBSHARDCACHE_VERSION;
 
@@ -489,7 +492,7 @@ int shardcache_use_persistent_connections(shardcache_t *cache, int new_value);
 /*
  * @brief Allows to change the evict_on_delete behaviour at runtime
  * @param cache       A valid pointer to a shardcache_t structure
- * @param new_value   1 if evict_on_delete is desired, 0 otherwise
+ * @param new_value   1 if evict_on_delete is desired, 0 otherwise.\n
  *                    If -1 is provided as new_value, no change will be applied
  *                    but the actual value will still be returned
  *                    (effectively querying the actual status).
@@ -502,7 +505,7 @@ int shardcache_evict_on_delete(shardcache_t *cache, int new_value);
  * @brief Allows to force caching of remote items
  *        (as opposed to the default behaviour  of caching only hot items)
  * @param cache       A valid pointer to a shardcache_t structure
- * @param new_value   1 if force_caching is desired, 0 otherwise
+ * @param new_value   1 if force_caching is desired, 0 otherwise.\n
  *                    If -1 is provided as new_value, no change will be applied
  *                    but the actual value will still be returned
  *                    (effectively querying the actual status).
@@ -514,7 +517,7 @@ int shardcache_force_caching(shardcache_t *cache, int new_value);
 /*
  * @brief Allows to change the timeout used when creating tcp connections
  * @param cache       A valid pointer to a shardcache_t structure
- * @param new_value   the amount of seconds to use as timeout
+ * @param new_value   The amount of seconds to use as timeout.
  *                    If -1 is provided as new_value, no change will be applied
  *                    but the actual value will still be returned
  *                    (effectively querying the actual status).
@@ -522,6 +525,48 @@ int shardcache_force_caching(shardcache_t *cache, int new_value);
  * @note defaults to SHARDCACHE_TCP_TIMEOUT_DEFAULT
  */
 int shardcache_tcp_timeout(shardcache_t *cache, int new_value);
+
+/*
+ * @brief Allows to change the timeout passed to iomux_run()
+ *               by the serving workers and the async reader
+ * @note  Both the workers and the async reader use a low timeout
+ *        to allow newly added filedescriptors to be included in the
+ *        iomux as soon as possible
+ * @param cache A valid pointer to a shardcache_t structure
+ * @param new_value The amount of microseconds to use as timeout.
+ *                  If -1 is provided as new_value, no change will be applied
+ *                  but the actual value will still be returned
+ *                  (effectively querying the actual status).
+ * @return the previous value for the iomux_run_timeout_low setting
+ * @note defaults to SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW
+ */
+int shardcache_iomux_run_timeout_low(shardcache_t *cache, int new_value);
+
+/*
+ * @brief Allows to change the timeout passed to iomux_run()
+ *               by the listener and expirer
+ * @param cache A valid pointer to a shardcache_t structure
+ * @param new_value The amount of microseconds to use as timeout.
+ *                  If -1 is provided as new_value, no change will be applied
+ *                  but the actual value will still be returned
+ *                  (effectively querying the actual status).
+ * @return the previous value for the iomux_run_timeout_high setting
+ * @note defaults to SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH
+ */
+int shardcache_iomux_run_timeout_high(shardcache_t *cache, int new_value);
+
+/*
+ * @brief Allows to change the expiration time for cached items
+ * @param cache A valid pointer to a shardcache_t structure
+ * @param new_value The amount of seconds to use as expire time.\n
+ *                  If 0 no expiration will be scheduled for cached items;\n
+ *                  If -1 is provided as new_value, no change will be applied
+ *                  but the actual value will still be returned
+ *                  (effectively querying the actual status).
+ * @return the previous value for the expire_time setting
+ * @note defaults to SHARDCACHE_IOMUX_EXPIRE_TIME
+ */
+int shardcache_expire_time(shardcache_t *cache, int new_value);
 
 /**
  * @brief Release all the resources used by the shardcache instance
