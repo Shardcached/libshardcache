@@ -158,7 +158,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     if (complete) {
         if (total_len && !drop) {
             arc_update_size(cache->arc, key, klen, total_len);
-            if (!obj->evict && !obj->evicted && !cache->lazy_expiration) {
+            if (cache->expire_time > 0 && !obj->evict && !obj->evicted && !cache->lazy_expiration) {
                 shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
             }
         } else if (error || drop) {
@@ -412,7 +412,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
 
     *size = obj->dlen;
 
-    if (!obj->evict && !obj->evicted && !cache->lazy_expiration) {
+    if (cache->expire_time > 0 && !obj->evict && !obj->evicted && !cache->lazy_expiration) {
         shardcache_schedule_expiration(cache, obj->key, obj->klen, cache->expire_time, 0);
     }
 
