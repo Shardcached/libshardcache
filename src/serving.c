@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <iomux.h>
 #include <queue.h>
+#include <rqueue.h>
 #include <linklist.h>
 #include <hashtable.h>
 
@@ -75,7 +76,8 @@ typedef struct {
     shardcache_hdr_t hdr;
     shardcache_hdr_t sig_hdr;
     shardcache_connection_context_t *ctx;
-    queue_t *output;
+    rqueue_t *output;
+    fbuf_t *pending;
     sip_hash *fetch_shash;
     int error;
     int skipped;
@@ -147,7 +149,7 @@ shardcache_request_destroy(shardcache_request_t *req)
     for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
         fbuf_destroy(&req->records[i]);
     }
-    queue_destroy(req->output);
+    rqueue_destroy(req->output);
     if (req->fetch_shash)
         sip_hash_free(req->fetch_shash);
     rbuf_destroy(req->fetch_accumulator);
@@ -233,7 +235,7 @@ write_status(shardcache_request_t *req, int rc, char mode)
     if (shash)
         sip_hash_free(shash);
 
-    queue_push_right(req->output, output);
+    rqueue_write(req->output, output);
     ATOMIC_INCREMENT(req->done);
 }
 
@@ -278,7 +280,7 @@ static int get_async_data_handler(void *key,
             req->fetch_shash = NULL;
         }
 
-        queue_push_right(req->output, output);
+        rqueue_write(req->output, output);
         ATOMIC_INCREMENT(req->done);
         return 0;
     }
@@ -316,8 +318,8 @@ static int get_async_data_handler(void *key,
     uint16_t accumulated_size = rbuf_used(req->fetch_accumulator);
     size_t to_process = accumulated_size + dlen;
     size_t data_offset = 0;
-    fbuf_t *output = fbuf_create(FBUF_MAXLEN_NONE);
     while(to_process >= max_chunk_size) {
+        fbuf_t *output = fbuf_create(FBUF_MAXLEN_NONE);
         size_t copy_size = max_chunk_size;
 
         uint16_t clen = htons((uint16_t)copy_size);
@@ -354,6 +356,11 @@ static int get_async_data_handler(void *key,
             }
             fbuf_add_binary(output, (void *)&digest, sizeof(digest));
         }
+        if (fbuf_used(output)) {
+            rqueue_write(req->output, output);
+        } else {
+            fbuf_free(output);
+        }
         to_process = accumulated_size + (dlen - data_offset);
     }
 
@@ -366,6 +373,7 @@ static int get_async_data_handler(void *key,
     }
     
     if (total_size > 0 && timestamp) {
+        fbuf_t *output = fbuf_create(FBUF_MAXLEN_NONE);
         uint16_t eor = 0;
         char eom = 0;
         if (accumulated_size) {
@@ -382,6 +390,7 @@ static int get_async_data_handler(void *key,
                 if (req->sig_hdr&0x01) {
                     uint64_t digest;
                     if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
+                        fbuf_free(output);
                         SHC_ERROR("Can't compute the siphash digest!\n");
                         sip_hash_free(req->fetch_shash);
                         req->fetch_shash = NULL;
@@ -410,7 +419,7 @@ static int get_async_data_handler(void *key,
             req->fetch_shash = NULL;
         }
 
-        queue_push_right(req->output, output);
+        rqueue_write(req->output, output);
         ATOMIC_INCREMENT(req->done);
     }
 
@@ -454,7 +463,7 @@ static void get_async_data(shardcache_t *cache,
             sip_hash_free(req->fetch_shash);
             req->fetch_shash = NULL;
         }
-        queue_push_right(req->output, output);
+        rqueue_write(req->output, output);
         ATOMIC_INCREMENT(req->done);
     }
 }
@@ -518,7 +527,7 @@ process_request(shardcache_request_t *req)
                 }
          
             }
-            queue_push_right(req->output, output);
+            rqueue_write(req->output, output);
             get_async_data(cache, key, klen, get_async_data_handler, req);
             break;
         }
@@ -644,7 +653,7 @@ process_request(shardcache_request_t *req)
                                   SHC_HDR_RESPONSE,
                                   &record, 1, out) == 0)
                 {
-                    queue_push_right(req->output, out);
+                    rqueue_write(req->output, out);
                     ATOMIC_INCREMENT(req->done);
                 } else {
                     SHC_ERROR("Can't build the STATS response");
@@ -694,7 +703,7 @@ process_request(shardcache_request_t *req)
             {
                 // destroy it early ... since we still need one more copy
                 SHC_DEBUG("Index response sent (%d)", fbuf_used(out));
-                queue_push_right(req->output, out);
+                rqueue_write(req->output, out);
                 ATOMIC_INCREMENT(req->done);
             } else {
                 fbuf_free(out);
@@ -733,7 +742,7 @@ process_request(shardcache_request_t *req)
                 {
                     // destroy it early ... since we still need one more copy
                     free(response);
-                    queue_push_right(req->output, out);
+                    rqueue_write(req->output, out);
                     ATOMIC_INCREMENT(req->done);
                 } else {
                     free(response);
@@ -803,9 +812,9 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
     req->hdr = async_read_context_hdr(ctx->reader_ctx);
     req->sig_hdr = async_read_context_sig_hdr(ctx->reader_ctx);
     req->ctx = ctx;
-    req->output = queue_create();
-    queue_set_free_value_callback(req->output,
-            (queue_free_value_callback_t)fbuf_free);
+    req->output = rqueue_create(256, RQUEUE_MODE_BLOCKING);
+    rqueue_set_free_value_callback(req->output,
+             (rqueue_free_value_callback_t)fbuf_free);
 
     int i;
     for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
@@ -831,7 +840,9 @@ shardcache_check_context_state(iomux_t *iomux,
         }
         push_value(ctx->requests, req);
         process_request(req);
-    } else if (state == SHC_STATE_READING_ERR || state == SHC_STATE_AUTH_ERR) {
+    }
+    else if (__builtin_expect(state == SHC_STATE_READING_ERR || state == SHC_STATE_AUTH_ERR, 0))
+    {
         // if the asynchronous reader is in error state we want
         // to close the connection, probably an unauthorized or a
         // badly formatted message has been sent by the client
@@ -854,19 +865,35 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
 
     int max = *len;
     int offset = 0;
-    while (offset < max) {
+    while (__builtin_expect(offset < max, 1)) {
         shardcache_request_t *req = pick_value(ctx->requests, 0);
         if (!req)
             break;
 
-        if (ATOMIC_READ(req->error)) {
+        if (__builtin_expect(ATOMIC_READ(req->error), 0)) {
             // abort the request and close the connection
             // if there was an error while fetching a remote object
             iomux_close(iomux, fd);
             return;
         }
 
-        fbuf_t *output = queue_pop_left(req->output);
+        if (__builtin_expect(req->pending != NULL, 0)) {
+            int to_copy = max - offset;
+            if (fbuf_used(req->pending) > to_copy) {
+                memcpy(out + offset, fbuf_data(req->pending), to_copy);
+                fbuf_remove(req->pending, to_copy);
+                offset += to_copy;
+            } else {
+                int req_outlen = fbuf_used(req->pending);
+                memcpy(out + offset, fbuf_data(req->pending), req_outlen);
+                fbuf_free(req->pending);
+                req->pending = NULL;
+                offset += req_outlen;
+            }
+            continue;
+        }
+
+        fbuf_t *output = rqueue_read(req->output);
         if(output) {
             void *req_output = fbuf_data(output);
             int req_outlen = fbuf_used(output);
@@ -875,7 +902,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
                 memcpy(out + offset, req_output, to_copy);
                 fbuf_remove(output, to_copy);
                 offset += to_copy;
-                queue_push_left(req->output, output);
+                req->pending = output;
             } else if (req_outlen > 0) {
                 memcpy(out + offset, req_output, req_outlen);
                 // NOTE: the buffer is already empty but calling
@@ -887,10 +914,9 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
             }
         }
 
-        int empty = (!output || fbuf_used(output) == 0);
         int done = ATOMIC_READ(req->done);
-
-        if (done && empty) {
+        int empty = rqueue_isempty(req->output);
+        if (done && empty && !req->pending) {
             shift_value(ctx->requests);
             shardcache_request_destroy(req);
             // if we have pending input data this is time

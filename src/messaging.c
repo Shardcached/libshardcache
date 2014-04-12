@@ -81,7 +81,8 @@ async_read_context_update(async_read_ctx_t *ctx)
 {
     gettimeofday(&ctx->last_update, NULL);
 
-    if (ctx->state == SHC_STATE_READING_DONE) {
+    if (__builtin_expect(ctx->state == SHC_STATE_READING_DONE, 0))
+    {
         ctx->state = SHC_STATE_READING_NONE;
         ctx->rnum = 0;
         ctx->rlen = 0;
