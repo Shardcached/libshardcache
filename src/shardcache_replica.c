@@ -660,7 +660,7 @@ shardcache_replica_create(shardcache_t *shc,
         return NULL;
     }
 
-    replica->iomux = iomux_create(0, 0, 1);
+    replica->iomux = iomux_create(0, 1);
 
     shardcache_replica_register_counters(replica);
 

@@ -426,6 +426,7 @@ static int get_async_data_handler(void *key,
         MUTEX_LOCK(&req->output_lock);
         fbuf_concat(&req->output, &output);
         MUTEX_UNLOCK(&req->output_lock);
+        fbuf_destroy(&output);
         ATOMIC_INCREMENT(req->done);
     }
 
@@ -860,7 +861,7 @@ shardcache_check_context_state(iomux_t *iomux,
         push_value(ctx->requests, req);
         process_request(req);
     }
-    else if (__builtin_expect(state == SHC_STATE_READING_ERR || state == SHC_STATE_AUTH_ERR, 0))
+    else if (UNLIKELY(state == SHC_STATE_READING_ERR || state == SHC_STATE_AUTH_ERR))
     {
         // if the asynchronous reader is in error state we want
         // to close the connection, probably an unauthorized or a
@@ -884,12 +885,12 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
 
     int max = *len;
     int offset = 0;
-    while (__builtin_expect(offset < max, 1)) {
+    while (LIKELY(offset < max)) {
         shardcache_request_t *req = pick_value(ctx->requests, 0);
         if (!req)
             break;
 
-        if (__builtin_expect(ATOMIC_READ(req->error), 0)) {
+        if (UNLIKELY(ATOMIC_READ(req->error))) {
             // abort the request and close the connection
             // if there was an error while fetching a remote object
             iomux_close(iomux, fd);
@@ -1193,13 +1194,13 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
         MUTEX_INIT(&wrk->wakeup_lock);
         CONDITION_INIT(&wrk->wakeup_cond);
         //wrk->fds = ht_create(1024, 65535, NULL);
-        wrk->iomux = iomux_create(0, 0, 0);
+        wrk->iomux = iomux_create(0, 0);
         pthread_create(&wrk->thread, NULL, worker, wrk);
         push_value(s->workers, wrk);
         ATOMIC_INCREMENT(s->total_workers);
     }
 
-    s->io_mux = iomux_create(1<<13, 1<<13, 0);
+    s->io_mux = iomux_create(1<<13, 0);
 
     // and start a background thread to handle incoming connections
     int rc = pthread_create(&s->io_thread, NULL, serve_cache, s);
