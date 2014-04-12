@@ -30,6 +30,9 @@
     __o[__s] = 0; \
 }
 
+#define LIKELY(__e) __builtin_expect((__e), 1)
+#define UNLIKELY(__e) __builtin_expect((__e), 0)
+
 typedef struct chash_t chash_t;
 
 struct __shardcache_node_s {

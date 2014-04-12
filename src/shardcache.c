@@ -27,6 +27,7 @@ const char *LIBSHARDCACHE_VERSION = "0.15";
 extern int shardcache_log_initialized;
 
 #define ADDR_REGEXP "^[a-z0-9_\\.\\-]+(:[0-9]+)?$"
+
 static int
 shardcache_check_address_string(char *str)
 {
@@ -894,16 +895,21 @@ shardcache_get_offset_async(shardcache_t *cache,
             memcpy(data, obj->data + offset, dlen);
         }
 
-        cb(key, klen, data, dlen, dlen, &obj->ts, priv);
         time_t obj_expiration = (obj->drop || obj->evict) ? 0 : obj->ts.tv_sec + cache->expire_time;
-        MUTEX_UNLOCK(&obj->lock);
         if (cache->lazy_expiration && obj_expiration &&
-            cache->expire_time > 0 && __builtin_expect(obj_expiration > time(NULL), 0))
+            cache->expire_time > 0 && UNLIKELY(obj_expiration < time(NULL)))
         {
+            MUTEX_UNLOCK(&obj->lock);
             arc_remove(cache->arc, key, klen);
+            arc_release_resource(cache->arc, res);
+            free(data);
+            return shardcache_get_offset_async(cache, key, klen, offset, length, cb, priv);
+        } else {
+            cb(key, klen, data, dlen, dlen, &obj->ts, priv);
+            MUTEX_UNLOCK(&obj->lock);
+            arc_release_resource(cache->arc, res);
+            free(data);
         }
-        arc_release_resource(cache->arc, res);
-        free(data);
     } else {
         if (obj->dlen) {
             // check if we have enough so far
@@ -1019,22 +1025,27 @@ shardcache_get_async(shardcache_t *cache,
 
     cached_object_t *obj = (cached_object_t *)obj_ptr;
     MUTEX_LOCK(&obj->lock);
-    if (__builtin_expect(obj->evicted, 0)) {
+    if (UNLIKELY(obj->evicted)) {
         // if marked for eviction we don't want to return this object
         cb(key, klen, NULL, 0, 0, NULL, priv);
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, res);
         return -1;
     } else if (obj->complete) {
-        cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
         time_t obj_expiration = (obj->drop || obj->evict) ? 0 : obj->ts.tv_sec + cache->expire_time;
-        MUTEX_UNLOCK(&obj->lock);
-        if (cache->lazy_expiration && obj_expiration &&
-            cache->expire_time > 0 && __builtin_expect(obj_expiration > time(NULL), 0))
+        if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
+                     cache->expire_time > 0 && obj_expiration < time(NULL)))
         {
+            MUTEX_UNLOCK(&obj->lock);
             arc_remove(cache->arc, key, klen);
+            arc_release_resource(cache->arc, res);
+            return shardcache_get_async(cache, key, klen, cb, priv);
+
+        } else {
+            cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
+            MUTEX_UNLOCK(&obj->lock);
+            arc_release_resource(cache->arc, res);
         }
-        arc_release_resource(cache->arc, res);
     } else {
         if (obj->dlen) // let's send what we have so far
             cb(key, klen, obj->data, obj->dlen, 0, NULL, priv);
