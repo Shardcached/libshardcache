@@ -325,7 +325,9 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                                                             &node_len);
             if (check == 0) {
                 ret = arc_ops_fetch_from_peer(cache, obj, node_name);
-            } else if (check == 1 || cache->storage.global) {
+            }
+
+            if (check == 1 || (ret == -1 && cache->storage.global)) {
                 // if it's a global storage or we are responsible in the
                 // migration context, we don't want to return earlier
                 done = 0;
