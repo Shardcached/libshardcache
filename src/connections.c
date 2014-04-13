@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/un.h>
 
@@ -266,7 +267,13 @@ open_connection(const char *host, int port, unsigned int timeout)
 
         // XXX - hack to overcome the 1024 FD_SETSIZE limit on some
         //       system's select() implementation (notably linux)
-        void *fdset = calloc(1, sizeof(fd_set) * 8); // we want to fit at most 8192 filedescriptors
+        struct rlimit rlim;
+        int fdset_size = sizeof(fd_set) * 8; // defaults to at least 8192 fds
+        if (getrlimit(RLIMIT_NOFILE, &rlim) == 0) {
+            fdset_size = sizeof(fd_set) * rlim.rlim_max/FD_SETSIZE;
+        }
+
+        void *fdset = calloc(1, fdset_size); // we want to fit at most 8192 filedescriptors
         FD_SET(sock, (fd_set *)fdset);
 
         struct timeval timeout = { tv.tv_sec, tv.tv_usec };
