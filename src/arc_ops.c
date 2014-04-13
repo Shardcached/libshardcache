@@ -364,9 +364,9 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         obj->data = vobj->data; 
         obj->dlen = vobj->dlen;
         free(vobj);
-        if (shardcache_log_level() >= LOG_DEBUG) {
+        if (shardcache_log_level() > LOG_DEBUG) {
             if (obj->data && obj->dlen) {
-                SHC_DEBUG2("Found volatile value %s (%lu) for key %s",
+                SHC_DEBUG3("Found volatile value %s (%lu) for key %s",
                        shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
                        (unsigned long)obj->dlen, keystr);
             }
@@ -374,13 +374,13 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     } else if (cache->use_persistent_storage && cache->storage.fetch) {
         obj->data = cache->storage.fetch(obj->key, obj->klen, &obj->dlen, cache->storage.priv);
 
-        if (shardcache_log_level() >= LOG_DEBUG) {
+        if (shardcache_log_level() > LOG_DEBUG) {
             if (obj->data && obj->dlen) {
-                SHC_DEBUG2("Fetch storage callback returned value %s (%lu) for key %s",
+                SHC_DEBUG3("Fetch storage callback returned value %s (%lu) for key %s",
                        shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
                        (unsigned long)obj->dlen, keystr);
             } else {
-                SHC_DEBUG2("Fetch storage callback returned an empty value for key %s", keystr);
+                SHC_DEBUG3("Fetch storage callback returned an empty value for key %s", keystr);
             }
         }
     }
@@ -394,8 +394,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
 
         MUTEX_UNLOCK(&obj->lock);
-        if (shardcache_log_level() >= LOG_DEBUG)
-            SHC_DEBUG("Item not found for key %s", keystr);
+        if (shardcache_log_level() > LOG_DEBUG)
+            SHC_DEBUG2("Item not found for key %s", keystr);
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value);
         return -1;
     }
