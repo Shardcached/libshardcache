@@ -833,7 +833,7 @@ shardcache_get_async_helper(void *key,
     }
 
     if (rc != 0 || (!dlen && !total_size)) { // error
-        arg->stat = -1;
+        ATOMIC_SET(arg->stat, -1);
         arc_release_resource(arc, arg->res);
         free(arg);
         return -1;
@@ -896,8 +896,8 @@ shardcache_get_offset_async(shardcache_t *cache,
         }
 
         time_t obj_expiration = (obj->drop || obj->evict) ? 0 : obj->ts.tv_sec + cache->expire_time;
-        if (cache->lazy_expiration && obj_expiration &&
-            cache->expire_time > 0 && UNLIKELY(obj_expiration < time(NULL)))
+        if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
+            cache->expire_time > 0 && obj_expiration < time(NULL)))
         {
             MUTEX_UNLOCK(&obj->lock);
             arc_remove(cache->arc, key, klen);
@@ -1089,29 +1089,28 @@ shardcache_get_helper(void *key,
                       void *priv)
 {
     shardcache_get_helper_arg_t *arg = (shardcache_get_helper_arg_t *)priv;
-    MUTEX_LOCK(&arg->lock);
     if (dlen) {
         fbuf_add_binary(&arg->data, data, dlen);
     } else if (!total_size) {
         // error notified (dlen == 0 && total_size == 0)
-        arg->complete = 1;
-        arg->stat = -1;
+        ATOMIC_SET(arg->complete, 1);
+        ATOMIC_SET(arg->stat, -1);
         pthread_cond_signal(&arg->cond);
-        MUTEX_UNLOCK(&arg->lock);
         return -1;
     }
 
     if (total_size) {
-        arg->complete = 1;
+        ATOMIC_SET(arg->complete, 1);
         if (timestamp)
             memcpy(&arg->ts, timestamp, sizeof(struct timeval));
         if (total_size != fbuf_used(&arg->data)) {
-            arg->stat = -1;
+            ATOMIC_SET(arg->stat, -1);
         }
+        MUTEX_LOCK(&arg->lock);
         pthread_cond_signal(&arg->cond);
+        MUTEX_UNLOCK(&arg->lock);
     }
 
-    MUTEX_UNLOCK(&arg->lock);
 
     return 0;
 }
@@ -1141,9 +1140,7 @@ shardcache_get(shardcache_t *cache,
     int rc = shardcache_get_async(cache, key, klen, shardcache_get_helper, arg);
 
     if (rc == 0) {
-        MUTEX_LOCK(&arg->lock);
-        while (!arg->complete && arg->stat == 0) {
-            MUTEX_UNLOCK(&arg->lock);
+        while (!ATOMIC_READ(arg->complete) && ATOMIC_READ(arg->stat) == 0) {
             struct timeval now;
             gettimeofday(&now, NULL);
             struct timeval waiting_time = { 0, 500000 };
@@ -1153,15 +1150,14 @@ shardcache_get(shardcache_t *cache,
             MUTEX_LOCK(&arg->lock);
             pthread_cond_timedwait(&arg->cond, &arg->lock, &abstime); 
             if (ATOMIC_READ(cache->async_quit)) {
-                arg->stat = 1;
+                ATOMIC_SET(arg->stat, 1);
                 break;
             }
         }
-        MUTEX_UNLOCK(&arg->lock);
 
         char *value = fbuf_data(&arg->data);
         uint32_t len = fbuf_used(&arg->data);
-        int stat = arg->stat;
+        int stat = ATOMIC_READ(arg->stat);
 
         if (timestamp)
             memcpy(timestamp, &arg->ts, sizeof(struct timeval));
