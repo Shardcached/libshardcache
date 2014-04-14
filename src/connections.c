@@ -293,6 +293,7 @@ open_connection(const char *host, int port, unsigned int timeout)
                 free(fdset);
                 return sock;
             } else if (err != EINPROGRESS) {
+                free(fdset);
                 errno = err;
                 return -1;
             }
