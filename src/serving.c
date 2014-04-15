@@ -251,43 +251,6 @@ static int get_async_data_handler(void *key,
     shardcache_request_t *req =
         (shardcache_request_t *)priv;
 
-    if (dlen == 0 && total_size == 0) {
-        if (!timestamp) {
-            // if there is no timestamp here it means there was an
-            // error (and not just an empty item)
-            write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
-            return -1;
-        }
-        uint16_t eor = 0;
-        char eom = 0;
-        fbuf_t output = FBUF_STATIC_INITIALIZER;
-        fbuf_add_binary(&output, (void *)&eor, 2);
-        fbuf_add_binary(&output, &eom, 1);
-        if (req->fetch_shash) {
-            uint64_t digest;
-            sip_hash_update(req->fetch_shash, (void *)&eor, 2);
-            sip_hash_update(req->fetch_shash, &eom, 1);
-            if (sip_hash_final_integer(req->fetch_shash, &digest)) {
-                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-            } else {
-                SHC_ERROR("Can't compute the siphash digest!\n");
-                fbuf_destroy(&output);
-                ATOMIC_INCREMENT(req->error);
-                write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
-                return -1;
-            }
-            sip_hash_free(req->fetch_shash);
-            req->fetch_shash = NULL;
-        }
-
-        MUTEX_LOCK(&req->output_lock);
-        fbuf_concat(&req->output, &output);
-        MUTEX_UNLOCK(&req->output_lock);
-        fbuf_destroy(&output);
-        ATOMIC_INCREMENT(req->done);
-        return 0;
-    }
-
     if (req->skipped == 0 && req->copied == 0) {
         shardcache_hdr_t hdr = SHC_HDR_RESPONSE;
 
@@ -327,27 +290,51 @@ static int get_async_data_handler(void *key,
         fbuf_destroy(&output);
     }
 
+    if (dlen == 0 && total_size == 0) {
+        if (!timestamp) {
+            // if there is no timestamp here it means there was an
+            // error (and not just an empty item)
+            ATOMIC_INCREMENT(req->error);
+            return -1;
+        }
+        uint16_t eor = 0;
+        char eom = 0;
+        fbuf_t output = FBUF_STATIC_INITIALIZER;
+        fbuf_add_binary(&output, (void *)&eor, 2);
+        fbuf_add_binary(&output, &eom, 1);
+        if (req->fetch_shash) {
+            uint64_t digest;
+            sip_hash_update(req->fetch_shash, (void *)&eor, 2);
+            sip_hash_update(req->fetch_shash, &eom, 1);
+            if (sip_hash_final_integer(req->fetch_shash, &digest)) {
+                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
+            } else {
+                SHC_ERROR("Can't compute the siphash digest!\n");
+                fbuf_destroy(&output);
+                ATOMIC_INCREMENT(req->error);
+                return -1;
+            }
+            sip_hash_free(req->fetch_shash);
+            req->fetch_shash = NULL;
+        }
+
+        MUTEX_LOCK(&req->output_lock);
+        fbuf_concat(&req->output, &output);
+        MUTEX_UNLOCK(&req->output_lock);
+        fbuf_destroy(&output);
+        ATOMIC_INCREMENT(req->done);
+        return 0;
+    }
+
     uint32_t offset = 0;
     uint32_t size = 0;
 
+    
     if (req->hdr == SHC_HDR_GET_OFFSET) {
-        if (fbuf_used(&req->records[1]) == 4) {
-            memcpy(&offset, fbuf_data(&req->records[1]), sizeof(uint32_t));
-            offset = ntohl(offset);
-        } else {
-            SHC_WARNING("Bad record (1) format for message GET_OFFSET");
-            write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
-            return -1;
-        }
-
-        if (fbuf_used(&req->records[2]) == 4) {
-            memcpy(&size, fbuf_data(&req->records[2]), sizeof(uint32_t));
-            size = ntohl(size);
-        } else {
-            SHC_WARNING("Bad record (1) format for message GET_OFFSET");
-            write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
-            return -1;
-        }
+        memcpy(&offset, fbuf_data(&req->records[1]), sizeof(uint32_t));
+        offset = ntohl(offset);
+        memcpy(&size, fbuf_data(&req->records[2]), sizeof(uint32_t));
+        size = ntohl(size);
     }
 
     if (offset && (req->skipped + dlen) < offset) {
@@ -523,6 +510,20 @@ process_request(shardcache_request_t *req)
         case SHC_HDR_GET_ASYNC:
         case SHC_HDR_GET_OFFSET:
         {
+            if (req->hdr == SHC_HDR_GET_OFFSET) {
+                if (fbuf_used(&req->records[1]) != 4) {
+                    SHC_WARNING("Bad record (1) format for message GET_OFFSET");
+                    write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                    break;
+                }
+
+                if (fbuf_used(&req->records[2]) != 4) {
+                    SHC_WARNING("Bad record (1) format for message GET_OFFSET");
+                    write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                    break;
+                }
+            }
+
             get_async_data(cache, key, klen, get_async_data_handler, req);
             break;
         }
