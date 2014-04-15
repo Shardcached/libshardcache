@@ -331,6 +331,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                 // if it's a global storage or we are responsible in the
                 // migration context, we don't want to return earlier
                 done = 0;
+                obj->evicted = 0;
             }
         }
         if (done) {
