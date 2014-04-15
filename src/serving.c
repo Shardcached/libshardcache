@@ -288,6 +288,45 @@ static int get_async_data_handler(void *key,
         return 0;
     }
 
+    if (req->skipped == 0 && req->copied == 0) {
+        shardcache_hdr_t hdr = SHC_HDR_RESPONSE;
+
+        uint32_t magic = htonl(SHC_MAGIC);
+
+        fbuf_t output = FBUF_STATIC_INITIALIZER;
+        fbuf_add_binary(&output, (char *)&magic, sizeof(magic));
+
+        if (req->ctx->serv->auth) {
+            if (req->fetch_shash) {
+                sip_hash_free(req->fetch_shash);
+                req->fetch_shash = NULL;
+            }
+            req->fetch_shash = sip_hash_new((char *)req->ctx->serv->auth, 2, 4);
+            fbuf_add_binary(&output, (void *)&req->sig_hdr, 1);
+        }
+
+        fbuf_add_binary(&output, (void *)&hdr, 1);
+
+        if (req->ctx->serv->auth && req->fetch_shash) {
+            sip_hash_update(req->fetch_shash, (char *)&hdr, 1);
+            if (req->sig_hdr&0x01) {
+                uint64_t digest;
+                if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
+                    ATOMIC_INCREMENT(req->error);
+                    SHC_ERROR("Can't compute the siphash digest!\n");
+                    fbuf_destroy(&output);
+                    return -1;
+                }
+                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
+            }
+     
+        }
+        MUTEX_LOCK(&req->output_lock);
+        fbuf_concat(&req->output, &output);
+        MUTEX_UNLOCK(&req->output_lock);
+        fbuf_destroy(&output);
+    }
+
     uint32_t offset = 0;
     uint32_t size = 0;
 
@@ -346,6 +385,7 @@ static int get_async_data_handler(void *key,
             if (req->fetch_shash)
                 sip_hash_update(req->fetch_shash, data + data_offset, copy_size);
             data_offset += copy_size;
+            req->copied += copy_size;
         }
         if (req->fetch_shash && (req->sig_hdr&0x01)) {
             uint64_t digest;
@@ -373,6 +413,7 @@ static int get_async_data_handler(void *key,
         if (remainder) {
             rbuf_write(req->fetch_accumulator, data + data_offset, remainder);
             accumulated_size = remainder;
+            req->copied += remainder;
         }
     }
     
@@ -433,14 +474,16 @@ static int get_async_data_handler(void *key,
     return 0;
 }
 
-static void get_async_data(shardcache_t *cache,
-                            void *key,
-                            size_t klen,
-                            shardcache_get_async_callback_t cb,
-                            shardcache_request_t *req)
+static int
+get_async_data(shardcache_t *cache,
+               void *key,
+               size_t klen,
+               shardcache_get_async_callback_t cb,
+               shardcache_request_t *req)
 {
     int rc;
-    
+    req->copied = 0;
+    req->skipped = 0;
     if (req->hdr == SHC_HDR_GET_OFFSET) {
         uint32_t offset = ntohl(*((uint32_t *)fbuf_data(&req->records[1])));
         uint32_t length = ntohl(*((uint32_t *)fbuf_data(&req->records[2])));
@@ -448,35 +491,9 @@ static void get_async_data(shardcache_t *cache,
     } else {
         rc = shardcache_get_async(cache, key, klen, cb, req);
     }
-    if (rc != 0) {
-        uint16_t eor = 0;
-        char eom = 0;
-        fbuf_t output = FBUF_STATIC_INITIALIZER;
-        fbuf_add_binary(&output, (void *)&eor, 2);
-        fbuf_add_binary(&output, &eom, 1);
-        if (req->fetch_shash) {
-            uint64_t digest;
-            sip_hash_update(req->fetch_shash, (void *)&eor, 2);
-            sip_hash_update(req->fetch_shash, &eom, 1);
-            if (sip_hash_final_integer(req->fetch_shash, &digest)) {
-                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-            } else {
-                SHC_ERROR("Can't compute the siphash digest!\n");
-                ATOMIC_INCREMENT(req->error);
-                sip_hash_free(req->fetch_shash);
-                req->fetch_shash = NULL;
-                fbuf_destroy(&output);
-                return;
-            }
-            sip_hash_free(req->fetch_shash);
-            req->fetch_shash = NULL;
-        }
-        MUTEX_LOCK(&req->output_lock);
-        fbuf_concat(&req->output, &output);
-        MUTEX_UNLOCK(&req->output_lock);
-        fbuf_destroy(&output);
-        ATOMIC_INCREMENT(req->done);
-    }
+    if (rc != 0)
+        write_status(req, rc, WRITE_STATUS_MODE_SIMPLE);
+    return rc;
 }
 
 static void
@@ -506,42 +523,6 @@ process_request(shardcache_request_t *req)
         case SHC_HDR_GET_ASYNC:
         case SHC_HDR_GET_OFFSET:
         {
-            shardcache_hdr_t hdr = SHC_HDR_RESPONSE;
-
-            uint32_t magic = htonl(SHC_MAGIC);
-
-            fbuf_t output = FBUF_STATIC_INITIALIZER;
-            fbuf_add_binary(&output, (char *)&magic, sizeof(magic));
-
-            if (req->ctx->serv->auth) {
-                if (req->fetch_shash) {
-                    sip_hash_free(req->fetch_shash);
-                    req->fetch_shash = NULL;
-                }
-                req->fetch_shash = sip_hash_new((char *)req->ctx->serv->auth, 2, 4);
-                fbuf_add_binary(&output, (void *)&req->sig_hdr, 1);
-            }
-
-            fbuf_add_binary(&output, (void *)&hdr, 1);
-
-            if (req->ctx->serv->auth && req->fetch_shash) {
-                sip_hash_update(req->fetch_shash, (char *)&hdr, 1);
-                if (req->sig_hdr&0x01) {
-                    uint64_t digest;
-                    if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
-                        fbuf_destroy(&output);
-                        ATOMIC_INCREMENT(req->error);
-                        SHC_ERROR("Can't compute the siphash digest!\n");
-                        break;
-                    }
-                    fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-                }
-         
-            }
-            MUTEX_LOCK(&req->output_lock);
-            fbuf_concat(&req->output, &output);
-            MUTEX_UNLOCK(&req->output_lock);
-            fbuf_destroy(&output);
             get_async_data(cache, key, klen, get_async_data_handler, req);
             break;
         }
