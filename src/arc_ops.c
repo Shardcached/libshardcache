@@ -398,7 +398,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         if (shardcache_log_level() > LOG_DEBUG)
             SHC_DEBUG2("Item not found for key %s", keystr);
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value);
-        return -1;
+        return 1;
     }
 
     if (obj->async) {
