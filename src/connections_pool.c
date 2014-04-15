@@ -67,6 +67,19 @@ get_connection_queue(connections_pool_t *cc, char *addr)
 }
 
 int
+connections_queue_empty(hashtable_t *table, void *value, size_t vlen, void *user)
+{
+    queue_t *connection_queue = (queue_t *)value;
+    int *fd = queue_pop_left(connection_queue);
+    while (fd) {
+        close(*fd);
+        free(fd);
+        fd = queue_pop_left(connection_queue);
+    }
+    return 1;
+}
+
+int
 connections_pool_get(connections_pool_t *cc, char *addr)
 {
     queue_t *connection_queue = get_connection_queue(cc, addr);
@@ -97,7 +110,11 @@ connections_pool_get(connections_pool_t *cc, char *addr)
     }
 
     int new_fd = connect_to_peer(addr, ATOMIC_READ(cc->tcp_timeout));
-
+    if (new_fd == -1 && (errno == EMFILE || errno == ENFILE)) {
+        ht_foreach_value(cc->table, connections_queue_empty, NULL);
+        // give us one more chance
+        new_fd = connect_to_peer(addr, ATOMIC_READ(cc->tcp_timeout));
+    }
     return new_fd; 
 }
 
