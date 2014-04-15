@@ -1007,7 +1007,7 @@ shardcache_get_async(shardcache_t *cache,
 
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_GETS].value);
 
-    if (shardcache_log_level() > LOG_DEBUG) {
+    if (UNLIKELY(shardcache_log_level() > LOG_DEBUG)) {
         char keystr[1024];
         KEY2STR(key, klen, keystr, sizeof(keystr));
         SHC_DEBUG3("Getting value for key: %s", keystr);
@@ -1474,6 +1474,8 @@ shardcache_schedule_expiration(shardcache_t *cache,
         return 0;
     }
 
+    if (tid_ptr)
+        free(tid_ptr);
     free(ctx->item.key);
     free(ctx);
     return -1;
