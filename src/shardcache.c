@@ -1027,10 +1027,10 @@ shardcache_get_async(shardcache_t *cache,
     MUTEX_LOCK(&obj->lock);
     if (UNLIKELY(obj->evicted)) {
         // if marked for eviction we don't want to return this object
-        cb(key, klen, NULL, 0, 0, NULL, priv);
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, res);
-        return -1;
+        // but we will try to fetch it again
+        return shardcache_get_async(cache, key, klen, cb, priv);
     } else if (obj->complete) {
         time_t obj_expiration = (obj->drop || obj->evict) ? 0 : obj->ts.tv_sec + cache->expire_time;
         if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
