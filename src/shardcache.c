@@ -886,8 +886,17 @@ shardcache_get_offset_async(shardcache_t *cache,
     } else if (obj->complete) {
         size_t dlen = obj->dlen;
         void *data = NULL;
-        if (offset)
-            dlen -= offset;
+        if (offset) {
+            if (offset < dlen) {
+                dlen -= offset;
+            } else {
+                cb(key, klen, NULL, 0, 0, &obj->ts, priv);
+                MUTEX_UNLOCK(&obj->lock);
+                arc_release_resource(cache->arc, res);
+                free(data);
+                return 0;
+            }
+        }
         if (dlen > length)
             dlen = length;
         if (dlen && obj->data) {
@@ -909,6 +918,7 @@ shardcache_get_offset_async(shardcache_t *cache,
             MUTEX_UNLOCK(&obj->lock);
             arc_release_resource(cache->arc, res);
             free(data);
+            return 0;
         }
     } else {
         if (obj->dlen) {
