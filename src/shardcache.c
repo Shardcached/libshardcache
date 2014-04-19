@@ -1030,6 +1030,7 @@ shardcache_get_async(shardcache_t *cache,
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, res);
         // but we will try to fetch it again
+        SHC_DEBUG("The retreived object has been already evicted, try fetching it again");
         return shardcache_get_async(cache, key, klen, cb, priv);
     } else if (obj->complete) {
         time_t obj_expiration = (obj->drop || obj->evict) ? 0 : obj->ts.tv_sec + cache->expire_time;
