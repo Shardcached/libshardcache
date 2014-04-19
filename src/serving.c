@@ -12,6 +12,7 @@
 #include <iomux.h>
 #include <queue.h>
 #include <linklist.h>
+#include <bsd_queue.h>
 #include <hashtable.h>
 
 #include "messaging.h"
@@ -68,7 +69,7 @@ struct __shardcache_serving_s {
 
 typedef struct __shardcache_connection_context_s shardcache_connection_context_t;
 
-typedef struct {
+typedef struct __shardcache_request_s {
 #define SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX 4
     fbuf_t records[SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX];
     int fd;
@@ -83,6 +84,7 @@ typedef struct {
     int copied;
     int done;
     rbuf_t *fetch_accumulator;
+    TAILQ_ENTRY(__shardcache_request_s) next;
 } shardcache_request_t;
 
 struct __shardcache_connection_context_s {
@@ -90,7 +92,7 @@ struct __shardcache_connection_context_s {
     shardcache_hdr_t sig_hdr;
 
     int request_number;
-    linked_list_t *requests;
+    TAILQ_HEAD (, __shardcache_request_s) requests;
 
 #define SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX 4
     fbuf_t records[SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX];
@@ -133,7 +135,7 @@ shardcache_connection_context_create(shardcache_serving_t *serv, int fd)
     ctx->reader_ctx = async_read_context_create((char *)serv->auth,
                                                     async_read_handler,
                                                     ctx);
-    ctx->requests = create_list();
+    TAILQ_INIT(&ctx->requests);
     return ctx;
 }
 
@@ -159,12 +161,11 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
     for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
         fbuf_destroy(&ctx->records[i]);
     }
-    shardcache_request_t *req = shift_value(ctx->requests);
+    shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
     while(req) {
         shardcache_request_destroy(req);
-        req = shift_value(ctx->requests);
+        req = TAILQ_FIRST(&ctx->requests);
     }
-    destroy_list(ctx->requests);
     async_read_context_destroy(ctx->reader_ctx);
     free(ctx);
 }
@@ -839,7 +840,7 @@ shardcache_check_context_state(iomux_t *iomux,
         for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
             fbuf_clear(&ctx->records[i]);
         }
-        push_value(ctx->requests, req);
+        TAILQ_INSERT_TAIL(&ctx->requests, req, next);
         process_request(req);
     }
     else if (UNLIKELY(state == SHC_STATE_READING_ERR || state == SHC_STATE_AUTH_ERR))
@@ -867,7 +868,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
     int max = *len;
     int offset = 0;
     while (LIKELY(offset < max)) {
-        shardcache_request_t *req = pick_value(ctx->requests, 0);
+        shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
         if (!req)
             break;
 
@@ -909,7 +910,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
         MUTEX_UNLOCK(&req->output_lock);
 
         if (done && is_empty) {
-            shift_value(ctx->requests);
+            TAILQ_REMOVE(&ctx->requests, req, next);
             shardcache_request_destroy(req);
             // if we have pending input data this is time
             // to process it and move to the next request
@@ -966,7 +967,7 @@ shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
     ATOMIC_DECREMENT(ctx->serv->num_connections);
 
     if (ctx) {
-        if (list_count(ctx->requests)) {
+        if (TAILQ_FIRST(&ctx->requests) != NULL) {
             ctx->closed = 1;
             gettimeofday(&ctx->in_prune_since, NULL);
             push_value(ctx->worker->prune, ctx);
@@ -1035,22 +1036,21 @@ worker(void *priv)
         int to_check = list_count(wrkctx->prune);
         while (to_check--) {
             shardcache_connection_context_t *to_prune = shift_value(wrkctx->prune);
-            int pending = list_count(to_prune->requests);
-            while (pending--) {
-                shardcache_request_t *req = shift_value(to_prune->requests);
+            shardcache_request_t *req = TAILQ_FIRST(&to_prune->requests);
+            int done = 0;
+            if (req) {
                 if (ATOMIC_READ(req->done)) {
                     // the request is served, we can destroy it
+                    TAILQ_REMOVE(&to_prune->requests, req, next);
                     shardcache_request_destroy(req);
-                    continue;
+                    done = 1;
                 } 
-                // put it back;
-                push_value(to_prune->requests, req);
             }
             struct timeval quarantine = { 60, 0 };
             struct timeval now, diff;
             gettimeofday(&now, NULL);
             timersub(&now, &to_prune->in_prune_since, &diff);
-            if (!list_count(to_prune->requests) || timercmp(&diff, &quarantine, >)) {
+            if (done || timercmp(&diff, &quarantine, >)) {
                 shardcache_connection_context_destroy(to_prune);
             } else {
                 push_value(wrkctx->prune, to_prune);
@@ -1222,10 +1222,11 @@ clear_workers_list(linked_list_t *list)
 
         shardcache_connection_context_t *ctx = shift_value(wrk->prune);
         while (ctx) {
-            shardcache_request_t *req = shift_value(ctx->requests);
+            shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
             while (req) {
+                TAILQ_REMOVE(&ctx->requests, req, next);
                 shardcache_request_destroy(req);
-                req = shift_value(ctx->requests);
+                req = TAILQ_FIRST(&ctx->requests);
             }
             shardcache_connection_context_destroy(ctx);
             ctx = shift_value(wrk->prune);
