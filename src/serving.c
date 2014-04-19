@@ -98,7 +98,6 @@ struct __shardcache_connection_context_s {
     shardcache_serving_t *serv;
 
     int fd;
-    shardcache_worker_context_t *worker_ctx;
     async_read_ctx_t *reader_ctx;
     int retries;
     struct timeval retry_timeout;
