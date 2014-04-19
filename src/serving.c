@@ -875,11 +875,17 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
         if (UNLIKELY(ATOMIC_READ(req->error))) {
             // abort the request and close the connection
             // if there was an error while fetching a remote object
-            iomux_close(iomux, fd);
+            if (!iomux_close(iomux, fd)) {
+                close(fd);
+                ATOMIC_DECREMENT(ctx->serv->num_connections);
+                shardcache_connection_context_destroy(ctx);
+            }
             return;
         }
 
         int is_empty = 1;
+
+        int done = ATOMIC_READ(req->done);
 
         MUTEX_LOCK(&req->output_lock);
         if(fbuf_used(&req->output)) {
@@ -903,7 +909,6 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
         }
         MUTEX_UNLOCK(&req->output_lock);
 
-        int done = ATOMIC_READ(req->done);
         if (done && is_empty) {
             shift_value(ctx->requests);
             shardcache_request_destroy(req);
