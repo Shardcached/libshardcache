@@ -1017,11 +1017,10 @@ shardcache_get_async(shardcache_t *cache,
 
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_GETS].value);
 
-    if (UNLIKELY(shardcache_log_level() > LOG_DEBUG)) {
-        char keystr[1024];
-        KEY2STR(key, klen, keystr, sizeof(keystr));
-        SHC_DEBUG3("Getting value for key: %s", keystr);
-    }
+    char keystr[1024];
+    KEY2STR(key, klen, keystr, sizeof(keystr));
+    SHC_DEBUG3("Getting value for key: %s", keystr);
+
     void *obj_ptr;
     arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 1);
 
