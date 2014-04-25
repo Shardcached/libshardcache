@@ -32,7 +32,7 @@
 #endif
 #include <siphash.h>
 
-#define SHARDCACHE_SERVING_MAX_RETRIES 10 
+#define SHARDCACHE_SERVING_MAX_RETRIES 10
 
 typedef struct {
     pthread_t thread;
@@ -76,7 +76,12 @@ typedef struct __shardcache_request_s {
     shardcache_hdr_t hdr;
     shardcache_hdr_t sig_hdr;
     shardcache_connection_context_t *ctx;
-    pthread_mutex_t output_lock;
+#ifdef __MACH__
+    OSSpinLock output_lock;
+#else
+    pthread_spinlock_t output_lock;
+#endif
+    int output_pending;
     fbuf_t output;
     sip_hash *fetch_shash;
     int error;
@@ -117,7 +122,7 @@ async_read_handler(void *data, size_t len, int idx, void *priv)
     if (idx >= 0 && idx < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX)
         fbuf_add_binary(&ctx->records[idx], data, len);
 
-    // idx == -1 means that reading finished 
+    // idx == -1 means that reading finished
     // idx == -2 means error
     // any idx >= 0 refers to the record index
     return (idx >= -1) ? 0 : -1;
@@ -146,7 +151,7 @@ shardcache_request_destroy(shardcache_request_t *req)
     for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
         fbuf_destroy(&req->records[i]);
     }
-    MUTEX_DESTROY(&req->output_lock);
+    SPIN_DESTROY(&req->output_lock);
     fbuf_destroy(&req->output);
     if (req->fetch_shash)
         sip_hash_free(req->fetch_shash);
@@ -169,6 +174,8 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
     async_read_context_destroy(ctx->reader_ctx);
     free(ctx);
 }
+
+static void send_data(shardcache_request_t *req, fbuf_t *data);
 
 #define WRITE_STATUS_MODE_SIMPLE  0x00
 #define WRITE_STATUS_MODE_BOOLEAN 0x01
@@ -217,7 +224,7 @@ write_status(shardcache_request_t *req, int rc, char mode)
     unsigned char hdr = SHC_HDR_RESPONSE;
 
     fbuf_add_binary(&output, (char *)&hdr, 1);
-    
+
     fbuf_add_binary(&output, out, sizeof(out));
 
     if (req->ctx->serv->auth) {
@@ -231,9 +238,7 @@ write_status(shardcache_request_t *req, int rc, char mode)
     if (shash)
         sip_hash_free(shash);
 
-    MUTEX_LOCK(&req->output_lock);
-    fbuf_concat(&req->output, &output);
-    MUTEX_UNLOCK(&req->output_lock);
+    send_data(req, &output);
     fbuf_destroy(&output);
 
     ATOMIC_INCREMENT(req->done);
@@ -282,11 +287,9 @@ static int get_async_data_handler(void *key,
                 }
                 fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
             }
-     
+
         }
-        MUTEX_LOCK(&req->output_lock);
-        fbuf_concat(&req->output, &output);
-        MUTEX_UNLOCK(&req->output_lock);
+        send_data(req, &output);
         fbuf_destroy(&output);
     }
 
@@ -318,9 +321,7 @@ static int get_async_data_handler(void *key,
             req->fetch_shash = NULL;
         }
 
-        MUTEX_LOCK(&req->output_lock);
-        fbuf_concat(&req->output, &output);
-        MUTEX_UNLOCK(&req->output_lock);
+        send_data(req, &output);
         fbuf_destroy(&output);
         ATOMIC_INCREMENT(req->done);
         return 0;
@@ -329,7 +330,6 @@ static int get_async_data_handler(void *key,
     uint32_t offset = 0;
     uint32_t size = 0;
 
-    
     if (req->hdr == SHC_HDR_GET_OFFSET) {
         memcpy(&offset, fbuf_data(&req->records[1]), sizeof(uint32_t));
         offset = ntohl(offset);
@@ -386,11 +386,10 @@ static int get_async_data_handler(void *key,
             }
             fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
         }
-        if (fbuf_used(&output)) {
-            MUTEX_LOCK(&req->output_lock);
-            fbuf_concat(&req->output, &output);
-            MUTEX_UNLOCK(&req->output_lock);
-        }
+
+        if (fbuf_used(&output))
+            send_data(req, &output);
+
         fbuf_destroy(&output);
         to_process = accumulated_size + (dlen - data_offset);
     }
@@ -403,7 +402,7 @@ static int get_async_data_handler(void *key,
             req->copied += remainder;
         }
     }
-    
+
     if (total_size > 0 && timestamp) {
         fbuf_t output = FBUF_STATIC_INITIALIZER;
         uint16_t eor = 0;
@@ -451,9 +450,7 @@ static int get_async_data_handler(void *key,
             req->fetch_shash = NULL;
         }
 
-        MUTEX_LOCK(&req->output_lock);
-        fbuf_concat(&req->output, &output);
-        MUTEX_UNLOCK(&req->output_lock);
+        send_data(req, &output);
         fbuf_destroy(&output);
         ATOMIC_INCREMENT(req->done);
     }
@@ -580,7 +577,7 @@ process_request(shardcache_request_t *req)
                     nodes = realloc(nodes, size);
                     shardcache_node_t *node = shardcache_node_create(label, &addr, 1);
                     nodes[num_shards++] = node;
-                } 
+                }
             }
             rc = shardcache_migration_begin(cache, nodes, num_shards, 0);
             if (rc != 0)
@@ -649,9 +646,7 @@ process_request(shardcache_request_t *req)
                                   SHC_HDR_RESPONSE,
                                   &record, 1, &out) == 0)
                 {
-                    MUTEX_LOCK(&req->output_lock);
-                    fbuf_concat(&req->output, &out);
-                    MUTEX_UNLOCK(&req->output_lock);
+                    send_data(req, &out);
                     ATOMIC_INCREMENT(req->done);
                 } else {
                     SHC_ERROR("Can't build the STATS response");
@@ -686,7 +681,7 @@ process_request(shardcache_request_t *req)
                 // no klen terminates the list
                 fbuf_add_binary(&buf, (char *)&zero, sizeof(zero));
 
-                shardcache_free_index(index); 
+                shardcache_free_index(index);
             }
 
             // chunkize the data and build an actual message
@@ -701,9 +696,7 @@ process_request(shardcache_request_t *req)
             {
                 // destroy it early ... since we still need one more copy
                 SHC_DEBUG("Index response sent (%d)", fbuf_used(&out));
-                MUTEX_LOCK(&req->output_lock);
-                fbuf_concat(&req->output, &out);
-                MUTEX_UNLOCK(&req->output_lock);
+                send_data(req, &out);
                 ATOMIC_INCREMENT(req->done);
             } else {
                 write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
@@ -742,9 +735,7 @@ process_request(shardcache_request_t *req)
                 {
                     // destroy it early ... since we still need one more copy
                     free(response);
-                    MUTEX_LOCK(&req->output_lock);
-                    fbuf_concat(&req->output, &out);
-                    MUTEX_UNLOCK(&req->output_lock);
+                    send_data(req, &out);
                     ATOMIC_INCREMENT(req->done);
                 } else {
                     free(response);
@@ -779,36 +770,6 @@ shardcache_select_worker(shardcache_serving_t *serv)
     return wrk;
 }
 
-
-/*
-static void
-shardcache_request_handler(iomux_t *iomux, int fd, shardcache_connection_context_t *ctx)
-{
-    // begin the worker slection process
-    // first get the next worker in the array
-    shardcache_worker_context_t *wrkctx = ctx->worker;
-    // XXX 
-    if (!wrkctx)
-        wrkctx = shardcache_select_worker(ctx->serv);
-
-    if (wrkctx) {
-        ctx->retries = 0;
-        //printf("PUSHED JOB %p\n", wrkctx);
-        queue_push_right(wrkctx->jobs, ctx);
-        CONDITION_SIGNAL(&wrkctx->wakeup_cond, &wrkctx->wakeup_lock);
-    } else {
-        // all workers are busy, we need to postpone this command
-        ctx->retries++;
-        struct timeval timeout = { 0, ctx->retries * 666 };
-        if (timeout.tv_usec > 1000000) {
-            timeout.tv_sec = 1;
-            timeout.tv_usec = 0;
-        }
-        iomux_set_timeout(iomux, fd, &timeout);
-    }
-}
-*/
-
 shardcache_request_t *
 shardcache_request_create(shardcache_connection_context_t *ctx)
 {
@@ -816,7 +777,7 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
     req->hdr = async_read_context_hdr(ctx->reader_ctx);
     req->sig_hdr = async_read_context_sig_hdr(ctx->reader_ctx);
     req->ctx = ctx;
-    MUTEX_INIT_RECURSIVE(&req->output_lock);
+    SPIN_INIT(&req->output_lock);
 
     int i;
     for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
@@ -887,27 +848,31 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
 
         int done = ATOMIC_READ(req->done);
 
-        MUTEX_LOCK(&req->output_lock);
-        if(fbuf_used(&req->output)) {
-            void *req_output = fbuf_data(&req->output);
-            int req_outlen = fbuf_used(&req->output);
-            if (req_outlen > (max - offset)) {
-                int to_copy = max - offset;
-                memcpy(out + offset, req_output, to_copy);
-                fbuf_remove(&req->output, to_copy);
-                offset += to_copy;
-                is_empty = 0;
-            } else if (req_outlen > 0) {
-                memcpy(out + offset, req_output, req_outlen);
-                // NOTE: the buffer is already empty but calling
-                // fbuf_clear() forces the fbuf to reset its
-                // internal indexes and avoid wasting some memory
-                // or doing a memmove later
-                fbuf_clear(&req->output);
-                offset += req_outlen;
+        if (ATOMIC_READ(req->output_pending)) {
+            SPIN_LOCK(&req->output_lock);
+            if(fbuf_used(&req->output)) {
+                void *req_output = fbuf_data(&req->output);
+                int req_outlen = fbuf_used(&req->output);
+                if (req_outlen > (max - offset)) {
+                    int to_copy = max - offset;
+                    memcpy(out + offset, req_output, to_copy);
+                    fbuf_remove(&req->output, to_copy);
+                    offset += to_copy;
+                    is_empty = 0;
+                } else if (req_outlen > 0) {
+                    memcpy(out + offset, req_output, req_outlen);
+                    // NOTE: the buffer is already empty but calling
+                    // fbuf_clear() forces the fbuf to reset its
+                    // internal indexes and avoid wasting some memory
+                    // or doing a memmove later
+                    fbuf_clear(&req->output);
+                    offset += req_outlen;
+                }
+                if (is_empty)
+                    ATOMIC_SET(req->output_pending, 0);
             }
+            SPIN_UNLOCK(&req->output_lock);
         }
-        MUTEX_UNLOCK(&req->output_lock);
 
         if (done && is_empty) {
             TAILQ_REMOVE(&ctx->requests, req, next);
@@ -921,6 +886,15 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
         }
     }
     *len = offset;
+}
+
+static inline void
+send_data(shardcache_request_t *req, fbuf_t *data)
+{
+    SPIN_LOCK(&req->output_lock);
+    fbuf_concat(&req->output, data);
+    SPIN_UNLOCK(&req->output_lock);
+    ATOMIC_SET(req->output_pending, 1);
 }
 
 static int
@@ -1015,9 +989,8 @@ worker(void *priv)
             iomux_callbacks_t connection_callbacks = {
                 .mux_connection = NULL,
                 .mux_input = shardcache_input_handler,
-                .mux_eof = shardcache_eof_handler,
-                //.mux_timeout = shardcache_timeout_handler,
                 .mux_output = shardcache_output_handler,
+                .mux_eof = shardcache_eof_handler,
                 .priv = ctx
             };
             //ht_set(wrkctx->fds, &ctx->fd, sizeof(ctx->fd), ctx, sizeof(shardcache_connection_context_t));
@@ -1044,7 +1017,7 @@ worker(void *priv)
                     TAILQ_REMOVE(&to_prune->requests, req, next);
                     shardcache_request_destroy(req);
                     done = 1;
-                } 
+                }
             }
             struct timeval quarantine = { 60, 0 };
             struct timeval now, diff;
@@ -1180,14 +1153,13 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
 
         MUTEX_INIT(&wrk->wakeup_lock);
         CONDITION_INIT(&wrk->wakeup_cond);
-        //wrk->fds = ht_create(1024, 65535, NULL);
-        wrk->iomux = iomux_create(0, 0);
+        wrk->iomux = iomux_create(1<<13, 0);
         pthread_create(&wrk->thread, NULL, worker, wrk);
         push_value(s->workers, wrk);
         ATOMIC_INCREMENT(s->total_workers);
     }
 
-    s->io_mux = iomux_create(1<<13, 0);
+    s->io_mux = iomux_create(0, 0);
 
     // and start a background thread to handle incoming connections
     int rc = pthread_create(&s->io_thread, NULL, serve_cache, s);
@@ -1247,7 +1219,7 @@ clear_workers_list(linked_list_t *list)
         free(wrk);
         wrk = shift_value(list);
     }
- 
+
 }
 
 void
@@ -1260,9 +1232,9 @@ stop_serving(shardcache_serving_t *s)
 
     // now the workers
     SHC_NOTICE("Collecting worker threads (might have to wait until i/o is finished)");
-    clear_workers_list(s->workers); 
+    clear_workers_list(s->workers);
     SHC_DEBUG2("All worker threads have been collected");
- 
+
     // unregister our counters if we did at creation time
     if (s->counters) {
         shardcache_counter_remove(s->counters, "connections");
