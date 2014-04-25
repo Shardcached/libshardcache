@@ -98,14 +98,17 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
     fbuf_t value = FBUF_STATIC_INITIALIZER;
     int rc = fetch_from_peer(node, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, &value, fd);
     if (rc == 0) {
+        size_t size = fbuf_used(&value);
         if (data)
             *data = fbuf_data(&value);
+        else
+            fbuf_destroy(&value);
 
         c->errno = SHARDCACHE_CLIENT_OK;
         c->errstr[0] = 0;
 
         connections_pool_add(c->connections, node, fd);
-        return fbuf_used(&value);
+        return size;
     } else {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
