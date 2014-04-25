@@ -12,6 +12,9 @@
 
 #include "atomic.h"
 
+#define LIKELY(__e) __builtin_expect((__e), 1)
+#define UNLIKELY(__e) __builtin_expect((__e), 0)
+
 /**********************************************************************
  * Simple double-linked list, inspired by the implementation used in the
  * linux kernel.
@@ -96,13 +99,13 @@ typedef struct __arc_object {
 struct __arc {
     struct __arc_ops *ops;
     hashtable_t *hash;
-    
+
     size_t c, p;
     struct __arc_state mrug, mru, mfu, mfug;
 
     pthread_mutex_t lock;
 
-    refcnt_t *refcnt; 
+    refcnt_t *refcnt;
 };
 
 
@@ -239,10 +242,10 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         } else if (obj_state != &cache->mru && obj_state != &cache->mfu) {
             /* The object is being moved from one of the ghost lists into
              * the MRU or MFU list, fetch the object into the cache. */
-            
+
             // release the lock (if any) when fetching (since might take long)
             // the object is anyway locked already by our caller (arc_lookup())
-            
+
             // unlock the mutex while the backend is fetching the data
             MUTEX_UNLOCK(&cache->lock);
             size_t size = 0;
@@ -260,7 +263,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                  * calling arc_balance() since we don't want a not-existing key
                  * to affect the cache.
                  * Note though that the ^ (p) marker has been updated since this
-                 * item was in a ghost list, so at next arc_balance() call it 
+                 * item was in a ghost list, so at next arc_balance() call it
                  * will be taken into account.
                  * This is a desired behaviour because it's still an indication
                  * of 'frequency'/'recency' in terms of cache usage
@@ -278,7 +281,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 return -1;
             } else if (size >= cache->c) {
                 // the object doesn't fit in the cache, let's return it
-                // to the getter without (re)adding it to the cache 
+                // to the getter without (re)adding it to the cache
                 release_ref(cache->refcnt, obj->node);
                 MUTEX_LOCK(&cache->lock);
             } else {
@@ -336,7 +339,7 @@ arc_t *arc_create(arc_ops_t *ops, size_t c)
     arc_t *cache = calloc(1, sizeof(arc_t));
 
     cache->ops = ops;
-    
+
     cache->hash = ht_create(1<<16, 1<<22, NULL);
 
     cache->c = c;
@@ -346,7 +349,7 @@ arc_t *arc_create(arc_ops_t *ops, size_t c)
     arc_list_init(&cache->mru.head);
     arc_list_init(&cache->mfu.head);
     arc_list_init(&cache->mfug.head);
-    
+
     MUTEX_INIT_RECURSIVE(&cache->lock);
 
     cache->refcnt = refcnt_create(1<<8, terminate_node_callback, free_node_ptr_callback);
@@ -372,7 +375,7 @@ void arc_destroy(arc_t *cache)
     arc_list_destroy(cache, &cache->mfu.head);
     arc_list_destroy(cache, &cache->mfug.head);
     ht_destroy(cache->hash);
-    refcnt_destroy(cache->refcnt); 
+    refcnt_destroy(cache->refcnt);
     MUTEX_DESTROY(&cache->lock);
     free(cache);
 }
@@ -423,30 +426,26 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
 
         MUTEX_LOCK(&obj->lock);
         retain_ref(cache->refcnt, obj->node);
+        arc_state_t *state = obj->state;
         MUTEX_UNLOCK(&obj->lock);
-        
-        void *ptr = NULL;
-        if (obj->state == &cache->mru || obj->state == &cache->mfu) {
-            /* Object is already in the cache, move it to the head of the
-             * MFU list. */
-            if (arc_move(cache, obj, &cache->mfu) == 0)
-                ptr = obj->ptr;
-        } else {
-            if (obj->state == &cache->mrug) {
-                if (arc_move(cache, obj, &cache->mfu) == 0)
-                    ptr = obj->ptr;
-            } else if (obj->state == &cache->mfug) {
-                if (arc_move(cache, obj, &cache->mfu) == 0)
-                    ptr = obj->ptr;
-            } else {
-                fprintf(stderr, "Found an object with no state in the hashtable ?!\n");
-                MUTEX_UNLOCK(&cache->lock);
-                return NULL;                
-            }
-        }
 
         MUTEX_UNLOCK(&cache->lock);
-        *valuep = ptr;
+
+        if (UNLIKELY(!state)) {
+            release_ref(cache->refcnt, obj->node);
+            fprintf(stderr, "Found an object with no state in the hashtable ?!\n");
+            return NULL;
+        }
+
+        if (UNLIKELY(arc_move(cache, obj, &cache->mfu) != 0)) {
+            release_ref(cache->refcnt, obj->node);
+            fprintf(stderr, "Can't move the object into the cache\n");
+            return NULL;
+        }
+
+        if (valuep)
+            *valuep = obj->ptr;
+
         return obj;
     }
 
@@ -485,7 +484,6 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     MUTEX_UNLOCK(&obj->lock);
     MUTEX_UNLOCK(&cache->lock);
     release_ref(cache->refcnt, obj->node);
-
 
     return NULL;
 }
