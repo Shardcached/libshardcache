@@ -32,8 +32,6 @@
 #endif
 #include <siphash.h>
 
-#define SHARDCACHE_SERVING_MAX_RETRIES 10
-
 typedef struct {
     pthread_t thread;
     queue_t *jobs;
@@ -41,7 +39,6 @@ typedef struct {
     pthread_cond_t wakeup_cond;
     pthread_mutex_t wakeup_lock;
     shardcache_serving_t *serv;
-    //hashtable_t *fds;
     iomux_t *iomux;
     linked_list_t *prune;
     uint32_t numfds;
@@ -169,6 +166,7 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
     shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
     while(req) {
         shardcache_request_destroy(req);
+        TAILQ_REMOVE(&ctx->requests, req, next);
         req = TAILQ_FIRST(&ctx->requests);
     }
     async_read_context_destroy(ctx->reader_ctx);
@@ -850,7 +848,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
 
         if (ATOMIC_READ(req->output_pending)) {
             SPIN_LOCK(&req->output_lock);
-            if(fbuf_used(&req->output)) {
+            if(LIKELY(fbuf_used(&req->output))) {
                 void *req_output = fbuf_data(&req->output);
                 int req_outlen = fbuf_used(&req->output);
                 if (req_outlen > (max - offset)) {
@@ -919,17 +917,6 @@ shardcache_input_handler(iomux_t *iomux,
 
     return processed;
 }
-
-/*
-static void
-shardcache_timeout_handler(iomux_t *iomux, int fd, void *priv)
-{
-    shardcache_connection_context_t *ctx =
-        (shardcache_connection_context_t *)priv;
-
-    shardcache_request_handler(iomux, fd, ctx);
-}
-*/
 
 static void
 shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
@@ -1215,7 +1202,6 @@ clear_workers_list(linked_list_t *list)
 
         destroy_list(wrk->prune);
 
-        //ht_destroy(wrk->fds);
         free(wrk);
         wrk = shift_value(list);
     }
