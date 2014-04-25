@@ -15,9 +15,9 @@ LDFLAGS +=
 CFLAGS += -Wno-deprecated-declarations
 endif
 
-all: shardcachec
+all: shardcachec shc_benchmark
 
-dynamic: CFLAGS += -fPIC -I../src -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
+dynamic: CFLAGS += -fPIC -I../src -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -g
 dynamic: shardcachec.c
 	gcc shardcachec.c $(CFLAGS) -lshardcache $(LDFLAGS)  -o shardcachec
 
@@ -25,6 +25,11 @@ shardcachec: CFLAGS += -fPIC -I../src -I../deps/.incs -Isrc -Wall -Werror -Wno-p
 shardcachec: shardcachec.c $(DEPS)
 	gcc shardcachec.c $(CFLAGS) $(DEPS) $(LDFLAGS) -o shardcachec
 
+shc_benchmark: CFLAGS += -fPIC -I../src -I../deps/.incs -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
+shc_benchmark: shc_benchmark.c $(DEPS)
+	gcc shc_benchmark.c $(CFLAGS) $(DEPS) $(LDFLAGS) -o shc_benchmark
+
 clean:
 	rm -f shardcachec
+	rm -f shc_benchmark
 
