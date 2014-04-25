@@ -97,7 +97,7 @@ async_read_context_update(async_read_ctx_t *ctx)
     if (!rbuf_used(ctx->buf))
         return ctx->state;
 
-    if (ctx->state == SHC_STATE_READING_NONE || ctx->state == SHC_STATE_READING_MAGIC)
+    if (ctx->state == SHC_STATE_READING_NONE)
     {
         ctx->hdr = 0;
         unsigned char byte;
@@ -111,7 +111,9 @@ async_read_context_update(async_read_ctx_t *ctx)
         ctx->magic[0] = byte;
         ctx->state = SHC_STATE_READING_MAGIC;
         ctx->moff = 1;
+    }
 
+    if (ctx->state == SHC_STATE_READING_MAGIC) {
         if (rbuf_used(ctx->buf) < sizeof(uint32_t) - ctx->moff) {
             return ctx->state;
         }
@@ -212,7 +214,7 @@ async_read_context_update(async_read_ctx_t *ctx)
             }
 
             // let's call the read_async callback
-            if (ctx->clen > 0 && ctx->cb(ctx->chunk, ctx->clen, ctx->rnum, ctx->cb_priv) != 0) {
+            if (ctx->clen > 0 && ctx->cb && ctx->cb(ctx->chunk, ctx->clen, ctx->rnum, ctx->cb_priv) != 0) {
                 ctx->state = SHC_STATE_READING_ERR;
                 return ctx->state;
             } 
@@ -245,21 +247,19 @@ async_read_context_update(async_read_ctx_t *ctx)
                 sip_hash_update(ctx->shash, (char *)&bsep, 1);
 
             if (bsep == SHARDCACHE_RSEP) {
-                if (ctx->rlen == 0) {
-                    if (ctx->cb(NULL, 0, ctx->rnum, ctx->cb_priv) != 0) {
-                        ctx->state = SHC_STATE_READING_ERR;
-                        return ctx->state;
-                    }
+                if (ctx->rlen == 0 && ctx->cb && ctx->cb(NULL, 0, ctx->rnum, ctx->cb_priv) != 0)
+                {
+                    ctx->state = SHC_STATE_READING_ERR;
+                    return ctx->state;
                 }
                 ctx->state = SHC_STATE_READING_RECORD;
                 ctx->rnum++;
                 ctx->rlen = 0;
             } else if (bsep == 0) {
-                if (ctx->rlen == 0) {
-                    if (ctx->cb(NULL, 0, -1, ctx->cb_priv) != 0) {
-                        ctx->state = SHC_STATE_READING_ERR;
-                        return ctx->state;
-                    }
+                if (ctx->rlen == 0 && ctx->cb && ctx->cb(NULL, 0, -1, ctx->cb_priv) != 0)
+                {
+                    ctx->state = SHC_STATE_READING_ERR;
+                    return ctx->state;
                 }
                 if (ctx->auth)
                     ctx->state = SHC_STATE_READING_AUTH;
@@ -393,10 +393,12 @@ read_async_input_eof(iomux_t *iomux, int fd, void *priv)
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
 
-    if (ctx->state == SHC_STATE_READING_DONE || ctx->state == SHC_STATE_READING_NONE)
-        ctx->cb(NULL, 0, -1, ctx->cb_priv);
-    else
-        ctx->cb(NULL, 0, -2, ctx->cb_priv);
+    if (ctx->cb) {
+        if (ctx->state == SHC_STATE_READING_DONE || ctx->state == SHC_STATE_READING_NONE)
+            ctx->cb(NULL, 0, -1, ctx->cb_priv);
+        else
+            ctx->cb(NULL, 0, -2, ctx->cb_priv);
+    }
 
     if (!ctx->blocking)
         iomux_end_loop(iomux);
