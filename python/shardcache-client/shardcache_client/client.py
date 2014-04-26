@@ -287,8 +287,6 @@ class ShardcacheClient:
         # read until we have a full message
         while True:
             readable, writable, exceptions = select.select([conn], [], [], 0.5)
-            if not readable:
-                break
             if readable[0] == conn:
                 data = conn.recv(1024)
                 # _process_input() will returns an array if it was able to process
