@@ -70,3 +70,35 @@ shardcache_get_all_counters(shardcache_counters_t *c, shardcache_counter_t **out
     return i;
 }
 
+int
+shardcache_counter_value_add(shardcache_counters_t *c, char *name, int value)
+{
+    tagged_value_t *tval = get_tagged_value(c->lookup, name);
+    if (tval)
+        return __sync_fetch_and_add((uint32_t *)tval->value, value);
+    return 0;
+}
+
+int
+shardcache_counter_value_sub(shardcache_counters_t *c, char *name, int value)
+{
+    tagged_value_t *tval = get_tagged_value(c->lookup, name);
+    if (tval)
+        return __sync_fetch_and_sub((uint32_t *)tval->value, value);
+    return 0;
+}
+
+int
+shardcache_counter_value_set(shardcache_counters_t *c, char *name, int value)
+{
+    tagged_value_t *tval = get_tagged_value(c->lookup, name);
+    if (tval) {
+        int b = 0;
+        int old = __sync_fetch_and_add((uint32_t *)tval->value, 0);
+        do {
+            b = __sync_bool_compare_and_swap((uint32_t *)tval->value, old, value);
+        } while (!b);
+        return old;
+    }
+    return 0;
+}

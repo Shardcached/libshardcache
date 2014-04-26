@@ -10,4 +10,8 @@ void shardcache_counter_add(shardcache_counters_t *counters, const char *name, c
 int shardcache_get_all_counters(shardcache_counters_t *counters, shardcache_counter_t **out);
 void shardcache_counter_remove(shardcache_counters_t *counters, const char *name);
 
+int shardcache_counter_value_add(shardcache_counters_t *c, char *name, int value);
+int shardcache_counter_value_sub(shardcache_counters_t *c, char *name, int value);
+int shardcache_counter_value_set(shardcache_counters_t *c, char *name, int value);
+
 #endif
