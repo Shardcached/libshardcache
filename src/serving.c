@@ -93,8 +93,8 @@ struct __shardcache_connection_context_s {
     shardcache_hdr_t hdr;
     shardcache_hdr_t sig_hdr;
 
-    int request_number;
     TAILQ_HEAD (, __shardcache_request_s) requests;
+    int num_requests;
 
 #define SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX 4
     fbuf_t records[SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX];
@@ -167,6 +167,7 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
     while(req) {
         shardcache_request_destroy(req);
         TAILQ_REMOVE(&ctx->requests, req, next);
+        ctx->num_requests--;
         req = TAILQ_FIRST(&ctx->requests);
     }
     async_read_context_destroy(ctx->reader_ctx);
@@ -800,6 +801,7 @@ shardcache_check_context_state(iomux_t *iomux,
             fbuf_clear(&ctx->records[i]);
         }
         TAILQ_INSERT_TAIL(&ctx->requests, req, next);
+        ctx->num_requests++;
         process_request(req);
     }
     else if (UNLIKELY(state == SHC_STATE_READING_ERR || state == SHC_STATE_AUTH_ERR))
@@ -874,11 +876,16 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
 
         if (done && is_empty) {
             TAILQ_REMOVE(&ctx->requests, req, next);
+            ctx->num_requests--;
             shardcache_request_destroy(req);
             // if we have pending input data this is time
             // to process it and move to the next request
             int state = async_read_context_update(ctx->reader_ctx);
-            shardcache_check_context_state(iomux, fd, ctx, state);
+            if (shardcache_check_context_state(iomux, fd, ctx, state) != 0) {
+                iomux_close(iomux, fd);
+                *len = 0;
+                return;
+            }
         } else if (is_empty) {
             break;
         }
@@ -909,6 +916,10 @@ shardcache_input_handler(iomux_t *iomux,
 
 
     if (ctx) {
+        if (ctx->num_requests > 512) {
+            SHC_DEBUG("Too many pipelined requests, waiting");
+            return 0;
+        }
         async_read_context_state_t state = async_read_context_input_data(ctx->reader_ctx, data, len, &processed);
         // updating the context state might eventually push a new requeset
         // (if entirely dowloaded) to a worker
@@ -1184,6 +1195,7 @@ clear_workers_list(linked_list_t *list)
             shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
             while (req) {
                 TAILQ_REMOVE(&ctx->requests, req, next);
+                ctx->num_requests--;
                 shardcache_request_destroy(req);
                 req = TAILQ_FIRST(&ctx->requests);
             }
