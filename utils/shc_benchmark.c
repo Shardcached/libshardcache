@@ -34,6 +34,8 @@ static uint32_t num_responses = 0;
 typedef struct {
     fbuf_t *output;
     async_read_ctx_t *reader; 
+    uint32_t num_requests;
+    uint32_t num_responses;
 } client_ctx;
 
 static void usage(char *progname, int rc, char *msg, ...)
@@ -82,6 +84,7 @@ int discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void 
     async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
     while (state == SHC_STATE_READING_DONE) {
         __sync_add_and_fetch(&num_responses, 1);
+        ctx->num_responses++;
         state = async_read_context_update(ctx->reader);
     }
     if (state == SHC_STATE_READING_ERR) {
@@ -95,39 +98,47 @@ void send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *p
     client_ctx *ctx = (client_ctx *)priv;
     fbuf_t *output_buffer = ctx->output;
 
-   int idx = rand() % num_keys;
-    shardcache_record_t record[2] = {
-        {
-            .v = keys_index->items[idx].key,
-            .l = keys_index->items[idx].klen
-        },
-        {
-            .v = NULL,
-            .l = 0
-        }
-    };
-    int num_records = 1;
-    unsigned char hdr = SHC_HDR_GET;
-    unsigned char sig_hdr = secret ? SHC_HDR_SIGNATURE_SIP : 0;
 
-    if (wrate && rand()%100 > wrate) {
-        char value[256];
-        snprintf(value, sizeof(value), "TEST%d", (int)time(NULL));
-        record[1].v = value;
-        record[1].l = strlen(value);
-        num_records = 2;
-        hdr = SHC_HDR_SET;
-    }
-
-    if (build_message(secret, sig_hdr, hdr, record, num_records, output_buffer) != 0)
+    // don't pipeline more than 512 requests ahead
+    if (ctx->num_requests - ctx->num_responses < 512)
     {
-        fprintf(stderr, "Can't create new command!\n");
-    }
-    if (hdr == SHC_HDR_GET)
-        __sync_add_and_fetch(&num_gets, 1);
-    else
-        __sync_add_and_fetch(&num_sets, 1);
+        int idx = rand() % num_keys;
+        while (use_index && keys_index->items[idx].vlen == 0)
+            idx = rand() % num_keys;
 
+        shardcache_record_t record[2] = {
+            {
+                .v = keys_index->items[idx].key,
+                .l = keys_index->items[idx].klen
+            },
+            {
+                .v = NULL,
+                .l = 0
+            }
+        };
+        int num_records = 1;
+        unsigned char hdr = SHC_HDR_GET;
+        unsigned char sig_hdr = secret ? SHC_HDR_SIGNATURE_SIP : 0;
+
+        if (wrate && rand()%100 > wrate) {
+            char value[256];
+            snprintf(value, sizeof(value), "TEST%d", (int)time(NULL));
+            record[1].v = value;
+            record[1].l = strlen(value);
+            num_records = 2;
+            hdr = SHC_HDR_SET;
+        }
+
+        if (build_message(secret, sig_hdr, hdr, record, num_records, output_buffer) != 0)
+        {
+            fprintf(stderr, "Can't create new command!\n");
+        }
+        if (hdr == SHC_HDR_GET)
+            __sync_add_and_fetch(&num_gets, 1);
+        else
+            __sync_add_and_fetch(&num_sets, 1);
+        ctx->num_requests++;
+    }
     if (fbuf_used(output_buffer)) {
         if (*len > fbuf_used(output_buffer)) {
             *len = fbuf_used(output_buffer);
