@@ -12,6 +12,7 @@
 #include <fbuf.h>
 
 #include <shardcache_client.h>
+#include <counters.h>
 #include <messaging.h>
 
 static int quit = 0;
@@ -20,6 +21,7 @@ static int num_hosts = 0;
 static int num_clients = 1;
 static int num_threads = 1;
 static int use_index = 0;
+static int print_stats = 0;
 static shardcache_storage_index_t *keys_index = NULL;
 static int num_keys = 1000;
 static char *prefix = "shc_bench";
@@ -30,6 +32,7 @@ static char *secret = NULL;
 static uint32_t num_gets = 0;
 static uint32_t num_sets = 0;
 static uint32_t num_responses = 0;
+shardcache_counters_t *counters = NULL;
 
 typedef struct {
     fbuf_t *output;
@@ -55,6 +58,7 @@ static void usage(char *progname, int rc, char *msg, ...)
            "    -i                Use the index instead of generating test keys\n"
            "    -k <num_keys>     The number of keys to use during the test (defaults to: %d)\n"
            "    -p <prefix>       A custom prefix to use for generated keys (defaults to: %s)\n"
+           "    -P                Print stats to stdout every second\n"
            "    -v                Be verbose\n"
            , progname
            , num_clients
@@ -72,6 +76,8 @@ static void stop(int sig)
 
 void close_connection(iomux_t *iomux, int fd, void *priv)
 {
+    client_ctx *ctx = (client_ctx *)priv;
+    free(ctx);
     close(fd);
 }
 
@@ -84,7 +90,7 @@ int discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void 
     async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
     while (state == SHC_STATE_READING_DONE) {
         __sync_add_and_fetch(&num_responses, 1);
-        ctx->num_responses++;
+        __sync_add_and_fetch(&ctx->num_responses, 1);
         state = async_read_context_update(ctx->reader);
     }
     if (state == SHC_STATE_READING_ERR) {
@@ -99,8 +105,8 @@ void send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *p
     fbuf_t *output_buffer = ctx->output;
 
 
-    // don't pipeline more than 512 requests ahead
-    if (ctx->num_requests - ctx->num_responses < 512)
+    // don't pipeline more than 1024 requests ahead
+    if (__sync_fetch_and_add(&ctx->num_requests, 0) - __sync_fetch_and_add(&ctx->num_responses, 0) < 1024)
     {
         int idx = rand() % num_keys;
         while (use_index && keys_index->items[idx].vlen == 0)
@@ -137,7 +143,7 @@ void send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *p
             __sync_add_and_fetch(&num_gets, 1);
         else
             __sync_add_and_fetch(&num_sets, 1);
-        ctx->num_requests++;
+        __sync_fetch_and_add(&ctx->num_requests, 1);
     }
     if (fbuf_used(output_buffer)) {
         if (*len > fbuf_used(output_buffer)) {
@@ -196,6 +202,11 @@ static void *worker(void *priv)
                 .priv = ctx
             };
 
+            char label[256];
+            snprintf(label, sizeof(label), "[client 0x%x:%d:%d] requests", (int)pthread_self(), i, n); 
+            shardcache_counter_add(counters, label, &ctx->num_requests);
+            snprintf(label, sizeof(label), "[client 0x%x:%d:%d] responses", (int)pthread_self(), i, n); 
+            shardcache_counter_add(counters, label, &ctx->num_responses);
             iomux_add(iomux, fd, &cbs);
         }
     }
@@ -270,20 +281,18 @@ main (int argc, char **argv)
         { "index", 0, 0, 'i' },
         { "keys", 2, 0, 'k' },
         { "prefix", 2, 0, 'p' },
+        { "print_stats", 2, 0, 'P' },
         { "verbose", 0, 0, 'v' },
     };
     hosts_string = getenv("SHC_HOSTS");
     int option_index = 0;
     char c;
-    while ((c = getopt_long(argc, argv, "c:hH:ik:p:t:v", long_options, &option_index))) {
+    while ((c = getopt_long(argc, argv, "c:hH:ik:p:Pt:v", long_options, &option_index))) {
         if (c == -1)
             break;
         switch(c) {
             case 'c':
                 num_clients = strtol(optarg, NULL, 10);
-                break;
-            case 't':
-                num_threads = strtol(optarg, NULL, 10);
                 break;
             case 'h':
                 usage(argv[0], 0, NULL);
@@ -299,6 +308,12 @@ main (int argc, char **argv)
             case 'p':
                 prefix = optarg;
                 break;
+            case 'P':
+                print_stats = 1;
+                break;
+            case 't':
+                num_threads = strtol(optarg, NULL, 10);
+                break;
             case 'v':
                 verbose++;
                 break;
@@ -306,19 +321,23 @@ main (int argc, char **argv)
                 break;
         }
     }
-    if (!hosts_string || !*hosts_string) {
+
+    if (!hosts_string || !*hosts_string)
         usage(argv[0], -1, "No hosts string provided!");
-    }
-    if (parse_hosts_string(hosts_string) <= 0) {
+
+    if (parse_hosts_string(hosts_string) <= 0)
         usage(argv[0], -1, "Can't parse the provided hosts string");
-    }
+
     shardcache_client_t *client = shardcache_client_create(hosts, num_hosts, secret);
     if (!client) {
         fprintf(stderr, "Can't create the shardcache client");
         exit(-1);
     }
+
     if (use_index) {
+        printf("Fetching index ... ");
         keys_index = shardcache_client_index(client, shardcache_node_get_label(hosts[0]));
+        printf("done!\nStarting clients ... ");
     } else {
         int n;
         keys_index = calloc(1, sizeof(shardcache_storage_index_t));
@@ -330,6 +349,7 @@ main (int argc, char **argv)
             snprintf(item->key, maxklen, "%s%d", prefix, n);
             item->klen = strlen(item->key);
             item->vlen = 4;
+            printf("Setting key %s\n", (char *)item->key);
             if (shardcache_client_set(client, item->key, item->klen, "TEST", 4, 0) != 0) {
                 // TODO - Error message
                 exit(-1);
@@ -341,6 +361,8 @@ main (int argc, char **argv)
 
     srand(time(NULL));
 
+    counters = shardcache_init_counters();
+
     int i;
     pthread_t *threads = malloc(sizeof(pthread_t) * num_threads);
     iomux_t **muxes = malloc(sizeof(iomux_t *) * num_threads);
@@ -351,11 +373,60 @@ main (int argc, char **argv)
             exit(-1);            
         }
     }
-
+    printf("Done\n");
+    sleep(1);
+    shardcache_counter_t *prev_counts = NULL;
+    int num_prev_counters = 0;
+    uint32_t num_responses_prev = 0;
     while (!__sync_fetch_and_add(&quit, 0)) {
-        printf("gets: %d\nsets: %d\nnum_responses: %d\n", num_gets, num_sets, num_responses);
+        shardcache_counter_t *counts = NULL;
+        int num_counters = shardcache_get_all_counters(counters, &counts);
+        if (!num_counters)
+            continue;
+        uint32_t fastest_client = 0;
+        uint32_t slowest_client = 0;
+        for (i = 0; i < num_counters; i++) {
+            if (strstr(counts[i].name, "responses")) {
+                uint32_t diff = (prev_counts && strcmp(counts[i].name, prev_counts[i].name) == 0)
+                              ? counts[i].value - prev_counts[i].value
+                              : 0;
+                if (!slowest_client || slowest_client > diff)
+                    slowest_client = diff;
+
+                if (!fastest_client || fastest_client < diff)
+                    fastest_client = diff;
+            }
+/*            if (print_stats)
+                printf("%s: %u\n", counts[i].name, counts[i].value);
+*/
+        }
+        uint32_t num_responses_cur = __sync_add_and_fetch(&num_responses, 0);
+        uint32_t responses_sum = num_responses_prev ? num_responses_cur - num_responses_prev : num_responses_cur;
+        uint32_t avg_responses = responses_sum / (num_threads * num_clients);
+        if (print_stats) {
+            
+            printf("\033[H\033[J"
+                   "gets: %u\n"
+                   "sets: %u\n"
+                   "num_responses: %u\n"
+                   "total_responses/s: %u\n"
+                   "avg_responses/s: %u\n"
+                   "slowest: %u\n"
+                   "fastest: %u\n",
+                   num_gets, num_sets, num_responses, responses_sum, avg_responses, slowest_client, fastest_client);
+        }
+
+        // TODO - dump stats to a file
+        prev_counts = realloc(prev_counts, sizeof(shardcache_counter_t) * num_counters);
+        memcpy(prev_counts, counts, sizeof(shardcache_counter_t) * num_counters);
+        num_prev_counters = num_counters;
+        num_responses_prev = __sync_add_and_fetch(&num_responses, 0);
+
         sleep(1);
     }
+    if (prev_counts)
+        free(prev_counts);
+
     for (i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
         fprintf(stderr, "Thread %d done\n", i);
@@ -363,6 +434,7 @@ main (int argc, char **argv)
 
     shardcache_free_nodes(hosts, num_hosts);
     shardcache_free_index(keys_index);
+    shardcache_release_counters(counters);
 
     exit (0);
 }
