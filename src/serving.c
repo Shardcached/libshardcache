@@ -916,7 +916,7 @@ shardcache_input_handler(iomux_t *iomux,
 
 
     if (ctx) {
-        if (ctx->num_requests > 512) {
+        if (ctx->num_requests > 1024) {
             SHC_DEBUG("Too many pipelined requests, waiting");
             return 0;
         }
