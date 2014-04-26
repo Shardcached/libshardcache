@@ -302,7 +302,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
 
     MUTEX_LOCK(&obj->lock);
-    if (obj->data) { // the value is already loaded, we don't need to fetch
+    if (obj->data || (obj->async && list_count(obj->listeners)))
+    { // the value is already loaded or being downloaded, we don't need to fetch
         *size = obj->dlen;
         MUTEX_UNLOCK(&obj->lock);
         return 0;
