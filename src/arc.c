@@ -417,7 +417,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     MUTEX_LOCK(&cache->lock);
     arc_object_t *obj = ht_get(cache->hash, (void *)key, len, NULL);
     if (obj) {
-        if (async && __sync_fetch_and_add(&obj->async, 0)) {
+        if (async && obj->async) {
             retain_ref(cache->refcnt, obj->node);
             MUTEX_UNLOCK(&cache->lock);
             *valuep = obj->ptr;
