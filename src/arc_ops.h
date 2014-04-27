@@ -13,11 +13,11 @@ typedef struct {
     struct timeval ts; // the timestamp of when the object has been loaded
                        // into the cache
 
-    int async;         // true if the object should be retreived
-                       // in asynchronous mode
-
     linked_list_t *listeners; // list of listeners which will be notified
                               // while the object data is being retreived 
+
+    int async;         // true if the object should be retreived
+                       // in asynchronous mode
 
     int complete; // true if the object has been completely retrieved
                   // (either from the storage or from a peer)
@@ -30,6 +30,8 @@ typedef struct {
 
     int drop;    // true if the object will not be cached cached but instead
                  // dropped just after being returned to the requester
+
+    int fetching; // true if fetch is in progress
 
     pthread_mutex_t lock; // All operations on this structure should be
                           // synchronized using this lock

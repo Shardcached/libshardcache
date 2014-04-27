@@ -103,18 +103,21 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     MUTEX_LOCK(&obj->lock);
     if (!obj->res) {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+        obj->fetching = 0;
         MUTEX_UNLOCK(&obj->lock);
         return -1;
     }
     arc_retain_resource(cache->arc, obj->res);
     if (!obj->listeners) {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+        obj->fetching = 0;
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, obj->res);
         return -1;
     }
     if (error) {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+        obj->fetching = 0;
         close(fd);
         free(arg);
         if (obj->evict)
@@ -134,6 +137,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     } else {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
         obj->complete = 1;
+        obj->fetching = 0;
         complete = 1;
         total_len = obj->dlen;
         // XXX - in theory we shuould let read_message_async() and its input data handler
@@ -200,6 +204,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
         arg->peer_addr = peer_addr;
         arg->fd = fd;
         async_read_wrk_t *wrk = NULL;
+        obj->fetching = 1;
         rc = fetch_from_peer_async(peer_addr,
                                    (char *)cache->auth,
                                    SHC_HDR_CSIGNATURE_SIP,
@@ -230,6 +235,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
                 arc_release_resource(cache->arc, obj->res);
             }
 
+            obj->fetching = 0;
             obj->evicted = 1;
 
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
@@ -238,7 +244,9 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
         }
     } else { 
         fbuf_t value = FBUF_STATIC_INITIALIZER;
+        obj->fetching = 1;
         rc = fetch_from_peer(peer_addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, obj->key, obj->klen, &value, fd);
+        obj->fetching = 0;
         if (rc == 0 && fbuf_used(&value)) {
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
@@ -302,7 +310,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
 
     MUTEX_LOCK(&obj->lock);
-    if (obj->data || (obj->async && list_count(obj->listeners)))
+    if (obj->data || (obj->async && obj->fetching))
     { // the value is already loaded or being downloaded, we don't need to fetch
         *size = obj->dlen;
         MUTEX_UNLOCK(&obj->lock);
@@ -386,6 +394,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     gettimeofday(&obj->ts, NULL);
 
     obj->complete = 1;
+    obj->fetching = 0;
 
     if (!obj->data) {
         if (obj->async && obj->listeners)
