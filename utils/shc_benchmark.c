@@ -77,6 +77,12 @@ static void stop(int sig)
 void close_connection(iomux_t *iomux, int fd, void *priv)
 {
     client_ctx *ctx = (client_ctx *)priv;
+    char label[256];
+    snprintf(label, sizeof(label), "[client %p] requests", ctx);
+    shardcache_counter_remove(counters, label);
+    snprintf(label, sizeof(label), "[client %p] responses", ctx);
+    shardcache_counter_remove(counters, label);
+    fprintf(stderr, "Client %p closed\n", ctx);
     free(ctx);
     close(fd);
 }
@@ -203,9 +209,9 @@ static void *worker(void *priv)
             };
 
             char label[256];
-            snprintf(label, sizeof(label), "[client 0x%x:%d:%d] requests", (int)pthread_self(), i, n); 
+            snprintf(label, sizeof(label), "[client %p] requests", ctx);
             shardcache_counter_add(counters, label, &ctx->num_requests);
-            snprintf(label, sizeof(label), "[client 0x%x:%d:%d] responses", (int)pthread_self(), i, n); 
+            snprintf(label, sizeof(label), "[client %p] responses", ctx);
             shardcache_counter_add(counters, label, &ctx->num_responses);
             iomux_add(iomux, fd, &cbs);
         }
@@ -385,6 +391,7 @@ main (int argc, char **argv)
             continue;
         uint32_t fastest_client = 0;
         uint32_t slowest_client = 0;
+        uint32_t stuck_clients = 0;
         for (i = 0; i < num_counters; i++) {
             if (strstr(counts[i].name, "responses")) {
                 uint32_t diff = (prev_counts && strcmp(counts[i].name, prev_counts[i].name) == 0)
@@ -395,6 +402,9 @@ main (int argc, char **argv)
 
                 if (!fastest_client || fastest_client < diff)
                     fastest_client = diff;
+
+                if (diff == 0)
+                    stuck_clients++;
             }
 /*            if (print_stats)
                 printf("%s: %u\n", counts[i].name, counts[i].value);
@@ -412,13 +422,15 @@ main (int argc, char **argv)
                    "total_responses/s: %u\n"
                    "avg_responses/s: %u\n"
                    "slowest: %u\n"
-                   "fastest: %u\n",
-                   num_gets, num_sets, num_responses, responses_sum, avg_responses, slowest_client, fastest_client);
+                   "fastest: %u\n"
+                   "stuck_clients: %u\n",
+                   num_gets, num_sets, num_responses, responses_sum, avg_responses, slowest_client, fastest_client, stuck_clients);
         }
 
         // TODO - dump stats to a file
-        prev_counts = realloc(prev_counts, sizeof(shardcache_counter_t) * num_counters);
-        memcpy(prev_counts, counts, sizeof(shardcache_counter_t) * num_counters);
+        if (prev_counts)
+            free(prev_counts);
+        prev_counts = counts;
         num_prev_counters = num_counters;
         num_responses_prev = __sync_add_and_fetch(&num_responses, 0);
 
