@@ -16,22 +16,13 @@ typedef struct {
     linked_list_t *listeners; // list of listeners which will be notified
                               // while the object data is being retreived 
 
-    int async;         // true if the object should be retreived
-                       // in asynchronous mode
-
-    int complete; // true if the object has been completely retrieved
-                  // (either from the storage or from a peer)
-
-    int evicted; // true if the object has been evicted and no new
-                 // new listeners should be registered anymore
-                 // (since they wouldn't be called anymore)
-
-    int evict;   // true if the object should be evicted as soon as possible
-
-    int drop;    // true if the object will not be cached cached but instead
-                 // dropped just after being returned to the requester
-
-    int fetching; // true if fetch is in progress
+    uint16_t flags;
+    #define COBJ_FLAG_ASYNC    (1)
+    #define COBJ_FLAG_COMPLETE (1<<1)
+    #define COBJ_FLAG_EVICTED  (1<<2)
+    #define COBJ_FLAG_EVICT    (1<<3)
+    #define COBJ_FLAG_DROP     (1<<4)
+    #define COBJ_FLAG_FETCHING (1<<5)
 
     pthread_mutex_t lock; // All operations on this structure should be
                           // synchronized using this lock
@@ -40,6 +31,10 @@ typedef struct {
                           // fetch or store operation
     arc_resource_t *res;
 } cached_object_t;
+
+#define COBJ_CHECK_FLAGS(__o, __f) ((((__o)->flags) & (__f)) == (__f))
+#define COBJ_SET_FLAG(__o, __f) ((__o)->flags |= (__f))
+#define COBJ_UNSET_FLAG(__o, __f) ((__o)->flags &= ~(__f))
 
 typedef struct {
     shardcache_get_async_callback_t cb;

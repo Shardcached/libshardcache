@@ -878,12 +878,12 @@ shardcache_get_offset_async(shardcache_t *cache,
 
     cached_object_t *obj = (cached_object_t *)obj_ptr;
     MUTEX_LOCK(&obj->lock);
-    if (obj->evicted) {
+    if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED)) {
         // if marked for eviction we don't want to return this object
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, res);
         return -1;
-    } else if (obj->complete) {
+    } else if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_COMPLETE)) {
         size_t dlen = obj->dlen;
         void *data = NULL;
         if (offset) {
@@ -904,7 +904,10 @@ shardcache_get_offset_async(shardcache_t *cache,
             memcpy(data, obj->data + offset, dlen);
         }
 
-        time_t obj_expiration = (obj->drop || obj->evict) ? 0 : obj->ts.tv_sec + cache->expire_time;
+        time_t obj_expiration = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
+                              ? 0
+                              : obj->ts.tv_sec + cache->expire_time;
+
         if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
             cache->expire_time > 0 && obj_expiration < time(NULL)))
         {
@@ -1034,15 +1037,17 @@ shardcache_get_async(shardcache_t *cache,
 
     cached_object_t *obj = (cached_object_t *)obj_ptr;
     MUTEX_LOCK(&obj->lock);
-    if (UNLIKELY(obj->evicted)) {
+    if (UNLIKELY(COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED))) {
         // if marked for eviction we don't want to return this object
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, res);
         // but we will try to fetch it again
         SHC_DEBUG("The retreived object has been already evicted, try fetching it again");
         return shardcache_get_async(cache, key, klen, cb, priv);
-    } else if (obj->complete) {
-        time_t obj_expiration = (obj->drop || obj->evict) ? 0 : obj->ts.tv_sec + cache->expire_time;
+    } else if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_COMPLETE)) {
+        time_t obj_expiration = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
+                              ? 0
+                              : obj->ts.tv_sec + cache->expire_time;
         if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
                      cache->expire_time > 0 && obj_expiration < time(NULL)))
         {

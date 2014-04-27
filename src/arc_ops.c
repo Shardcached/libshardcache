@@ -57,20 +57,16 @@ static void
 arc_ops_evict_object(shardcache_t *cache, cached_object_t *obj)
 {
     if (list_count(obj->listeners)) {
-        obj->evict = 1;
+        COBJ_SET_FLAG(obj, COBJ_FLAG_EVICT);
         return;
     }
     if (obj->data) {
         free(obj->data);
         obj->data = NULL;
         obj->dlen = 0;
-        obj->complete = 0;
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
     }
-    obj->async = 0;
-    obj->evict = 0;
-    obj->drop = 0;
-    obj->evicted = 1;
+    obj->flags = COBJ_FLAG_EVICTED; // reset all flags but leave the EVICTED bit on
     clear_list(obj->listeners);
 }
 
@@ -103,24 +99,24 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     MUTEX_LOCK(&obj->lock);
     if (!obj->res) {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-        obj->fetching = 0;
+        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
         return -1;
     }
     arc_retain_resource(cache->arc, obj->res);
     if (!obj->listeners) {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-        obj->fetching = 0;
+        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, obj->res);
         return -1;
     }
     if (error) {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-        obj->fetching = 0;
+        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         close(fd);
         free(arg);
-        if (obj->evict)
+        if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
             arc_ops_evict_object(cache, obj);
         else
             drop = 1;
@@ -136,8 +132,8 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
     } else {
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
-        obj->complete = 1;
-        obj->fetching = 0;
+        COBJ_SET_FLAG(obj, COBJ_FLAG_COMPLETE);
+        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         complete = 1;
         total_len = obj->dlen;
         // XXX - in theory we shuould let read_message_async() and its input data handler
@@ -153,16 +149,18 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
 
-        if (obj->evict)
+        if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
             arc_ops_evict_object(cache, obj);
-        else if (obj->drop)
+        else if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP))
             drop = 1;
     }
 
     if (complete) {
         if (total_len && !drop) {
             arc_update_size(cache->arc, key, klen, total_len);
-            if (cache->expire_time > 0 && !obj->evict && !obj->evicted && !cache->lazy_expiration) {
+            int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
+                          COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
+            if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration) {
                 shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
             }
         } else if (error || drop) {
@@ -197,14 +195,14 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
     // another peer is responsible for this item, let's get the value from there
 
     int fd = shardcache_get_connection_for_peer(cache, peer_addr);
-    if (obj->async) {
+    if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC)) {
         shc_fetch_async_arg_t *arg = malloc(sizeof(shc_fetch_async_arg_t));
         arg->obj = obj;
         arg->cache = cache;
         arg->peer_addr = peer_addr;
         arg->fd = fd;
         async_read_wrk_t *wrk = NULL;
-        obj->fetching = 1;
+        COBJ_SET_FLAG(obj, COBJ_FLAG_FETCHING);
         rc = fetch_from_peer_async(peer_addr,
                                    (char *)cache->auth,
                                    SHC_HDR_CSIGNATURE_SIP,
@@ -223,9 +221,9 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
             // This is the same logic applied by groupcache to determine hot keys.
             // Better approaches are possible but maybe unnecessary.
             if (!cache->force_caching && rand() % 10 != 0)
-                obj->drop = 1;
+                COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
             else
-                obj->drop = 0;
+                COBJ_UNSET_FLAG(obj, COBJ_FLAG_DROP);
 
         } else {
             if (obj->listeners) {
@@ -235,8 +233,8 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
                 arc_release_resource(cache->arc, obj->res);
             }
 
-            obj->fetching = 0;
-            obj->evicted = 1;
+            COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
+            COBJ_SET_FLAG(obj, COBJ_FLAG_EVICTED);
 
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
 
@@ -244,17 +242,17 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
         }
     } else { 
         fbuf_t value = FBUF_STATIC_INITIALIZER;
-        obj->fetching = 1;
+        COBJ_SET_FLAG(obj, COBJ_FLAG_FETCHING);
         rc = fetch_from_peer(peer_addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, obj->key, obj->klen, &value, fd);
-        obj->fetching = 0;
+        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         if (rc == 0 && fbuf_used(&value)) {
             obj->data = fbuf_data(&value);
             obj->dlen = fbuf_used(&value);
-            obj->complete = 1;
+            COBJ_SET_FLAG(obj, COBJ_FLAG_COMPLETE);
             if (!cache->force_caching && rand() % 10 != 0)
-                obj->drop = 1;
+                COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
             else
-                obj->drop = 0;
+                COBJ_UNSET_FLAG(obj, COBJ_FLAG_DROP);
         } else {
             // if succeded the fbuf buffer has been moved to the obj structure
             // but otherwise we have to release it
@@ -276,10 +274,10 @@ arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void
     obj->key = malloc(len);
     memcpy(obj->key, key, len);
     obj->data = NULL;
-    obj->complete = 0;
+    COBJ_UNSET_FLAG(obj, COBJ_FLAG_COMPLETE);
     obj->res = res;
     if (async) {
-        obj->async = async;
+        COBJ_SET_FLAG(obj, COBJ_FLAG_ASYNC);
         obj->listeners = create_list();
         set_free_value_callback(obj->listeners, free);
     }
@@ -310,14 +308,15 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
 
     MUTEX_LOCK(&obj->lock);
-    if (obj->data || (obj->async && obj->fetching))
+    if (obj->data || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC|COBJ_FLAG_FETCHING))
     { // the value is already loaded or being downloaded, we don't need to fetch
         *size = obj->dlen;
         MUTEX_UNLOCK(&obj->lock);
         return 0;
     }
 
-    obj->evicted = 0; // this object is not evicted anymore (if it eventually was)
+    // this object is not evicted anymore (if it eventually was)
+    COBJ_UNSET_FLAG(obj, COBJ_FLAG_EVICTED);
     char node_name[1024];
     size_t node_len = sizeof(node_name);
     memset(node_name, 0, node_len);
@@ -340,7 +339,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                 // if it's a global storage or we are responsible in the
                 // migration context, we don't want to return earlier
                 done = 0;
-                obj->evicted = 0;
+                COBJ_UNSET_FLAG(obj, COBJ_FLAG_EVICTED);
             }
         }
         if (done) {
@@ -349,7 +348,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                 gettimeofday(&obj->ts, NULL);
                 *size = obj->dlen;
                 MUTEX_UNLOCK(&obj->lock);
-                return (obj->drop && !obj->async) ? 1 : 0;
+                return COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP|COBJ_FLAG_COMPLETE) ? 1 : 0;
             }
             MUTEX_UNLOCK(&obj->lock);
             return -1;
@@ -393,11 +392,11 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
 
     gettimeofday(&obj->ts, NULL);
 
-    obj->complete = 1;
-    obj->fetching = 0;
+    COBJ_SET_FLAG(obj, COBJ_FLAG_COMPLETE);
+    COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
 
     if (!obj->data) {
-        if (obj->async && obj->listeners)
+        if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC) && obj->listeners)
             foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
 
         MUTEX_UNLOCK(&obj->lock);
@@ -406,7 +405,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         return 1;
     }
 
-    if (obj->async) {
+    if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC)) {
         shardcache_fetch_from_peer_notify_arg arg = {
             .obj = obj,
             .data = obj->data,
@@ -414,13 +413,15 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         };
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
         foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
-        if (obj->evict)
+        if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
             arc_ops_evict_object(cache, obj);
     }
 
     *size = obj->dlen;
 
-    if (cache->expire_time > 0 && !obj->evict && !obj->evicted && !cache->lazy_expiration) {
+    int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
+                  COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
+    if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration) {
         shardcache_schedule_expiration(cache, obj->key, obj->klen, cache->expire_time, 0);
     }
 

@@ -165,8 +165,8 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
     }
     shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
     while(req) {
-        shardcache_request_destroy(req);
         TAILQ_REMOVE(&ctx->requests, req, next);
+        shardcache_request_destroy(req);
         ctx->num_requests--;
         req = TAILQ_FIRST(&ctx->requests);
     }
