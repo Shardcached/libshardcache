@@ -417,17 +417,17 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     MUTEX_LOCK(&cache->lock);
     arc_object_t *obj = ht_get(cache->hash, (void *)key, len, NULL);
     if (obj) {
+        retain_ref(cache->refcnt, obj->node);
         if (async && obj->async) {
-            retain_ref(cache->refcnt, obj->node);
             MUTEX_UNLOCK(&cache->lock);
             *valuep = obj->ptr;
             return obj;
         }
 
-        MUTEX_LOCK(&obj->lock);
-        retain_ref(cache->refcnt, obj->node);
+        // we don't need to lock the object here since
+        // its status can't be updated without acquiring
+        // the cache-level lock
         arc_state_t *state = obj->state;
-        MUTEX_UNLOCK(&obj->lock);
 
         MUTEX_UNLOCK(&cache->lock);
 
