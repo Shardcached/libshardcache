@@ -412,32 +412,27 @@ void arc_retain_resource(arc_t *cache, arc_resource_t *res) {
     MUTEX_UNLOCK(&obj->lock);
 }
 
+static void *
+retain_obj_cb(void *data, size_t dlen, void *user)
+{
+    arc_object_t *obj = (arc_object_t *)data;
+    arc_t *cache = (arc_t *)user;
+    retain_ref(cache->refcnt, obj->node);
+    return obj;
+}
+
 arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
 {
-    MUTEX_LOCK(&cache->lock);
-    arc_object_t *obj = ht_get(cache->hash, (void *)key, len, NULL);
+    arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
     if (obj) {
-        retain_ref(cache->refcnt, obj->node);
         if (async && obj->async) {
-            MUTEX_UNLOCK(&cache->lock);
             *valuep = obj->ptr;
             return obj;
         }
 
-        // we don't need to lock the object here since
-        // its status can't be updated without acquiring
-        // the cache-level lock
-        arc_state_t *state = obj->state;
-
-        MUTEX_UNLOCK(&cache->lock);
-
-        if (UNLIKELY(!state)) {
-            release_ref(cache->refcnt, obj->node);
-            fprintf(stderr, "Found an object with no state in the hashtable ?!\n");
-            return NULL;
-        }
-
+        MUTEX_LOCK(&obj->lock);
         if (UNLIKELY(arc_move(cache, obj, &cache->mfu) != 0)) {
+            MUTEX_UNLOCK(&obj->lock);
             release_ref(cache->refcnt, obj->node);
             fprintf(stderr, "Can't move the object into the cache\n");
             return NULL;
@@ -446,6 +441,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
         if (valuep)
             *valuep = obj->ptr;
 
+        MUTEX_UNLOCK(&obj->lock);
         return obj;
     }
 
@@ -457,34 +453,44 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     obj->async = async;
 
     if (!obj) {
-        MUTEX_UNLOCK(&cache->lock);
         return NULL;
     }
 
     retain_ref(cache->refcnt, obj->node);
     MUTEX_LOCK(&obj->lock);
-    ht_set(cache->hash, (void *)key, len, obj, sizeof(arc_object_t));
-
-    /* New objects are always moved to the MRU list. */
-    MUTEX_UNLOCK(&cache->lock);
-    if (arc_move(cache, obj, &cache->mru) == 0) {
-        *valuep = obj->ptr;
-        MUTEX_UNLOCK(&obj->lock);
-        // the object is retained, the caller must call
-        // arc_release_resource(obj) to release it
-        return obj;
-    } else {
-        release_ref(cache->refcnt, obj->node);
-    }
-
-    MUTEX_LOCK(&cache->lock);
-    // failed to add the object to the cache, probably the key doesn't
-    // exist in the storage
-    ht_delete(cache->hash, (void *)key, len, NULL, NULL);
+    int rc = ht_set_if_not_exists(cache->hash, (void *)key, len, obj, sizeof(arc_object_t));
+    switch(rc) {
+        case -1:
+            fprintf(stderr, "Can't set the new value in the internal hashtable\n");
+            release_ref(cache->refcnt, obj->node);
+            break;
+        case 1:
+            // the object has been created in the meanwhile
+            release_ref(cache->refcnt, obj->node);
+            MUTEX_UNLOCK(&obj->lock);
+            // XXX - yes, we have to release it twice
+            release_ref(cache->refcnt, obj->node);
+            return arc_lookup(cache, key, len, valuep, async);
+        case 0:
+            /* New objects are always moved to the MRU list. */
+            if (arc_move(cache, obj, &cache->mru) == 0) {
+                *valuep = obj->ptr;
+                MUTEX_UNLOCK(&obj->lock);
+                // the object is retained, the caller must call
+                // arc_release_resource(obj) to release it
+                return obj;
+            } else {
+                ht_delete(cache->hash, (void *)key, len, NULL, NULL);
+                release_ref(cache->refcnt, obj->node);
+            }
+            break;
+        default:
+            fprintf(stderr, "Unknown return code from ht_set_if_not_exists() : %d\n", rc);
+            release_ref(cache->refcnt, obj->node);
+            break;
+    } 
     MUTEX_UNLOCK(&obj->lock);
-    MUTEX_UNLOCK(&cache->lock);
     release_ref(cache->refcnt, obj->node);
-
     return NULL;
 }
 

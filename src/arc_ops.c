@@ -286,7 +286,7 @@ arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void
 }
 
 static void *
-arc_ops_fetch_copy_volatile_object_cb(void *ptr, size_t len)
+arc_ops_fetch_copy_volatile_object_cb(void *ptr, size_t len, void *user)
 {
     volatile_object_t *item = (volatile_object_t *)ptr;
     volatile_object_t *copy = malloc(sizeof(volatile_object_t));
@@ -366,7 +366,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                                                obj->key,
                                                obj->klen,
                                                NULL,
-                                               arc_ops_fetch_copy_volatile_object_cb);
+                                               arc_ops_fetch_copy_volatile_object_cb,
+                                               NULL);
     if (vobj) {
         obj->data = vobj->data; 
         obj->dlen = vobj->dlen;
