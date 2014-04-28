@@ -841,7 +841,7 @@ shardcache_get_async_helper(void *key,
 
     arg->dlen += dlen;
 
-    if (total_size) {
+    if (total_size || timestamp) {
         arc_release_resource(arc, arg->res);
         free(arg);
     }
@@ -882,7 +882,9 @@ shardcache_get_offset_async(shardcache_t *cache,
         // if marked for eviction we don't want to return this object
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, res);
-        return -1;
+        // but we will try to fetch it again
+        SHC_DEBUG("The retreived object has been already evicted, try fetching it again (offset)");
+        return shardcache_get_async(cache, key, klen, cb, priv);
     } else if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_COMPLETE)) {
         size_t dlen = obj->dlen;
         void *data = NULL;
