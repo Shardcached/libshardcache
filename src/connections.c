@@ -270,7 +270,11 @@ open_connection(const char *host, int port, unsigned int timeout)
         struct rlimit rlim;
         int fdset_size = sizeof(fd_set) * 8; // defaults to at least 8192 fds
         if (getrlimit(RLIMIT_NOFILE, &rlim) == 0) {
-            fdset_size = sizeof(fd_set) * rlim.rlim_max/FD_SETSIZE;
+            int limit = sizeof(fd_set) * rlim.rlim_max;
+            if (!limit)
+                limit = sizeof(fd_set) * rlim.rlim_cur;
+            if (limit)
+                fdset_size = limit/FD_SETSIZE;
         }
 
         void *fdset = calloc(1, fdset_size); // we want to fit at most 8192 filedescriptors
