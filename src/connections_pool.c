@@ -131,7 +131,10 @@ connections_pool_add(connections_pool_t *cc, char *addr, int fd)
     if (queue_count(connection_queue) < ATOMIC_READ(cc->max_spare)) {
         int *fdp = malloc(sizeof(int));
         *fdp = fd;
-        queue_push_right(connection_queue, fdp);
+        if (queue_push_right(connection_queue, fdp) != 0) {
+            free(fdp);
+            close(fd);
+        }
     } else {
         close(fd);
     }
