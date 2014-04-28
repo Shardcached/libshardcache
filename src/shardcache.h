@@ -94,11 +94,6 @@ typedef int
 typedef int
 (*shardcache_exist_item_callback_t)(void *key, size_t klen, void *priv);
 
-typedef struct __shardcache_record_s {
-    void *v;
-    size_t l;
-} shardcache_record_t;
-
 /**
  * @struct shardcache_storage_index_item_t
  *

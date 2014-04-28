@@ -69,6 +69,11 @@ typedef enum {
     SHC_RES_ERR    = 0xFF
 } shardcache_res_t;
 
+typedef struct __shardcache_record_s {
+    void *v;
+    size_t l;
+} shardcache_record_t;
+
 #define SHARDCACHE_RSEP 0x80
 
 // TODO - Document all exposed functions

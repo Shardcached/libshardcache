@@ -44,7 +44,8 @@ typedef struct {
     uint32_t num_responses;
 } client_ctx;
 
-static void usage(char *progname, int rc, char *msg, ...)
+static void
+usage(char *progname, int rc, char *msg, ...)
 {
     if (msg) {
         va_list arg;
@@ -75,13 +76,15 @@ static void usage(char *progname, int rc, char *msg, ...)
     exit(rc);
 }
 
-static void stop(int sig)
+static void
+stop(int sig)
 {
     __sync_fetch_and_add(&quit, 1);
 }
 
 
-void close_connection(iomux_t *iomux, int fd, void *priv)
+static void
+close_connection(iomux_t *iomux, int fd, void *priv)
 {
     client_ctx *ctx = (client_ctx *)priv;
     char label[256];
@@ -95,7 +98,8 @@ void close_connection(iomux_t *iomux, int fd, void *priv)
     __sync_sub_and_fetch(&num_running_clients, 1);
 }
 
-int discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
+int
+discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
 {
     client_ctx *ctx = (client_ctx *)priv;
     int processed = 0;
@@ -113,18 +117,21 @@ int discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void 
     return len;
 }
 
-void send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *priv)
+void
+send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *priv)
 {
     client_ctx *ctx = (client_ctx *)priv;
     fbuf_t *output_buffer = ctx->output;
 
+    *len = 0;
 
     // don't pipeline more than 1024 requests ahead
     if (__sync_fetch_and_add(&ctx->num_requests, 0) - __sync_fetch_and_add(&ctx->num_responses, 0) < 1024)
     {
-        int idx = rand() % num_keys;
-        while (use_index && keys_index->items[idx].vlen == 0)
+        int idx = 0;
+        do {
             idx = rand() % num_keys;
+        } while (use_index && keys_index->items[idx].vlen == 0);
 
         shardcache_record_t record[2] = {
             {
@@ -162,15 +169,17 @@ void send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *p
         }
 
         if (build_message(secret, sig_hdr, hdr, record, num_records, output_buffer) != 0)
-        {
             fprintf(stderr, "Can't create new command!\n");
-        }
+
         if (hdr == SHC_HDR_GET)
             __sync_add_and_fetch(&num_gets, 1);
         else
             __sync_add_and_fetch(&num_sets, 1);
+
         __sync_fetch_and_add(&ctx->num_requests, 1);
     }
+
+    // flush as much as we can
     if (fbuf_used(output_buffer)) {
         if (*len > fbuf_used(output_buffer)) {
             *len = fbuf_used(output_buffer);
@@ -180,12 +189,11 @@ void send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *p
             memcpy(data, fbuf_data(output_buffer), *len);
             fbuf_remove(output_buffer, *len);
         }
-    } else {
-        *len = 0;
     }
 }
 
-static void *worker(void *priv)
+static void
+*worker(void *priv)
 {
     iomux_t *iomux = (iomux_t *)priv;
 
@@ -230,7 +238,8 @@ static void *worker(void *priv)
 
 #define ADDR_REGEXP "^([a-z0-9_\\.\\-]+|\\*)(:[0-9]+)?$"
 
-static int check_address_string(char *str)
+static int
+check_address_string(char *str)
 {
     regex_t addr_regexp;
     int rc = regcomp(&addr_regexp, ADDR_REGEXP, REG_EXTENDED|REG_ICASE);
@@ -251,7 +260,8 @@ static int check_address_string(char *str)
     return 0;
 }
 
-static int parse_hosts_string(char *str)
+static int
+parse_hosts_string(char *str)
 {
     char *copy = strdup(str);
     char *s = copy;
