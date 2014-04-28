@@ -23,7 +23,7 @@ void shardcache_release_counters(shardcache_counters_t *c)
 }
 
 void
-shardcache_counter_add(shardcache_counters_t *c, const char *name, const uint32_t *counter_ptr)
+shardcache_counter_add(shardcache_counters_t *c, const char *name, const uint64_t *counter_ptr)
 {
     tagged_value_t *tval = create_tagged_value_nocopy((char *)name, (void *)counter_ptr);
     push_tagged_value(c->lookup, tval);
@@ -46,7 +46,7 @@ shardcache_counter_remove(shardcache_counters_t *c, const char *name)
 typedef struct {
     shardcache_counter_t *counters;
     size_t size;
-    uint32_t index;
+    uint64_t index;
 } counters_iterator_arg_t;
 
 int
@@ -63,7 +63,7 @@ shardcache_get_all_counters(shardcache_counters_t *c, shardcache_counter_t **out
         }
         shardcache_counter_t *counter = &counters[i];
         snprintf(counter->name, sizeof(counter->name), "%s", tval->tag);
-        counter->value = (uint32_t)__sync_fetch_and_add((uint32_t *)tval->value, 0);
+        counter->value = (uint64_t)__sync_fetch_and_add((uint64_t *)tval->value, 0);
  
     }
     *out_counters = counters;
@@ -75,7 +75,7 @@ shardcache_counter_value_add(shardcache_counters_t *c, char *name, int value)
 {
     tagged_value_t *tval = get_tagged_value(c->lookup, name);
     if (tval)
-        return __sync_fetch_and_add((uint32_t *)tval->value, value);
+        return __sync_fetch_and_add((uint64_t *)tval->value, value);
     return 0;
 }
 
@@ -84,7 +84,7 @@ shardcache_counter_value_sub(shardcache_counters_t *c, char *name, int value)
 {
     tagged_value_t *tval = get_tagged_value(c->lookup, name);
     if (tval)
-        return __sync_fetch_and_sub((uint32_t *)tval->value, value);
+        return __sync_fetch_and_sub((uint64_t *)tval->value, value);
     return 0;
 }
 
@@ -94,9 +94,9 @@ shardcache_counter_value_set(shardcache_counters_t *c, char *name, int value)
     tagged_value_t *tval = get_tagged_value(c->lookup, name);
     if (tval) {
         int b = 0;
-        int old = __sync_fetch_and_add((uint32_t *)tval->value, 0);
+        int old = __sync_fetch_and_add((uint64_t *)tval->value, 0);
         do {
-            b = __sync_bool_compare_and_swap((uint32_t *)tval->value, old, value);
+            b = __sync_bool_compare_and_swap((uint64_t *)tval->value, old, value);
         } while (!b);
         return old;
     }

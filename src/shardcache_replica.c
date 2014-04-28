@@ -67,14 +67,14 @@ struct __shardcache_replica_s {
     hashtable_t *recovery;    // teomporary store for keys being recovered
     pqueue_t *recovery_queue; // priority queue with the items to recover
     struct {
-        uint32_t recovering;
-        uint32_t ballot;
-        uint32_t commits;
-        uint32_t commit_fails;
-        uint32_t dispached;
-        uint32_t responses;
-        uint32_t commands;
-        uint32_t acks;
+        uint64_t recovering;
+        uint64_t ballot;
+        uint64_t commits;
+        uint64_t commit_fails;
+        uint64_t dispached;
+        uint64_t responses;
+        uint64_t commands;
+        uint64_t acks;
     } counters; // counters exported to libshardcache
     int quit; // tells both the recovery and the async-io threads when to exit
     pthread_t recover_th; // the recovery thread

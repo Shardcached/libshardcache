@@ -146,7 +146,7 @@ struct __shardcache_s {
 #define SHARDCACHE_NUM_COUNTERS 11
     struct {
         const char *name; // the exported label of the counter
-        uint32_t value;   // the actual value (accessed using the atomic builtins)
+        uint64_t value;   // the actual value (accessed using the atomic builtins)
     } cnt[SHARDCACHE_NUM_COUNTERS]; // array holding the storage for the counters
                                     // exported as stats
 

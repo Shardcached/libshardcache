@@ -31,17 +31,17 @@ static int verbose = 0;
 static int wrate = 0;
 static int wmode = 0;
 static char *secret = NULL;
-static uint32_t num_gets = 0;
-static uint32_t num_sets = 0;
-static uint32_t num_responses = 0;
-static uint32_t num_running_clients = 0;
+static uint64_t num_gets = 0;
+static uint64_t num_sets = 0;
+static uint64_t num_responses = 0;
+static uint64_t num_running_clients = 0;
 shardcache_counters_t *counters = NULL;
 
 typedef struct {
     fbuf_t *output;
     async_read_ctx_t *reader; 
-    uint32_t num_requests;
-    uint32_t num_responses;
+    uint64_t num_requests;
+    uint64_t num_responses;
 } client_ctx;
 
 static void
@@ -418,7 +418,7 @@ main (int argc, char **argv)
 
     shardcache_counter_t *prev_counts = NULL;
     int num_prev_counters = 0;
-    uint32_t num_responses_prev = 0;
+    uint64_t num_responses_prev = 0;
 
     while (!__sync_fetch_and_add(&quit, 0)) {
 
@@ -428,12 +428,12 @@ main (int argc, char **argv)
         int num_counters = shardcache_get_all_counters(counters, &counts);
         if (!num_counters)
             continue;
-        uint32_t fastest_client = 0;
-        uint32_t slowest_client = 0;
-        uint32_t stuck_clients = 0;
+        uint64_t fastest_client = 0;
+        uint64_t slowest_client = 0;
+        uint64_t stuck_clients = 0;
         for (i = 0; i < num_counters; i++) {
             if (strstr(counts[i].name, "responses")) {
-                uint32_t diff = (prev_counts && strcmp(counts[i].name, prev_counts[i].name) == 0)
+                uint64_t diff = (prev_counts && strcmp(counts[i].name, prev_counts[i].name) == 0)
                               ? counts[i].value - prev_counts[i].value
                               : 0;
                 if (!slowest_client || slowest_client > diff)
@@ -447,26 +447,26 @@ main (int argc, char **argv)
             }
         }
 
-        uint32_t num_responses_cur = __sync_add_and_fetch(&num_responses, 0);
-        uint32_t responses_sum = num_responses_prev ? num_responses_cur - num_responses_prev : num_responses_cur;
-        uint32_t avg_responses = responses_sum / (num_threads * num_clients);
+        uint64_t num_responses_cur = __sync_add_and_fetch(&num_responses, 0);
+        uint64_t responses_sum = num_responses_prev ? num_responses_cur - num_responses_prev : num_responses_cur;
+        uint64_t avg_responses = responses_sum / (num_threads * num_clients);
 
-        uint32_t running_clients = __sync_fetch_and_add(&num_running_clients, 0);
-        uint32_t gets_total = __sync_fetch_and_add(&num_gets, 0);
-        uint32_t sets_total = __sync_fetch_and_add(&num_sets, 0);
-        uint32_t responses_total = __sync_fetch_and_add(&num_responses, 0);
+        uint64_t running_clients = __sync_fetch_and_add(&num_running_clients, 0);
+        uint64_t gets_total = __sync_fetch_and_add(&num_gets, 0);
+        uint64_t sets_total = __sync_fetch_and_add(&num_sets, 0);
+        uint64_t responses_total = __sync_fetch_and_add(&num_responses, 0);
         if (print_stats) {
             
             printf("\033[H\033[J"
-                   "num_clients: %u\n"
-                   "gets: %u\n"
-                   "sets: %u\n"
-                   "num_responses: %u\n"
-                   "total_responses/s: %u\n"
-                   "avg_responses/s: %u\n"
-                   "slowest: %u\n"
-                   "fastest: %u\n"
-                   "stuck_clients: %u\n",
+                   "num_clients: %llu\n"
+                   "gets: %llu\n"
+                   "sets: %llu\n"
+                   "num_responses: %llu\n"
+                   "total_responses/s: %llu\n"
+                   "avg_responses/s: %llu\n"
+                   "slowest: %llu\n"
+                   "fastest: %llu\n"
+                   "stuck_clients: %llu\n",
                    running_clients,
                    gets_total,
                    sets_total,
@@ -480,7 +480,7 @@ main (int argc, char **argv)
 
         if (stats_file) {
             char line[(10*9) + 10];
-            snprintf(line, sizeof(line), "%u,%u,%u,%u,%u,%u,%u,%u,%u\n",
+            snprintf(line, sizeof(line), "%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
                      running_clients,
                      gets_total,
                      sets_total,

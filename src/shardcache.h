@@ -266,7 +266,7 @@ typedef void (*shardcache_storage_destructor)(shardcache_storage_t *storage);
  */
 typedef struct {
     char name[256];
-    uint32_t value;
+    uint64_t value;
 } shardcache_counter_t;
 
 /**

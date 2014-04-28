@@ -2096,10 +2096,10 @@ migrate(void *priv)
     int aborted = 0;
     linked_list_t *to_delete = create_list();
 
-    uint32_t migrated_items = 0;
-    uint32_t scanned_items = 0;
-    uint32_t errors = 0;
-    uint32_t total_items = 0;
+    uint64_t migrated_items = 0;
+    uint64_t scanned_items = 0;
+    uint64_t errors = 0;
+    uint64_t total_items = 0;
 
     if (index) {
         total_items = index->size;

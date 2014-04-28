@@ -41,8 +41,8 @@ typedef struct {
     shardcache_serving_t *serv;
     iomux_t *iomux;
     linked_list_t *prune;
-    uint32_t numfds;
-    uint32_t pruning;
+    uint64_t numfds;
+    uint64_t pruning;
 } shardcache_worker_context_t;
 
 struct __shardcache_serving_s {
@@ -57,10 +57,10 @@ struct __shardcache_serving_s {
     int next_worker_index;
     linked_list_t *workers;
     int worker_index;
-    uint32_t num_connections;
-    uint32_t busy_workers;
-    uint32_t spare_workers;
-    uint32_t total_workers;
+    uint64_t num_connections;
+    uint64_t busy_workers;
+    uint64_t spare_workers;
+    uint64_t total_workers;
     shardcache_counters_t *counters;
 };
 
