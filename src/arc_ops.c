@@ -229,8 +229,6 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
             if (obj->listeners) {
                 foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
                 clear_list(obj->listeners);
-            } else {
-                arc_release_resource(cache->arc, obj->res);
             }
 
             COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
