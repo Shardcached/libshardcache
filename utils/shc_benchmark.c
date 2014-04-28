@@ -26,12 +26,15 @@ static shardcache_storage_index_t *keys_index = NULL;
 static int num_keys = 1000;
 static char *prefix = "shc_bench";
 static char *hosts_string = NULL;
+static FILE *stats_file = NULL;
 static int verbose = 0;
 static int wrate = 0;
+static int wmode = 0;
 static char *secret = NULL;
 static uint32_t num_gets = 0;
 static uint32_t num_sets = 0;
 static uint32_t num_responses = 0;
+static uint32_t num_running_clients = 0;
 shardcache_counters_t *counters = NULL;
 
 typedef struct {
@@ -59,6 +62,10 @@ static void usage(char *progname, int rc, char *msg, ...)
            "    -k <num_keys>     The number of keys to use during the test (defaults to: %d)\n"
            "    -p <prefix>       A custom prefix to use for generated keys (defaults to: %s)\n"
            "    -P                Print stats to stdout every second\n"
+           "    -s <stats_file>   File where to (optionally) dump the stats every second (in CSV format)\n"
+           "    -w <wrate>        Rate at which to send set/del/evict commands instead of get\n"
+           "    -W <write_mode>   Determines which command to send at the requested write rate\n"
+           "                      0 => 'set', 1 => 'del' , 2 => 'evict' (defaults to 0)\n"
            "    -v                Be verbose\n"
            , progname
            , num_clients
@@ -85,6 +92,7 @@ void close_connection(iomux_t *iomux, int fd, void *priv)
     fprintf(stderr, "Client %p closed\n", ctx);
     free(ctx);
     close(fd);
+    __sync_sub_and_fetch(&num_running_clients, 1);
 }
 
 int discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
@@ -133,12 +141,24 @@ void send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *p
         unsigned char sig_hdr = secret ? SHC_HDR_SIGNATURE_SIP : 0;
 
         if (wrate && rand()%100 > wrate) {
-            char value[256];
-            snprintf(value, sizeof(value), "TEST%d", (int)time(NULL));
-            record[1].v = value;
-            record[1].l = strlen(value);
-            num_records = 2;
-            hdr = SHC_HDR_SET;
+            switch(wmode) {
+                case 0:
+                {
+                    char value[256];
+                    snprintf(value, sizeof(value), "TEST%d", (int)time(NULL));
+                    record[1].v = value;
+                    record[1].l = strlen(value);
+                    num_records = 2;
+                    hdr = SHC_HDR_SET;
+                    break;
+                }
+                case 1:
+                    hdr = SHC_HDR_DELETE;
+                    break;
+                case 2:
+                    hdr = SHC_HDR_EVICT;
+                    break;
+            }
         }
 
         if (build_message(secret, sig_hdr, hdr, record, num_records, output_buffer) != 0)
@@ -163,30 +183,12 @@ void send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *p
     } else {
         *len = 0;
     }
-    //printf("sent %d\n", *len);
 }
 
 static void *worker(void *priv)
 {
     iomux_t *iomux = (iomux_t *)priv;
 
-#if 0
-    shardcache_client_t *c = shardcache_client_create(hosts, num_hosts, secret);
-    if (!c) {
-        // TODO - Error message
-        return NULL;
-    }
-    while(!__sync_add_and_fetch(&quit, 0)) {
-        int idx = rand() % num_keys;
-        if (wrate && rand()%100 > wrate) {
-            char value[256];
-            snprintf(value, sizeof(value), "TEST%d", (int)time(NULL));
-            shardcache_client_set(c, keys_index->items[idx].key, keys_index->items[idx].klen, value, strlen(value), 0);
-        } else {
-            shardcache_client_get(c, keys_index->items[idx].key, keys_index->items[idx].klen, NULL);
-        }
-    }
-#else
     int i,n;
     for (i = 0; i < num_hosts; i++) {
         char *addr = shardcache_node_get_address(hosts[i]);
@@ -213,7 +215,8 @@ static void *worker(void *priv)
             shardcache_counter_add(counters, label, &ctx->num_requests);
             snprintf(label, sizeof(label), "[client %p] responses", ctx);
             shardcache_counter_add(counters, label, &ctx->num_responses);
-            iomux_add(iomux, fd, &cbs);
+            if (iomux_add(iomux, fd, &cbs) == 1)
+                __sync_add_and_fetch(&num_running_clients, 1);
         }
     }
 
@@ -222,7 +225,6 @@ static void *worker(void *priv)
         iomux_run(iomux, &tv);
     }
 
-#endif
     return NULL;
 }
 
@@ -288,12 +290,15 @@ main (int argc, char **argv)
         { "keys", 2, 0, 'k' },
         { "prefix", 2, 0, 'p' },
         { "print_stats", 2, 0, 'P' },
+        { "stats_file", 2, 0, 's' },
+        { "write_rate", 2, 0, 'w' },
+        { "write_mode", 2, 0, 'W' },
         { "verbose", 0, 0, 'v' },
     };
     hosts_string = getenv("SHC_HOSTS");
     int option_index = 0;
     char c;
-    while ((c = getopt_long(argc, argv, "c:hH:ik:p:Pt:v", long_options, &option_index))) {
+    while ((c = getopt_long(argc, argv, "c:hH:ik:p:s:Pt:w:W:v", long_options, &option_index))) {
         if (c == -1)
             break;
         switch(c) {
@@ -317,8 +322,22 @@ main (int argc, char **argv)
             case 'P':
                 print_stats = 1;
                 break;
+            case 's':
+                stats_file = fopen(optarg, "w");
+                if (!stats_file)
+                    usage(argv[0], -1, "Can't open the stats file %s for output : %s\n",
+                          optarg, strerror(errno));
+                break;
             case 't':
                 num_threads = strtol(optarg, NULL, 10);
+                break;
+            case 'w':
+                wrate = strtol(optarg, NULL, 10);
+                break;
+            case 'W':
+                wmode = strtol(optarg, NULL, 10);
+                if (wmode < 0 || wmode > 2)
+                    usage(argv[0], -1, "Unknown write mode %d (valid are 0, 1 or 2)", wmode);
                 break;
             case 'v':
                 verbose++;
@@ -357,7 +376,7 @@ main (int argc, char **argv)
             item->vlen = 4;
             printf("Setting key %s\n", (char *)item->key);
             if (shardcache_client_set(client, item->key, item->klen, "TEST", 4, 0) != 0) {
-                // TODO - Error message
+                fprintf(stderr, "Can't set key %s : %s\n", (char *)item->key, shardcache_client_errstr(client));
                 exit(-1);
             }
         }
@@ -380,11 +399,21 @@ main (int argc, char **argv)
         }
     }
     printf("Done\n");
-    sleep(1);
+
+    if (stats_file) {
+        char *columns = "num_clients,gets,sets,num_responses,total_responses/s,"
+                        "avg_responses/s,slowest,fastest,stuck_clients\n";
+        fwrite(columns, strlen(columns), 1, stats_file);
+    }
+
     shardcache_counter_t *prev_counts = NULL;
     int num_prev_counters = 0;
     uint32_t num_responses_prev = 0;
+
     while (!__sync_fetch_and_add(&quit, 0)) {
+
+        sleep(1);
+
         shardcache_counter_t *counts = NULL;
         int num_counters = shardcache_get_all_counters(counters, &counts);
         if (!num_counters)
@@ -406,16 +435,20 @@ main (int argc, char **argv)
                 if (diff == 0)
                     stuck_clients++;
             }
-/*            if (print_stats)
-                printf("%s: %u\n", counts[i].name, counts[i].value);
-*/
         }
+
         uint32_t num_responses_cur = __sync_add_and_fetch(&num_responses, 0);
         uint32_t responses_sum = num_responses_prev ? num_responses_cur - num_responses_prev : num_responses_cur;
         uint32_t avg_responses = responses_sum / (num_threads * num_clients);
+
+        uint32_t running_clients = __sync_fetch_and_add(&num_running_clients, 0);
+        uint32_t gets_total = __sync_fetch_and_add(&num_gets, 0);
+        uint32_t sets_total = __sync_fetch_and_add(&num_sets, 0);
+        uint32_t responses_total = __sync_fetch_and_add(&num_responses, 0);
         if (print_stats) {
             
             printf("\033[H\033[J"
+                   "num_clients: %u\n"
                    "gets: %u\n"
                    "sets: %u\n"
                    "num_responses: %u\n"
@@ -424,17 +457,42 @@ main (int argc, char **argv)
                    "slowest: %u\n"
                    "fastest: %u\n"
                    "stuck_clients: %u\n",
-                   num_gets, num_sets, num_responses, responses_sum, avg_responses, slowest_client, fastest_client, stuck_clients);
+                   running_clients,
+                   gets_total,
+                   sets_total,
+                   responses_total,
+                   responses_sum,
+                   avg_responses,
+                   slowest_client,
+                   fastest_client,
+                   stuck_clients);
         }
 
-        // TODO - dump stats to a file
+        if (stats_file) {
+            char line[(10*9) + 10];
+            snprintf(line, sizeof(line), "%u,%u,%u,%u,%u,%u,%u,%u,%u\n",
+                     running_clients,
+                     gets_total,
+                     sets_total,
+                     responses_total,
+                     responses_sum,
+                     avg_responses,
+                     slowest_client,
+                     fastest_client,
+                     stuck_clients);
+            if (fwrite(line, strlen(line), 1, stats_file) != 1) {
+                fprintf(stderr, "Can't dump the new line to the stats file: %s\n", strerror(errno));
+                exit(-2);
+            }
+            fflush(stats_file);
+        }
+
         if (prev_counts)
             free(prev_counts);
         prev_counts = counts;
         num_prev_counters = num_counters;
         num_responses_prev = __sync_add_and_fetch(&num_responses, 0);
 
-        sleep(1);
     }
     if (prev_counts)
         free(prev_counts);
@@ -447,6 +505,10 @@ main (int argc, char **argv)
     shardcache_free_nodes(hosts, num_hosts);
     shardcache_free_index(keys_index);
     shardcache_release_counters(counters);
+    if (stats_file) {
+        fflush(stats_file);
+        fclose(stats_file);
+    }
 
     exit (0);
 }
