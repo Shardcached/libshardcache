@@ -18,8 +18,9 @@ endif
 all: shardcachec shc_benchmark
 
 dynamic: CFLAGS += -fPIC -I../src -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -g
-dynamic: shardcachec.c
-	gcc shardcachec.c $(CFLAGS) -lshardcache $(LDFLAGS)  -o shardcachec
+dynamic: shardcachec.c shc_benchmark.c
+	gcc shardcachec.c $(CFLAGS) $(LDFLAGS)  -o shardcachec -lshardcache
+	gcc shc_benchmark.c $(CFLAGS) $(LDFLAGS) -o shc_benchmark -lshardcache
 
 shardcachec: CFLAGS += -fPIC -I../src -I../deps/.incs -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
 shardcachec: shardcachec.c $(DEPS)
