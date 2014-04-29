@@ -631,7 +631,7 @@ process_request(shardcache_request_t *req)
             int ncounters = shardcache_get_counters(cache, &counters);
             if (counters) {
                 for (i = 0; i < ncounters; i++) {
-                    fbuf_printf(&buf, "%s;%u\r\n",
+                    fbuf_printf(&buf, "%s;%llu\r\n",
                                 counters[i].name, counters[i].value);
                 }
 
