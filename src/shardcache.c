@@ -22,7 +22,7 @@
 #include "messaging.h"
 #include "shardcache_replica.h"
 
-const char *LIBSHARDCACHE_VERSION = "0.18";
+const char *LIBSHARDCACHE_VERSION = "0.19";
 
 extern int shardcache_log_initialized;
 
