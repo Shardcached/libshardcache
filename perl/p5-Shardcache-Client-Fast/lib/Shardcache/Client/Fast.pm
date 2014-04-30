@@ -18,27 +18,27 @@ our @ISA = qw(Exporter);
 # If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
 # will save memory.
 our %EXPORT_TAGS = ( 'all' => [ qw(
-	shardcache_client_create
-	shardcache_client_del
-	shardcache_client_destroy
-	shardcache_client_evict
-	shardcache_client_get
-	shardcache_client_get_async
-	shardcache_client_touch
-	shardcache_client_exists
-	shardcache_client_set
-	shardcache_client_add
-        shardcache_client_check
-        shardcache_client_index
-        shardcache_client_stats
-        shardcache_client_errno
-        shardcache_client_errstr
+    shardcache_client_create
+    shardcache_client_del
+    shardcache_client_destroy
+    shardcache_client_evict
+    shardcache_client_get
+    shardcache_client_get_async
+    shardcache_client_touch
+    shardcache_client_exists
+    shardcache_client_set
+    shardcache_client_add
+    shardcache_client_check
+    shardcache_client_index
+    shardcache_client_stats
+    shardcache_client_errno
+    shardcache_client_errstr
 ) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 
 our @EXPORT = qw(
-	
+
 );
 
 our $VERSION = '0.07';
@@ -54,14 +54,14 @@ sub AUTOLOAD {
     my ($error, $val) = constant($constname);
     if ($error) { croak $error; }
     {
-	no strict 'refs';
-	# Fixed between 5.005_53 and 5.005_61
-#XXX	if ($] >= 5.00561) {
-#XXX	    *$AUTOLOAD = sub () { $val };
-#XXX	}
-#XXX	else {
-	    *$AUTOLOAD = sub { $val };
-#XXX	}
+    no strict 'refs';
+    # Fixed between 5.005_53 and 5.005_61
+#XXX    if ($] >= 5.00561) {
+#XXX        *$AUTOLOAD = sub () { $val };
+#XXX    }
+#XXX    else {
+            *$AUTOLOAD = sub { $val };
+#XXX    }
     }
     goto &$AUTOLOAD;
 }
