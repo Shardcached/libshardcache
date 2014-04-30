@@ -638,7 +638,7 @@ shardcache_create(char *me,
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
         { "gets", "sets", "dels", "heads", "evicts", "cache_misses",
           "fetch_remote", "fetch_local", "not_found",
-          "volatile_table_size", "cache_size" };
+          "volatile_table_size", "cache_size", "errors" };
 
     cache->counters = shardcache_init_counters();
 
@@ -2126,6 +2126,8 @@ migrate(void *priv)
             SHC_DEBUG("Migrator processign key %s", keystr);
 
             int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+
+            int rc = 0;
             
             if (is_mine == -1) {
                 SHC_WARNING("Migrator running while no migration continuum present ... aborting");
@@ -2137,7 +2139,13 @@ migrate(void *priv)
                 void *value = NULL;
                 size_t vlen = 0;
                 if (cache->storage.fetch) {
-                    value = cache->storage.fetch(key, klen, &vlen, cache->storage.priv);
+                    rc = cache->storage.fetch(key, klen, &value, &vlen, cache->storage.priv);
+                    if (rc == -1) {
+                        SHC_ERROR("Fetch storage callback retunrned an error during migration (%d)", rc);
+                        ATOMIC_INCREMENT(errors);
+                        ATOMIC_INCREMENT(scanned_items);
+                        continue;
+                    }
                 }
                 if (value) {
                     shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
@@ -2145,7 +2153,7 @@ migrate(void *priv)
                         char *addr = shardcache_node_get_address(peer);
                         SHC_DEBUG("Migrator copying %s to peer %s (%s)", keystr, node_name, addr);
                         int fd = shardcache_get_connection_for_peer(cache, addr);
-                        int rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, 0, fd, 1);
+                        rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, 0, fd, 1);
                         if (rc == 0) {
                             shardcache_release_connection_for_peer(cache, addr, fd);
                             ATOMIC_INCREMENT(migrated_items);

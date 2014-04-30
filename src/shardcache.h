@@ -47,8 +47,8 @@ extern const char *LIBSHARDCACHE_VERSION;
  * @note The returned value MUST be a volatile copy and the caller
  *       WILL release its resources
  */
-typedef void *(*shardcache_fetch_item_callback_t)
-    (void *key, size_t klen, size_t *vlen, void *priv);
+typedef int (*shardcache_fetch_item_callback_t)
+    (void *key, size_t klen, void **value, size_t *vlen, void *priv);
 
 /**
  * @brief Callback to store a new value for a given key.

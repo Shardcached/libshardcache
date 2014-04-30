@@ -143,7 +143,8 @@ struct __shardcache_s {
 #define SHARDCACHE_COUNTER_NOT_FOUND    8
 #define SHARDCACHE_COUNTER_TABLE_SIZE   9
 #define SHARDCACHE_COUNTER_CACHE_SIZE   10
-#define SHARDCACHE_NUM_COUNTERS 11
+#define SHARDCACHE_COUNTER_ERRORS       11
+#define SHARDCACHE_NUM_COUNTERS 12
     struct {
         const char *name; // the exported label of the counter
         uint64_t value;   // the actual value (accessed using the atomic builtins)

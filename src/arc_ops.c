@@ -349,6 +349,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                 return COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP|COBJ_FLAG_COMPLETE) ? 1 : 0;
             }
             MUTEX_UNLOCK(&obj->lock);
+            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_ERRORS].value);
             return -1;
         }
     }
@@ -378,8 +379,13 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                    (unsigned long)obj->dlen, keystr);
         }
     } else if (cache->use_persistent_storage && cache->storage.fetch) {
-        obj->data = cache->storage.fetch(obj->key, obj->klen, &obj->dlen, cache->storage.priv);
-
+        int rc = cache->storage.fetch(obj->key, obj->klen, &obj->data, &obj->dlen, cache->storage.priv);
+        if (rc == -1) {
+            SHC_ERROR("Fetch storage callback retunrned an error (%d)", rc);
+            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_ERRORS].value);
+            MUTEX_UNLOCK(&obj->lock);
+            return -1;
+        }
         if (obj->data && obj->dlen) {
             SHC_DEBUG3("Fetch storage callback returned value %s (%lu) for key %s",
                    shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
