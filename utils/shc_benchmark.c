@@ -15,6 +15,8 @@
 #include <counters.h>
 #include <messaging.h>
 
+#include <inttypes.h>
+
 static int quit = 0;
 static shardcache_node_t **hosts = NULL;
 static int num_hosts = 0;
@@ -458,15 +460,15 @@ main (int argc, char **argv)
         if (print_stats) {
             
             printf("\033[H\033[J"
-                   "num_clients: %llu\n"
-                   "gets: %llu\n"
-                   "sets: %llu\n"
-                   "num_responses: %llu\n"
-                   "total_responses/s: %llu\n"
-                   "avg_responses/s: %llu\n"
-                   "slowest: %llu\n"
-                   "fastest: %llu\n"
-                   "stuck_clients: %llu\n",
+                   "num_clients: %" PRIu64
+                   "\ngets: %" PRIu64
+                   "\nsets: %" PRIu64
+                   "\nnum_responses: %" PRIu64
+                   "\ntotal_responses/s: %" PRIu64
+                   "\navg_responses/s: %" PRIu64
+                   "\nslowest: %" PRIu64
+                   "\nfastest: %" PRIu64
+                   "\nstuck_clients: %" PRIu64,
                    running_clients,
                    gets_total,
                    sets_total,
@@ -480,7 +482,9 @@ main (int argc, char **argv)
 
         if (stats_file) {
             char line[(10*9) + 10];
-            snprintf(line, sizeof(line), "%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
+            snprintf(line, sizeof(line),
+                     "%"PRIu64",%"PRIu64",%"PRIu64",%"PRIu64",%"PRIu64",%"
+                     PRIu64",%"PRIu64",%"PRIu64",%"PRIu64",\n",
                      running_clients,
                      gets_total,
                      sets_total,
