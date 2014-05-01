@@ -223,9 +223,9 @@ shardcache_storage_index_t *index_from_peer(char *peer,
 // idx = -1 , data == NULL, len = 0 when finished
 // idx = -2 , data == NULL, len = 0 if an error occurred
 typedef int (*async_read_callback_t)(void *data,
-                                      size_t len,
-                                      int  idx,
-                                      void *priv);
+                                     size_t len,
+                                     int  idx,
+                                     void *priv);
 
 
 typedef struct __async_read_ctx_s async_read_ctx_t;
