@@ -98,15 +98,18 @@
 #define ATOMIC_READ(__v) __sync_fetch_and_add(&(__v), 0)
 
 #define ATOMIC_SET(__v, __n) {\
-    int __b = 0;\
-    do {\
-        __b = ATOMIC_CAS(__v, ATOMIC_READ(__v), __n);\
-    } while (!__b);\
+    int __o = ATOMIC_READ(__v);\
+    if (__builtin_expect(__o != (__n), 1)) {\
+        int __b = 0;\
+        do {\
+            __b = ATOMIC_CAS(__v, ATOMIC_READ(__v), __n);\
+        } while (__builtin_expect(!__b, 0));\
+    }\
 }
 
 #define ATOMIC_SET_IF(__v, __c, __n, __t) {\
     __t __o = ATOMIC_READ(__v); \
-    while ((__o __c (__n)) && !ATOMIC_CAS(__v, __o, __n))\
+    while (__builtin_expect((__o __c (__n)) && !ATOMIC_CAS(__v, __o, __n), 0))\
         __o = ATOMIC_READ(__v);\
 }
 
