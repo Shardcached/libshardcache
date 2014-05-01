@@ -30,12 +30,14 @@ struct shardcache_client_s {
     char errstr[1024];
 };
 
-int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value)
+int
+shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value)
 {
     return connections_pool_tcp_timeout(c->connections, new_value);
 }
 
-shardcache_client_t *shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth)
+shardcache_client_t *
+shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth)
 {
     int i;
     if (!num_nodes) {
@@ -67,7 +69,8 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t **nodes, int num
     return c;
 }
 
-char *select_node(shardcache_client_t *c, void *key, size_t klen)
+char *
+select_node(shardcache_client_t *c, void *key, size_t klen)
 {
     const char *node_name;
     size_t name_len = 0;
@@ -85,7 +88,8 @@ char *select_node(shardcache_client_t *c, void *key, size_t klen)
     return addr;
 }
 
-size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data)
+size_t
+shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
@@ -118,7 +122,8 @@ size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, voi
     return 0;
 }
 
-size_t shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, uint32_t offset, void *data, uint32_t dlen)
+size_t
+shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, uint32_t offset, void *data, uint32_t dlen)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
@@ -150,7 +155,8 @@ size_t shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, 
     return 0;
 }
 
-int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
+int
+shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
@@ -173,7 +179,8 @@ int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
     return rc;
 }
 
-int shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen)
+int
+shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
@@ -237,7 +244,8 @@ shardcache_client_add(shardcache_client_t *c, void *key, size_t klen, void *data
      return _shardcache_client_set_internal(c, key, klen, data, dlen, expire, 1);
 }
 
-int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
+int
+shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
@@ -259,7 +267,8 @@ int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
     return rc;
 }
 
-int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
+int
+shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
@@ -283,7 +292,8 @@ int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
     return rc;
 }
 
-shardcache_node_t *shardcache_get_node(shardcache_client_t *c, char *node_name)
+shardcache_node_t *
+shardcache_get_node(shardcache_client_t *c, char *node_name)
 {
     shardcache_node_t *node = NULL;
 
@@ -303,7 +313,9 @@ shardcache_node_t *shardcache_get_node(shardcache_client_t *c, char *node_name)
 
     return node;
 }
-int shardcache_client_stats(shardcache_client_t *c, char *node_name, char **buf, size_t *len)
+
+int
+shardcache_client_stats(shardcache_client_t *c, char *node_name, char **buf, size_t *len)
 {
 
     shardcache_node_t *node = shardcache_get_node(c, node_name);
@@ -333,7 +345,8 @@ int shardcache_client_stats(shardcache_client_t *c, char *node_name, char **buf,
     return rc;
 }
 
-int shardcache_client_check(shardcache_client_t *c, char *node_name) {
+int
+shardcache_client_check(shardcache_client_t *c, char *node_name) {
     shardcache_node_t *node = shardcache_get_node(c, node_name);
     if (!node)
         return -1;
@@ -360,7 +373,8 @@ int shardcache_client_check(shardcache_client_t *c, char *node_name) {
     return rc;
 }
 
-void shardcache_client_destroy(shardcache_client_t *c)
+void
+shardcache_client_destroy(shardcache_client_t *c)
 {
     chash_free(c->chash);
     shardcache_free_nodes(c->shards, c->num_shards);
@@ -370,17 +384,20 @@ void shardcache_client_destroy(shardcache_client_t *c)
     free(c);
 }
 
-int shardcache_client_errno(shardcache_client_t *c)
+int
+shardcache_client_errno(shardcache_client_t *c)
 {
     return c->errno;
 }
 
-char *shardcache_client_errstr(shardcache_client_t *c)
+char *
+shardcache_client_errstr(shardcache_client_t *c)
 {
     return c->errstr;
 }
 
-shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *node_name)
+shardcache_storage_index_t *
+shardcache_client_index(shardcache_client_t *c, char *node_name)
 {
     shardcache_node_t *node = shardcache_get_node(c, node_name);
     if (!node)
@@ -409,7 +426,8 @@ shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char
     return index;
 }
 
-int shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t **nodes, int num_nodes)
+int
+shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t **nodes, int num_nodes)
 {
     fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
 
@@ -454,7 +472,8 @@ int shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t 
     return 0;
 }
 
-int shardcache_client_migration_abort(shardcache_client_t *c)
+int
+shardcache_client_migration_abort(shardcache_client_t *c)
 {
     int i;
     for (i = 0; i < c->num_shards; i++) {
@@ -486,11 +505,12 @@ int shardcache_client_migration_abort(shardcache_client_t *c)
     return 0;
 }
 
-int shardcache_client_get_async(shardcache_client_t *c,
-                                   void *key,
-                                   size_t klen,
-                                   shardcache_client_get_aync_data_cb data_cb,
-                                   void *priv)
+int
+shardcache_client_get_async(shardcache_client_t *c,
+                            void *key,
+                            size_t klen,
+                            shardcache_client_get_aync_data_cb data_cb,
+                            void *priv)
 {
     char *node = select_node(c, key, klen);
     int fd = connections_pool_get(c->connections, node);
@@ -503,11 +523,11 @@ int shardcache_client_get_async(shardcache_client_t *c,
     return fetch_from_peer_async(node, (char *)c->auth, SHC_HDR_CSIGNATURE_SIP, key, klen, 0, 0, data_cb, priv, fd, NULL);
 }
 
-shc_multi_item_t *shc_multi_item_create(shardcache_client_t *c,
-                                        void  *key,
-                                        size_t klen,
-                                        void  *data,
-                                        size_t dlen)
+shc_multi_item_t *
+shc_multi_item_create(void  *key,
+                      size_t klen,
+                      void  *data,
+                      size_t dlen)
 {
     shc_multi_item_t *item = calloc(1, sizeof(shc_multi_item_t));
     item->key = malloc(klen);
@@ -520,61 +540,19 @@ shc_multi_item_t *shc_multi_item_create(shardcache_client_t *c,
         item->dlen = dlen;
     }
 
-    item->c = c;
     return item;
 }
 
-void shc_multi_item_destroy(shc_multi_item_t *item)
+void
+shc_multi_item_destroy(shc_multi_item_t *item)
 {
     free(item->key);
     if (item->data)
         free(item->data);
 }
 
-static void *shc_get_multi(void *priv)
-{
-    linked_list_t *items = (linked_list_t *)priv;
-
-    shardcache_client_t *client = NULL;
-
-    int i;
-    for (i = 0; i < list_count(items); i++) {
-        shc_multi_item_t *item = pick_value(items, i);
-        if (!client)
-            client = shardcache_client_create(item->c->shards, item->c->num_shards, (char *)item->c->auth);
-        item->dlen = shardcache_client_get(client, item->key, item->klen, &item->data);
-    }
-    if (client)
-        shardcache_client_destroy(client);
-
-    return NULL;
-}
-
-static void *shc_set_multi(void *priv)
-{
-    linked_list_t *items = (linked_list_t *)priv;
-
-    shardcache_client_t *client = NULL;
-
-    int i;
-    for (i = 0; i < list_count(items); i++) {
-        shc_multi_item_t *item = pick_value(items, i);
-        if (!client)
-            client = shardcache_client_create(item->c->shards, item->c->num_shards, (char *)item->c->auth);
-        if (item->data && item->dlen)
-            item->status = shardcache_client_set(client, item->key, item->klen, item->data, item->dlen, item->expire);
-        else
-            item->status = shardcache_client_del(client, item->key, item->klen);
-
-    }
-    if (client)
-        shardcache_client_destroy(client);
-
-    return NULL;
-}
-
-static linked_list_t *shc_split_buckets(shardcache_client_t *c,
-                                        shc_multi_item_t **items)
+static linked_list_t *
+shc_split_buckets(shardcache_client_t *c, shc_multi_item_t **items)
 {
     linked_list_t *pools = create_list();
     int i;
@@ -603,54 +581,226 @@ static linked_list_t *shc_split_buckets(shardcache_client_t *c,
     return pools;
 }
 
-typedef void *(*thread_function_t) (void *);
 
-#define SHC_CLIENT_MULTI_GET 0
-#define SHC_CLIENT_MULTI_SET 1
-static int _shardcache_client_multi(shardcache_client_t *c,
-                                    shc_multi_item_t **items,
-                                    char cmd)
+typedef struct {
+    char *peer;
+    fbuf_t *commands;
+    shc_multi_item_t **items;
+    async_read_ctx_t *reader; 
+    int data_offset;
+    int response_index;
+    int num_requests;
+    shardcache_hdr_t cmd;
+} shc_multi_ctx_t;
+
+static int
+shc_multi_collect_data(void *data, size_t len, int idx, void *priv)
 {
-
-    thread_function_t fn;
-    switch(cmd) {
-        case SHC_CLIENT_MULTI_GET:
-            fn = shc_get_multi;
-            break;
-        case SHC_CLIENT_MULTI_SET:
-            fn = shc_set_multi;
-            break;
-        default:
-            SHC_ERROR("Unkown multi-action %d", cmd);
-            return -1;
+    shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
+    shc_multi_item_t *item = ctx->items[ctx->response_index];
+    if (idx == 0 && len) {
+        if (ctx->cmd == SHC_HDR_GET) {
+            item->data = realloc(item->data, ctx->data_offset + len);
+            memcpy(item->data + ctx->data_offset, data, len);
+            ctx->data_offset += len;
+        } else {
+            if (len == 1) {
+                item->status = (int)*((char *)data);
+            }
+        }
     }
+    return 0;
+}
 
+static void
+shc_multi_context_destroy(shc_multi_ctx_t *ctx)
+{
+    async_read_context_destroy(ctx->reader);
+    fbuf_free(ctx->commands);
+    free(ctx->items);
+    free(ctx);
+}
+
+static shc_multi_ctx_t *
+shc_multi_context_create(shardcache_hdr_t cmd, char *secret, char *peer, linked_list_t *items)
+{
+    shc_multi_ctx_t *ctx = calloc(1, sizeof(shc_multi_ctx_t));
+    ctx->commands = fbuf_create(0);
+    ctx->num_requests = list_count(items);
+    ctx->items = calloc(1, sizeof(shc_multi_item_t *) * ctx->num_requests);
+    ctx->reader = async_read_context_create(secret, shc_multi_collect_data, ctx);
+    ctx->cmd = cmd;
+    int n;
+    for (n = 0; n < ctx->num_requests; n++) {
+        shc_multi_item_t *item = pick_value(items, n);
+        ctx->items[n] = item;
+        
+        shardcache_record_t record[3] = {
+            {
+                .v = item->key,
+                .l = item->klen
+            },
+            {
+                .v = NULL,
+                .l = 0
+            },
+            {
+                .v = NULL,
+                .l = 0
+            }
+        };
+        int num_records = 1;
+        unsigned char sig_hdr = secret ? SHC_HDR_SIGNATURE_SIP : 0;
+
+        if (cmd == SHC_HDR_SET) {
+            record[1].v = item->data;
+            record[1].l = item->dlen;
+            num_records = 2;
+            if (item->expire) {
+                uint32_t expire_nbo = ntohl(item->expire);
+                record[2].v = &expire_nbo;
+                record[2].l = sizeof(uint32_t);
+                num_records = 3;
+            }
+        }
+
+        if (build_message(secret, sig_hdr, cmd, record, num_records, ctx->commands) != 0) {
+            fprintf(stderr, "Can't create new command!\n");
+            fbuf_free(ctx->commands);
+            free(ctx->items);
+            async_read_context_destroy(ctx->reader);
+            free(ctx);
+            return NULL;
+        }
+    }
+    return ctx;
+}
+
+
+static void
+shc_multi_close_connection(iomux_t *iomux, int fd, void *priv)
+{
+    shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
+    shc_multi_context_destroy(ctx);
+    close(fd);
+    if (iomux_isempty(iomux))
+        iomux_end_loop(iomux);
+}
+
+int
+shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
+{
+    shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
+    int processed = 0;
+    
+    //printf("received %d\n", len);
+    async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
+    while (state == SHC_STATE_READING_DONE) {
+        ctx->data_offset = 0;
+        ctx->response_index++;
+        state = async_read_context_update(ctx->reader);
+    }
+    if (state == SHC_STATE_READING_ERR) {
+        fprintf(stderr, "Async context returned error\n");
+        iomux_close(iomux, fd);
+    }
+    if (ctx->response_index == ctx->num_requests)
+        iomux_close(iomux, fd);
+
+    return len;
+}
+
+void
+shc_multi_send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *priv)
+{
+    shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
+    fbuf_t *output_buffer = ctx->commands;
+
+    // flush as much as we can
+    if (fbuf_used(output_buffer)) {
+        if (*len > fbuf_used(output_buffer)) {
+            *len = fbuf_used(output_buffer);
+            memcpy(data, fbuf_data(output_buffer), *len);
+            fbuf_clear(output_buffer);
+        } else {
+            memcpy(data, fbuf_data(output_buffer), *len);
+            fbuf_remove(output_buffer, *len);
+        }
+    } else {
+        *len = 0;
+    }
+}
+
+static int
+_shardcache_client_multi(shardcache_client_t *c,
+                         shc_multi_item_t **items,
+                         shardcache_hdr_t cmd)
+{
     linked_list_t *pools = shc_split_buckets(c, items);
 
+    iomux_t *iomux = iomux_create(0, 0);
     uint32_t count = list_count(pools);
-    pthread_t getters[count];
-
     int i;
-    for (i = 0; i < count; i++)
-        pthread_create(&getters[i], NULL, fn, pick_tagged_value(pools, i)->value);
+    for (i = 0; i < count; i++) {
 
-    for (i = 0; i < count; i++)
-        pthread_join(getters[i], NULL);
+        tagged_value_t *tval = pick_tagged_value(pools, i);
+        linked_list_t *items = (linked_list_t *)tval->value;
+        shc_multi_ctx_t *ctx = shc_multi_context_create(cmd, (char *)c->auth, tval->tag, items);
+        if (!ctx) {
+            iomux_destroy(iomux);
+            destroy_list(pools);
+            return -1;
+        }
 
+        iomux_callbacks_t cbs = {
+            .mux_output = shc_multi_send_command,
+            .mux_timeout = NULL,
+            .mux_input = shc_multi_fetch_response,
+            .mux_eof = shc_multi_close_connection,
+            .priv = ctx
+        };
+
+        shardcache_node_t *node = shardcache_get_node(c, tval->tag);
+        if (!node) {
+            shc_multi_context_destroy(ctx);
+            iomux_destroy(iomux);
+            destroy_list(pools);
+            return -1;
+        }
+
+        char *addr = shardcache_node_get_address(node);
+        int fd = connections_pool_get(c->connections, addr);
+        if (fd < 0) {
+            c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
+            snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
+            shc_multi_context_destroy(ctx);
+            iomux_destroy(iomux);
+            destroy_list(pools);
+            return -1;
+        }
+
+        iomux_add(iomux, fd, &cbs);
+    }
+
+    struct timeval tv = { 1, 0 };
+    iomux_loop(iomux, &tv);
+    iomux_destroy(iomux);
     destroy_list(pools);
     return 0;
 }
 
-int shardcache_client_get_multi(shardcache_client_t *c,
-                                shc_multi_item_t **items)
+int
+shardcache_client_get_multi(shardcache_client_t *c,
+                            shc_multi_item_t **items)
 
 {
-    return _shardcache_client_multi(c, items, SHC_CLIENT_MULTI_GET);
+    return _shardcache_client_multi(c, items, SHC_HDR_GET);
 }
 
-int shardcache_client_set_multi(shardcache_client_t *c,
-                                shc_multi_item_t **items)
+int
+shardcache_client_set_multi(shardcache_client_t *c,
+                            shc_multi_item_t **items)
 
 {
-    return _shardcache_client_multi(c, items, SHC_CLIENT_MULTI_SET);
+    return _shardcache_client_multi(c, items, SHC_HDR_SET);
 }

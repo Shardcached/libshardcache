@@ -163,7 +163,7 @@ int main(int argc, char **argv)
     for (i = 0; i < 10; i++) {
         char key[32];
         snprintf(key, sizeof(key), "test_key%d", 100+i);
-        items[i] = shc_multi_item_create(client, key, strlen(key), NULL, 0);
+        items[i] = shc_multi_item_create(key, strlen(key), NULL, 0);
     }
     items[10] = NULL; // null-terminate it
 
@@ -192,7 +192,7 @@ int main(int argc, char **argv)
         char value[32];
         snprintf(key, sizeof(key), "test_key%d", 200+i);
         snprintf(value, sizeof(value), "test_value%d", 200+i);
-        items[i] = shc_multi_item_create(client, key, strlen(key), value, strlen(value));
+        items[i] = shc_multi_item_create(key, strlen(key), value, strlen(value));
     }
 
     ut_testing("shardcache_client_set_multi(c, items)");

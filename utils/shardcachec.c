@@ -166,7 +166,7 @@ int main (int argc, char **argv) {
         shc_multi_item_t *items[num_keys+1];
         int i;
         for (i = 0; i < num_keys; i++) {
-            items[i] = shc_multi_item_create(client, keys[i], strlen(keys[i]), NULL, 0);
+            items[i] = shc_multi_item_create(keys[i], strlen(keys[i]), NULL, 0);
         }
         items[num_keys] = NULL;
 

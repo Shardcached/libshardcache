@@ -288,7 +288,6 @@ typedef struct {
     size_t dlen;
     int status;
     uint32_t expire;
-    shardcache_client_t *c;
 } shc_multi_item_t;
 
 /**
@@ -306,8 +305,7 @@ typedef struct {
  *       shc_multi_item_destroy() when done with it
  *
  */
-shc_multi_item_t *shc_multi_item_create(shardcache_client_t *c,
-                                        void  *key,
+shc_multi_item_t *shc_multi_item_create(void  *key,
                                         size_t klen,
                                         void  *data,
                                         size_t dlen);
