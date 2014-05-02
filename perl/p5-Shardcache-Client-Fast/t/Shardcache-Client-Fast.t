@@ -29,6 +29,8 @@ unless($ENV{SHC_HOSTS}) {
 my @nodes = split(',', $ENV{SHC_HOSTS});
 my $c = Shardcache::Client::Fast->new(\@nodes, $ENV{SHC_SECRET});
 
+ok($c->tcp_timeout(5000) > 0);
+
 # set some keys on the first one
 my $rc = $c->set("test_key1", "test_value1");
 is($rc, 1, "set(test_key1, test_value1)");

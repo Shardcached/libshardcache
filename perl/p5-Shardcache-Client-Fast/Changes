@@ -1,5 +1,8 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.08  Fri May  2 12:02:43 CEST 2014
+        - Allow to set the tcp timeout of the underlying shardcache_client instance
+
 0.07  Fri Mar 28 09:46:07 CET 2014
         - updated to be conform to the new libshardcache API (0.10)
 

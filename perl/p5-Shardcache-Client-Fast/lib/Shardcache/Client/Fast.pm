@@ -14,34 +14,35 @@ our @ISA = qw(Exporter);
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
 
-# This allows declaration	use Shardcache::Client::Fast ':all';
+# This allows declaration use Shardcache::Client::Fast ':all';
 # If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
 # will save memory.
 our %EXPORT_TAGS = ( 'all' => [ qw(
-    shardcache_client_create
-    shardcache_client_del
-    shardcache_client_destroy
-    shardcache_client_evict
-    shardcache_client_get
-    shardcache_client_get_async
-    shardcache_client_touch
-    shardcache_client_exists
-    shardcache_client_set
-    shardcache_client_add
-    shardcache_client_check
-    shardcache_client_index
-    shardcache_client_stats
-    shardcache_client_errno
-    shardcache_client_errstr
+        shardcache_client_create
+        shardcache_client_del
+        shardcache_client_destroy
+        shardcache_client_evict
+        shardcache_client_get
+        shardcache_client_get_async
+        shardcache_client_touch
+        shardcache_client_exists
+        shardcache_client_set
+        shardcache_client_add
+        shardcache_client_check
+        shardcache_client_index
+        shardcache_client_stats
+        shardcache_client_errno
+        shardcache_client_errstr
+        shardcache_client_tcp_timeout
 ) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 
 our @EXPORT = qw(
-
+    
 );
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -54,14 +55,14 @@ sub AUTOLOAD {
     my ($error, $val) = constant($constname);
     if ($error) { croak $error; }
     {
-    no strict 'refs';
-    # Fixed between 5.005_53 and 5.005_61
-#XXX    if ($] >= 5.00561) {
-#XXX        *$AUTOLOAD = sub () { $val };
-#XXX    }
-#XXX    else {
+        no strict 'refs';
+        # Fixed between 5.005_53 and 5.005_61
+#XXX        if ($] >= 5.00561) {
+#XXX            *$AUTOLOAD = sub () { $val };
+#XXX        }
+#XXX        else {
             *$AUTOLOAD = sub { $val };
-#XXX    }
+#XXX        }
     }
     goto &$AUTOLOAD;
 }
@@ -118,6 +119,11 @@ sub new {
     bless $self, $class;
 
     return $self;
+}
+
+sub tcp_timeout {
+    my ($self, $new_value) = @_;
+    return shardcache_client_tcp_timeout($self->{_client}, $new_value);
 }
 
 sub get {
@@ -492,6 +498,7 @@ None by default.
   int shardcache_client_add(shardcache_client_t *c, void *key, size_t klen)
   int shardcache_client_stats(shardcache_client_t *c, char *node, char **buf, size_t *len);
   int shardcache_client_check(shardcache_client_t *c, char *node);
+  int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value);
   shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *node);
   int shardcache_client_errno(shardcache_client_t *c)
   char *shardcache_client_errstr(shardcache_client_t *c)
