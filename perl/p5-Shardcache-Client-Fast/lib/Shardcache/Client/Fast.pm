@@ -472,7 +472,7 @@ None by default.
     Returns an arrayref containing the values for the requested keys. Values are stored at the same index of the
     corresponding key in the input array. Empty or unretrieved values will be returned as undef.
 
-    Note that multi commands are not all‐or‐nothing, some operations may succeed, while others may fail.
+    Note that multi-commands are not all-or-nothing, some operations may succeed, while others may fail.
 
 =item * set_multi ( %$pairs )
 
@@ -480,7 +480,7 @@ None by default.
     Returns an hashref containing the same keys of the input hashref as keys and the status of the operation as values
     (1 if successfully set, 0 otherwise).
 
-    Note that multi commands are not all‐or‐nothing, some operations may succeed, while others may fail.
+    Note that multi-commands are not all-or-nothing, some operations may succeed, while others may fail.
 
 =back
 
