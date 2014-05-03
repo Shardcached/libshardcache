@@ -763,7 +763,7 @@ shardcache_select_worker(shardcache_serving_t *serv)
     if (ATOMIC_READ(serv->leave))
         return NULL;
 
-    shardcache_worker_context_t *wrk = pick_value(serv->workers,
+    shardcache_worker_context_t *wrk = list_pick_value(serv->workers,
             __sync_fetch_and_add(&serv->next_worker_index, 1)%list_count(serv->workers));
 
     return wrk;
@@ -942,7 +942,7 @@ shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
         if (TAILQ_FIRST(&ctx->requests) != NULL) {
             ctx->closed = 1;
             gettimeofday(&ctx->in_prune_since, NULL);
-            push_value(ctx->worker->prune, ctx);
+            list_push_value(ctx->worker->prune, ctx);
             return;
         }
         shardcache_connection_context_destroy(ctx);
@@ -1006,7 +1006,7 @@ worker(void *priv)
 
         int to_check = list_count(wrkctx->prune);
         while (to_check--) {
-            shardcache_connection_context_t *to_prune = shift_value(wrkctx->prune);
+            shardcache_connection_context_t *to_prune = list_shift_value(wrkctx->prune);
             shardcache_request_t *req = TAILQ_FIRST(&to_prune->requests);
             int done = 0;
             if (req) {
@@ -1024,7 +1024,7 @@ worker(void *priv)
             if (done || timercmp(&diff, &quarantine, >)) {
                 shardcache_connection_context_destroy(to_prune);
             } else {
-                push_value(wrkctx->prune, to_prune);
+                list_push_value(wrkctx->prune, to_prune);
             }
         }
 
@@ -1126,7 +1126,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
     free(addr); // we don't need it anymore
 
     // create the workers' pool
-    s->workers = create_list();
+    s->workers = list_create();
 
     if (s->counters) {
         shardcache_counter_add(s->counters, "connections", &s->num_connections);
@@ -1140,8 +1140,8 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
         wrk->jobs = queue_create();
         queue_set_free_value_callback(wrk->jobs,
                 (queue_free_value_callback_t)shardcache_connection_context_destroy);
-        wrk->prune = create_list();
-        set_free_value_callback(wrk->prune, (free_value_callback_t)shardcache_connection_context_destroy);
+        wrk->prune = list_create();
+        list_set_free_value_callback(wrk->prune, (free_value_callback_t)shardcache_connection_context_destroy);
 
         char label[64];
         snprintf(label, sizeof(label), "worker[%d].numfds", i);
@@ -1153,7 +1153,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
         CONDITION_INIT(&wrk->wakeup_cond);
         wrk->iomux = iomux_create(1<<13, 0);
         pthread_create(&wrk->thread, NULL, worker, wrk);
-        push_value(s->workers, wrk);
+        list_push_value(s->workers, wrk);
         ATOMIC_INCREMENT(s->total_workers);
     }
 
@@ -1173,7 +1173,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache,
 static void
 clear_workers_list(linked_list_t *list)
 {
-    shardcache_worker_context_t *wrk = shift_value(list);
+    shardcache_worker_context_t *wrk = list_shift_value(list);
 
     int cnt = 0;
     while (wrk) {
@@ -1190,7 +1190,7 @@ clear_workers_list(linked_list_t *list)
         CONDITION_DESTROY(&wrk->wakeup_cond);
         SHC_DEBUG3("Worker thread %p exited", wrk);
 
-        shardcache_connection_context_t *ctx = shift_value(wrk->prune);
+        shardcache_connection_context_t *ctx = list_shift_value(wrk->prune);
         while (ctx) {
             shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
             while (req) {
@@ -1200,7 +1200,7 @@ clear_workers_list(linked_list_t *list)
                 req = TAILQ_FIRST(&ctx->requests);
             }
             shardcache_connection_context_destroy(ctx);
-            ctx = shift_value(wrk->prune);
+            ctx = list_shift_value(wrk->prune);
         }
 
         char label[64];
@@ -1212,10 +1212,10 @@ clear_workers_list(linked_list_t *list)
 
         iomux_destroy(wrk->iomux);
 
-        destroy_list(wrk->prune);
+        list_destroy(wrk->prune);
 
         free(wrk);
-        wrk = shift_value(list);
+        wrk = list_shift_value(list);
     }
 
 }
@@ -1242,7 +1242,7 @@ stop_serving(shardcache_serving_t *s)
     pthread_join(s->io_thread, NULL);
 
     iomux_destroy(s->io_mux);
-    destroy_list(s->workers);
+    list_destroy(s->workers);
 
     free(s);
 }

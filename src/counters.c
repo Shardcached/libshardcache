@@ -12,21 +12,21 @@ struct __shardcache_counters_s {
 shardcache_counters_t *shardcache_init_counters()
 {
     shardcache_counters_t *c = calloc(1, sizeof(shardcache_counters_t));
-    c->lookup = create_list();
+    c->lookup = list_create();
     return c;
 }
 
 void shardcache_release_counters(shardcache_counters_t *c)
 {
-    destroy_list(c->lookup);
+    list_destroy(c->lookup);
     free(c);
 }
 
 void
 shardcache_counter_add(shardcache_counters_t *c, const char *name, const uint64_t *counter_ptr)
 {
-    tagged_value_t *tval = create_tagged_value_nocopy((char *)name, (void *)counter_ptr);
-    push_tagged_value(c->lookup, tval);
+    tagged_value_t *tval = list_create_tagged_value_nocopy((char *)name, (void *)counter_ptr);
+    list_push_tagged_value(c->lookup, tval);
 }
 
 void
@@ -34,10 +34,10 @@ shardcache_counter_remove(shardcache_counters_t *c, const char *name)
 {
     int i;
     for (i = 0; i < list_count(c->lookup); i++) {
-        tagged_value_t *tval = pick_tagged_value(c->lookup, i);
+        tagged_value_t *tval = list_pick_tagged_value(c->lookup, i);
         if (strcmp(tval->tag, name) == 0) {
-            tval = fetch_tagged_value(c->lookup, i);
-            destroy_tagged_value(tval);
+            tval = list_fetch_tagged_value(c->lookup, i);
+            list_destroy_tagged_value(tval);
             break;
         }  
     }
@@ -56,7 +56,7 @@ shardcache_get_all_counters(shardcache_counters_t *c, shardcache_counter_t **out
     size_t size = sizeof(shardcache_counter_t) * COUNTERS_ALLOC_CHUNK;
     shardcache_counter_t *counters = malloc(sizeof(shardcache_counter_t) * COUNTERS_ALLOC_CHUNK);
     for (i = 0; i < list_count(c->lookup); i++) {
-        tagged_value_t *tval = pick_tagged_value(c->lookup, i);
+        tagged_value_t *tval = list_pick_tagged_value(c->lookup, i);
         if (i == (size/sizeof(shardcache_counter_t))-1) {
             size += (sizeof(shardcache_counter_t) * COUNTERS_ALLOC_CHUNK);
             counters = realloc(counters, size);
@@ -73,7 +73,7 @@ shardcache_get_all_counters(shardcache_counters_t *c, shardcache_counter_t **out
 int
 shardcache_counter_value_add(shardcache_counters_t *c, char *name, int value)
 {
-    tagged_value_t *tval = get_tagged_value(c->lookup, name);
+    tagged_value_t *tval = list_get_tagged_value(c->lookup, name);
     if (tval)
         return __sync_fetch_and_add((uint64_t *)tval->value, value);
     return 0;
@@ -82,7 +82,7 @@ shardcache_counter_value_add(shardcache_counters_t *c, char *name, int value)
 int
 shardcache_counter_value_sub(shardcache_counters_t *c, char *name, int value)
 {
-    tagged_value_t *tval = get_tagged_value(c->lookup, name);
+    tagged_value_t *tval = list_get_tagged_value(c->lookup, name);
     if (tval)
         return __sync_fetch_and_sub((uint64_t *)tval->value, value);
     return 0;
@@ -91,7 +91,7 @@ shardcache_counter_value_sub(shardcache_counters_t *c, char *name, int value)
 int
 shardcache_counter_value_set(shardcache_counters_t *c, char *name, int value)
 {
-    tagged_value_t *tval = get_tagged_value(c->lookup, name);
+    tagged_value_t *tval = list_get_tagged_value(c->lookup, name);
     if (tval) {
         int b = 0;
         int old = __sync_fetch_and_add((uint64_t *)tval->value, 0);

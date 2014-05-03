@@ -67,7 +67,7 @@ arc_ops_evict_object(shardcache_t *cache, cached_object_t *obj)
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
     }
     obj->flags = COBJ_FLAG_EVICTED; // reset all flags but leave the EVICTED bit on
-    clear_list(obj->listeners);
+    list_clear(obj->listeners);
 }
 
 typedef struct
@@ -98,21 +98,21 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
 
     MUTEX_LOCK(&obj->lock);
     if (!obj->res) {
-        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
         return -1;
     }
     arc_retain_resource(cache->arc, obj->res);
     if (!obj->listeners) {
-        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, obj->res);
         return -1;
     }
     if (error) {
-        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         close(fd);
         free(arg);
@@ -129,9 +129,9 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             .data = data,
             .len = len
         };
-        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
+        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
     } else {
-        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
+        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
         COBJ_SET_FLAG(obj, COBJ_FLAG_COMPLETE);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         complete = 1;
@@ -227,8 +227,8 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
 
         } else {
             if (obj->listeners) {
-                foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-                clear_list(obj->listeners);
+                list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+                list_clear(obj->listeners);
             }
 
             COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
@@ -276,8 +276,8 @@ arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void
     obj->res = res;
     if (async) {
         COBJ_SET_FLAG(obj, COBJ_FLAG_ASYNC);
-        obj->listeners = create_list();
-        set_free_value_callback(obj->listeners, free);
+        obj->listeners = list_create();
+        list_set_free_value_callback(obj->listeners, free);
     }
     MUTEX_INIT(&obj->lock);
     obj->arc = cache->arc;
@@ -402,7 +402,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
 
     if (!obj->data) {
         if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC) && obj->listeners)
-            foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
+            list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
 
         MUTEX_UNLOCK(&obj->lock);
         SHC_DEBUG("Item not found for key %s", keystr);
@@ -416,8 +416,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             .data = obj->data,
             .len = obj->dlen
         };
-        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
-        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
+        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
+        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
         if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
             arc_ops_evict_object(cache, obj);
     }
@@ -460,8 +460,8 @@ arc_ops_destroy(void *item, void *priv)
         //       but in case of race conditions or bugs which would end up registering
         //       listeners when they shouldn't, at least we notify back an error instead
         //       of making them wait forever
-        foreach_list_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-        destroy_list(obj->listeners);
+        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+        list_destroy(obj->listeners);
     }
     MUTEX_UNLOCK(&obj->lock);
 

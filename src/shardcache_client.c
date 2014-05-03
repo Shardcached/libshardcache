@@ -554,7 +554,7 @@ shc_multi_item_destroy(shc_multi_item_t *item)
 static linked_list_t *
 shc_split_buckets(shardcache_client_t *c, shc_multi_item_t **items)
 {
-    linked_list_t *pools = create_list();
+    linked_list_t *pools = list_create();
     int i;
     for(i = 0; items[i]; i++) {
         const char *node_name;
@@ -567,14 +567,14 @@ shc_split_buckets(shardcache_client_t *c, shc_multi_item_t **items)
         char name_string[name_len+1];
         snprintf(name_string, name_len+1, "%s", node_name);
 
-        tagged_value_t *tval = get_tagged_value(pools, name_string);
+        tagged_value_t *tval = list_get_tagged_value(pools, name_string);
         if (!tval) {
-            linked_list_t *sublist = create_list();
-            tval = create_tagged_sublist(name_string, sublist);
-            push_tagged_value(pools, tval);
+            linked_list_t *sublist = list_create();
+            tval = list_create_tagged_sublist(name_string, sublist);
+            list_push_tagged_value(pools, tval);
         }
 
-        push_value((linked_list_t *)tval->value, item);
+        list_push_value((linked_list_t *)tval->value, item);
 
     }
 
@@ -632,7 +632,7 @@ shc_multi_context_create(shardcache_hdr_t cmd, char *secret, char *peer, linked_
     ctx->cmd = cmd;
     int n;
     for (n = 0; n < ctx->num_requests; n++) {
-        shc_multi_item_t *item = pick_value(items, n);
+        shc_multi_item_t *item = list_pick_value(items, n);
         ctx->items[n] = item;
         
         shardcache_record_t record[3] = {
@@ -743,12 +743,12 @@ _shardcache_client_multi(shardcache_client_t *c,
     int i;
     for (i = 0; i < count; i++) {
 
-        tagged_value_t *tval = pick_tagged_value(pools, i);
+        tagged_value_t *tval = list_pick_tagged_value(pools, i);
         linked_list_t *items = (linked_list_t *)tval->value;
         shc_multi_ctx_t *ctx = shc_multi_context_create(cmd, (char *)c->auth, tval->tag, items);
         if (!ctx) {
             iomux_destroy(iomux);
-            destroy_list(pools);
+            list_destroy(pools);
             return -1;
         }
 
@@ -764,7 +764,7 @@ _shardcache_client_multi(shardcache_client_t *c,
         if (!node) {
             shc_multi_context_destroy(ctx);
             iomux_destroy(iomux);
-            destroy_list(pools);
+            list_destroy(pools);
             return -1;
         }
 
@@ -775,7 +775,7 @@ _shardcache_client_multi(shardcache_client_t *c,
             snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
             shc_multi_context_destroy(ctx);
             iomux_destroy(iomux);
-            destroy_list(pools);
+            list_destroy(pools);
             return -1;
         }
 
@@ -785,7 +785,7 @@ _shardcache_client_multi(shardcache_client_t *c,
     struct timeval tv = { 1, 0 };
     iomux_loop(iomux, &tv);
     iomux_destroy(iomux);
-    destroy_list(pools);
+    list_destroy(pools);
     return 0;
 }
 

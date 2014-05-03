@@ -955,7 +955,7 @@ shardcache_get_offset_async(shardcache_t *cache,
         shardcache_get_listener_t *listener = malloc(sizeof(shardcache_get_listener_t));
         listener->cb = shardcache_get_async_helper;
         listener->priv = arg;
-        push_value(obj->listeners, listener);
+        list_push_value(obj->listeners, listener);
         MUTEX_UNLOCK(&obj->lock);
     }
 
@@ -1078,7 +1078,7 @@ shardcache_get_async(shardcache_t *cache,
         shardcache_get_listener_t *listener = malloc(sizeof(shardcache_get_listener_t));
         listener->cb = shardcache_get_async_helper;
         listener->priv = arg;
-        push_value(obj->listeners, listener);
+        list_push_value(obj->listeners, listener);
         MUTEX_UNLOCK(&obj->lock);
     }
 
@@ -2096,7 +2096,7 @@ migrate(void *priv)
 
     shardcache_storage_index_t *index = shardcache_get_index(cache);
     int aborted = 0;
-    linked_list_t *to_delete = create_list();
+    linked_list_t *to_delete = list_create();
 
     uint64_t migrated_items = 0;
     uint64_t scanned_items = 0;
@@ -2159,7 +2159,7 @@ migrate(void *priv)
                         if (rc == 0) {
                             shardcache_release_connection_for_peer(cache, addr, fd);
                             ATOMIC_INCREMENT(migrated_items);
-                            push_value(to_delete, &index->items[i]);
+                            list_push_value(to_delete, &index->items[i]);
                         } else {
                             close(fd);
                             SHC_WARNING("Errors copying %s to peer %s (%s)", keystr, node_name, addr);
@@ -2182,7 +2182,7 @@ migrate(void *priv)
 
     if (!aborted) {
             SHC_INFO("Migration completed, now removing not-owned  items");
-        shardcache_storage_index_item_t *item = shift_value(to_delete);
+        shardcache_storage_index_item_t *item = list_shift_value(to_delete);
         while (item) {
             if (cache->storage.remove)
                 cache->storage.remove(item->key, item->klen, cache->storage.priv);
@@ -2191,7 +2191,7 @@ migrate(void *priv)
             KEY2STR(item->key, item->klen, ikeystr, sizeof(ikeystr));
             SHC_DEBUG2("removed item %s", ikeystr);
 
-            item = shift_value(to_delete);
+            item = list_shift_value(to_delete);
         }
 
         // and now let's expire all the volatile keys that don't belong to us anymore
@@ -2199,7 +2199,7 @@ migrate(void *priv)
         //ATOMIC_SET(cache->next_expire, 0);
     }
 
-    destroy_list(to_delete);
+    list_destroy(to_delete);
 
     SPIN_LOCK(&cache->migration_lock);
     cache->migration_done = 1;
