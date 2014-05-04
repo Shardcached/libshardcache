@@ -12,7 +12,6 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <limits.h>
 #include <regex.h>
 
 #include "shardcache.h"
