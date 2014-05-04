@@ -37,6 +37,8 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t **nodes, int num
  */
 int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value);
 
+int shardcache_client_use_random_node(shardcache_client_t *c, int new_value);
+
 /**
  * @brief Get the value for a key
  * @param c       A valid pointer to a shardcache_client_t structure

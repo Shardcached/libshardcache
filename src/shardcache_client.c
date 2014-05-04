@@ -5,18 +5,22 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <limits.h>
 #include <chash.h>
 #include <fbuf.h>
 #include <rbuf.h>
 #include <linklist.h>
 #include <iomux.h>
 
-#include <pthread.h>
-
 #include "connections.h"
 #include "messaging.h"
 #include "connections_pool.h"
 #include "shardcache_client.h"
+
+#ifdef BSD
+#  define random() arc4random()
+#endif
 
 typedef struct chash_t chash_t;
 
@@ -26,6 +30,8 @@ struct shardcache_client_s {
     connections_pool_t *connections;
     int num_shards;
     const char *auth;
+    int use_random_node;
+    shardcache_node_t *current_node;
     int errno;
     char errstr[1024];
 };
@@ -34,6 +40,13 @@ int
 shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value)
 {
     return connections_pool_tcp_timeout(c->connections, new_value);
+}
+
+int shardcache_client_use_random_node(shardcache_client_t *c, int new_value)
+{
+    int old_value = c->use_random_node;
+    c->use_random_node = new_value;
+    return old_value;
 }
 
 shardcache_client_t *
@@ -69,21 +82,51 @@ shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth)
     return c;
 }
 
-char *
-select_node(shardcache_client_t *c, void *key, size_t klen)
+static inline char *
+select_node(shardcache_client_t *c, void *key, size_t klen, int *fd)
 {
     const char *node_name;
     size_t name_len = 0;
     int i;
     char *addr = NULL;
-    chash_lookup(c->chash, key, klen, &node_name, &name_len);
+    shardcache_node_t *node = NULL;
 
-    for (i = 0; i < c->num_shards; i++) {
-        if (strncmp(node_name, shardcache_node_get_label(c->shards[i]), name_len) == 0) {
-            addr = shardcache_node_get_address(c->shards[i]);
-            break;
+    if (c->num_shards == 1) {
+        node = c->shards[0];
+    } else if (c->use_random_node) {
+        node = c->current_node;
+        if (!node) {
+            node = c->shards[random()%c->num_shards];
+            c->current_node = node;
+        }
+    } else {
+        chash_lookup(c->chash, key, klen, &node_name, &name_len);
+
+        for (i = 0; i < c->num_shards; i++) {
+            if (strncmp(node_name, shardcache_node_get_label(c->shards[i]), name_len) == 0) {
+                node = c->shards[i];
+                break;
+            }
         }
     }
+
+    if (node)
+        addr = shardcache_node_get_address(node);
+        if (fd) { 
+            int retries = 3;
+            do {
+                *fd = connections_pool_get(c->connections, addr);
+                if (*fd < 0 && c->use_random_node && c->num_shards > 1) {
+                    shardcache_node_t *prev = node;
+                    do {
+                        node = c->shards[random()%c->num_shards];
+                    } while (node == prev);
+                    c->current_node = node;
+                    addr = shardcache_node_get_address(node);
+                }
+            } while (*fd < 0 && retries--);
+
+        }
 
     return addr;
 }
@@ -91,8 +134,8 @@ select_node(shardcache_client_t *c, void *key, size_t klen)
 size_t
 shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data)
 {
-    char *node = select_node(c, key, klen);
-    int fd = connections_pool_get(c->connections, node);
+    int fd = -1;
+    char *node = select_node(c, key, klen, &fd);
     if (fd < 0) {
         c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
@@ -125,8 +168,8 @@ shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **dat
 size_t
 shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, uint32_t offset, void *data, uint32_t dlen)
 {
-    char *node = select_node(c, key, klen);
-    int fd = connections_pool_get(c->connections, node);
+    int fd = -1;
+    char *node = select_node(c, key, klen, &fd);
     if (fd < 0) {
         c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
@@ -158,8 +201,8 @@ shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, uint32_
 int
 shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
 {
-    char *node = select_node(c, key, klen);
-    int fd = connections_pool_get(c->connections, node);
+    int fd = -1;
+    char *node = select_node(c, key, klen, &fd);
     if (fd < 0) {
         c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
@@ -182,8 +225,8 @@ shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
 int
 shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen)
 {
-    char *node = select_node(c, key, klen);
-    int fd = connections_pool_get(c->connections, node);
+    int fd = -1;
+    char *node = select_node(c, key, klen, &fd);
     if (fd < 0) {
         c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
@@ -203,11 +246,11 @@ shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen)
     return rc;
 }
 
-static int
-_shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire, int inx)
+static inline int
+shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire, int inx)
 {
-    char *node = select_node(c, key, klen);
-    int fd = connections_pool_get(c->connections, node);
+    int fd = -1;
+    char *node = select_node(c, key, klen, &fd);
     if (fd < 0) {
         c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
@@ -235,20 +278,20 @@ _shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, 
 int
 shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
 {
-     return _shardcache_client_set_internal(c, key, klen, data, dlen, expire, 0);
+     return shardcache_client_set_internal(c, key, klen, data, dlen, expire, 0);
 }
 
 int
 shardcache_client_add(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
 {
-     return _shardcache_client_set_internal(c, key, klen, data, dlen, expire, 1);
+     return shardcache_client_set_internal(c, key, klen, data, dlen, expire, 1);
 }
 
 int
 shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
 {
-    char *node = select_node(c, key, klen);
-    int fd = connections_pool_get(c->connections, node);
+    int fd = -1;
+    char *node = select_node(c, key, klen, &fd);
     if (fd < 0) {
         c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
@@ -270,8 +313,8 @@ shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
 int
 shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
 {
-    char *node = select_node(c, key, klen);
-    int fd = connections_pool_get(c->connections, node);
+    int fd = -1;
+    char *node = select_node(c, key, klen, &fd);
     if (fd < 0) {
         c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
@@ -292,7 +335,7 @@ shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
     return rc;
 }
 
-shardcache_node_t *
+static inline shardcache_node_t *
 shardcache_get_node(shardcache_client_t *c, char *node_name)
 {
     shardcache_node_t *node = NULL;
@@ -512,8 +555,8 @@ shardcache_client_get_async(shardcache_client_t *c,
                             shardcache_client_get_aync_data_cb data_cb,
                             void *priv)
 {
-    char *node = select_node(c, key, klen);
-    int fd = connections_pool_get(c->connections, node);
+    int fd = -1;
+    char *node = select_node(c, key, klen, &fd);
     if (fd < 0) {
         c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
@@ -731,8 +774,8 @@ shc_multi_send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, vo
     }
 }
 
-static int
-_shardcache_client_multi(shardcache_client_t *c,
+static inline int
+shardcache_client_multi(shardcache_client_t *c,
                          shc_multi_item_t **items,
                          shardcache_hdr_t cmd)
 {
@@ -794,7 +837,7 @@ shardcache_client_get_multi(shardcache_client_t *c,
                             shc_multi_item_t **items)
 
 {
-    return _shardcache_client_multi(c, items, SHC_HDR_GET);
+    return shardcache_client_multi(c, items, SHC_HDR_GET);
 }
 
 int
@@ -802,5 +845,5 @@ shardcache_client_set_multi(shardcache_client_t *c,
                             shc_multi_item_t **items)
 
 {
-    return _shardcache_client_multi(c, items, SHC_HDR_SET);
+    return shardcache_client_multi(c, items, SHC_HDR_SET);
 }
