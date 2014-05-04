@@ -34,6 +34,7 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
         shardcache_client_errno
         shardcache_client_errstr
         shardcache_client_tcp_timeout
+        shardcache_client_use_random_node
 ) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
@@ -124,6 +125,11 @@ sub new {
 sub tcp_timeout {
     my ($self, $new_value) = @_;
     return shardcache_client_tcp_timeout($self->{_client}, $new_value);
+}
+
+sub use_random_node {
+    my ($self, $new_value) = @_;
+    return shardcache_client_use_random_node($self->{_client}, $new_value);
 }
 
 sub get {
@@ -399,6 +405,22 @@ None by default.
 
 =over 4
 
+=item * tcp_timeout ( $new_value )
+
+    Set/Get the tcp timeout (in milliseconds) used for all operations on a tcp socket (such as connect(), read(), write()).
+    A value of 0 means no-timeout (system-wide timeouts might still apply).
+    If $new_value is negative, no new value will be set but the current value will be returned.
+    If $new_value is positive it will set as new tcp timeout and the old value will be returned.
+
+=item * use_random_node ( $new_value )
+
+    Set the internal shardcache client flag which determines if using the consistent hashing to
+    always query the node responsible for a given key, or select any random node among the available
+    ones when executing a get/set/del/evict command.
+    If $new_value is true a random node will be used, if false the node responsible for the specific
+    key will be selected.
+    Note that the 'stats', the 'index' and the 'migration*' commands are not affected by this flag
+
 =item * get ( $key )
 
     Get the value for $key. 
@@ -499,6 +521,7 @@ None by default.
   int shardcache_client_stats(shardcache_client_t *c, char *node, char **buf, size_t *len);
   int shardcache_client_check(shardcache_client_t *c, char *node);
   int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value);
+  int shardcache_client_use_random_node(shardcache_client_t *c, int new_value);
   shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *node);
   int shardcache_client_errno(shardcache_client_t *c)
   char *shardcache_client_errstr(shardcache_client_t *c)
