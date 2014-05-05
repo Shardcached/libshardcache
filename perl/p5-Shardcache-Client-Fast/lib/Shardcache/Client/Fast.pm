@@ -91,7 +91,7 @@ sub new {
                 $label = $h->[0];
                 $addr = $h->[1];
             } else {
-                if ($h !~ /[a-zA-Z0-9_\.]+:[a-zA-Z0-9_\.]+(:[0-9]+)?/) {
+                if ($h !~ /^[a-zA-Z0-9_\.]+:[a-zA-Z0-9\-\.]+(:[0-9]+)?$/) {
                     die "Invalid host string '$h'";
                 }
                 ($label, $addr, my $port) = split(':', $h);
@@ -103,7 +103,7 @@ sub new {
         if (!$nodes) {
             die "Empty host string";
         }
-        elsif ($nodes !~ /[a-zA-Z0-9_\.]+:[a-zA-Z0-9_\.]+(:[0-9]+)?/) {
+        elsif ($nodes !~ /^[a-zA-Z0-9_\.]+:[a-zA-Z0-9\-\.]+(:[0-9]+)?$/) {
             die "Invalid host string '$nodes'";
         }
         my ($label, $addr, $port) = split(':', $nodes);
