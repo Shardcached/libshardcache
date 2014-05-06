@@ -487,7 +487,7 @@ None by default.
 
     Retrieve the index for a given node (or all nodes if none is provided as parameter).
 
-=item * check ( $node )
+=item * check ( [ $node ] )
 
     Checks the status of a given node (or all nodes if none is provided as parameter).
 
