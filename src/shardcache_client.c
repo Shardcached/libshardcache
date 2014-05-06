@@ -62,7 +62,7 @@ shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth)
     char *shard_names[num_nodes];
 
     c->shards = malloc(sizeof(shardcache_node_t *) * num_nodes);
-    c->connections = connections_pool_create(10000, 1);
+    c->connections = connections_pool_create(SHARDCACHE_TCP_TIMEOUT_DEFAULT, 1);
     for (i = 0; i < num_nodes; i++) {
         c->shards[i] = shardcache_node_copy(nodes[i]);
 
