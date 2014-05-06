@@ -448,7 +448,9 @@ void shardcache_free_labels(shardcache_node_t **labels, int num_labels);
  *                        taking part to the shardcache 'cloud'
  * @param num_nodes       the number of nodes present in the nodes list
  * @param storage         a shardcache_storage_t structure holding pointers to the
- *                        storage callbacks.
+ *                        storage callbacks.\nIf NULL the internal (memory-only)
+ *                        volatile storage will be used for all the keys (and not
+ *                        only the ones being set with an expiration time)
  * @param secret          a null-terminated string containing the shared secret used to
  *                        authenticate incoming messages
  * @param num_workers     number of worker threads taking care of serving input connections
