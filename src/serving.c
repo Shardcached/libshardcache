@@ -185,24 +185,33 @@ write_status(shardcache_request_t *req, int rc, char mode)
     // we are ensured that req exists until done is set to 1 and that
     // both req->output and req->ctx will never change, so we don't need a lock here
     char out[6] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00 };
+    int no_data = 0;
 
-    if (rc == -1) {
-        out[2] = SHC_RES_ERR;
+    if (UNLIKELY(req->hdr == SHC_HDR_GET ||
+                 req->hdr == SHC_HDR_GET_ASYNC ||
+                 req->hdr == SHC_HDR_GET_OFFSET))
+    {
+        out[1] = 0;
+        no_data = 1;
     } else {
-        if (mode == WRITE_STATUS_MODE_BOOLEAN) {
-            if (rc == 1)
-                out[2] = SHC_RES_YES;
-            else if (rc == 0)
-                out[2] = SHC_RES_NO;
-            else
-                out[2] = SHC_RES_ERR;
-        } else if (mode == WRITE_STATUS_MODE_EXISTS && rc == 1) {
-            out[2] = SHC_RES_EXISTS;
-        }
-        else if (rc == 0) {
-            out[2] = SHC_RES_OK;
-        } else {
+        if (rc == -1) {
             out[2] = SHC_RES_ERR;
+        } else {
+            if (mode == WRITE_STATUS_MODE_BOOLEAN) {
+                if (rc == 1)
+                    out[2] = SHC_RES_YES;
+                else if (rc == 0)
+                    out[2] = SHC_RES_NO;
+                else
+                    out[2] = SHC_RES_ERR;
+            } else if (mode == WRITE_STATUS_MODE_EXISTS && rc == 1) {
+                out[2] = SHC_RES_EXISTS;
+            }
+            else if (rc == 0) {
+                out[2] = SHC_RES_OK;
+            } else {
+                out[2] = SHC_RES_ERR;
+            }
         }
     }
 
@@ -224,7 +233,7 @@ write_status(shardcache_request_t *req, int rc, char mode)
 
     fbuf_add_binary(&output, (char *)&hdr, 1);
 
-    fbuf_add_binary(&output, out, sizeof(out));
+    fbuf_add_binary(&output, out, sizeof(out) - (no_data ? 3 : 0));
 
     if (req->ctx->serv->auth) {
         uint64_t digest;
@@ -476,6 +485,7 @@ get_async_data(shardcache_t *cache,
     }
     if (rc != 0)
         write_status(req, rc, WRITE_STATUS_MODE_SIMPLE);
+
     return rc;
 }
 
