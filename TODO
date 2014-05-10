@@ -1,3 +1,20 @@
+ * protocol V2 :
+    - a new response header to distinguish between not-found and errors as response to
+      GET/SET/OFFSET/HEAD commands
+
+    - use a simple crc byte instead of the 8-bytes siphash signature (especially beneficial
+      for chunked-signing). This also means that it's going to become a checksum and not a signature anymore  
+
+    - introduce an extended GET command which returns the timestamp and the node responsible
+      for the requested key as second and third record of the response (or perhaps some structure
+      holding more meta-data as second record of the response)
+
+    - introduce a CAS command
+
+    NOTE: V2 implementation must ensure compatibility with V1 clients which, as long as the
+          changes are the ones described above, means using the old response header when
+          answering to a failing GET/SET/OFFSET/HEAD command.
+
  * in serving.c unregister the output handler (shardcache_output_handler()) if there is
    no pending output and register the callback instead when new data is being added to
    the output buffer. This might be beneficial for performances in case of a big number
