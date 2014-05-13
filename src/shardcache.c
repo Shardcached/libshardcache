@@ -487,6 +487,7 @@ shardcache_expire_key_cb(iomux_t *iomux, void *priv)
         }
         free(ptr);
     }
+    ATOMIC_INCREMENT(ctx->cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
     arc_remove(ctx->cache->arc, (const void *)ctx->item.key, ctx->item.klen);
     free(ctx->item.key);
     free(ctx);
@@ -635,8 +636,8 @@ shardcache_create(char *me,
     }
 
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
-        { "gets", "sets", "dels", "heads", "evicts", "cache_misses",
-          "fetch_remote", "fetch_local", "not_found",
+        { "gets", "sets", "dels", "heads", "evicts", "expires",
+          "cache_misses", "fetch_remote", "fetch_local", "not_found",
           "volatile_table_size", "cache_size", "errors" };
 
     cache->counters = shardcache_init_counters();
@@ -916,6 +917,7 @@ shardcache_get_offset_async(shardcache_t *cache,
             arc_remove(cache->arc, key, klen);
             arc_release_resource(cache->arc, res);
             free(data);
+            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
             return shardcache_get_offset_async(cache, key, klen, offset, length, cb, priv);
         } else {
             cb(key, klen, data, dlen, dlen, &obj->ts, priv);
@@ -1057,6 +1059,7 @@ shardcache_get_async(shardcache_t *cache,
             MUTEX_UNLOCK(&obj->lock);
             arc_remove(cache->arc, key, klen);
             arc_release_resource(cache->arc, res);
+            ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
             return shardcache_get_async(cache, key, klen, cb, priv);
 
         } else {
