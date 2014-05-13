@@ -1,5 +1,9 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.09  Tue May 13 13:48:06 CEST 2014
+        - Allow to set the use_random_node flag on the underlying shardcache_client instance
+        - Minor fixes to the documentation
+
 0.08  Fri May  2 12:02:43 CEST 2014
         - Allow to set the tcp timeout of the underlying shardcache_client instance
 
