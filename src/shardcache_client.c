@@ -110,9 +110,9 @@ select_node(shardcache_client_t *c, void *key, size_t klen, int *fd)
         }
     }
 
-    if (node)
+    if (node) {
         addr = shardcache_node_get_address(node);
-        if (fd) { 
+        if (fd) {
             int retries = 3;
             do {
                 *fd = connections_pool_get(c->connections, addr);
@@ -125,8 +125,8 @@ select_node(shardcache_client_t *c, void *key, size_t klen, int *fd)
                     addr = shardcache_node_get_address(node);
                 }
             } while (*fd < 0 && retries--);
-
         }
+    }
 
     return addr;
 }
