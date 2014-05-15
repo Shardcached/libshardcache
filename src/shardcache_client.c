@@ -600,20 +600,14 @@ shc_split_buckets(shardcache_client_t *c, shc_multi_item_t **items)
     linked_list_t *pools = list_create();
     int i;
     for(i = 0; items[i]; i++) {
-        const char *node_name;
-        size_t name_len = 0;
-
         shc_multi_item_t *item = items[i];
 
-        chash_lookup(c->chash, item->key, item->klen, &node_name, &name_len);
+        char *node = select_node(c, item->key, item->klen, NULL);
 
-        char name_string[name_len+1];
-        snprintf(name_string, name_len+1, "%s", node_name);
-
-        tagged_value_t *tval = list_get_tagged_value(pools, name_string);
+        tagged_value_t *tval = list_get_tagged_value(pools, node);
         if (!tval) {
             linked_list_t *sublist = list_create();
-            tval = list_create_tagged_sublist(name_string, sublist);
+            tval = list_create_tagged_sublist(node, sublist);
             list_push_tagged_value(pools, tval);
         }
 
@@ -665,7 +659,7 @@ shc_multi_context_destroy(shc_multi_ctx_t *ctx)
 }
 
 static shc_multi_ctx_t *
-shc_multi_context_create(shardcache_hdr_t cmd, char *secret, char *peer, linked_list_t *items)
+shc_multi_context_create(shardcache_hdr_t cmd, char *secret, linked_list_t *items)
 {
     shc_multi_ctx_t *ctx = calloc(1, sizeof(shc_multi_ctx_t));
     ctx->commands = fbuf_create(0);
@@ -788,7 +782,7 @@ shardcache_client_multi(shardcache_client_t *c,
 
         tagged_value_t *tval = list_pick_tagged_value(pools, i);
         linked_list_t *items = (linked_list_t *)tval->value;
-        shc_multi_ctx_t *ctx = shc_multi_context_create(cmd, (char *)c->auth, tval->tag, items);
+        shc_multi_ctx_t *ctx = shc_multi_context_create(cmd, (char *)c->auth, items);
         if (!ctx) {
             iomux_destroy(iomux);
             list_destroy(pools);
@@ -803,19 +797,10 @@ shardcache_client_multi(shardcache_client_t *c,
             .priv = ctx
         };
 
-        shardcache_node_t *node = shardcache_get_node(c, tval->tag);
-        if (!node) {
-            shc_multi_context_destroy(ctx);
-            iomux_destroy(iomux);
-            list_destroy(pools);
-            return -1;
-        }
-
-        char *addr = shardcache_node_get_address(node);
-        int fd = connections_pool_get(c->connections, addr);
+        int fd = connections_pool_get(c->connections, tval->tag);
         if (fd < 0) {
             c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
-            snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
+            snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", tval->tag);
             shc_multi_context_destroy(ctx);
             iomux_destroy(iomux);
             list_destroy(pools);
