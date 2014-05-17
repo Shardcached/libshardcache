@@ -37,10 +37,12 @@ int main(int argc, char **argv)
                                        NULL,
                                        5,
                                        1<<29);
-        if (servers[i])
+        if (servers[i]) {
             ut_success();
-        else
+            shardcache_iomux_run_timeout_low(servers[i], 5000);
+        } else {
             ut_failure("Errors creating the shardcache instance");
+        }
     }
 
     sleep(1); // let the servers complete their startup
