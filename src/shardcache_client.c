@@ -640,6 +640,7 @@ shc_multi_collect_data(void *data, size_t len, int idx, void *priv)
             item->data = realloc(item->data, ctx->data_offset + len);
             memcpy(item->data + ctx->data_offset, data, len);
             ctx->data_offset += len;
+            item->dlen = ctx->data_offset;
         } else {
             if (len == 1) {
                 item->status = (int)*((char *)data);
