@@ -624,7 +624,6 @@ typedef struct {
     fbuf_t *commands;
     shc_multi_item_t **items;
     async_read_ctx_t *reader; 
-    int data_offset;
     int response_index;
     int num_requests;
     shardcache_hdr_t cmd;
@@ -637,10 +636,9 @@ shc_multi_collect_data(void *data, size_t len, int idx, void *priv)
     shc_multi_item_t *item = ctx->items[ctx->response_index];
     if (idx == 0 && len) {
         if (ctx->cmd == SHC_HDR_GET) {
-            item->data = realloc(item->data, ctx->data_offset + len);
-            memcpy(item->data + ctx->data_offset, data, len);
-            ctx->data_offset += len;
-            item->dlen = ctx->data_offset;
+            item->data = realloc(item->data, item->dlen + len);
+            memcpy(item->data + item->dlen, data, len);
+            item->dlen += len;
         } else {
             if (len == 1) {
                 item->status = (int)*((char *)data);
@@ -734,7 +732,6 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
     //printf("received %d\n", len);
     async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
     while (state == SHC_STATE_READING_DONE) {
-        ctx->data_offset = 0;
         ctx->response_index++;
         state = async_read_context_update(ctx->reader);
     }
