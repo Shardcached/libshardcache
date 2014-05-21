@@ -11,6 +11,17 @@
 
     - introduce a CAS command
 
+    - extend set interface to allow controlling if the expiry time should be renewed when the key is
+      accessed or not (and let it honor the initial expiration time).
+
+    - support message compression
+
+    - introduce GET_MULTI and SET_MULTI commands.
+      This will reduce the overhead of creating a sequence of get/set commands and also allow clients
+      without knowledge of the complete shard (or always communicating with a single node) to still
+      commence set_multi/get_multi commands but relying on the server to take care of parallelizing
+      the operation if possible.
+
     NOTE: V2 implementation must ensure compatibility with V1 clients which, as long as the
           changes are the ones described above, means using the old response header when
           answering to a failing GET/SET/OFFSET/HEAD command.
@@ -26,6 +37,10 @@
    so a threshold should be added which controls whether we need to check the status
    or we can avoid since it has been just used
 
+ * server-side get_multi() and set_multi() implementation, as for the client implementation
+   server nodes can take care of parallelizing (when possible) batch set/get commands which involve
+   keys not owned by the current server.
+
  * refactor the API actually exposed to set internal shardcache flags and options
    once an instance has been created. The way it's actually implemented is suboptimal
    because adding a new option requires to add both a member to the shardcache_t structure
@@ -35,21 +50,6 @@
    those within the shardcache_t structure
 
  * complete and test the replica support
-
- * support message compression
-
- * extend the protocol to support get_multi and set_multi messages.
-   This will allow clients without knowledge of the complete shard (or always communicating
-   with a single node) to still commence set_multi/get_multi commands letting the server
-   to take care of parallelizing the operation if possible.
-
- * server-side get_multi() and set_multi() implementation, as for the client implementation
-   server nodes can take care of parallelizing (when possible) batch set/get commands which involve
-   keys not owned by the current server.
-
- * extend the expire interface in set() commands to allow the use of some flag to 
-   control if the expiry time should be renewed when the key is accessed or not
-   (and let it honor the initial expiration time).
 
  * parallelize migrations
 
