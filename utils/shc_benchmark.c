@@ -181,7 +181,7 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
 
     // flush as much as we can
     if (fbuf_used(output_buffer)) {
-        *len = fbuf_detach(output_buffer, out);
+        *len = fbuf_detach(output_buffer, (char **)data);
     } else {
         *len = 0;
     }
