@@ -745,27 +745,6 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
     return len;
 }
 
-void
-shc_multi_send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *priv)
-{
-    shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
-    fbuf_t *output_buffer = ctx->commands;
-
-    // flush as much as we can
-    if (fbuf_used(output_buffer)) {
-        if (*len > fbuf_used(output_buffer)) {
-            *len = fbuf_used(output_buffer);
-            memcpy(data, fbuf_data(output_buffer), *len);
-            fbuf_clear(output_buffer);
-        } else {
-            memcpy(data, fbuf_data(output_buffer), *len);
-            fbuf_remove(output_buffer, *len);
-        }
-    } else {
-        *len = 0;
-    }
-}
-
 static inline int
 shardcache_client_multi(shardcache_client_t *c,
                          shc_multi_item_t **items,
@@ -788,7 +767,7 @@ shardcache_client_multi(shardcache_client_t *c,
         }
 
         iomux_callbacks_t cbs = {
-            .mux_output = shc_multi_send_command,
+            .mux_output = NULL,
             .mux_timeout = NULL,
             .mux_input = shc_multi_fetch_response,
             .mux_eof = shc_multi_close_connection,
@@ -806,6 +785,9 @@ shardcache_client_multi(shardcache_client_t *c,
         }
 
         iomux_add(iomux, fd, &cbs);
+        char *output = NULL;
+        unsigned int len = fbuf_detach(ctx->commands, &output);
+        iomux_write(iomux, fd, output, len, 1);
     }
 
     struct timeval tv = { 1, 0 };

@@ -172,21 +172,6 @@ kepaxos_connection_input(iomux_t *iomux, int fd, unsigned char *data, int len, v
     return processed;
 }
 
-static void 
-kepaxos_connection_output(iomux_t *iomux, int fd, unsigned char *out, int *len, void *priv)
-{
-    kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
-    int max = *len;
-    if (fbuf_used(&connection->output) <= max) {
-        *len = fbuf_used(&connection->output);
-        memcpy(out, fbuf_data(&connection->output), *len);
-    } else {
-        void *data = fbuf_data(&connection->output);
-        memcpy(out, data, *len);
-    }
-    fbuf_remove(&connection->output, *len);
-}
-
 static void
 kepaxos_connection_timeout(iomux_t *iomux, int fd, void *priv)
 {
@@ -346,7 +331,7 @@ kepaxos_send(char **recipients,
 
             iomux_callbacks_t callbacks = {
                 .mux_input = kepaxos_connection_input,
-                .mux_output = kepaxos_connection_output,
+                .mux_output = NULL,
                 .mux_timeout = kepaxos_connection_timeout,
                 .mux_eof = kepaxos_connection_eof,
                 .mux_connection = NULL,
@@ -354,6 +339,9 @@ kepaxos_send(char **recipients,
             };
 
             iomux_add(replica->iomux, fd, &callbacks);
+            char **data = NULL;
+            unsigned int len = fbuf_detach(&connection->output, data);
+            iomux_write(replica->iomux, fd, (unsigned char *)data, len, 1);
         }
     }
     return 0;
@@ -446,13 +434,16 @@ shardcache_replica_ping(shardcache_replica_t *replica)
 
                 iomux_callbacks_t callbacks = {
                     .mux_input = kepaxos_connection_input,
-                    .mux_output = kepaxos_connection_output,
+                    .mux_output = NULL,
                     .mux_timeout = kepaxos_connection_timeout,
                     .mux_eof = kepaxos_connection_eof,
                     .mux_connection = NULL,
                     .priv = connection
                 };
                 iomux_add(replica->iomux, fd, &callbacks);
+                char **data = NULL;
+                unsigned int len = fbuf_detach(&connection->output, data);
+                iomux_write(replica->iomux, fd, (unsigned char *)data, len, 1);
             }
             free(msg);
         }

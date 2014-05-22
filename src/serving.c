@@ -830,19 +830,17 @@ shardcache_check_context_state(iomux_t *iomux,
 }
 
 
-static void
-shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, void *priv)
+static int
+shardcache_output_handler(iomux_t *iomux, int fd, unsigned char **out, int *len, void *priv)
 {
     shardcache_connection_context_t *ctx =
         (shardcache_connection_context_t *)priv;
 
-    int max = *len;
-    int offset = 0;
-    while (LIKELY(offset < max)) {
-        shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
-        if (!req)
-            break;
+    *len = 0;
 
+    shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
+
+    if (req) {
         if (UNLIKELY(ATOMIC_READ(req->error))) {
             // abort the request and close the connection
             // if there was an error while fetching a remote object
@@ -851,40 +849,22 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
                 ATOMIC_DECREMENT(ctx->serv->num_connections);
                 shardcache_connection_context_destroy(ctx);
             }
-            return;
+            return 0;
         }
-
-        int is_empty = 1;
 
         int done = ATOMIC_READ(req->done);
 
         if (ATOMIC_READ(req->output_pending)) {
+
             SPIN_LOCK(&req->output_lock);
             if(LIKELY(fbuf_used(&req->output))) {
-                void *req_output = fbuf_data(&req->output);
-                int req_outlen = fbuf_used(&req->output);
-                if (req_outlen > (max - offset)) {
-                    int to_copy = max - offset;
-                    memcpy(out + offset, req_output, to_copy);
-                    fbuf_remove(&req->output, to_copy);
-                    offset += to_copy;
-                    is_empty = 0;
-                } else if (req_outlen > 0) {
-                    memcpy(out + offset, req_output, req_outlen);
-                    // NOTE: the buffer is already empty but calling
-                    // fbuf_clear() forces the fbuf to reset its
-                    // internal indexes and avoid wasting some memory
-                    // or doing a memmove later
-                    fbuf_clear(&req->output);
-                    offset += req_outlen;
-                }
-                if (is_empty)
-                    ATOMIC_SET(req->output_pending, 0);
+                *len = fbuf_detach(&req->output, (char **)out);
+                ATOMIC_SET(req->output_pending, 0);
             }
             SPIN_UNLOCK(&req->output_lock);
         }
 
-        if (done && is_empty) {
+        if (done) {
             TAILQ_REMOVE(&ctx->requests, req, next);
             ctx->num_requests--;
             shardcache_request_destroy(req);
@@ -894,13 +874,12 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char *out, int *len, 
             if (shardcache_check_context_state(iomux, fd, ctx, state) != 0) {
                 iomux_close(iomux, fd);
                 *len = 0;
-                return;
             }
-        } else if (is_empty) {
-            break;
         }
+    } else {
+        iomux_unset_output_callback(iomux, fd);
     }
-    *len = offset;
+    return 1;
 }
 
 static inline void
@@ -933,7 +912,14 @@ shardcache_input_handler(iomux_t *iomux,
         async_read_context_state_t state = async_read_context_input_data(ctx->reader_ctx, data, len, &processed);
         // updating the context state might eventually push a new requeset
         // (if entirely dowloaded) to a worker
-        shardcache_check_context_state(iomux, fd, ctx, state);
+        if (shardcache_check_context_state(iomux, fd, ctx, state) == 0) {
+            if (ctx->num_requests) {
+                iomux_set_output_callback(iomux, fd, shardcache_output_handler);
+            }
+        } else {
+            iomux_close(iomux, fd);
+            return 0;
+        }
     }
 
     return processed;
@@ -997,7 +983,7 @@ worker(void *priv)
             iomux_callbacks_t connection_callbacks = {
                 .mux_connection = NULL,
                 .mux_input = shardcache_input_handler,
-                .mux_output = shardcache_output_handler,
+                .mux_output = NULL,
                 .mux_eof = shardcache_eof_handler,
                 .priv = ctx
             };
