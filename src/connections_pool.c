@@ -17,6 +17,7 @@ struct __connections_pool_s {
     hashtable_t *table;
     int tcp_timeout;
     int max_spare;
+    int check;
 };
 
 connections_pool_t *
@@ -89,23 +90,27 @@ connections_pool_get(connections_pool_t *cc, char *addr)
     int *fd = queue_pop_left(connection_queue);
     while (fd) {
         int rfd = *fd;
+        free(fd);
         int flags = fcntl(rfd, F_GETFL, 0);
         if (flags == -1) {
             close(rfd);
             fd = queue_pop_left(connection_queue);
             continue;
         }
+
+        if (!ATOMIC_READ(cc->check))
+            return rfd;
+
         flags &= ~O_NONBLOCK;
         fcntl(rfd, F_SETFL, flags);
         char noop = SHC_HDR_NOOP;
-        if (write(*fd, &noop, 1) == 1) {
-            int rfd = *fd;
-            free(fd);
+
+        // XXX - this is a blocking write
+        if (write(rfd, &noop, 1) == 1)
             return rfd;
-        } else {
-            close(*fd);
-            free(fd);
-        }
+        else
+            close(rfd);
+
         fd = queue_pop_left(connection_queue);
     }
 
@@ -162,3 +167,12 @@ connections_pool_max_spare(connections_pool_t *cc, int new_value)
     return old_value;
 }
 
+int
+connections_pool_check(connections_pool_t *cc, int new_value)
+{
+    int old_value = ATOMIC_READ(cc->check);
+
+    ATOMIC_SET(cc->check, new_value);
+
+    return old_value;
+}
