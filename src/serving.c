@@ -78,7 +78,6 @@ typedef struct __shardcache_request_s {
 #else
     pthread_spinlock_t output_lock;
 #endif
-    int output_pending;
     fbuf_t output;
     sip_hash *fetch_shash;
     int error;
@@ -854,15 +853,10 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char **out, int *len,
 
         int done = ATOMIC_READ(req->done);
 
-        if (ATOMIC_READ(req->output_pending)) {
-
-            SPIN_LOCK(&req->output_lock);
-            if(LIKELY(fbuf_used(&req->output))) {
-                *len = fbuf_detach(&req->output, (char **)out);
-                ATOMIC_SET(req->output_pending, 0);
-            }
-            SPIN_UNLOCK(&req->output_lock);
-        }
+        SPIN_LOCK(&req->output_lock);
+        if (fbuf_used(&req->output))
+            *len = fbuf_detach(&req->output, (char **)out);
+        SPIN_UNLOCK(&req->output_lock);
 
         if (done) {
             TAILQ_REMOVE(&ctx->requests, req, next);
@@ -888,7 +882,6 @@ send_data(shardcache_request_t *req, fbuf_t *data)
     SPIN_LOCK(&req->output_lock);
     fbuf_concat(&req->output, data);
     SPIN_UNLOCK(&req->output_lock);
-    ATOMIC_SET(req->output_pending, 1);
 }
 
 static int
