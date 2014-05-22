@@ -119,8 +119,8 @@ discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *pri
     return len;
 }
 
-void
-send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *priv)
+iomux_output_mode_t
+send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
 {
     client_ctx *ctx = (client_ctx *)priv;
     fbuf_t *output_buffer = ctx->output;
@@ -181,17 +181,11 @@ send_command(iomux_t *iomux, int fd, unsigned char *data, int *len, void *priv)
 
     // flush as much as we can
     if (fbuf_used(output_buffer)) {
-        if (*len > fbuf_used(output_buffer)) {
-            *len = fbuf_used(output_buffer);
-            memcpy(data, fbuf_data(output_buffer), *len);
-            fbuf_clear(output_buffer);
-        } else {
-            memcpy(data, fbuf_data(output_buffer), *len);
-            fbuf_remove(output_buffer, *len);
-        }
+        *len = fbuf_detach(output_buffer, out);
     } else {
         *len = 0;
     }
+    return IOMUX_OUTPUT_MODE_FREE;
 }
 
 static void
