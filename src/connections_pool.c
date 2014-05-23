@@ -20,6 +20,7 @@ struct __connections_pool_s {
     int tcp_timeout;
     int max_spare;
     int check;
+    int expire_time;
 };
 
 struct __connection_pool_entry_s {
@@ -27,20 +28,20 @@ struct __connection_pool_entry_s {
     struct timeval last_access;
 };
 
-
-int
-is_connection_time_valid(struct timeval *conn_time)
+static inline int
+is_connection_time_valid(connections_pool_t *cc, struct timeval *conn_time)
 {
     struct timeval now;
     gettimeofday(&now, NULL);
     struct timeval result = { 0, 0 };
+    int expire_time = ATOMIC_READ(cc->expire_time);
+    struct timeval threshold = { expire_time/1000, expire_time*1000 };
     timersub(&now, conn_time, &result);
 
-    if (result.tv_sec < 30) { // TODO: read from configuration
-        return 1;
-    }
+    if (timercmp(&result, &threshold, >))
+        return 0;
 
-    return 0;
+    return 1;
 }
 
 connections_pool_t *
@@ -50,6 +51,7 @@ connections_pool_create(int tcp_timeout, int max_spare)
     cc->table = ht_create(128, 65535, (ht_free_item_callback_t)queue_destroy);
     cc->tcp_timeout = tcp_timeout;
     cc->max_spare = max_spare;
+    cc->expire_time = SHARDCACHE_CONNECTION_EXPIRE_DEFAULT;
     return cc;
 }
 
@@ -130,7 +132,7 @@ connections_pool_get(connections_pool_t *cc, char *addr)
         char noop = SHC_HDR_NOOP;
 
         // XXX - this is a blocking write
-        if (is_connection_time_valid(&last_access) || write(fd, &noop, 1) == 1)
+        if (is_connection_time_valid(cc, &last_access) || write(fd, &noop, 1) == 1)
             return fd;
         else
             close(fd);
