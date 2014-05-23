@@ -899,7 +899,7 @@ shardcache_input_handler(iomux_t *iomux,
 
     if (ctx) {
         if (ctx->num_requests > 1024) {
-            SHC_DEBUG("Too many pipelined requests, waiting");
+            SHC_DEBUG2("Too many pipelined requests, waiting");
             return 0;
         }
         async_read_context_state_t state = async_read_context_input_data(ctx->reader_ctx, data, len, &processed);
@@ -909,9 +909,6 @@ shardcache_input_handler(iomux_t *iomux,
             if (ctx->num_requests) {
                 iomux_set_output_callback(iomux, fd, shardcache_output_handler);
             }
-        } else {
-            iomux_close(iomux, fd);
-            return 0;
         }
     }
 
@@ -980,7 +977,6 @@ worker(void *priv)
                 .mux_eof = shardcache_eof_handler,
                 .priv = ctx
             };
-            //ht_set(wrkctx->fds, &ctx->fd, sizeof(ctx->fd), ctx, sizeof(shardcache_connection_context_t));
             if (!iomux_add(wrkctx->iomux, ctx->fd, &connection_callbacks)) {
                 close(ctx->fd);
                 shardcache_connection_context_destroy(ctx);
@@ -1003,7 +999,7 @@ worker(void *priv)
                     // the request is served, we can destroy it
                     TAILQ_REMOVE(&to_prune->requests, req, next);
                     shardcache_request_destroy(req);
-                    done = 1;
+                    done = (TAILQ_FIRST(&to_prune->requests) == NULL);
                 }
             }
             struct timeval quarantine = { 60, 0 };
