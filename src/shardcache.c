@@ -548,6 +548,7 @@ shardcache_create(char *me,
     cache->use_persistent_connections = 1;
     cache->tcp_timeout = SHARDCACHE_TCP_TIMEOUT_DEFAULT;
     cache->expire_time = SHARDCACHE_EXPIRE_TIME_DEFAULT;
+    cache->serving_look_ahead = SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT;
     cache->iomux_run_timeout_low = SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW;
     cache->iomux_run_timeout_high = SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH;
 
@@ -669,7 +670,8 @@ shardcache_create(char *me,
         return NULL;
     }
 
-    cache->serv = start_serving(cache, cache->auth, cache->addr, num_workers, cache->counters); 
+    cache->serv = start_serving(cache, num_workers); 
+
     if (!cache->serv) {
         SHC_ERROR("Can't start the communication engine");
         shardcache_destroy(cache);
@@ -2471,6 +2473,12 @@ int
 shardcache_expire_time(shardcache_t *cache, int new_value)
 {
     return shardcache_get_set_option(&cache->expire_time, new_value);
+}
+
+int
+shardcache_serving_look_ahead(shardcache_t *cache, int new_value)
+{
+    return shardcache_get_set_option(&cache->serving_look_ahead, new_value);
 }
 
 int

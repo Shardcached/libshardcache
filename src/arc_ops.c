@@ -336,6 +336,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             if (check == 1 || (ret == -1 && cache->storage.global)) {
                 // if it's a global storage or we are responsible in the
                 // migration context, we don't want to return earlier
+                SHC_WARNING("Can't fetch data from peer, falling back to the global storage");
                 done = 0;
                 COBJ_UNSET_FLAG(obj, COBJ_FLAG_EVICTED);
             }

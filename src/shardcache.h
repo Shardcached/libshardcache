@@ -21,6 +21,9 @@
 #define SHARDCACHE_EXPIRE_TIME_DEFAULT 0 // don't expire keys by default
 #define SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW 100000 // (in microsecs)
 #define SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH 500000 // (in microsecs)
+#define SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT 64 // number of queued/pipelined
+                                                 // requests to handle ahead
+                                                 // while serving the first
 
 extern const char *LIBSHARDCACHE_VERSION;
 
@@ -564,6 +567,8 @@ int shardcache_iomux_run_timeout_high(shardcache_t *cache, int new_value);
  * @note defaults to SHARDCACHE_IOMUX_EXPIRE_TIME
  */
 int shardcache_expire_time(shardcache_t *cache, int new_value);
+
+int shardcache_serving_look_ahead(shardcache_t *cache, int new_value);
 
 /*
  * @brief Allows to enable/disable the 'lazy_expiration' mode

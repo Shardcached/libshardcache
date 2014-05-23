@@ -114,6 +114,10 @@ struct __shardcache_s {
     int iomux_run_timeout_high; // timeout passed to iomux_run()
                                 // by both the async reader and the serving workers
 
+
+    int serving_look_ahead;     // amount of pipelined requests to handle in parallel
+                                // while the current is being served
+
     shardcache_serving_t *serv; // the serving-subsystem instance
 
     const char *auth;     // the secret to use for signing messages
