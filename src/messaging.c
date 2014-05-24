@@ -985,7 +985,6 @@ write_message(int fd,
     SHC_DEBUG2("sending message: %s",
            shardcache_hex_escape(fbuf_data(&msg), mlen-dlen, DEBUG_DUMP_MAXSIZE));
 
-    if (dlen)
     if (dlen && fbuf_used(&msg) >= dlen) {
         SHC_DEBUG2("computed digest: %s",
                   shardcache_hex_escape(fbuf_end(&msg)-dlen, dlen, 0));
