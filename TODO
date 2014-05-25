@@ -26,12 +26,6 @@
           changes are the ones described above, means using the old response header when
           answering to a failing GET/SET/OFFSET/HEAD command.
 
- * in serving.c unregister the output handler (shardcache_output_handler()) if there is
-   no pending output and register the callback instead when new data is being added to
-   the output buffer. This might be beneficial for performances in case of a big number
-   of client connections because we would stop wasting time calling the output callback
-   for each active connection while most of them don't have any output ready.
-
  * minimize the usage of the NOOP to verify the connection status.
    When connections are reused quickly there is no point in checking the status again,
    so a threshold should be added which controls whether we need to check the status
