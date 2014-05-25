@@ -33,7 +33,7 @@ Unlike [groupcache](http://github.com/golang/groupcache "groupcache") :
    If the receiving node is not the responsible for the key, the request
    will be forwarded (through the internal communication channel)
    to the responsible peer which will eventualy store the new value and make it
-   available to all the [groupcache](http://github.com/golang/groupcache "groupcache") nodes.
+   available to all the [shardcache](http://github.com/xant/libshardcache "shardcache") nodes.
  
  * Supports DEL operations. If the node which receives the DEL operation
    is responsible for the specified KEY, the key will be removed from the
