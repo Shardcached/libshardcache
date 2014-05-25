@@ -1015,5 +1015,8 @@ kepaxos_diff_release(kepaxos_diff_item_t *items, int num_items)
 
 uint64_t kepaxos_seq(kepaxos_t *ke, void *key, size_t klen)
 {
-    return kepaxos_last_seq_for_key(ke->log, key, klen, NULL);
+    MUTEX_LOCK(&ke->lock);
+    uint64_t seq = kepaxos_last_seq_for_key(ke->log, key, klen, NULL);
+    MUTEX_UNLOCK(&ke->lock);
+    return seq;
 }
