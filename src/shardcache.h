@@ -568,6 +568,14 @@ int shardcache_iomux_run_timeout_high(shardcache_t *cache, int new_value);
  */
 int shardcache_expire_time(shardcache_t *cache, int new_value);
 
+/*
+ * @brief Allows to change the number of queued/pipelined requests to handle ahead
+ *        while still serving the response to the first request
+ * @param cache A valid pointer to a shardcache_t structure
+ * @param new_value The amount of requests to look ahead
+ * @return the previous value for the look_ahead setting
+ * @note defaults to SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT
+ */
 int shardcache_serving_look_ahead(shardcache_t *cache, int new_value);
 
 /*
