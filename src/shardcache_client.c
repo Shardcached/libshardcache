@@ -638,6 +638,7 @@ shc_split_buckets(shardcache_client_t *c, shc_multi_item_t **items)
 
 
 typedef struct {
+    shardcache_client_t *client;
     char *peer;
     fbuf_t *commands;
     shc_multi_item_t **items;
@@ -676,14 +677,16 @@ shc_multi_context_destroy(shc_multi_ctx_t *ctx)
 }
 
 static shc_multi_ctx_t *
-shc_multi_context_create(shardcache_hdr_t cmd, char *secret, linked_list_t *items)
+shc_multi_context_create(shardcache_client_t *c, shardcache_hdr_t cmd, char *peer, char *secret, linked_list_t *items)
 {
     shc_multi_ctx_t *ctx = calloc(1, sizeof(shc_multi_ctx_t));
+    ctx->client = c;
     ctx->commands = fbuf_create(0);
     ctx->num_requests = list_count(items);
     ctx->items = calloc(1, sizeof(shc_multi_item_t *) * ctx->num_requests);
     ctx->reader = async_read_context_create(secret, shc_multi_collect_data, ctx);
     ctx->cmd = cmd;
+    ctx->peer = peer;
     int n;
     for (n = 0; n < ctx->num_requests; n++) {
         shc_multi_item_t *item = list_pick_value(items, n);
@@ -757,8 +760,13 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
         fprintf(stderr, "Async context returned error\n");
         iomux_close(iomux, fd);
     }
-    if (ctx->response_index == ctx->num_requests)
-        iomux_close(iomux, fd);
+    if (ctx->response_index == ctx->num_requests) {
+        iomux_remove(iomux, fd);
+        connections_pool_add(ctx->client->connections, ctx->peer, fd);
+        shc_multi_context_destroy(ctx);
+        if (iomux_isempty(iomux))
+            iomux_end_loop(iomux);
+    }
 
     return len;
 }
@@ -777,7 +785,7 @@ shardcache_client_multi(shardcache_client_t *c,
 
         tagged_value_t *tval = list_pick_tagged_value(pools, i);
         linked_list_t *items = (linked_list_t *)tval->value;
-        shc_multi_ctx_t *ctx = shc_multi_context_create(cmd, (char *)c->auth, items);
+        shc_multi_ctx_t *ctx = shc_multi_context_create(c, cmd, tval->tag, (char *)c->auth, items);
         if (!ctx) {
             iomux_destroy(iomux);
             list_destroy(pools);
