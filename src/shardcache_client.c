@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <time.h>
 #include <limits.h>
 #include <chash.h>
 #include <fbuf.h>
@@ -18,9 +19,7 @@
 #include "connections_pool.h"
 #include "shardcache_client.h"
 
-#ifdef BSD
-#  define random() arc4random()
-#endif
+#define SHC_PIPELINE_MAX_DEFAULT 1024
 
 typedef struct chash_t chash_t;
 
@@ -32,6 +31,7 @@ struct shardcache_client_s {
     const char *auth;
     int use_random_node;
     shardcache_node_t *current_node;
+    int pipeline_max;
     int errno;
     char errstr[1024];
 };
@@ -42,10 +42,20 @@ shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value)
     return connections_pool_tcp_timeout(c->connections, new_value);
 }
 
-int shardcache_client_use_random_node(shardcache_client_t *c, int new_value)
+int
+shardcache_client_use_random_node(shardcache_client_t *c, int new_value)
 {
     int old_value = c->use_random_node;
     c->use_random_node = new_value;
+    return old_value;
+}
+
+int
+shardcache_client_pipeline_max(shardcache_client_t *c, int new_value)
+{
+    int old_value = c->pipeline_max;
+    if (new_value >= 0)
+        c->pipeline_max = new_value;
     return old_value;
 }
 
@@ -78,7 +88,11 @@ shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth)
         c->auth = calloc(1, 16);
         strncpy((char *)c->auth, auth, 16);
     }
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    srandom((unsigned)tv.tv_usec);
 
+    c->pipeline_max = SHC_PIPELINE_MAX_DEFAULT;
     return c;
 }
 
@@ -605,10 +619,14 @@ shc_split_buckets(shardcache_client_t *c, shc_multi_item_t **items)
         char *node = select_node(c, item->key, item->klen, NULL);
 
         tagged_value_t *tval = list_get_tagged_value(pools, node);
-        if (!tval) {
+        if (!tval || list_count((linked_list_t *)tval->value) > c->pipeline_max)
+        {
             linked_list_t *sublist = list_create();
             tval = list_create_tagged_sublist(node, sublist);
-            list_push_tagged_value(pools, tval);
+            // put the new sublist at the beggining of the main tagged list
+            // so that in case of multiple lists for the same node this will
+            // be the one returned by list_get_tagged_value()
+            list_unshift_tagged_value(pools, tval);
         }
 
         list_push_value((linked_list_t *)tval->value, item);

@@ -37,7 +37,32 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t **nodes, int num
  */
 int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value);
 
+/**
+ * @brief Get and/or set the random_node mode on a shardcache client instance.
+ *        When on a single (random) node will be used for all the commands instead
+ *        of using the chash algorithm to determine the owner.
+ * @param c       A valid pointer to a shardcache_client_t structure
+ * @param new_value If false, the chash algorithm will be used against the list
+ *        of known node to determine the owner of a key and commands will be sent
+ *        only to owners.\nIf true a single random node will be used instead
+ *
+ */
 int shardcache_client_use_random_node(shardcache_client_t *c, int new_value);
+
+/**
+ * @brief Get and/or set the maximum number of requests that can be pipelined
+ *        on a single connection
+ * @param c         A valid pointer to a shardcache_client_t structure
+ * @param new_value If greater or equal to 0 the new value will be set.
+ *                  Otherwise the old value will be queried but no new value
+ *                  will be set
+ * @note  this setting affects only the _multi commands, which will pipeline
+ *        at most pipeline_max requests on a single connections and creating
+ *        how many connections are necessary to fulfill all the requests
+ * @return The previously configured value for the pipeline_max option
+ *         (still valid if no new value has been provided)
+ */
+int shardcache_client_pipeline_max(shardcache_client_t *c, int new_value);
 
 /**
  * @brief Get the value for a key
