@@ -35,6 +35,7 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
         shardcache_client_errstr
         shardcache_client_tcp_timeout
         shardcache_client_use_random_node
+        shardcache_client_pipeline_max
 ) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
@@ -43,7 +44,7 @@ our @EXPORT = qw(
     
 );
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -133,6 +134,11 @@ sub tcp_timeout {
 sub use_random_node {
     my ($self, $new_value) = @_;
     return shardcache_client_use_random_node($self->{_client}, $new_value);
+}
+
+sub pipeline_max {
+    my ($self, $new_value) = @_;
+    return shardcache_client_pipeline_max($self->{_client}, $new_value);
 }
 
 sub get {
@@ -424,6 +430,11 @@ None by default.
     key will be selected.
     Note that the 'stats', the 'index' and the 'migration*' commands are not affected by this flag
 
+=item * pipeline_max ( $new_value )
+
+    Set the maximum number of requests to pipeline on a single connection.
+    This setting affects how many parallel connections will be used to execute a multi command
+
 =item * get ( $key )
 
     Get the value for $key. 
@@ -525,6 +536,7 @@ None by default.
   int shardcache_client_check(shardcache_client_t *c, char *node);
   int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value);
   int shardcache_client_use_random_node(shardcache_client_t *c, int new_value);
+  int shardcache_client_pipeline_max(shardcache_client_t *c, int new_value);
   shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *node);
   int shardcache_client_errno(shardcache_client_t *c)
   char *shardcache_client_errstr(shardcache_client_t *c)
