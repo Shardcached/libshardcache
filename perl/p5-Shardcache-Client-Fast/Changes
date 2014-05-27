@@ -1,5 +1,8 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.10  Tue May 27 09:22:51 CEST 2014
+        - Allow to set the pipeline_max parameter on the underlying shardcache_client instance
+
 0.09  Tue May 13 13:48:06 CEST 2014
         - Allow to set the use_random_node flag on the underlying shardcache_client instance
         - Minor fixes to the documentation
