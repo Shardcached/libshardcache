@@ -81,7 +81,7 @@ usage(char *progname, int rc, char *msg, ...)
 static void
 stop(int sig)
 {
-    __sync_fetch_and_add(&quit, 1);
+    (void)__sync_fetch_and_add(&quit, 1);
 }
 
 
