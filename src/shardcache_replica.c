@@ -183,9 +183,9 @@ static void
 kepaxos_connection_eof(iomux_t *iomux, int fd, void *priv)
 {
     kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
+    shardcache_release_connection_for_peer(connection->replica->shc, connection->peer, fd);
     async_read_context_destroy(connection->ctx);
     free(connection);
-    shardcache_release_connection_for_peer(connection->replica->shc, connection->peer, fd);
 }
 
 static void
