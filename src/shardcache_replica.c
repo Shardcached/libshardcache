@@ -659,6 +659,8 @@ shardcache_replica_create(shardcache_t *shc,
 
     replica->recovery_queue = pqueue_create(PQUEUE_MODE_LOWEST, 1<<20, free);
 
+    replica->iomux = iomux_create(0, 1);
+
     if (pthread_create(&replica->recover_th, NULL, shardcache_replica_recover, replica) != 0)
     {
         shardcache_replica_destroy(replica); 
@@ -671,8 +673,6 @@ shardcache_replica_create(shardcache_t *shc,
         free(peers);
         return NULL;
     }
-
-    replica->iomux = iomux_create(0, 1);
 
     shardcache_replica_register_counters(replica);
 
