@@ -273,7 +273,7 @@ open_connection(const char *host, int port, unsigned int timeout)
             int limit = sizeof(fd_set) * rlim.rlim_max;
             if (!limit)
                 limit = sizeof(fd_set) * rlim.rlim_cur;
-            if (limit)
+            if (limit > 0)
                 fdset_size = limit/FD_SETSIZE;
         }
 
