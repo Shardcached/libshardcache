@@ -983,8 +983,12 @@ int kepaxos_get_diff(kepaxos_t *ke,
                      kepaxos_diff_item_t **items,
                      int *num_items)
 {
-    if (BALLOT_VALUE(ballot) >= BALLOT_VALUE(kepaxos_max_ballot(ke->log)))
+    MUTEX_LOCK(&ke->lock);
+
+    if (BALLOT_VALUE(ballot) >= BALLOT_VALUE(kepaxos_max_ballot(ke->log))) {
+        MUTEX_UNLOCK(&ke->lock);
         return -1;
+    }
 
     /*
     uint64_t ballots[256];
@@ -992,11 +996,14 @@ int kepaxos_get_diff(kepaxos_t *ke,
     */
 
     kepaxos_log_t *log = kepaxos_log_create(ke->dbfile);
-    if (!log)
+    if (!log) {
+        MUTEX_UNLOCK(&ke->lock);
         return -1;
+    }
 
     int rc = kepaxos_diff_from_ballot(log, ballot, items, num_items);
 
+    MUTEX_UNLOCK(&ke->lock);
     return rc;
 }
 
