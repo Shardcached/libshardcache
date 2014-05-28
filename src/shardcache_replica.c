@@ -450,7 +450,6 @@ shardcache_replica_ping(shardcache_replica_t *replica)
             free(msg);
         }
     }
-
     free(peers);
 }
 
@@ -644,7 +643,8 @@ shardcache_replica_create(shardcache_t *shc,
     kepaxos_callbacks_t kepaxos_callbacks = {
         .send = kepaxos_send,
         .commit = kepaxos_commit,
-        .recover = kepaxos_recover
+        .recover = kepaxos_recover,
+        .priv = replica
     };
     replica->kepaxos = kepaxos_context_create(dbfile, peers, num_peers, my_index, 10, &kepaxos_callbacks);
     if (!replica->kepaxos) {
