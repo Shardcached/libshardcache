@@ -13,7 +13,9 @@
 
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <arpa/inet.h>
+#include <errno.h>
 
 #define SHARDCACHE_REPLICA_WRKDIR_DEFAULT "/tmp/shcrpl"
 #define KEPAXOS_LOG_FILENAME "kepaxos_log.db"
@@ -626,10 +628,20 @@ shardcache_replica_create(shardcache_t *shc,
     replica->shc = shc;
 
     // TODO - check wrkdir exists and is writeable
-    char dbfile[2048];
-    snprintf(dbfile, sizeof(dbfile), "%s/%s",
-             wrkdir ? wrkdir : SHARDCACHE_REPLICA_WRKDIR_DEFAULT, KEPAXOS_LOG_FILENAME);
+    if (!wrkdir)
+        wrkdir = SHARDCACHE_REPLICA_WRKDIR_DEFAULT;
 
+    char dbfile[2048];
+    snprintf(dbfile, sizeof(dbfile), "%s/%s", wrkdir, KEPAXOS_LOG_FILENAME);
+
+    struct stat s;
+    if (stat(wrkdir, &s) != 0) {
+        if (mkdir(wrkdir, S_IRWXU) != 0) {
+            SHC_ERROR("Can't create the workdir %s to store the replica log: %s", wrkdir, strerror(errno));
+            shardcache_replica_destroy(replica);
+            return NULL;
+        }
+    }
     char **peers = malloc(sizeof(char *) * replica->num_replicas);
     int num_peers = shardcache_node_get_all_addresses(replica->node, peers,  replica->num_replicas);
 
@@ -639,6 +651,11 @@ shardcache_replica_create(shardcache_t *shc,
         .recover = kepaxos_recover
     };
     replica->kepaxos = kepaxos_context_create(dbfile, peers, num_peers, my_index, 10, &kepaxos_callbacks);
+    if (!replica->kepaxos) {
+        shardcache_replica_destroy(replica);
+        free(peers);
+        return NULL;
+    }
 
     replica->recovery = ht_create(128, 1024, NULL);
 
@@ -666,9 +683,14 @@ shardcache_replica_destroy(shardcache_replica_t *replica)
         ATOMIC_INCREMENT(replica->quit);
         pthread_join(replica->recover_th, NULL);
     }
+
     shardcache_node_destroy(replica->node);
-    ht_destroy(replica->recovery);
-    pqueue_destroy(replica->recovery_queue);
+
+    if (replica->recovery)
+        ht_destroy(replica->recovery);
+    if (replica->recovery_queue)
+        pqueue_destroy(replica->recovery_queue);
+
     free(replica);
 }
 

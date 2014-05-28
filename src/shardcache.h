@@ -321,6 +321,15 @@ typedef struct __shardcache_node_s shardcache_node_t;
 shardcache_node_t *shardcache_node_create(char *label, char **addresses, int num_addresses);
 
 /**
+ * @brief Create a new shardcache_node_t structure by parsing a full node string
+ * @param str A valid node string
+ * @return A newly initialized shardcache_node_t structure
+ * @note The caller MUST release the resources used to represent the node by calling
+ *       shardcache_node_destroy() on the returned pointer
+ */
+shardcache_node_t *shardcache_node_create_from_string(char *str);
+
+/**
  * @brief Create a copy of an existing shardcache_node_t structure
  * @param node A previously initialized and valid shardcache_node_t structure
  * @return A newly initialized shardcache_node_t structure identical to the original one

@@ -574,6 +574,7 @@ shardcache_create(char *me,
     cache->ops.priv = cache;
     cache->shards = malloc(sizeof(shardcache_node_t *) * nnodes);
     int me_found = 0;
+    int my_index = -1;
     for (i = 0; i < nnodes; i++) {
         shard_names[i] = nodes[i]->label;
         shard_lens[i] = strlen(shard_names[i]);
@@ -587,13 +588,13 @@ shardcache_create(char *me,
                 if (fd >= 0) {
                     SHC_DEBUG("Using address %s", nodes[i]->address[n]);
                     cache->addr = strdup(nodes[i]->address[n]);
+                    my_index = n;
                     close(fd);
+                    break;
                 } else {
                     SHC_DEBUG("Skipping address %s", nodes[i]->address[n]);
                 }
             }
-            if (nodes[i]->num_replicas > 1)
-                cache->replica = shardcache_replica_create(cache, cache->shards[i], n, NULL);
         }
     }
 
@@ -686,6 +687,12 @@ shardcache_create(char *me,
     if (!shardcache_log_initialized)
         shardcache_log_init("libshardcache", LOG_WARNING);
 
+    // start the replica subsystem now
+    // NOTE: this needs to happen after the cache has been fully initialized
+    for (i = 0; i < nnodes; i++) {
+        if (nodes[i]->num_replicas > 1 && my_index >= 0)
+            cache->replica = shardcache_replica_create(cache, cache->shards[i], my_index, NULL);
+    }
     return cache;
 }
 
