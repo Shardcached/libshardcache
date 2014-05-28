@@ -3,6 +3,8 @@
 
 typedef struct __connections_pool_s connections_pool_t;
 
+typedef struct __connection_pool_entry_s connection_pool_entry_t;
+
 connections_pool_t * connections_pool_create(int tcp_timeout, int max_spare);
 void connections_pool_destroy(connections_pool_t *cc);
 int connections_pool_get(connections_pool_t *cc, char *addr);

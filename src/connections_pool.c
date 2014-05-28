@@ -13,12 +13,35 @@
 
 #include "atomic.h"
 
+#include <time.h>
+
 struct __connections_pool_s {
     hashtable_t *table;
     int tcp_timeout;
     int max_spare;
     int check;
 };
+
+struct __connection_pool_entry_s {
+    int fd;
+    struct timeval last_access;
+};
+
+
+int
+is_connection_time_valid(struct timeval *conn_time)
+{
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    struct timeval result = { 0, 0 };
+    timersub(&now, conn_time, &result);
+
+    if (result.tv_sec < 30) { // TODO: read from configuration
+        return 1;
+    }
+
+    return 0;
+}
 
 connections_pool_t *
 connections_pool_create(int tcp_timeout, int max_spare)
@@ -40,9 +63,9 @@ connections_pool_destroy(connections_pool_t *cc)
 static void
 free_connection(void *conn)
 {
-    int *fdp = (int *)conn;
-    close(*fdp);
-    free(fdp);
+    connection_pool_entry_t *entry = (connection_pool_entry_t *)conn;
+    close(entry->fd);
+    free(entry);
 }
 
 static queue_t *
@@ -71,11 +94,11 @@ int
 connections_queue_empty(hashtable_t *table, void *value, size_t vlen, void *user)
 {
     queue_t *connection_queue = (queue_t *)value;
-    int *fd = queue_pop_left(connection_queue);
-    while (fd) {
-        close(*fd);
-        free(fd);
-        fd = queue_pop_left(connection_queue);
+    connection_pool_entry_t *entry = queue_pop_left(connection_queue);
+    while (entry) {
+        close(entry->fd);
+        free(entry);
+        entry = queue_pop_left(connection_queue);
     }
     return 1;
 }
@@ -87,31 +110,32 @@ connections_pool_get(connections_pool_t *cc, char *addr)
     if (!connection_queue)
         return -1;
 
-    int *fd = queue_pop_left(connection_queue);
-    while (fd) {
-        int rfd = *fd;
-        free(fd);
-        int flags = fcntl(rfd, F_GETFL, 0);
+    connection_pool_entry_t *entry = queue_pop_left(connection_queue);
+    while (entry) {
+        int fd = entry->fd;
+        struct timeval last_access = entry->last_access;
+        free(entry);
+        int flags = fcntl(fd, F_GETFL, 0);
         if (flags == -1) {
-            close(rfd);
-            fd = queue_pop_left(connection_queue);
+            close(fd);
+            entry = queue_pop_left(connection_queue);
             continue;
         }
 
         if (!ATOMIC_READ(cc->check))
-            return rfd;
+            return fd;
 
         flags &= ~O_NONBLOCK;
-        fcntl(rfd, F_SETFL, flags);
+        fcntl(fd, F_SETFL, flags);
         char noop = SHC_HDR_NOOP;
 
         // XXX - this is a blocking write
-        if (write(rfd, &noop, 1) == 1)
-            return rfd;
+        if (is_connection_time_valid(&last_access) || write(fd, &noop, 1) == 1)
+            return fd;
         else
-            close(rfd);
+            close(fd);
 
-        fd = queue_pop_left(connection_queue);
+        entry = queue_pop_left(connection_queue);
     }
 
     int new_fd = connect_to_peer(addr, ATOMIC_READ(cc->tcp_timeout));
@@ -134,10 +158,11 @@ connections_pool_add(connections_pool_t *cc, char *addr, int fd)
     }
 
     if (queue_count(connection_queue) < ATOMIC_READ(cc->max_spare)) {
-        int *fdp = malloc(sizeof(int));
-        *fdp = fd;
-        if (queue_push_right(connection_queue, fdp) != 0) {
-            free(fdp);
+        connection_pool_entry_t *entry = malloc(sizeof(connection_pool_entry_t));
+        entry->fd = fd;
+        gettimeofday(&entry->last_access, NULL);
+        if (queue_push_right(connection_queue, entry) != 0) {
+            free(entry);
             close(fd);
         }
     } else {
