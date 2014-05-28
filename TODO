@@ -26,10 +26,10 @@
           changes are the ones described above, means using the old response header when
           answering to a failing GET/SET/OFFSET/HEAD command.
 
- * minimize the usage of the NOOP to verify the connection status.
-   When connections are reused quickly there is no point in checking the status again,
-   so a threshold should be added which controls whether we need to check the status
-   or we can avoid since it has been just used
+ * extend the storage API to allow asynchronous fetches.
+   Adding a fetch_async callback to the storage structure would be the easiest. Then arc_ops will
+   also expose a fetch_async which will be called by arc_lookup() if used in async mode,
+   otherwise the synchronous interface will still be used.
 
  * server-side get_multi() and set_multi() implementation, as for the client implementation
    server nodes can take care of parallelizing (when possible) batch set/get commands which involve
