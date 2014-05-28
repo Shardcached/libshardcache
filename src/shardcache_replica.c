@@ -139,7 +139,6 @@ kepaxos_connection_input(iomux_t *iomux, int fd, unsigned char *data, int len, v
     shardcache_replica_t *replica = connection->replica;
 
     int processed = 0;
-    fbuf_t out = FBUF_STATIC_INITIALIZER;
 
     int read_state = async_read_context_input_data(connection->ctx, data, len, &processed);
     if (read_state == SHC_STATE_READING_DONE ||
@@ -151,10 +150,10 @@ kepaxos_connection_input(iomux_t *iomux, int fd, unsigned char *data, int len, v
         {
             if (hdr == SHC_HDR_REPLICA_RESPONSE) {
                 ATOMIC_INCREMENT(replica->counters.responses);
-                kepaxos_received_response(replica->kepaxos, fbuf_data(&out), fbuf_used(&out));
+                kepaxos_received_response(replica->kepaxos, data, len);
             } else {
                 ATOMIC_INCREMENT(replica->counters.acks);
-                shardcache_replica_received_ack(replica, fbuf_data(&out), fbuf_used(&out));
+                shardcache_replica_received_ack(replica, data, len);
             }
             iomux_remove(iomux, fd);
             shardcache_release_connection_for_peer(replica->shc, connection->peer, fd);
