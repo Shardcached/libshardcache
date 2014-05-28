@@ -443,8 +443,8 @@ shardcache_replica_ping(shardcache_replica_t *replica)
                     .priv = connection
                 };
                 iomux_add(replica->iomux, fd, &callbacks);
-                char **data = NULL;
-                unsigned int len = fbuf_detach(&connection->output, data);
+                char *data = NULL;
+                unsigned int len = fbuf_detach(&connection->output, &data);
                 iomux_write(replica->iomux, fd, (unsigned char *)data, len, 1);
             }
             free(msg);
