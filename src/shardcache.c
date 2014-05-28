@@ -1830,8 +1830,12 @@ int shardcache_set_async(shardcache_t *cache,
     if (!key || !klen)
         return -1;
 
-    if (cache->replica)
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, 0);
+    if (cache->replica) {
+        int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, 0);
+        if (cb)
+            cb(key, klen, rc, priv);
+        return rc;
+    }
 
     return shardcache_set_internal(cache, key, klen, value, vlen, expire, if_not_exists, 0, cb, priv);
 }
