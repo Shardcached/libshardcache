@@ -472,11 +472,7 @@ shardcache_replica_recover(void *priv)
         ATOMIC_SET(replica->counters.ballot, kepaxos_ballot(replica->kepaxos));
 
         int rc = pqueue_pull_highest(replica->recovery_queue, (void **)&key, &klen, &prio);
-        if (rc != 0) {
-            SHC_ERROR("replica_recover: Can't get the top item from the priority queue");
-        }
-
-        if (!key) {
+        if (rc != 0 || !key) {
             shardcache_replica_ping(replica);
             do {
                 rc = nanosleep(&timeout, &remainder);
