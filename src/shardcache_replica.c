@@ -724,9 +724,7 @@ shardcache_replica_received_ping(shardcache_replica_t *replica,
 
     kepaxos_diff_item_t *items = NULL;
     int num_items = 0;
-    int rc = kepaxos_get_diff(replica->kepaxos, ballot, &items, &num_items);
-    if (rc != 0)
-        return -1; 
+    kepaxos_get_diff(replica->kepaxos, ballot, &items, &num_items);
 
     size_t myname_len = strlen(replica->me) + 1;
     size_t outlen = (sizeof(uint32_t) * 2) + myname_len;
