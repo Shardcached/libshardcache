@@ -161,7 +161,7 @@ kepaxos_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_t *b
         seq = sqlite3_column_int64(log->select_seq_stmt, 0);
         if (ballot)
             *ballot = sqlite3_column_int64(log->select_seq_stmt, 1);
-    } else {
+    } else if (!rc == SQLITE_DONE) {
         SHC_ERROR("Can't execut the select-seq statement: %s",
                   sqlite3_errmsg(log->dbh));
     }
