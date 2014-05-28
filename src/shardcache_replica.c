@@ -150,10 +150,10 @@ kepaxos_connection_input(iomux_t *iomux, int fd, unsigned char *data, int len, v
         {
             if (hdr == SHC_HDR_REPLICA_RESPONSE) {
                 ATOMIC_INCREMENT(replica->counters.responses);
-                kepaxos_received_response(replica->kepaxos, data, len);
+                kepaxos_received_response(replica->kepaxos, fbuf_data(&connection->input), fbuf_used(&connection->input));
             } else {
                 ATOMIC_INCREMENT(replica->counters.acks);
-                shardcache_replica_received_ack(replica, data, len);
+                shardcache_replica_received_ack(replica, fbuf_data(&connection->input), fbuf_used(&connection->input));
             }
             iomux_remove(iomux, fd);
             shardcache_release_connection_for_peer(replica->shc, connection->peer, fd);
