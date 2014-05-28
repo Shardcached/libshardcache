@@ -185,7 +185,7 @@ kepaxos_connection_eof(iomux_t *iomux, int fd, void *priv)
     kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
     async_read_context_destroy(connection->ctx);
     free(connection);
-    close(fd);
+    shardcache_release_connection_for_peer(connection->replica->shc, connection->peer, fd);
 }
 
 static void
@@ -341,9 +341,10 @@ kepaxos_send(char **recipients,
             };
 
             iomux_add(replica->iomux, fd, &callbacks);
-            char **data = NULL;
-            unsigned int len = fbuf_detach(&connection->output, data);
+            char *data = NULL;
+            unsigned int len = fbuf_detach(&connection->output, &data);
             iomux_write(replica->iomux, fd, (unsigned char *)data, len, 1);
+            free(data);
         }
     }
     return 0;
@@ -446,6 +447,9 @@ shardcache_replica_ping(shardcache_replica_t *replica)
                 char *data = NULL;
                 unsigned int len = fbuf_detach(&connection->output, &data);
                 iomux_write(replica->iomux, fd, (unsigned char *)data, len, 1);
+                free(data);
+            } else {
+                shardcache_release_connection_for_peer(replica->shc, peers[i], fd);
             }
             free(msg);
         }
