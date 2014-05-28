@@ -344,7 +344,6 @@ kepaxos_send(char **recipients,
             char *data = NULL;
             unsigned int len = fbuf_detach(&connection->output, &data);
             iomux_write(replica->iomux, fd, (unsigned char *)data, len, 1);
-            free(data);
         }
     }
     return 0;
@@ -447,7 +446,6 @@ shardcache_replica_ping(shardcache_replica_t *replica)
                 char *data = NULL;
                 unsigned int len = fbuf_detach(&connection->output, &data);
                 iomux_write(replica->iomux, fd, (unsigned char *)data, len, 1);
-                free(data);
             } else {
                 shardcache_release_connection_for_peer(replica->shc, peers[i], fd);
             }
@@ -668,6 +666,12 @@ shardcache_replica_create(shardcache_t *shc,
         return NULL;
     }
 
+    if (pthread_create(&replica->async_io_th, NULL, shardcache_replica_async_io, replica) != 0) {
+        shardcache_replica_destroy(replica); 
+        free(peers);
+        return NULL;
+    }
+
     replica->iomux = iomux_create(0, 1);
 
     shardcache_replica_register_counters(replica);
@@ -682,6 +686,7 @@ shardcache_replica_destroy(shardcache_replica_t *replica)
     if (replica->recover_th) {
         ATOMIC_INCREMENT(replica->quit);
         pthread_join(replica->recover_th, NULL);
+        pthread_join(replica->async_io_th, NULL);
     }
 
     shardcache_node_destroy(replica->node);
