@@ -254,7 +254,7 @@ kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t
     kepaxos_log_item_t *itms = NULL;
     while(sqlite3_step(stmt) == SQLITE_ROW) {
         itms = realloc(itms, sizeof(kepaxos_log_item_t) * (nitems + 1));
-        kepaxos_log_item_t *item = &itms[++nitems];
+        kepaxos_log_item_t *item = &itms[nitems++];
         item->ballot = sqlite3_column_int64(stmt, 0);
         item->seq = sqlite3_column_int64(stmt, 1);
         item->klen = sqlite3_column_bytes(stmt, 2); 
