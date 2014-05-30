@@ -537,6 +537,18 @@ int shardcache_force_caching(shardcache_t *cache, int new_value);
 int shardcache_tcp_timeout(shardcache_t *cache, int new_value);
 
 /*
+ * @brief Allows to change the connection pool connection timeout when reusing tcp connections
+ * @param cache       A valid pointer to a shardcache_t structure
+ * @param new_value   The amount of milliseconds to use as timeout.
+ *                    If -1 is provided as new_value, no change will be applied
+ *                    but the actual value will still be returned
+ *                    (effectively querying the actual status).
+ * @return the previous value for the tcp_timeout setting
+ * @note defaults to SHARDCACHE_CONNECTION_EXPIRE_DEFAULT
+ */
+int shardcache_conn_expire_time(shardcache_t *cache, int new_value);
+
+/*
  * @brief Allows to change the timeout passed to iomux_run()
  *               by the serving workers and the async reader
  * @note  Both the workers and the async reader use a low timeout

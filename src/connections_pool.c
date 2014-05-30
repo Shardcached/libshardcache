@@ -184,6 +184,17 @@ connections_pool_tcp_timeout(connections_pool_t *cc, int new_value)
 }
 
 int
+connections_pool_expire_time(connections_pool_t *cc, int new_value)
+{
+    int old_value = ATOMIC_READ(cc->expire_time);
+
+    if (new_value >= 0)
+        ATOMIC_SET(cc->expire_time, new_value);
+
+    return old_value;
+}
+
+int
 connections_pool_max_spare(connections_pool_t *cc, int new_value)
 {
     int old_value = ATOMIC_READ(cc->max_spare);

@@ -2435,6 +2435,15 @@ shardcache_tcp_timeout(shardcache_t *cache, int new_value)
     return connections_pool_tcp_timeout(cache->connections_pool, new_value);
 }
 
+int
+shardcache_conn_expire_time(shardcache_t *cache, int new_value)
+{
+    if (new_value == 0)
+        new_value = SHARDCACHE_CONNECTION_EXPIRE_DEFAULT;
+
+    return connections_pool_expire_time(cache->connections_pool, new_value);
+}
+
 static inline int
 shardcache_get_set_option(int *option, int new_value)
 {

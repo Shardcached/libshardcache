@@ -11,6 +11,7 @@ int connections_pool_get(connections_pool_t *cc, char *addr);
 void connections_pool_add(connections_pool_t *cc, char *addr, int fd);
 int connections_pool_tcp_timeout(connections_pool_t *cc, int new_value);
 int connections_pool_check(connections_pool_t *cc, int new_value);
+int connections_pool_expire_time(connections_pool_t *cc, int new_value);
 
 #endif
 
