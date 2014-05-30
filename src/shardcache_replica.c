@@ -524,7 +524,7 @@ shardcache_replica_recover(void *priv)
                                        item->klen,
                                        item->ballot,
                                        item->seq);
-                if (rc == 0) {
+                if (rc == 0 && fbuf_used(&data)) {
                     rc = shardcache_set_internal(replica->shc,
                                                  item->key,
                                                  item->klen,
