@@ -1978,8 +1978,12 @@ shardcache_del_async(shardcache_t *cache,
     if (!key || !key)
         return -1;
 
-    if (cache->replica)
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_DELETE, key, klen, NULL, 0, 0);
+    if (cache->replica) {
+        int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_DELETE, key, klen, NULL, 0, 0);
+        if (cb)
+            cb(key, klen, rc, priv);
+        return rc;
+    }
 
     return shardcache_del_internal(cache, key, klen, 0, cb, priv);
 }
