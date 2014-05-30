@@ -995,13 +995,7 @@ int kepaxos_get_diff(kepaxos_t *ke,
     uint64_t seq[256];
     */
 
-    kepaxos_log_t *log = kepaxos_log_create(ke->dbfile);
-    if (!log) {
-        MUTEX_UNLOCK(&ke->lock);
-        return -1;
-    }
-
-    int rc = kepaxos_diff_from_ballot(log, ballot, items, num_items);
+    int rc = kepaxos_diff_from_ballot(ke->log, ballot, items, num_items);
 
     MUTEX_UNLOCK(&ke->lock);
     return rc;
