@@ -81,4 +81,6 @@ void kepaxos_diff_release(kepaxos_diff_item_t *items, int num_items);
 
 uint64_t kepaxos_ballot(kepaxos_t *ke); // returns the current ballot
 
+uint64_t kepaxos_seq(kepaxos_t *ke, void *key, size_t klen);
+
 #endif

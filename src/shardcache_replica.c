@@ -390,7 +390,9 @@ shardcache_replica_received_ack(shardcache_replica_t *replica, void *msg, size_t
             return;
         }
         MSG_READ_POINTER(p, key, klen);
-        kepaxos_recover(peer, key, klen, seq, ballot, replica);
+        uint64_t last_seq = kepaxos_seq(replica->kepaxos, key, klen);
+        if (last_seq < seq)
+            kepaxos_recover(peer, key, klen, seq, ballot, replica);
     }
 }
 
