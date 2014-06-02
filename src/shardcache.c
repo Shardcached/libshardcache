@@ -71,7 +71,7 @@ shardcache_node_create_from_string(char *str)
             free(copy);
             return NULL;
         }
-        addrlist = realloc(addrlist, num_addresses + 1);
+        addrlist = realloc(addrlist, sizeof(shardcache_node_t *) * (num_addresses + 1));
         addrlist[num_addresses] = strdup(addr);
         num_addresses++;
     }
@@ -718,8 +718,15 @@ shardcache_destroy(shardcache_t *cache)
     //        the serving subsystem has been stopped
     if (cache->async_mux)
         iomux_destroy(cache->async_mux);
-    if (cache->async_queue)
+    if (cache->async_queue) {
+        async_read_wrk_t *wrk = queue_pop_left(cache->async_queue);
+        while(wrk) {
+            async_read_context_destroy(wrk->ctx);
+            free(wrk);
+            wrk = queue_pop_left(cache->async_queue);
+        }
         queue_destroy(cache->async_queue);
+    }
 
     if (ATOMIC_READ(cache->evict_on_delete) && cache->evictor_jobs)
     {
