@@ -16,15 +16,15 @@
 #include <syslog.h>
 
 
-#define SHARDCACHE_PORT_DEFAULT 4444
-#define SHARDCACHE_TCP_TIMEOUT_DEFAULT 5000 // (in millisecs) == 5 secs
-#define SHARDCACHE_EXPIRE_TIME_DEFAULT 0 // don't expire keys by default
-#define SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW 100000 // (in microsecs)
-#define SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH 500000 // (in microsecs)
-#define SHARDCACHE_CONNECTION_EXPIRE_DEFAULT 30000 // (in millisecs)
-#define SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT 64 // number of queued/pipelined
-                                                 // requests to handle ahead
-                                                 // while serving the first
+#define SHARDCACHE_PORT_DEFAULT               4444
+#define SHARDCACHE_TCP_TIMEOUT_DEFAULT        5000   // (in millisecs) == 5 secs
+#define SHARDCACHE_EXPIRE_TIME_DEFAULT        0      // don't expire keys by default
+#define SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW      100000 // (in microsecs)
+#define SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH     500000 // (in microsecs)
+#define SHARDCACHE_CONNECTION_EXPIRE_DEFAULT  30000  // (in millisecs)
+#define SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT 64     // number of queued/pipelined
+                                                     // requests to handle ahead
+                                                     // while serving the first
 
 extern const char *LIBSHARDCACHE_VERSION;
 
