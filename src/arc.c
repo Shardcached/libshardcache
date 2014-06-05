@@ -318,7 +318,7 @@ static void free_node_ptr_callback(void *node) {
     free(obj);
 }
 
-static void terminate_node_callback(refcnt_node_t *node, int concurrent) {
+static void terminate_node_callback(refcnt_node_t *node) {
     arc_object_t *obj = (arc_object_t *)get_node_ptr(node);
     MUTEX_LOCK(&obj->lock);
 
