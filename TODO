@@ -31,10 +31,6 @@
    also expose a fetch_async which will be called by arc_lookup() if used in async mode,
    otherwise the synchronous interface will still be used.
 
- * server-side get_multi() and set_multi() implementation, as for the client implementation
-   server nodes can take care of parallelizing (when possible) batch set/get commands which involve
-   keys not owned by the current server.
-
  * refactor the API actually exposed to set internal shardcache flags and options
    once an instance has been created. The way it's actually implemented is suboptimal
    because adding a new option requires to add both a member to the shardcache_t structure
