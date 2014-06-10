@@ -135,18 +135,6 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         complete = 1;
         total_len = obj->dlen;
-        // XXX - in theory we shuould let read_message_async() and its input data handler
-        //       (who is calling us) take care of calling iomux_close() on this fd and hence
-        //       removing it from the async mux. We need to do it now (earlier) only because
-        //       we want to put back the filedescriptor into the connections pool (for further usage)
-        //       which would create issues if we do it before removing it from the async mux.
-        //       This means that when our caller will try using iomux_close() on this fd, the attempt
-        //       will fail but it will stil need to take care of releasing the async_read context. 
-        //       (check commit 792760ada8e655d7b87996788b490c9718177bc7)
-        if (arg->fd > 0)
-            iomux_close(cache->async_mux, arg->fd);
-        shardcache_release_connection_for_peer(cache, peer_addr, fd);
-        free(arg);
 
         if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
             arc_ops_evict_object(cache, obj);
@@ -168,8 +156,15 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     }
 
     MUTEX_UNLOCK(&obj->lock);
-    if (complete || error)
+    if (complete) {
+        if (arg->fd > 0)
+            iomux_close(cache->async_mux, arg->fd);
+        shardcache_release_connection_for_peer(cache, peer_addr, fd);
+        free(arg);
         arc_release_resource(cache->arc, obj->res);
+    } else if (error) {
+        arc_release_resource(cache->arc, obj->res);
+    }
 
     return !error ? 0 : -1;
 }
