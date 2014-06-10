@@ -359,11 +359,9 @@ read_async_input_data(iomux_t *iomux, int fd, unsigned char *data, int len, void
                 inet_ntoa(saddr.sin_addr));
     }
 
-    if (close && !iomux_close(iomux, fd)) {
-        // if the filedescriptor has been already removed from the mux
-        // by the async_read_context callback, we need to release the context
-        async_read_context_destroy(ctx);
-    } 
+    if (close)
+        iomux_close(iomux, fd);
+
     return len;
 }
 
