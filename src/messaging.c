@@ -123,12 +123,16 @@ async_read_context_update(async_read_ctx_t *ctx)
         memcpy((char *)&rmagic, ctx->magic, sizeof(uint32_t));
         if ((rmagic&0xFFFFFF00) != (htonl(SHC_MAGIC)&0xFFFFFF00)) {
             ctx->state = SHC_STATE_READING_ERR;
+            if (ctx->cb)
+                ctx->cb(NULL, 0, -2, ctx->cb_priv);
             return ctx->state;
         }
         ctx->version = ctx->magic[3];
         if (ctx->version > SHC_PROTOCOL_VERSION) {
             SHC_WARNING("Unsupported protocol version %02x", ctx->version);
             ctx->state = SHC_STATE_READING_ERR;
+            if (ctx->cb)
+                ctx->cb(NULL, 0, -2, ctx->cb_priv);
             return ctx->state;
         }
 
@@ -191,6 +195,8 @@ async_read_context_update(async_read_ctx_t *ctx)
                 if (!ctx->shash) {
                     SHC_ERROR("No siphash context when signature needed");
                     ctx->state = SHC_STATE_READING_ERR;
+                    if (ctx->cb)
+                        ctx->cb(NULL, 0, -2, ctx->cb_priv);
                     return ctx->state;
                 }
 
@@ -247,27 +253,29 @@ async_read_context_update(async_read_ctx_t *ctx)
                 sip_hash_update(ctx->shash, (char *)&bsep, 1);
 
             if (bsep == SHARDCACHE_RSEP) {
-                if (ctx->rlen == 0 && ctx->cb && ctx->cb(NULL, 0, ctx->rnum, ctx->cb_priv) != 0)
+                ctx->state = SHC_STATE_READING_RECORD;
+                if (ctx->cb && ctx->cb(NULL, 0, ctx->rnum, ctx->cb_priv) != 0)
                 {
                     ctx->state = SHC_STATE_READING_ERR;
                     return ctx->state;
                 }
-                ctx->state = SHC_STATE_READING_RECORD;
                 ctx->rnum++;
                 ctx->rlen = 0;
             } else if (bsep == 0) {
-                if (ctx->rlen == 0 && ctx->cb && ctx->cb(NULL, 0, -1, ctx->cb_priv) != 0)
-                {
-                    ctx->state = SHC_STATE_READING_ERR;
-                    return ctx->state;
-                }
                 if (ctx->auth)
                     ctx->state = SHC_STATE_READING_AUTH;
                 else
                     ctx->state = SHC_STATE_READING_DONE;
+                if (ctx->cb && ctx->cb(NULL, 0, -1, ctx->cb_priv) != 0)
+                {
+                    ctx->state = SHC_STATE_READING_ERR;
+                    return ctx->state;
+                }
                 break;
             } else {
                 ctx->state = SHC_STATE_READING_ERR;
+                if (ctx->cb)
+                    ctx->cb(NULL, 0, -2, ctx->cb_priv);
                 return ctx->state;
             }
         }
@@ -390,13 +398,6 @@ void
 read_async_input_eof(iomux_t *iomux, int fd, void *priv)
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
-
-    if (ctx->cb) {
-        if (ctx->state == SHC_STATE_READING_DONE || ctx->state == SHC_STATE_READING_NONE)
-            ctx->cb(NULL, 0, -1, ctx->cb_priv);
-        else
-            ctx->cb(NULL, 0, -2, ctx->cb_priv);
-    }
 
     if (!ctx->blocking)
         iomux_end_loop(iomux);
