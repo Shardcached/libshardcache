@@ -103,7 +103,6 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         MUTEX_UNLOCK(&obj->lock);
         return -1;
     }
-    arc_retain_resource(cache->arc, obj->res);
     if (!obj->listeners) {
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
@@ -145,7 +144,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         //       will fail but it will stil need to take care of releasing the async_read context. 
         //       (check commit 792760ada8e655d7b87996788b490c9718177bc7)
         if (arg->fd > 0)
-            iomux_remove(cache->async_mux, arg->fd);
+            iomux_close(cache->async_mux, arg->fd);
         shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
 
@@ -169,7 +168,8 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     }
 
     MUTEX_UNLOCK(&obj->lock);
-    arc_release_resource(cache->arc, obj->res);
+    if (complete || error)
+        arc_release_resource(cache->arc, obj->res);
 
     return !error ? 0 : -1;
 }
@@ -203,6 +203,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
         arg->fd = fd;
         async_read_wrk_t *wrk = NULL;
         COBJ_SET_FLAG(obj, COBJ_FLAG_FETCHING);
+        arc_retain_resource(cache->arc, obj->res);
         rc = fetch_from_peer_async(peer_addr,
                                    (char *)cache->auth,
                                    SHC_HDR_CSIGNATURE_SIP,
@@ -215,8 +216,6 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
                                    fd,
                                    &wrk);
         if (rc == 0) {
-            queue_push_right(cache->async_queue, wrk);
-
             // Keep the remote object in the cache only 10% of the time.
             // This is the same logic applied by groupcache to determine hot keys.
             // Better approaches are possible but maybe unnecessary.
@@ -224,6 +223,8 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
                 COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
             else
                 COBJ_UNSET_FLAG(obj, COBJ_FLAG_DROP);
+
+            queue_push_right(cache->async_queue, wrk);
 
         } else {
             if (obj->listeners) {
@@ -235,6 +236,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
             COBJ_SET_FLAG(obj, COBJ_FLAG_EVICTED);
 
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
+            arc_release_resource(cache->arc, obj->res);
 
             free(arg);
         }
