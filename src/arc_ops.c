@@ -222,14 +222,17 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
             queue_push_right(cache->async_queue, wrk);
 
         } else {
-            if (obj->listeners) {
-                list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-                list_clear(obj->listeners);
+            // if the storage is flagged as 'global' we don't want to notify the listeners yest
+            // because an attempt of fetching form the local storage will be done in arc_ops_fetch()
+            if (!cache->storage.global) {
+                if (obj->listeners) {
+                    list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+                    list_clear(obj->listeners);
+                }
+
+                COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
+                COBJ_SET_FLAG(obj, COBJ_FLAG_EVICTED);
             }
-
-            COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-            COBJ_SET_FLAG(obj, COBJ_FLAG_EVICTED);
-
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
             arc_release_resource(cache->arc, obj->res);
 
