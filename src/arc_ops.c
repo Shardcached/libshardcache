@@ -300,8 +300,6 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     cached_object_t *obj = (cached_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
 
-    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
-
     MUTEX_LOCK(&obj->lock);
     if (obj->data || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC|COBJ_FLAG_FETCHING))
     { // the value is already loaded or being downloaded, we don't need to fetch
@@ -309,6 +307,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         MUTEX_UNLOCK(&obj->lock);
         return 0;
     }
+
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
 
     // this object is not evicted anymore (if it eventually was)
     COBJ_UNSET_FLAG(obj, COBJ_FLAG_EVICTED);
