@@ -8,9 +8,12 @@
 #include <hashtable.h>
 #include <refcnt.h>
 
+#include <atomic_defs.h>
+
+#include "shardcache_internal.h" // for MUTEX_* macros
+
 #include "arc.h"
 
-#include "atomic.h"
 
 #define LIKELY(__e) __builtin_expect((__e), 1)
 #define UNLIKELY(__e) __builtin_expect((__e), 0)

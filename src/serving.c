@@ -14,6 +14,7 @@
 #include <linklist.h>
 #include <bsd_queue.h>
 #include <hashtable.h>
+#include <atomic_defs.h>
 
 #include "messaging.h"
 #include "connections.h"
@@ -22,8 +23,6 @@
 #include "rbuf.h"
 
 #include "serving.h"
-
-#include "atomic.h"
 
 #include "shardcache_internal.h" // for the replica memeber
 

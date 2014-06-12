@@ -6,7 +6,7 @@
 #include <pqueue.h>
 #include <iomux.h>
 
-#include "atomic.h"
+#include <atomic_defs.h>
 #include "kepaxos.h"
 #include "shardcache_internal.h"
 #include "counters.h"
@@ -106,6 +106,11 @@ typedef struct {
     fbuf_t input;
     fbuf_t output;
 } kepaxos_connection_t;
+
+typedef struct {
+    void *key;
+    size_t len;
+} kepaxos_key_t;
 
 static void
 shardcache_replica_received_ack(shardcache_replica_t *replica, void *msg, size_t len);
@@ -216,9 +221,11 @@ kepaxos_recover(char *peer,
     item->seq = seq;
     item->ballot = ballot;
     ht_set(replica->recovery, key, klen, item, sizeof(shardcache_item_to_recover_t));
-    void *k = malloc(klen);
-    memcpy(k, key, klen);
-    pqueue_insert(replica->recovery_queue, ballot, k, klen);
+    kepaxos_key_t *k = malloc(sizeof(kepaxos_key_t));
+    k->key = malloc(klen);
+    k->len = klen;
+    memcpy(k, k->key, klen);
+    pqueue_insert(replica->recovery_queue, ballot, k);
     return 0;
 }
 
@@ -456,6 +463,13 @@ shardcache_replica_ping(shardcache_replica_t *replica)
     free(peers);
 }
 
+static void
+kepaxos_key_destroy(kepaxos_key_t *k)
+{
+    free(k->key);
+    free(k);
+}
+
 /* TODO - parallelize recovery */
 static void *
 shardcache_replica_recover(void *priv)
@@ -466,15 +480,14 @@ shardcache_replica_recover(void *priv)
         struct timespec timeout = { 0, 500 * 1e6 };
         struct timespec remainder = { 0, 0 };
 
-        void *key = NULL;
-        size_t klen = 0;
+        kepaxos_key_t *k = NULL;
         uint64_t prio = 0;
 
         ATOMIC_SET(replica->counters.recovering, pqueue_count(replica->recovery_queue));
         ATOMIC_SET(replica->counters.ballot, kepaxos_ballot(replica->kepaxos));
 
-        int rc = pqueue_pull_highest(replica->recovery_queue, (void **)&key, &klen, &prio);
-        if (rc != 0 || !key) {
+        int rc = pqueue_pull_highest(replica->recovery_queue, (void **)&k, &prio);
+        if (rc != 0 || !k) {
             shardcache_replica_ping(replica);
             do {
                 rc = nanosleep(&timeout, &remainder);
@@ -485,17 +498,19 @@ shardcache_replica_recover(void *priv)
             } while (rc != 0);
             continue;
         }
-        shardcache_item_to_recover_t *item = ht_get(replica->recovery, key, klen, NULL);
-        free(key);
+        shardcache_item_to_recover_t *item = ht_get(replica->recovery, k->key, k->len, NULL);
+        kepaxos_key_destroy(k);
 
         if (!item)
             continue;
 
         int fd = shardcache_get_connection_for_peer(replica->shc, item->peer);
         if (fd < 0) {
-            void *k = malloc(item->klen);
-            memcpy(k, item->key, klen);
-            pqueue_insert(replica->recovery_queue, prio, k, item->klen);
+            kepaxos_key_t *k = malloc(sizeof(kepaxos_key_t));
+            k->key = malloc(item->klen);
+            k->len = item->klen;
+            memcpy(k->key, item->key, item->klen);
+            pqueue_insert(replica->recovery_queue, prio, k);
             if (pqueue_count(replica->recovery_queue) == 1) {
                 do {
                     rc = nanosleep(&timeout, &remainder);
@@ -554,9 +569,11 @@ shardcache_replica_recover(void *priv)
             }
         } else {
             // retry
-            void *k = malloc(item->klen);
+            kepaxos_key_t *k = malloc(sizeof(kepaxos_key_t));
+            k->key = malloc(item->klen);
+            k->len = item->klen;
             memcpy(k, item->key, item->klen);
-            pqueue_insert(replica->recovery_queue, prio, k, item->klen);
+            pqueue_insert(replica->recovery_queue, prio, k);
         }
     }
     return NULL;
@@ -658,7 +675,8 @@ shardcache_replica_create(shardcache_t *shc,
 
     replica->recovery = ht_create(128, 1024, NULL);
 
-    replica->recovery_queue = pqueue_create(PQUEUE_MODE_LOWEST, 1<<20, free);
+    replica->recovery_queue = pqueue_create(PQUEUE_MODE_LOWEST, 1<<20,
+                                            (pqueue_free_value_callback)kepaxos_key_destroy);
 
     replica->iomux = iomux_create(0, 1);
 

@@ -6,12 +6,13 @@
 #include <hashtable.h>
 #include <queue.h>
 
+#include <atomic_defs.h>
+
 #include "connections_pool.h"
 #include "messaging.h"
 
 #include <errno.h>
 
-#include "atomic.h"
 
 #include <time.h>
 

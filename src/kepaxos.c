@@ -1,5 +1,5 @@
 #include "kepaxos.h"
-#include "atomic.h"
+#include <atomic_defs.h>
 #include <hashtable.h>
 
 #include <unistd.h>
