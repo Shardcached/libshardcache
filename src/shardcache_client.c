@@ -562,6 +562,35 @@ shardcache_client_migration_abort(shardcache_client_t *c)
     return 0;
 }
 
+typedef struct {
+    shardcache_client_get_aync_data_cb cb;
+    void *priv;
+    int fd;
+    connections_pool_t *connections;
+} shardcache_client_get_async_data_arg_t;
+
+static int
+shardcache_client_get_async_data_helper(char *node,
+                                        void *key,
+                                        size_t klen,
+                                        void *data,
+                                        size_t dlen,
+                                        int error,
+                                        void *priv)
+{
+    shardcache_client_get_async_data_arg_t *arg = (shardcache_client_get_async_data_arg_t *)priv;
+    int rc = arg->cb(node, key, klen, data, dlen, error, arg->priv);
+    if (!data && !dlen) {
+        if (error)
+            close(arg->fd);
+        else
+            connections_pool_add(arg->connections, node, arg->fd);
+
+        free(arg);
+    }
+    return rc;
+}
+
 int
 shardcache_client_get_async(shardcache_client_t *c,
                             void *key,
@@ -576,8 +605,22 @@ shardcache_client_get_async(shardcache_client_t *c,
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", node);
         return -1;
     }
-
-    return fetch_from_peer_async(node, (char *)c->auth, SHC_HDR_CSIGNATURE_SIP, key, klen, 0, 0, data_cb, priv, fd, NULL);
+    shardcache_client_get_async_data_arg_t *arg = malloc(sizeof(shardcache_client_get_async_data_arg_t));
+    arg->connections = c->connections;
+    arg->fd = fd;
+    arg->cb = data_cb;
+    arg->priv = priv;
+    return fetch_from_peer_async(node,
+                                 (char *)c->auth,
+                                 SHC_HDR_CSIGNATURE_SIP,
+                                 key,
+                                 klen,
+                                 0,
+                                 0,
+                                 shardcache_client_get_async_data_helper,
+                                 arg,
+                                 fd,
+                                 NULL);
 }
 
 shc_multi_item_t *
