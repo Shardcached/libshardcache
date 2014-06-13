@@ -149,6 +149,8 @@ async_read_context_update(async_read_ctx_t *ctx)
             {
                 if (!ctx->auth) {
                     ctx->state = SHC_STATE_AUTH_ERR;
+                    if (ctx->cb)
+                        ctx->cb(NULL, 0, -2, ctx->cb_priv);
                     return ctx->state;
                 }
 
@@ -160,6 +162,8 @@ async_read_context_update(async_read_ctx_t *ctx)
             } else if (ctx->auth) {
                 // we are expecting the signature header
                 ctx->state = SHC_STATE_AUTH_ERR;
+                if (ctx->cb)
+                    ctx->cb(NULL, 0, -2, ctx->cb_priv);
                 return ctx->state;
             } else {
                 ctx->hdr = ctx->sig_hdr;
@@ -204,6 +208,8 @@ async_read_context_update(async_read_ctx_t *ctx)
                 if (!sip_hash_final_integer(ctx->shash, &digest)) {
                     SHC_WARNING("Bad signature in received message");
                     ctx->state = SHC_STATE_AUTH_ERR;
+                    if (ctx->cb)
+                        ctx->cb(NULL, 0, -2, ctx->cb_priv);
                     return ctx->state;
                 }
 
@@ -215,6 +221,8 @@ async_read_context_update(async_read_ctx_t *ctx)
 
                 if (memcmp(&digest, &received_digest, sizeof(digest)) != 0) {
                     ctx->state = SHC_STATE_AUTH_ERR;
+                    if (ctx->cb)
+                        ctx->cb(NULL, 0, -2, ctx->cb_priv);
                     return ctx->state;
                 }
             }
@@ -222,6 +230,8 @@ async_read_context_update(async_read_ctx_t *ctx)
             // let's call the read_async callback
             if (ctx->clen > 0 && ctx->cb && ctx->cb(ctx->chunk, ctx->clen, ctx->rnum, ctx->cb_priv) != 0) {
                 ctx->state = SHC_STATE_READING_ERR;
+                if (ctx->cb)
+                    ctx->cb(NULL, 0, -2, ctx->cb_priv);
                 return ctx->state;
             } 
 
@@ -257,6 +267,8 @@ async_read_context_update(async_read_ctx_t *ctx)
                 if (ctx->cb && ctx->cb(NULL, 0, ctx->rnum, ctx->cb_priv) != 0)
                 {
                     ctx->state = SHC_STATE_READING_ERR;
+                    if (ctx->cb)
+                        ctx->cb(NULL, 0, -2, ctx->cb_priv);
                     return ctx->state;
                 }
                 ctx->rnum++;
@@ -269,6 +281,8 @@ async_read_context_update(async_read_ctx_t *ctx)
                 if (ctx->cb && ctx->cb(NULL, 0, -1, ctx->cb_priv) != 0)
                 {
                     ctx->state = SHC_STATE_READING_ERR;
+                    if (ctx->cb)
+                        ctx->cb(NULL, 0, -2, ctx->cb_priv);
                     return ctx->state;
                 }
                 break;
@@ -291,6 +305,8 @@ async_read_context_update(async_read_ctx_t *ctx)
                 // TODO - Error Messages
                 fprintf(stderr, "Bad signature\n");
                 ctx->state = SHC_STATE_AUTH_ERR;
+                if (ctx->cb)
+                    ctx->cb(NULL, 0, -2, ctx->cb_priv);
                 return ctx->state;
             }
 
@@ -311,6 +327,8 @@ async_read_context_update(async_read_ctx_t *ctx)
 
             if (!match) {
                 ctx->state = SHC_STATE_AUTH_ERR;
+                if (ctx->cb)
+                    ctx->cb(NULL, 0, -2, ctx->cb_priv);
                 return ctx->state;
             }
             sip_hash_free(ctx->shash);
@@ -367,8 +385,11 @@ read_async_input_data(iomux_t *iomux, int fd, unsigned char *data, int len, void
                 inet_ntoa(saddr.sin_addr));
     }
 
-    if (close)
+    if (close) {
+        // NOTE: the fd might have already been closed by the read async callback,
+        //       in such case iomux_close() on that fd will just do nothing
         iomux_close(iomux, fd);
+    }
 
     return len;
 }
