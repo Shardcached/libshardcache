@@ -128,10 +128,7 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
     // don't pipeline more than 1024 requests ahead
     if (__sync_fetch_and_add(&ctx->num_requests, 0) - __sync_fetch_and_add(&ctx->num_responses, 0) < 1024)
     {
-        int idx = 0;
-        do {
-            idx = rand() % num_keys;
-        } while (use_index && keys_index->items[idx].vlen == 0);
+        uint32_t idx = random() % (num_keys && num_keys < keys_index->size ? num_keys : keys_index->size);
 
         shardcache_record_t record[2] = {
             {
@@ -147,7 +144,7 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
         unsigned char hdr = SHC_HDR_GET;
         unsigned char sig_hdr = secret ? SHC_HDR_SIGNATURE_SIP : 0;
 
-        if (wrate && rand()%100 > wrate) {
+        if (wrate && random()%100 > wrate) {
             switch(wmode) {
                 case 0:
                 {
@@ -368,7 +365,7 @@ main (int argc, char **argv)
     if (use_index) {
         printf("Fetching index ... ");
         keys_index = shardcache_client_index(client, shardcache_node_get_label(hosts[0]));
-        printf("done!\nStarting clients ... ");
+        printf("done! (%lu items) \nStarting clients ... ", keys_index->size);
     } else {
         int n;
         keys_index = calloc(1, sizeof(shardcache_storage_index_t));
@@ -390,7 +387,7 @@ main (int argc, char **argv)
     shardcache_client_destroy(client);
     signal (SIGINT, stop);
 
-    srand(time(NULL));
+    srandom(time(NULL));
 
     counters = shardcache_init_counters();
 
