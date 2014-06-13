@@ -306,12 +306,6 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     shardcache_t *cache = (shardcache_t *)priv;
 
     MUTEX_LOCK(&obj->lock);
-    if (obj->data || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC|COBJ_FLAG_FETCHING))
-    { // the value is already loaded or being downloaded, we don't need to fetch
-        *size = obj->dlen;
-        MUTEX_UNLOCK(&obj->lock);
-        return 0;
-    }
 
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
 
