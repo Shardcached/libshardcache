@@ -156,13 +156,15 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     }
 
     MUTEX_UNLOCK(&obj->lock);
-    if (complete) {
-        if (arg->fd > 0)
+    if (complete || error) {
+        if (arg->fd > 0) {
             iomux_close(cache->async_mux, arg->fd);
-        shardcache_release_connection_for_peer(cache, peer_addr, fd);
+            if (error)
+                close(fd);
+            else
+                shardcache_release_connection_for_peer(cache, peer_addr, fd);
+        }
         free(arg);
-        arc_release_resource(cache->arc, obj->res);
-    } else if (error) {
         arc_release_resource(cache->arc, obj->res);
     }
 
