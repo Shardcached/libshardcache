@@ -788,8 +788,14 @@ static void
 shc_multi_close_connection(iomux_t *iomux, int fd, void *priv)
 {
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
+
+    if (ctx->response_index == ctx->num_requests)
+        connections_pool_add(ctx->client->connections, ctx->peer, fd);
+    else
+        close(fd);
+
     shc_multi_context_destroy(ctx);
-    close(fd);
+
     if (iomux_isempty(iomux))
         iomux_end_loop(iomux);
 }
@@ -806,16 +812,14 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
         ctx->response_index++;
         state = async_read_context_update(ctx->reader);
     }
+
     if (state == SHC_STATE_READING_ERR) {
         fprintf(stderr, "Async context returned error\n");
         iomux_close(iomux, fd);
     }
+
     if (ctx->response_index == ctx->num_requests) {
-        iomux_remove(iomux, fd);
-        connections_pool_add(ctx->client->connections, ctx->peer, fd);
-        shc_multi_context_destroy(ctx);
-        if (iomux_isempty(iomux))
-            iomux_end_loop(iomux);
+        iomux_close(iomux, fd);
     }
 
     return len;
