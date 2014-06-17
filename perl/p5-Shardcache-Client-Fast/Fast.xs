@@ -27,7 +27,7 @@ static int _get_async_helper (char *node,
         SV *dataSv = &PL_sv_undef;
 
         if (dlen)
-            dataSV = newSVpv(data, dlen);
+            dataSv = newSVpv(data, dlen);
 
         dSP;
 
