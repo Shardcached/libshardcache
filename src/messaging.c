@@ -385,11 +385,8 @@ read_async_input_data(iomux_t *iomux, int fd, unsigned char *data, int len, void
                 inet_ntoa(saddr.sin_addr));
     }
 
-    if (close) {
-        // NOTE: the fd might have already been closed by the read async callback,
-        //       in such case iomux_close() on that fd will just do nothing
+    if (close)
         iomux_close(iomux, fd);
-    }
 
     return len;
 }
@@ -420,16 +417,9 @@ read_async_input_eof(iomux_t *iomux, int fd, void *priv)
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
 
-    if (ctx->cb) {
-        if (ctx->state != SHC_STATE_READING_DONE &&
-            ctx->state != SHC_STATE_READING_ERR &&
-            ctx->state != SHC_STATE_AUTH_ERR)
-        {
-            ctx->cb(NULL, 0, -2, ctx->cb_priv);
-        }
-    }
+    ctx->cb(NULL, 0, -3, ctx->cb_priv);
 
-    if (!ctx->blocking)
+    if (ctx->blocking)
         iomux_end_loop(iomux);
 
     async_read_context_destroy(ctx);
@@ -534,15 +524,25 @@ fetch_from_peer_helper(void *data,
 
     // idx == -1 means that reading finished 
     // idx == -2 means error
+    // idx == -3 means the async connection can been closed
     // any idx >= 0 refers to the record index
     
-    int ret;
-    if (idx == 0)
-        ret = arg->cb(arg->peer, arg->key, arg->klen, data, len, 0, arg->priv);
-    else
-        ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx == -2), arg->priv);
+    int ret = 0;
+    if (arg->cb) {
+        if (idx >= 0)
+            ret = arg->cb(arg->peer, arg->key, arg->klen, data, len, idx, arg->priv);
+        else if (idx == -1)
+            ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, 0, arg->priv);
+        else
+            ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx == -3) ? 1 : -1, arg->priv);
+    }
 
-    if (idx < 0) {
+    if (ret != 0) {
+        arg->cb = NULL;
+        arg->priv = NULL;
+    }
+
+    if (idx == -3) {
         // if the reading is finished or there was an error
         // we need to release the helper_arg structure
         // and eventually close the filedescriptor

@@ -575,19 +575,25 @@ shardcache_client_get_async_data_helper(char *node,
                                         size_t klen,
                                         void *data,
                                         size_t dlen,
-                                        int error,
+                                        int status,
                                         void *priv)
 {
     shardcache_client_get_async_data_arg_t *arg = (shardcache_client_get_async_data_arg_t *)priv;
-    int rc = arg->cb(node, key, klen, data, dlen, error, arg->priv);
-    if (!data && !dlen) {
-        if (error)
+    int rc = -1;
+    switch(status) {
+        case 0:
+            rc = arg->cb(node, key, klen, data, dlen, 0, arg->priv);
+            break;
+        case -1:
+            arg->cb(node, key, klen, data, dlen, 1, arg->priv);
             close(arg->fd);
-        else
+            break;
+        case 1:
             connections_pool_add(arg->connections, node, arg->fd);
-
-        free(arg);
+            break;
     }
+
+    free(arg);
     return rc;
 }
 

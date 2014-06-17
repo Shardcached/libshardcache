@@ -84,7 +84,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
                                  size_t klen,
                                  void *data,
                                  size_t len,
-                                 int error,
+                                 int status, // 0 OK, -1 ERR, 1 CLOSE
                                  void *priv)
 {
     shc_fetch_async_arg_t *arg = (shc_fetch_async_arg_t *)priv;
@@ -110,15 +110,17 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         arc_release_resource(cache->arc, obj->res);
         return -1;
     }
-    if (error) {
+    if (status == -1) {
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         close(fd);
-        free(arg);
         if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
             arc_ops_evict_object(cache, obj);
         else
             drop = 1;
+    } else if (status == 1) {
+        if (fd > 0)
+            shardcache_release_connection_for_peer(cache, peer_addr, fd);
     } else if (len) {
         obj->data = realloc(obj->data, obj->dlen + len);
         memcpy(obj->data + obj->dlen, data, len);
@@ -150,25 +152,18 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration) {
                 shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
             }
-        } else if (error || drop) {
+        } else if (status || drop) {
             arc_remove(cache->arc, key, klen);
         }
     }
 
     MUTEX_UNLOCK(&obj->lock);
-    if (complete || error) {
-        if (arg->fd > 0) {
-            iomux_close(cache->async_mux, arg->fd);
-            if (error)
-                close(fd);
-            else
-                shardcache_release_connection_for_peer(cache, peer_addr, fd);
-        }
+    if (status != 0) {
         free(arg);
         arc_release_resource(cache->arc, obj->res);
     }
 
-    return !error ? 0 : -1;
+    return status >= 0 ? 0 : -1;
 }
 
 

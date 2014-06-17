@@ -261,7 +261,7 @@ typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         size_t klen,
                                         void *data,
                                         size_t len,
-                                        int error,
+                                        int status,
                                         void *priv);
 
 // NOTE: when the async_read_wrk_t param is provided to the following
