@@ -22,6 +22,7 @@ static shardcache_node_t **hosts = NULL;
 static int num_hosts = 0;
 static int num_clients = 1;
 static int num_threads = 1;
+static int max_requests = 0;
 static int use_index = 0;
 static int print_stats = 0;
 static shardcache_storage_index_t *keys_index = NULL;
@@ -44,6 +45,7 @@ typedef struct {
     async_read_ctx_t *reader; 
     uint64_t num_requests;
     uint64_t num_responses;
+    char *node;
 } client_ctx;
 
 static void
@@ -58,6 +60,8 @@ usage(char *progname, int rc, char *msg, ...)
 
     printf("Usage: %s [OPTION]...\n"
            "    -c <num_clients>  The number of clients per thread (defaults to: %d)\n"
+           "    -m <max_requests> Number of requests to receive before renewing a client connection\n"
+           "                      (0 never refresh the connections)\n"
            "    -t <num_threads>  The number of threads (defaults to: %d)\n"
            "    -h                Print this message and exit\n"
            "    -H <hosts_string> A shardcache hosts string (defaults to: $SHC_HOSTS)\n"
@@ -94,29 +98,9 @@ close_connection(iomux_t *iomux, int fd, void *priv)
     shardcache_counter_remove(counters, label);
     snprintf(label, sizeof(label), "[client %p] responses", ctx);
     shardcache_counter_remove(counters, label);
-    fprintf(stderr, "Client %p closed\n", ctx);
     free(ctx);
     close(fd);
     __sync_sub_and_fetch(&num_running_clients, 1);
-}
-
-int
-discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
-{
-    client_ctx *ctx = (client_ctx *)priv;
-    int processed = 0;
-    
-    //printf("received %d\n", len);
-    async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
-    while (state == SHC_STATE_READING_DONE) {
-        __sync_add_and_fetch(&num_responses, 1);
-        __sync_add_and_fetch(&ctx->num_responses, 1);
-        state = async_read_context_update(ctx->reader);
-    }
-    if (state == SHC_STATE_READING_ERR) {
-        fprintf(stderr, "Async context returned error\n");
-    }
-    return len;
 }
 
 iomux_output_mode_t
@@ -185,6 +169,55 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
     return IOMUX_OUTPUT_MODE_FREE;
 }
 
+int
+discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
+{
+    client_ctx *ctx = (client_ctx *)priv;
+    int processed = 0;
+    
+    //printf("received %d\n", len);
+    async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
+    while (state == SHC_STATE_READING_DONE) {
+        __sync_add_and_fetch(&num_responses, 1);
+        __sync_add_and_fetch(&ctx->num_responses, 1);
+        state = async_read_context_update(ctx->reader);
+    }
+    if (state == SHC_STATE_READING_ERR) {
+        fprintf(stderr, "Async context returned error\n");
+    }
+    if (max_requests && __sync_fetch_and_add(&ctx->num_responses, 0) > max_requests) {
+        int newfd = connect_to_peer(ctx->node, 5000);
+        if (newfd < 0) {
+            fprintf(stderr, "Can't connect to %s: %s\n", ctx->node, strerror(errno));
+            exit(-99);
+        }
+
+        client_ctx *newctx = calloc(1, sizeof(client_ctx));
+        newctx->reader = async_read_context_create(secret, NULL, NULL);
+        newctx->output = fbuf_create(0);
+        newctx->node = ctx->node;
+        iomux_callbacks_t cbs = {
+            .mux_output = send_command,
+            .mux_timeout = NULL,
+            .mux_input = discard_response,
+            .mux_eof = close_connection,
+            .priv = newctx
+        };
+
+        char label[256];
+        snprintf(label, sizeof(label), "[client %p] requests", newctx);
+        shardcache_counter_add(counters, label, &newctx->num_requests);
+        snprintf(label, sizeof(label), "[client %p] responses", newctx);
+        shardcache_counter_add(counters, label, &newctx->num_responses);
+        if (iomux_add(iomux, newfd, &cbs) == 1)
+            __sync_add_and_fetch(&num_running_clients, 1);
+
+        iomux_close(iomux, fd);
+    
+    }
+    return len;
+}
+
 static void
 *worker(void *priv)
 {
@@ -203,6 +236,7 @@ static void
             client_ctx *ctx = calloc(1, sizeof(client_ctx));
             ctx->reader = async_read_context_create(secret, NULL, NULL);
             ctx->output = fbuf_create(0);
+            ctx->node = addr;
             iomux_callbacks_t cbs = {
                 .mux_output = send_command,
                 .mux_timeout = NULL,
@@ -291,6 +325,7 @@ main (int argc, char **argv)
         { "hosts", 2, 0, 'H' },
         { "index", 0, 0, 'i' },
         { "keys", 2, 0, 'k' },
+        { "max_requests", 2, 0, 'm' },
         { "prefix", 2, 0, 'p' },
         { "print_stats", 2, 0, 'P' },
         { "stats_file", 2, 0, 's' },
@@ -301,7 +336,7 @@ main (int argc, char **argv)
     hosts_string = getenv("SHC_HOSTS");
     int option_index = 0;
     char c;
-    while ((c = getopt_long(argc, argv, "c:hH:ik:p:s:Pt:w:W:v", long_options, &option_index))) {
+    while ((c = getopt_long(argc, argv, "c:hH:im:k:p:s:Pt:w:W:v", long_options, &option_index))) {
         if (c == -1)
             break;
         switch(c) {
@@ -315,6 +350,9 @@ main (int argc, char **argv)
                 hosts_string = optarg;
             case 'i':
                 use_index = 1;
+                break;
+            case 'm':
+                max_requests = strtol(optarg, NULL, 10);
                 break;
             case 'k':
                 num_keys = strtol(optarg, NULL, 10);
