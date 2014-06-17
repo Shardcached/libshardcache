@@ -18,13 +18,16 @@ static int _get_async_helper (char *node,
                               size_t klen,
                               void *data,
                               size_t dlen,
-                              int error,
+                              int status,
                               void *priv)
 {
         get_async_helper_arg_t *arg = (get_async_helper_arg_t *)priv;
         SV *nodeSv = newSVpv(node, strlen(node));
         SV *keySv = newSVpv(key, klen);
-        SV *dataSv = newSVpv(data, dlen);
+        SV *dataSv = &PL_sv_undef;
+
+        if (dlen)
+            dataSV = newSVpv(data, dlen);
 
         dSP;
 
@@ -35,6 +38,7 @@ static int _get_async_helper (char *node,
         XPUSHs(sv_2mortal(nodeSv));
         XPUSHs(sv_2mortal(keySv));
         XPUSHs(sv_2mortal(dataSv));
+        mXPUSHi(status);
         XPUSHs(arg->priv);
         PUTBACK;
 
@@ -52,7 +56,7 @@ static int _get_async_helper (char *node,
         FREETMPS;
         LEAVE;
 
-        return ret ? 0 : -1;
+        return (ret && status != -1) ? 0 : -1;
 }
 
 MODULE = Shardcache::Client::Fast		PACKAGE = Shardcache::Client::Fast		

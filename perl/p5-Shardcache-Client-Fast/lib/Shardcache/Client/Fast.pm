@@ -44,7 +44,7 @@ our @EXPORT = qw(
     
 );
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -452,9 +452,16 @@ None by default.
     The control will be returned to the caller when there is no
     more data to read or an error occurred
 
-    $coderef must be a reference to a perl SUB which will get as arguments
-    the tuple : ($node, $key, $data, $priv)
-    $priv will be the same scalar value passed to get_async() as last argument
+    - $coderef must be a reference to a perl SUB which will get as arguments
+      the tuple : ($node, $key, $data, $status, $priv)
+
+    - $status == 0 means that the operation is still in progress and $data contains the new chunk of data
+
+    - $status == 1 means that the operation is complete and no further notifications will be received
+
+    - $status == -1 means that an error occurred and no further notifications will be received
+
+    - $priv will be the same scalar value passed to get_async() as last argument
 
     If the $coderef, called at each chunk of data being received, returns a 
     NON-TRUE value the fetch will be interrupted and the coderef won't be called
