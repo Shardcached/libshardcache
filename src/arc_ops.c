@@ -92,11 +92,11 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     shardcache_t *cache = arg->cache;
     char *peer_addr = arg->peer_addr;
     int fd = arg->fd;
-    int complete = 0;
     int total_len = 0;
     int drop = 0;
 
     MUTEX_LOCK(&obj->lock);
+
     if (!obj->res) {
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
@@ -107,6 +107,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
+        free(arg);
         arc_release_resource(cache->arc, obj->res);
         return -1;
     }
@@ -118,9 +119,17 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             arc_ops_evict_object(cache, obj);
         else
             drop = 1;
+        MUTEX_UNLOCK(&obj->lock);
+        free(arg);
+        arc_release_resource(cache->arc, obj->res);
+        return -1;
     } else if (status == 1) {
+        MUTEX_UNLOCK(&obj->lock);
         if (fd > 0)
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
+        free(arg);
+        arc_release_resource(cache->arc, obj->res);
+        return 0;
     } else if (len) {
         obj->data = realloc(obj->data, obj->dlen + len);
         memcpy(obj->data + obj->dlen, data, len);
@@ -131,20 +140,19 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             .len = len
         };
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
+        MUTEX_UNLOCK(&obj->lock);
+        return 0;
     } else {
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
         COBJ_SET_FLAG(obj, COBJ_FLAG_COMPLETE);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-        complete = 1;
         total_len = obj->dlen;
 
         if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
             arc_ops_evict_object(cache, obj);
         else if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP))
             drop = 1;
-    }
 
-    if (complete) {
         if (total_len && !drop) {
             arc_update_size(cache->arc, key, klen, total_len);
             int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
@@ -155,15 +163,9 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         } else if (status || drop) {
             arc_remove(cache->arc, key, klen);
         }
+        MUTEX_UNLOCK(&obj->lock);
+        return 0;
     }
-
-    MUTEX_UNLOCK(&obj->lock);
-    if (status != 0) {
-        free(arg);
-        arc_release_resource(cache->arc, obj->res);
-    }
-
-    return status >= 0 ? 0 : -1;
 }
 
 
@@ -230,7 +232,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
                 COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
                 COBJ_SET_FLAG(obj, COBJ_FLAG_EVICTED);
             }
-            shardcache_release_connection_for_peer(cache, peer_addr, fd);
+            close(fd);
             arc_release_resource(cache->arc, obj->res);
 
             free(arg);
@@ -240,20 +242,23 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
         COBJ_SET_FLAG(obj, COBJ_FLAG_FETCHING);
         rc = fetch_from_peer(peer_addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, obj->key, obj->klen, &value, fd);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-        if (rc == 0 && fbuf_used(&value)) {
-            obj->data = fbuf_data(&value);
-            obj->dlen = fbuf_used(&value);
-            COBJ_SET_FLAG(obj, COBJ_FLAG_COMPLETE);
-            if (!cache->force_caching && rand() % 10 != 0)
-                COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
-            else
-                COBJ_UNSET_FLAG(obj, COBJ_FLAG_DROP);
+        if (rc == 0) {
+            shardcache_release_connection_for_peer(cache, peer_addr, fd);
+            if (fbuf_used(&value)) {
+                obj->data = fbuf_data(&value);
+                obj->dlen = fbuf_used(&value);
+                COBJ_SET_FLAG(obj, COBJ_FLAG_COMPLETE);
+                if (!cache->force_caching && rand() % 10 != 0)
+                    COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
+                else
+                    COBJ_UNSET_FLAG(obj, COBJ_FLAG_DROP);
+            }
         } else {
             // if succeded the fbuf buffer has been moved to the obj structure
             // but otherwise we have to release it
             fbuf_destroy(&value);
+            close(fd);
         }
-        shardcache_release_connection_for_peer(cache, peer_addr, fd);
     }
 
     return rc;
