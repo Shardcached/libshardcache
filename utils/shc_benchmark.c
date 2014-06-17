@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <iomux.h>
 #include <fbuf.h>
+#include <hashtable.h>
 
 #include <shardcache_client.h>
 #include <counters.h>
@@ -39,6 +40,7 @@ static uint64_t num_sets = 0;
 static uint64_t num_responses = 0;
 static uint64_t num_running_clients = 0;
 shardcache_counters_t *counters = NULL;
+hashtable_t *prev_counts = NULL;
 
 typedef struct {
     fbuf_t *output;
@@ -96,8 +98,10 @@ close_connection(iomux_t *iomux, int fd, void *priv)
     char label[256];
     snprintf(label, sizeof(label), "[client %p] requests", ctx);
     shardcache_counter_remove(counters, label);
+    ht_delete(prev_counts, label, strlen(label), NULL, NULL);
     snprintf(label, sizeof(label), "[client %p] responses", ctx);
     shardcache_counter_remove(counters, label);
+    ht_delete(prev_counts, label, strlen(label), NULL, NULL);
     free(ctx);
     close(fd);
     __sync_sub_and_fetch(&num_running_clients, 1);
@@ -110,7 +114,8 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
     fbuf_t *output_buffer = ctx->output;
 
     // don't pipeline more than 1024 requests ahead
-    if (__sync_fetch_and_add(&ctx->num_requests, 0) - __sync_fetch_and_add(&ctx->num_responses, 0) < 1024)
+    if (__sync_fetch_and_add(&ctx->num_requests, 0) - __sync_fetch_and_add(&ctx->num_responses, 0) < 1024 &&
+       (!max_requests || max_requests > __sync_fetch_and_add(&ctx->num_requests, 0)))
     {
         uint32_t idx = random() % (num_keys && num_keys < keys_index->size ? num_keys : keys_index->size);
 
@@ -185,7 +190,7 @@ discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *pri
     if (state == SHC_STATE_READING_ERR) {
         fprintf(stderr, "Async context returned error\n");
     }
-    if (max_requests && __sync_fetch_and_add(&ctx->num_responses, 0) > max_requests) {
+    if (max_requests && __sync_fetch_and_add(&ctx->num_responses, 0) >= max_requests) {
         int newfd = connect_to_peer(ctx->node, 5000);
         if (newfd < 0) {
             fprintf(stderr, "Can't connect to %s: %s\n", ctx->node, strerror(errno));
@@ -429,6 +434,8 @@ main (int argc, char **argv)
 
     counters = shardcache_init_counters();
 
+    prev_counts = ht_create(1<<16, 1<<20, free);
+
     int i;
     pthread_t *threads = malloc(sizeof(pthread_t) * num_threads);
     iomux_t **muxes = malloc(sizeof(iomux_t *) * num_threads);
@@ -447,8 +454,6 @@ main (int argc, char **argv)
         fwrite(columns, strlen(columns), 1, stats_file);
     }
 
-    shardcache_counter_t *prev_counts = NULL;
-    int num_prev_counters = 0;
     uint64_t num_responses_prev = 0;
 
     while (!__sync_fetch_and_add(&quit, 0)) {
@@ -464,17 +469,22 @@ main (int argc, char **argv)
         uint64_t stuck_clients = 0;
         for (i = 0; i < num_counters; i++) {
             if (strstr(counts[i].name, "responses")) {
-                uint64_t diff = (prev_counts && strcmp(counts[i].name, prev_counts[i].name) == 0)
-                              ? counts[i].value - prev_counts[i].value
-                              : 0;
-                if (!slowest_client || slowest_client > diff)
+                uint64_t *prev_value = ht_get(prev_counts, counts[i].name, strlen(counts[i].name), NULL);
+                int64_t diff = prev_value
+                               ? counts[i].value - *prev_value
+                               : counts[i].value;
+                if (!slowest_client || (diff > 0 && slowest_client > diff))
                     slowest_client = diff;
 
-                if (!fastest_client || fastest_client < diff)
+                if (!fastest_client || (diff > 0 && fastest_client < diff))
                     fastest_client = diff;
 
                 if (diff == 0)
                     stuck_clients++;
+
+                prev_value = malloc(sizeof(uint64_t));
+                *prev_value = counts[i].value;
+                ht_set(prev_counts, counts[i].name, strlen(counts[i].name), prev_value, sizeof(uint64_t));
             }
         }
 
@@ -530,15 +540,11 @@ main (int argc, char **argv)
             fflush(stats_file);
         }
 
-        if (prev_counts)
-            free(prev_counts);
-        prev_counts = counts;
-        num_prev_counters = num_counters;
         num_responses_prev = __sync_add_and_fetch(&num_responses, 0);
-
     }
+
     if (prev_counts)
-        free(prev_counts);
+        ht_destroy(prev_counts);
 
     for (i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
