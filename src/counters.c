@@ -29,18 +29,22 @@ shardcache_counter_add(shardcache_counters_t *c, const char *name, const uint64_
     list_push_tagged_value(c->lookup, tval);
 }
 
+static int
+shardcache_counter_remove_helper(void *item, uint32_t idx, void *user)
+{
+    char *name = (char *)user;
+    tagged_value_t *tval = (tagged_value_t *)item;
+    if (strcmp(tval->tag, name) == 0) {
+        list_destroy_tagged_value(tval);
+        return -2;
+    }
+    return 1;
+}
+
 void
 shardcache_counter_remove(shardcache_counters_t *c, const char *name)
 {
-    int i;
-    for (i = 0; i < list_count(c->lookup); i++) {
-        tagged_value_t *tval = list_pick_tagged_value(c->lookup, i);
-        if (strcmp(tval->tag, name) == 0) {
-            tval = list_fetch_tagged_value(c->lookup, i);
-            list_destroy_tagged_value(tval);
-            break;
-        }  
-    }
+    list_foreach_value(c->lookup, shardcache_counter_remove_helper, (void *)name);
 }
 
 typedef struct {
