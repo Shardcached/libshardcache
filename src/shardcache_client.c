@@ -587,6 +587,7 @@ shardcache_client_get_async_data_helper(char *node,
         case -1:
             arg->cb(node, key, klen, data, dlen, 1, arg->priv);
             close(arg->fd);
+            rc = -1;
             break;
         case 1:
             connections_pool_add(arg->connections, node, arg->fd);
