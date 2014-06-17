@@ -1,5 +1,8 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.11  Tue Jun 17 23:27:09 CEST 2014
+        - error handling in the get_async callback
+
 0.10  Tue May 27 09:22:51 CEST 2014
         - Allow to set the pipeline_max parameter on the underlying shardcache_client instance
 
