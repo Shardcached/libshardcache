@@ -1256,6 +1256,7 @@ typedef struct {
     int fd;
     shardcache_hdr_t hdr;
     shardcache_t *cache;
+    int error;
 } shardcache_async_command_helper_arg_t;
 
 static int shardcache_async_command_helper(void *data,
@@ -1266,6 +1267,14 @@ static int shardcache_async_command_helper(void *data,
     shardcache_async_command_helper_arg_t *arg =
         (shardcache_async_command_helper_arg_t *)priv;
 
+    // idx == -1 means that reading finished 
+    // idx == -2 means error
+    // idx == -3 means the async connection can been closed
+    // any idx >= 0 refers to the record index
+
+    // XXX - works only for the first record
+    //       needs refactoring if we will started
+    //       including multiple reports in the responses
     if (idx == 0) {
         int rc = -1;
         if (data && len == 1) {
@@ -1288,15 +1297,16 @@ static int shardcache_async_command_helper(void *data,
         }
         arg->cb(arg->key, arg->klen, rc, arg->priv);
         arg->done = 1;
-    } else if (idx < 0) {
+    } else if (idx == -1) {
         if (!arg->done)
             arg->cb(arg->key, arg->klen, -1, arg->priv);
-        if (idx == -1) {
-            iomux_close(arg->cache->async_mux, arg->fd);
-            shardcache_release_connection_for_peer(arg->cache, arg->addr, arg->fd);
-        } else {
+    } else if (idx == -2) {
+        arg->error = 1;
+    } else if (idx == -3) {
+        if (arg->error)
             close(arg->fd);
-        }
+        else
+            shardcache_release_connection_for_peer(arg->cache, arg->addr, arg->fd);
         free(arg->key);
         free(arg);
     }
