@@ -59,6 +59,7 @@ shardcache_get_all_counters(shardcache_counters_t *c, shardcache_counter_t **out
     int i = 0;
     size_t size = sizeof(shardcache_counter_t) * COUNTERS_ALLOC_CHUNK;
     shardcache_counter_t *counters = malloc(sizeof(shardcache_counter_t) * COUNTERS_ALLOC_CHUNK);
+    list_lock(c->lookup);
     for (i = 0; i < list_count(c->lookup); i++) {
         tagged_value_t *tval = list_pick_tagged_value(c->lookup, i);
         if (i == (size/sizeof(shardcache_counter_t))-1) {
@@ -70,6 +71,7 @@ shardcache_get_all_counters(shardcache_counters_t *c, shardcache_counter_t **out
         counter->value = (uint64_t)__sync_fetch_and_add((uint64_t *)tval->value, 0);
  
     }
+    list_unlock(c->lookup);
     *out_counters = counters;
     return i;
 }
