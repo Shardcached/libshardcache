@@ -467,14 +467,19 @@ main (int argc, char **argv)
         uint64_t fastest_client = 0;
         uint64_t slowest_client = 0;
         uint64_t stuck_clients = 0;
+        char *slowest_label = NULL;;
         for (i = 0; i < num_counters; i++) {
             if (strstr(counts[i].name, "responses")) {
                 uint64_t *prev_value = ht_get(prev_counts, counts[i].name, strlen(counts[i].name), NULL);
                 int64_t diff = prev_value
                                ? counts[i].value - *prev_value
                                : counts[i].value;
-                if (!slowest_client || (diff > 0 && slowest_client > diff))
+                if (!slowest_client || (diff > 0 && slowest_client > diff)) {
                     slowest_client = diff;
+                    if (slowest_label)
+                        free(slowest_label);
+                    slowest_label = strdup(counts[i].name);
+                }
 
                 if (!fastest_client || (diff > 0 && fastest_client < diff))
                     fastest_client = diff;
@@ -505,7 +510,7 @@ main (int argc, char **argv)
                    "\nnum_responses: %" PRIu64
                    "\ntotal_responses/s: %" PRIu64
                    "\navg_responses/s: %" PRIu64
-                   "\nslowest: %" PRIu64
+                   "\nslowest: %" PRIu64 " (%s)"
                    "\nfastest: %" PRIu64
                    "\nstuck_clients: %" PRIu64,
                    running_clients,
@@ -515,9 +520,12 @@ main (int argc, char **argv)
                    responses_sum,
                    avg_responses,
                    slowest_client,
+                   slowest_label,
                    fastest_client,
                    stuck_clients);
         }
+        if (slowest_label)
+            free(slowest_label);
 
         if (stats_file) {
             char line[(10*9) + 10];
