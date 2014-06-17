@@ -420,6 +420,15 @@ read_async_input_eof(iomux_t *iomux, int fd, void *priv)
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
 
+    if (ctx->cb) {
+        if (ctx->state != SHC_STATE_READING_DONE &&
+            ctx->state != SHC_STATE_READING_ERR &&
+            ctx->state != SHC_STATE_AUTH_ERR)
+        {
+            ctx->cb(NULL, 0, -2, ctx->cb_priv);
+        }
+    }
+
     if (!ctx->blocking)
         iomux_end_loop(iomux);
 
