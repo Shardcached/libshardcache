@@ -292,8 +292,8 @@ sub index {
 }
 
 sub get_multi {
-    my ($self, $keys) = @_;
-    my $res = shardcache_client_get_multi($self->{_client}, $keys);
+    my ($self, $keys, $results) = @_;
+    my $res = shardcache_client_get_multi($self->{_client}, $keys, $results);
     wantarray ? @$res : $res;
 }
 

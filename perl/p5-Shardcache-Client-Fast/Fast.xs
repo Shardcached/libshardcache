@@ -335,16 +335,17 @@ shardcache_client_errno(c)
 	shardcache_client_t *c
 
 SV *
-shardcache_client_get_multi(c, items)
+shardcache_client_get_multi(c, keys, results = &PL_sv_undef)
         shardcache_client_t *c
-        SV *items
+        SV *keys
+        SV *results
     CODE:
         RETVAL = &PL_sv_undef;
-        if (SvOK(items)) {
-            if (!SvROK(items) || SvTYPE(SvRV(items)) != SVt_PVAV)
-              croak("shardcache_client_get_multi(): Expected an array reference as 'items' parameter");
+        if (SvOK(keys)) {
+            if (!SvROK(keys) || SvTYPE(SvRV(keys)) != SVt_PVAV)
+              croak("shardcache_client_get_multi(): Expected an array reference as 'keys' parameter");
 
-            AV *items_av = (AV *)SvRV(items);
+            AV *items_av = (AV *)SvRV(keys);
 
             int num_items = av_len(items_av) + 1;
             if (num_items > 0) {
@@ -353,7 +354,7 @@ shardcache_client_get_multi(c, items)
                 for (i = 0; i < num_items; i++) {
                    SV **svp = av_fetch(items_av, i, 0);
                     if (!svp)
-                        croak("shardcache_client_get_multi(): null element in the 'items' array");
+                        croak("shardcache_client_get_multi(): null element in the 'keys' array");
 
                     STRLEN klen = 0;
                     char *key = SvPVbyte(*svp, klen);
@@ -363,7 +364,16 @@ shardcache_client_get_multi(c, items)
 
                 int rc = shardcache_client_get_multi(c, items_array);
                 if (rc == 0) {
-                    AV *out_array = newAV();
+                    AV *out_array;
+                    if (!SvROK(results) || SvTYPE(SvRV(results)) != SVt_PVAV) {
+                        out_array = newAV();
+                        RETVAL = newRV_noinc((SV *)out_array);
+                    } else {
+                        out_array = (AV *)SvRV(results);
+                        av_clear(out_array);
+                        RETVAL = newRV_inc((SV *)out_array);
+                    }
+
                     for (i = 0; i < num_items; i++) {
                         SV *item_sv = &PL_sv_undef;
 
@@ -375,7 +385,6 @@ shardcache_client_get_multi(c, items)
 
                         shc_multi_item_destroy(items_array[i]);
                     }
-                    RETVAL = newRV_noinc((SV *)out_array);
                 } else {
                     for (i = 0; i < num_items; i++)
                         shc_multi_item_destroy(items_array[i]);
@@ -387,20 +396,20 @@ shardcache_client_get_multi(c, items)
         RETVAL
 
 SV *
-shardcache_client_set_multi(c, items)
+shardcache_client_set_multi(c, keys)
         shardcache_client_t *c
-        SV *items
+        SV *keys
     CODE:
         RETVAL = &PL_sv_undef;
-        if (SvOK(items)) {
-            if (!SvROK(items) || SvTYPE(SvRV(items)) != SVt_PVHV)
-              croak("shardcache_client_get_multi(): Expected an hash reference as 'items' parameter");
+        if (SvOK(keys)) {
+            if (!SvROK(keys) || SvTYPE(SvRV(keys)) != SVt_PVHV)
+              croak("shardcache_client_get_multi(): Expected an hash reference as 'keys' parameter");
 
-            HV *items_hv = (HV *)SvRV(items);
+            HV *items_hv = (HV *)SvRV(keys);
 
             int num_items = 0;
 
-            // count the number of items in the hashref
+            // count the number of keys in the hashref
             if (GIMME_V == G_SCALAR) {
                 IV i;
                 dTARGET;
@@ -418,7 +427,7 @@ shardcache_client_set_multi(c, items)
                 int i = 0;
                 while ((entry = hv_iternext(items_hv))) {
                     if (i > num_items)
-                        croak("shardcache_client_set_multi() found more elements than expected in the 'items' hashref");
+                        croak("shardcache_client_set_multi() found more elements than expected in the 'keys' hashref");
 
                     SV* const key_sv = hv_iterkeysv(entry);
                     SV *value_sv = hv_iterval(items_hv, entry);
