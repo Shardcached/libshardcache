@@ -38,6 +38,21 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t **nodes, int num
 int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value);
 
 /**
+ * @brief Get and/or set the maximum time (in seconds) to wait on multi commands
+ *        (get_multi/set_multi) when no data is arriving.
+ * @note This setting represents a timeout which is reset each time some data is received
+ *       and it prevents the get_multi()/set_multi() commands from hanging indefinitely 
+ *       waiting for data. A value of 0 indicates no timeout
+ * @param c         A valid pointer to a shardcache_client_t structure
+ * @param new_value If greater or equal to 0 the new value will be set.
+ *                  Otherwise the old value will be queried but no new value
+ *                  will be set. A value of 0 indicates no timeout.
+ * @return The previously configured max_wait timeout
+ *         (still valid if no new value has been provided)
+ */
+int shardcache_client_multi_command_max_wait(shardcache_client_t *c, int new_value);
+
+/**
  * @brief Get and/or set the random_node mode on a shardcache client instance.
  *        When on a single (random) node will be used for all the commands instead
  *        of using the chash algorithm to determine the owner.

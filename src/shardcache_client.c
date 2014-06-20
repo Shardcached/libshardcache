@@ -33,6 +33,7 @@ struct shardcache_client_s {
     shardcache_node_t *current_node;
     int pipeline_max;
     int errno;
+    int multi_command_max_wait;
     char errstr[1024];
 };
 
@@ -47,6 +48,14 @@ shardcache_client_use_random_node(shardcache_client_t *c, int new_value)
 {
     int old_value = c->use_random_node;
     c->use_random_node = new_value;
+    return old_value;
+}
+
+int
+shardcache_client_multi_command_max_wait(shardcache_client_t *c, int new_value)
+{
+    int old_value = c->multi_command_max_wait;
+    c->multi_command_max_wait = new_value;
     return old_value;
 }
 
@@ -879,7 +888,8 @@ shardcache_client_multi(shardcache_client_t *c,
 
     int rc = 0;
     uint32_t previous_count = 0;
-    uint32_t no_updates = 0;
+    struct timeval hang_time = { 0, 0 };
+    struct timeval max_hang_time = { c->multi_command_max_wait, 0 };
     for (;;) {
         struct timeval tv = { 1, 0 };
         iomux_run(iomux, &tv);
@@ -888,12 +898,20 @@ shardcache_client_multi(shardcache_client_t *c,
             break;
 
         if (previous_count == total_count) {
-            if (no_updates++ > 5) {
-                rc = -1;
-                break;
+            struct timeval now;
+            struct timeval diff;
+            if (hang_time.tv_sec == 0) {
+                gettimeofday(&hang_time, NULL);
+            } else {
+                gettimeofday(&now, NULL);
+                timersub(&hang_time, &now, &diff);
+                if (timercmp(&diff, &max_hang_time, >)) {
+                    rc = -1;
+                    break;
+                }
             }
         } else {
-            no_updates = 0;
+            memset(&hang_time, 0, sizeof(hang_time));
         }
 
         previous_count = total_count;
