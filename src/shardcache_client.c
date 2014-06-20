@@ -587,10 +587,10 @@ shardcache_client_get_async_data_helper(char *node,
         case -1:
             arg->cb(node, key, klen, data, dlen, 1, arg->priv);
             close(arg->fd);
-            rc = -1;
             break;
         case 1:
             connections_pool_add(arg->connections, node, arg->fd);
+            rc = 0;
             break;
     }
 
@@ -696,6 +696,7 @@ typedef struct {
     int response_index;
     int num_requests;
     shardcache_hdr_t cmd;
+    uint32_t *total_count;
 } shc_multi_ctx_t;
 
 static int
@@ -717,7 +718,7 @@ shc_multi_collect_data(void *data, size_t len, int idx, void *priv)
     return 0;
 }
 
-static void
+static inline void
 shc_multi_context_destroy(shc_multi_ctx_t *ctx)
 {
     async_read_context_destroy(ctx->reader);
@@ -726,8 +727,13 @@ shc_multi_context_destroy(shc_multi_ctx_t *ctx)
     free(ctx);
 }
 
-static shc_multi_ctx_t *
-shc_multi_context_create(shardcache_client_t *c, shardcache_hdr_t cmd, char *peer, char *secret, linked_list_t *items)
+static inline shc_multi_ctx_t *
+shc_multi_context_create(shardcache_client_t *c,
+                         shardcache_hdr_t cmd,
+                         char *peer,
+                         char *secret,
+                         linked_list_t *items,
+                         uint32_t *total_count)
 {
     shc_multi_ctx_t *ctx = calloc(1, sizeof(shc_multi_ctx_t));
     ctx->client = c;
@@ -737,6 +743,7 @@ shc_multi_context_create(shardcache_client_t *c, shardcache_hdr_t cmd, char *pee
     ctx->reader = async_read_context_create(secret, shc_multi_collect_data, ctx);
     ctx->cmd = cmd;
     ctx->peer = peer;
+    ctx->total_count = total_count;
     int n;
     for (n = 0; n < ctx->num_requests; n++) {
         shc_multi_item_t *item = list_pick_value(items, n);
@@ -796,8 +803,6 @@ shc_multi_close_connection(iomux_t *iomux, int fd, void *priv)
 
     shc_multi_context_destroy(ctx);
 
-    if (iomux_isempty(iomux))
-        iomux_end_loop(iomux);
 }
 
 int
@@ -810,6 +815,7 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
     async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
     while (state == SHC_STATE_READING_DONE) {
         ctx->response_index++;
+        ctx->total_count[0]++;
         state = async_read_context_update(ctx->reader);
     }
 
@@ -817,10 +823,8 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
         fprintf(stderr, "Async context returned error\n");
         iomux_close(iomux, fd);
     }
-
-    if (ctx->response_index == ctx->num_requests) {
+    if (ctx->response_index == ctx->num_requests)
         iomux_close(iomux, fd);
-    }
 
     return len;
 }
@@ -832,6 +836,8 @@ shardcache_client_multi(shardcache_client_t *c,
 {
     linked_list_t *pools = shc_split_buckets(c, items);
 
+    uint32_t total_count = 0;
+    uint32_t total_requests = 0;
     iomux_t *iomux = iomux_create(0, 0);
     uint32_t count = list_count(pools);
     int i;
@@ -839,7 +845,7 @@ shardcache_client_multi(shardcache_client_t *c,
 
         tagged_value_t *tval = list_pick_tagged_value(pools, i);
         linked_list_t *items = (linked_list_t *)tval->value;
-        shc_multi_ctx_t *ctx = shc_multi_context_create(c, cmd, tval->tag, (char *)c->auth, items);
+        shc_multi_ctx_t *ctx = shc_multi_context_create(c, cmd, tval->tag, (char *)c->auth, items, &total_count);
         if (!ctx) {
             iomux_destroy(iomux);
             list_destroy(pools);
@@ -867,14 +873,34 @@ shardcache_client_multi(shardcache_client_t *c,
         iomux_add(iomux, fd, &cbs);
         char *output = NULL;
         unsigned int len = fbuf_detach(ctx->commands, &output);
-        iomux_write(iomux, fd, output, len, 1);
+        iomux_write(iomux, fd, (unsigned char *)output, len, 1);
+        total_requests += ctx->num_requests;
     }
 
-    struct timeval tv = { 1, 0 };
-    iomux_loop(iomux, &tv);
+    int rc = 0;
+    uint32_t previous_count = 0;
+    uint32_t no_updates = 0;
+    for (;;) {
+        struct timeval tv = { 1, 0 };
+        iomux_run(iomux, &tv);
+
+        if (iomux_isempty(iomux))
+            break;
+
+        if (previous_count == total_count) {
+            if (no_updates++ > 5) {
+                rc = -1;
+                break;
+            }
+        } else {
+            no_updates = 0;
+        }
+
+        previous_count = total_count;
+    }
     iomux_destroy(iomux);
     list_destroy(pools);
-    return 0;
+    return rc;
 }
 
 int
