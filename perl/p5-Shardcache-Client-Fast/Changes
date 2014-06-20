@@ -1,5 +1,11 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.12  Fri Jun 20 13:23:59 CEST 2014
+        - introduced the multi_command_max_wait() method to allow
+          setting the shardcache_client option with the same name
+          and determining the timeout to use for get_multi/set_multi
+          commands if no data is being received
+
 0.11  Tue Jun 17 23:27:09 CEST 2014
         - error handling in the get_async callback
 

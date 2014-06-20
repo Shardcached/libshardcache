@@ -34,6 +34,7 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
         shardcache_client_errno
         shardcache_client_errstr
         shardcache_client_tcp_timeout
+        shardcache_client_multi_command_max_wait
         shardcache_client_use_random_node
         shardcache_client_pipeline_max
 ) ] );
@@ -44,7 +45,7 @@ our @EXPORT = qw(
     
 );
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -129,6 +130,11 @@ sub new {
 sub tcp_timeout {
     my ($self, $new_value) = @_;
     return shardcache_client_tcp_timeout($self->{_client}, $new_value);
+}
+
+sub multi_command_max_wait {
+    my ($self, $new_value) = @_;
+    return shardcache_client_multi_command_max_wait($self->{_client}, $new_value);
 }
 
 sub use_random_node {

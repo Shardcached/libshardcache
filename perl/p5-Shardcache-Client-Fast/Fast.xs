@@ -133,6 +133,11 @@ shardcache_client_tcp_timeout(c, new_value)
       int new_value
 
 int
+shardcache_client_multi_command_max_wait(c, new_value)
+      shardcache_client_t *   c
+      int new_value
+
+int
 shardcache_client_use_random_node(c, new_value)
       shardcache_client_t *   c
       int new_value
