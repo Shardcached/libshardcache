@@ -94,7 +94,6 @@ typedef struct __arc_object {
     size_t klen;
     pthread_mutex_t lock;
     refcnt_node_t *node;
-    arc_t *cache;
     int async;
 } arc_object_t;
 
@@ -122,13 +121,12 @@ static arc_object_t *arc_object_create(arc_t *cache, const void *key, size_t len
 {
     arc_object_t *obj = calloc(1, sizeof(arc_object_t));
     obj->state = NULL;
-    obj->cache = cache;
 
     arc_list_init(&obj->head);
 
     MUTEX_INIT_RECURSIVE(&obj->lock);
 
-    obj->node = new_node(cache->refcnt, obj);
+    obj->node = new_node(cache->refcnt, obj, cache);
     obj->key = malloc(len);
     memcpy(obj->key, key, len);
     obj->klen = len;
@@ -321,15 +319,16 @@ static void free_node_ptr_callback(void *node) {
     free(obj);
 }
 
-static void terminate_node_callback(refcnt_node_t *node) {
+static void terminate_node_callback(refcnt_node_t *node, void *priv) {
     arc_object_t *obj = (arc_object_t *)get_node_ptr(node);
+    arc_t *cache = (arc_t *)priv;
     MUTEX_LOCK(&obj->lock);
 
     if (obj->key) {
-        ht_delete(obj->cache->hash, obj->key, obj->klen, NULL, NULL);
+        ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
     }
-    if (obj->ptr && obj->cache->ops->destroy)
-        obj->cache->ops->destroy(obj->ptr, obj->cache->ops->priv);
+    if (obj->ptr && cache->ops->destroy)
+        cache->ops->destroy(obj->ptr, cache->ops->priv);
 
     obj->ptr = NULL;
     obj->state = NULL;

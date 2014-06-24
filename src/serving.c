@@ -788,7 +788,9 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
     return req;
 }
 
-static int
+static int shardcache_output_handler(iomux_t *iomux, int fd, unsigned char **out, int *len, void *priv);
+
+static inline int
 shardcache_check_context_state(iomux_t *iomux,
                                int fd,
                                shardcache_connection_context_t *ctx,
@@ -805,6 +807,7 @@ shardcache_check_context_state(iomux_t *iomux,
         TAILQ_INSERT_TAIL(&ctx->requests, req, next);
         ctx->num_requests++;
         process_request(req);
+        iomux_set_output_callback(iomux, fd, shardcache_output_handler);
     }
     else if (UNLIKELY(state == SHC_STATE_READING_ERR || state == SHC_STATE_AUTH_ERR))
     {
@@ -841,7 +844,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char **out, int *len,
                 ATOMIC_DECREMENT(ctx->serv->num_connections);
                 shardcache_connection_context_destroy(ctx);
             }
-            return 0;
+            return IOMUX_OUTPUT_MODE_NONE;
         }
 
         int done = ATOMIC_READ(req->done);
@@ -866,7 +869,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char **out, int *len,
     } else {
         iomux_unset_output_callback(iomux, fd);
     }
-    return 1;
+    return IOMUX_OUTPUT_MODE_FREE;
 }
 
 static inline void
@@ -901,10 +904,8 @@ shardcache_input_handler(iomux_t *iomux,
 
         // updating the context state might eventually push a new requeset
         // (if entirely dowloaded) to a worker
-        if (shardcache_check_context_state(iomux, fd, ctx, state) == 0) {
-            if (ctx->num_requests) {
-                iomux_set_output_callback(iomux, fd, shardcache_output_handler);
-            }
+        if (shardcache_check_context_state(iomux, fd, ctx, state) != 0) {
+            iomux_close(iomux, fd);
         }
     }
 
