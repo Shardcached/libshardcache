@@ -34,6 +34,7 @@ static FILE *stats_file = NULL;
 static int verbose = 0;
 static int wrate = 0;
 static int wmode = 0;
+static int key_expire_time = 0;
 static char *secret = NULL;
 static uint64_t num_gets = 0;
 static uint64_t num_sets = 0;
@@ -69,6 +70,7 @@ usage(char *progname, int rc, char *msg, ...)
            "    -H <hosts_string> A shardcache hosts string (defaults to: $SHC_HOSTS)\n"
            "    -i                Use the index instead of generating test keys\n"
            "    -k <num_keys>     The number of keys to use during the test (defaults to: %d)\n"
+           "    -e <expire_time>  Optionally set the expiration time for the test keys (defaults to: 0)\n"
            "    -p <prefix>       A custom prefix to use for generated keys (defaults to: %s)\n"
            "    -P                Print stats to stdout every second\n"
            "    -s <stats_file>   File where to (optionally) dump the stats every second (in CSV format)\n"
@@ -102,6 +104,10 @@ close_connection(iomux_t *iomux, int fd, void *priv)
     snprintf(label, sizeof(label), "[client %p] responses", ctx);
     shardcache_counter_remove(counters, label);
     ht_delete(prev_counts, label, strlen(label), NULL, NULL);
+
+    async_read_context_destroy(ctx->reader);
+    fbuf_free(ctx->output);
+
     free(ctx);
     close(fd);
     __sync_sub_and_fetch(&num_running_clients, 1);
@@ -265,6 +271,8 @@ static void
         iomux_run(iomux, &tv);
     }
 
+    iomux_destroy(iomux);
+
     return NULL;
 }
 
@@ -328,6 +336,7 @@ main (int argc, char **argv)
         { "threads", 2, 0, 't' },
         { "help", 0, 0, 'h' },
         { "hosts", 2, 0, 'H' },
+        { "expire_time", 2, 0, 'e' },
         { "index", 0, 0, 'i' },
         { "keys", 2, 0, 'k' },
         { "max_requests", 2, 0, 'm' },
@@ -348,11 +357,15 @@ main (int argc, char **argv)
             case 'c':
                 num_clients = strtol(optarg, NULL, 10);
                 break;
+            case 'e':
+                key_expire_time = strtol(optarg, NULL, 10);
+                break;
             case 'h':
                 usage(argv[0], 0, NULL);
                 break;
             case 'H':
                 hosts_string = optarg;
+                break;
             case 'i':
                 use_index = 1;
                 break;
@@ -414,14 +427,14 @@ main (int argc, char **argv)
         keys_index = calloc(1, sizeof(shardcache_storage_index_t));
         for (n = 0; n < num_keys; n++) {
             int maxklen = strlen(prefix) + 32;
-            keys_index->items = realloc(keys_index->items, keys_index->size + 1);
+            keys_index->items = realloc(keys_index->items, sizeof(shardcache_storage_index_item_t) * (keys_index->size + 1));
             shardcache_storage_index_item_t *item = &keys_index->items[keys_index->size++];
             item->key = malloc(maxklen);
             snprintf(item->key, maxklen, "%s%d", prefix, n);
             item->klen = strlen(item->key);
             item->vlen = 4;
             printf("Setting key %s\n", (char *)item->key);
-            if (shardcache_client_set(client, item->key, item->klen, "TEST", 4, 0) != 0) {
+            if (shardcache_client_set(client, item->key, item->klen, "TEST", 4, key_expire_time) != 0) {
                 fprintf(stderr, "Can't set key %s : %s\n", (char *)item->key, shardcache_client_errstr(client));
                 exit(-1);
             }
@@ -548,24 +561,31 @@ main (int argc, char **argv)
             fflush(stats_file);
         }
 
-        num_responses_prev = __sync_add_and_fetch(&num_responses, 0);
-    }
 
-    if (prev_counts)
-        ht_destroy(prev_counts);
+        num_responses_prev = __sync_add_and_fetch(&num_responses, 0);
+        if (counts)
+            free(counts);
+    }
 
     for (i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
         fprintf(stderr, "Thread %d done\n", i);
     }
 
+    if (prev_counts)
+        ht_destroy(prev_counts);
+
     shardcache_free_nodes(hosts, num_hosts);
     shardcache_free_index(keys_index);
     shardcache_release_counters(counters);
+
     if (stats_file) {
         fflush(stats_file);
         fclose(stats_file);
     }
+
+    free(threads);
+    free(muxes);
 
     exit (0);
 }
