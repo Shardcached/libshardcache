@@ -68,6 +68,7 @@ arc_ops_evict_object(shardcache_t *cache, cached_object_t *obj)
     }
     obj->flags = COBJ_FLAG_EVICTED; // reset all flags but leave the EVICTED bit on
     list_clear(obj->listeners);
+    ATOMIC_DECREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value);
 }
 
 typedef struct
@@ -337,6 +338,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         if (done) {
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
             if (ret == 0) {
+                ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value);
                 gettimeofday(&obj->ts, NULL);
                 *size = obj->dlen;
                 MUTEX_UNLOCK(&obj->lock);
@@ -425,6 +427,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     }
 
     MUTEX_UNLOCK(&obj->lock);
+
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value);
 
     return 0;
 }

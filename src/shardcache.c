@@ -640,7 +640,7 @@ shardcache_create(char *me,
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
         { "gets", "sets", "dels", "heads", "evicts", "expires",
           "cache_misses", "fetch_remote", "fetch_local", "not_found",
-          "volatile_table_size", "cache_size", "errors" };
+          "volatile_table_size", "cache_size", "cached_items", "errors" };
 
     cache->counters = shardcache_init_counters();
 
