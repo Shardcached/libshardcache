@@ -25,18 +25,27 @@
       for the requested key as second and third record of the response (or perhaps some structure
       holding more meta-data as second record of the response)
 
-    - introduce a CAS command
-
     - extend set interface to allow controlling if the expiry time should be renewed when the key is
       accessed or not (and let it honor the initial expiration time).
-
-    - support message compression
 
     - introduce GET_MULTI and SET_MULTI commands.
       This will reduce the overhead of creating a sequence of get/set commands and also allow clients
       without knowledge of the complete shard (or always communicating with a single node) to still
       commence set_multi/get_multi commands but relying on the server to take care of parallelizing
       the operation if possible.
+
+    - introduce a CAS command
+
+    - introduce SET_INT GET_INT INCREMENT_INT DECREMENT_INT commands
+      such commands will assume tha data is a 64bit integer (and store it as such)
+      If the value retrieved from the storage is not exactly 64bits it will be discarded
+      (and considered invalid). Direct access to the underlying data is still possible
+      with the normal GET/SET semantic, but the byte-order of the retrieved/stored data
+      is totally in control of the client.
+      These commands are intended to facilitate atomic operations which involve integers
+      (especially increment/decrement together with the CAS command)
+
+    - support message compression
 
     NOTE: V2 implementation must ensure compatibility with V1 clients which, as long as the
           changes are the ones described above, means using the old response header when
