@@ -267,11 +267,10 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
 void *
 arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void *priv)
 {
-    shardcache_t *cache = (shardcache_t *)priv;
     cached_object_t *obj = calloc(1, sizeof(cached_object_t));
 
     obj->klen = len;
-    obj->key = key;
+    obj->key = (void *)key;
     obj->data = NULL;
     COBJ_UNSET_FLAG(obj, COBJ_FLAG_COMPLETE);
     obj->res = res;
