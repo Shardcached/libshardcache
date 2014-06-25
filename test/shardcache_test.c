@@ -245,12 +245,16 @@ int main(int argc, char **argv)
     size = shardcache_client_get(client, volatile_key, strlen(volatile_key), (void **)&value);
     ut_validate_int(size, 0);
 
+    ut_testing("destroying all clients");
     shardcache_client_destroy(client);
     shardcache_client_destroy(client1);
     shardcache_client_destroy(client2);
+    ut_success();
 
     for (i = 0; i < num_nodes; i++) {
+        ut_testing("destroying server %d", i);
         shardcache_destroy(servers[i]);
+        ut_success();
     }
 
     free(nodes);
