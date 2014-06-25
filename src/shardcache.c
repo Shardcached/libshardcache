@@ -151,7 +151,7 @@ shardcache_node_get_label(shardcache_node_t *node)
 char *
 shardcache_node_get_address(shardcache_node_t *node)
 {
-    return node->address[rand() % node->num_replicas];
+    return node->address[random() % node->num_replicas];
 }
 
 shardcache_node_t *
@@ -381,7 +381,7 @@ evictor(void *priv)
                 char *peer = cache->shards[i]->label;
                 if (strcmp(peer, cache->me) != 0) {
                     SHC_DEBUG3("Sending Eviction command to %s", peer);
-                    int rindex = rand()%cache->shards[i]->num_replicas;
+                    int rindex = random()%cache->shards[i]->num_replicas;
                     int fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
                     if (fd < 0)
                         break;
@@ -656,7 +656,10 @@ shardcache_create(char *me,
         pthread_create(&cache->evictor_th, NULL, evictor, cache);
     }
 
-    srand(time(NULL));
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    srandom((unsigned)tv.tv_usec);
+
     cache->volatile_storage = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)destroy_volatile);
 
     cache->connections_pool = connections_pool_create(cache->tcp_timeout, (num_workers/2)+ 1);
@@ -1497,7 +1500,7 @@ shardcache_schedule_expiration(shardcache_t *cache,
     ctx->cache = cache;
     ctx->is_volatile = is_volatile;
     hashtable_t *table = is_volatile ? cache->volatile_timeouts : cache->cache_timeouts;
-    struct timeval timeout = { expire, (int)rand()%(int)1e6 };
+    struct timeval timeout = { expire, (int)random()%(int)1e6 };
     iomux_timeout_id_t *tid_ptr = NULL;
     void *prev = NULL;
     iomux_timeout_id_t tid = 0;
@@ -2342,13 +2345,13 @@ shardcache_migration_begin_internal(shardcache_t *cache,
         for (i = 0; i < num_nodes; i++) {
             if (i > 0) 
                 fbuf_add(&mgb_message, ",");
-            int rindex = rand()%nodes[i]->num_replicas;
+            int rindex = random()%nodes[i]->num_replicas;
             fbuf_printf(&mgb_message, "%s:%s", nodes[i]->label, nodes[i]->address[rindex]);
         }
 
         for (i = 0; i < cache->num_shards; i++) {
             if (strcmp(cache->shards[i]->label, cache->me) != 0) {
-                int rindex = rand()%cache->shards[i]->num_replicas;
+                int rindex = random()%cache->shards[i]->num_replicas;
                 int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
                 int rc = migrate_peer(cache->shards[i]->address[rindex],
                                       (char *)cache->auth,

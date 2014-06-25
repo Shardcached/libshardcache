@@ -213,7 +213,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
             // Keep the remote object in the cache only 10% of the time.
             // This is the same logic applied by groupcache to determine hot keys.
             // Better approaches are possible but maybe unnecessary.
-            if (!cache->force_caching && rand() % 10 != 0)
+            if (!cache->force_caching && random() % 10 != 0)
                 COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
             else
                 COBJ_UNSET_FLAG(obj, COBJ_FLAG_DROP);
