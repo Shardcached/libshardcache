@@ -6,6 +6,14 @@
  * make use of a dynamic (configurable) number of threads to run the asynchronous inter-node communication.
    (it might also be determined in function of the configured number of workers)
 
+ * take advantage of pipelining in the inter-node communication.
+   When new asyncrhonous requests are queued, instead of requesting a new filedescriptor to forward the
+   request to a peer, if an aysnc request is already being running to that peer, just push the new request
+   to the same connection.
+
+ * extend the storage API to support fetch_multi and store_multi which can be (optianlly, if exposed by the module)
+   used to fulfill get_multi and set_multi requests which need to go down to the storage
+
  * protocol V2 :
     - a new response header to distinguish between not-found and errors as response to
       GET/SET/OFFSET/HEAD commands
