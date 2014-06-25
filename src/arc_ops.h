@@ -2,9 +2,7 @@
  * and some data. This data will be loaded when ARC instruct
  * us to do so. */
 typedef struct {
-    arc_t *arc; // A pointer to the ARC cache owning this object
-
-    void *key;   // The key
+    void *key;   // The key (weak reference to the actual key stored in the arc resource)
     size_t klen; // The length of the key
 
     void *data;  // The data (if any, NULL otherwise)

@@ -271,8 +271,7 @@ arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void
     cached_object_t *obj = calloc(1, sizeof(cached_object_t));
 
     obj->klen = len;
-    obj->key = malloc(len);
-    memcpy(obj->key, key, len);
+    obj->key = key;
     obj->data = NULL;
     COBJ_UNSET_FLAG(obj, COBJ_FLAG_COMPLETE);
     obj->res = res;
@@ -282,7 +281,6 @@ arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void
         list_set_free_value_callback(obj->listeners, free);
     }
     MUTEX_INIT(&obj->lock);
-    obj->arc = cache->arc;
 
     return obj;
 }
@@ -464,11 +462,8 @@ arc_ops_destroy(void *item, void *priv)
 
     // no lock is necessary here ... if we are here
     // nobody is referencing us anymore
-    if (obj->data) {
+    if (obj->data)
         free(obj->data);
-    }
-    if (obj->key)
-        free(obj->key);
 
     MUTEX_DESTROY(&obj->lock);
     free(obj);
