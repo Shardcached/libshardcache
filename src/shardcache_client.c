@@ -881,7 +881,7 @@ shardcache_client_multi(shardcache_client_t *c,
 
         iomux_add(iomux, fd, &cbs);
         char *output = NULL;
-        unsigned int len = fbuf_detach(ctx->commands, &output);
+        unsigned int len = fbuf_detach(ctx->commands, &output, NULL);
         iomux_write(iomux, fd, (unsigned char *)output, len, 1);
         total_requests += ctx->num_requests;
     }

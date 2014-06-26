@@ -348,7 +348,7 @@ kepaxos_send(char **recipients,
 
             iomux_add(replica->iomux, fd, &callbacks);
             char *data = NULL;
-            unsigned int len = fbuf_detach(&connection->output, &data);
+            unsigned int len = fbuf_detach(&connection->output, &data, NULL);
             iomux_write(replica->iomux, fd, (unsigned char *)data, len, 1);
         }
     }
@@ -452,7 +452,7 @@ shardcache_replica_ping(shardcache_replica_t *replica)
                 };
                 iomux_add(replica->iomux, fd, &callbacks);
                 char *data = NULL;
-                unsigned int len = fbuf_detach(&connection->output, &data);
+                unsigned int len = fbuf_detach(&connection->output, &data, NULL);
                 iomux_write(replica->iomux, fd, (unsigned char *)data, len, 1);
             } else {
                 shardcache_release_connection_for_peer(replica->shc, peers[i], fd);

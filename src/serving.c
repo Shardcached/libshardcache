@@ -851,7 +851,7 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char **out, int *len,
 
         SPIN_LOCK(&req->output_lock);
         if (fbuf_used(&req->output))
-            *len = fbuf_detach(&req->output, (char **)out);
+            *len = fbuf_detach(&req->output, (char **)out, NULL);
         SPIN_UNLOCK(&req->output_lock);
 
         if (done) {
