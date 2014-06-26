@@ -60,12 +60,11 @@ arc_ops_evict_object(shardcache_t *cache, cached_object_t *obj)
         COBJ_SET_FLAG(obj, COBJ_FLAG_EVICT);
         return;
     }
-    if (obj->data) {
+    if (obj->data != obj->buf)
         free(obj->data);
-        obj->data = NULL;
-        obj->dlen = 0;
-        ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
-    }
+    obj->data = NULL;
+    obj->dlen = 0;
+    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
     obj->flags = COBJ_FLAG_EVICTED; // reset all flags but leave the EVICTED bit on
     list_clear(obj->listeners);
     ATOMIC_DECREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value);
@@ -132,9 +131,20 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         arc_release_resource(cache->arc, obj->res);
         return 0;
     } else if (len) {
-        obj->data = realloc(obj->data, obj->dlen + len);
-        memcpy(obj->data + obj->dlen, data, len);
+        size_t olen = obj->dlen;
         obj->dlen += len;
+        if (obj->dlen > sizeof(obj->buf)) {
+            if (obj->data == obj->buf) {
+                obj->data = malloc(obj->dlen);
+                if (olen)
+                    memcpy(obj->data, obj->buf, olen);
+            } else {
+                obj->data = realloc(obj->data, obj->dlen);
+            }
+        } else {
+            obj->data = obj->buf;
+        }
+        memcpy(obj->data + olen, data, len);
         shardcache_fetch_from_peer_notify_arg arg = {
             .obj = obj,
             .data = data,
@@ -155,12 +165,15 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             drop = 1;
 
         if (total_len && !drop) {
-            arc_update_size(cache->arc, key, klen, total_len);
+            arc_update_size(cache->arc, key, klen,
+                    sizeof(cached_object_t) + ((obj->data == obj->buf) ? 0 : total_len));
+
             int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
                           COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
-            if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration) {
+
+            if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
                 shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
-            }
+
         } else if (status || drop) {
             arc_remove(cache->arc, key, klen);
         }
@@ -288,13 +301,14 @@ arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void
 static void *
 arc_ops_fetch_copy_volatile_object_cb(void *ptr, size_t len, void *user)
 {
+    cached_object_t *obj = (cached_object_t *)user;
     volatile_object_t *item = (volatile_object_t *)ptr;
-    volatile_object_t *copy = malloc(sizeof(volatile_object_t));
-    copy->data = malloc(item->dlen);
-    memcpy(copy->data, item->data, item->dlen);
-    copy->dlen = item->dlen;
-    copy->expire = item->expire;
-    return copy;
+    if (item->dlen) {
+        obj->data = (item->dlen > sizeof(obj->buf)) ? malloc(item->dlen) : obj->buf;
+        memcpy(obj->data, item->data, item->dlen);
+        obj->dlen = item->dlen;
+    }
+    return (void *)obj;
 }
 
 int
@@ -340,7 +354,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             if (ret == 0) {
                 ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value);
                 gettimeofday(&obj->ts, NULL);
-                *size = obj->dlen;
+                *size = sizeof(cached_object_t) + ((obj->data == obj->buf) ? 0 : obj->dlen);
                 MUTEX_UNLOCK(&obj->lock);
                 return COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP|COBJ_FLAG_COMPLETE) ? 1 : 0;
             }
@@ -359,21 +373,16 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     // we are responsible for this item ... 
     // let's first check if it's among the volatile keys otherwise
     // fetch it from the storage
-    volatile_object_t *vobj = ht_get_deep_copy(cache->volatile_storage,
-                                               obj->key,
-                                               obj->klen,
-                                               NULL,
-                                               arc_ops_fetch_copy_volatile_object_cb,
-                                               NULL);
-    if (vobj) {
-        obj->data = vobj->data; 
-        obj->dlen = vobj->dlen;
-        free(vobj);
-        if (obj->data && obj->dlen) {
-            SHC_DEBUG3("Found volatile value %s (%lu) for key %s",
-                   shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
-                   (unsigned long)obj->dlen, keystr);
-        }
+    ht_get_deep_copy(cache->volatile_storage,
+                     obj->key,
+                     obj->klen,
+                     NULL,
+                     arc_ops_fetch_copy_volatile_object_cb,
+                     obj);
+    if (obj->data && obj->dlen) {
+        SHC_DEBUG3("Found volatile value %s (%lu) for key %s",
+               shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
+               (unsigned long)obj->dlen, keystr);
     } else if (cache->use_persistent_storage && cache->storage.fetch) {
         int rc = cache->storage.fetch(obj->key, obj->klen, &obj->data, &obj->dlen, cache->storage.priv);
         if (rc == -1) {
@@ -418,10 +427,11 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             arc_ops_evict_object(cache, obj);
     }
 
-    *size = obj->dlen;
+    *size = sizeof(cached_object_t) + ((obj->data == obj->buf) ? 0 : obj->dlen);
 
     int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
                   COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
+
     if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration) {
         shardcache_schedule_expiration(cache, obj->key, obj->klen, cache->expire_time, 0);
     }
@@ -465,7 +475,7 @@ arc_ops_destroy(void *item, void *priv)
 
     // no lock is necessary here ... if we are here
     // nobody is referencing us anymore
-    if (obj->data)
+    if (obj->data && obj->data != obj->buf)
         free(obj->data);
 
     MUTEX_DESTROY(&obj->lock);

@@ -1,18 +1,26 @@
-/* This is the object we're managing. It has a key
- * and some data. This data will be loaded when ARC instruct
- * us to do so. */
+/* The cached object.
+ * The data will be loaded when ARC instruct us to do so.
+ */
 typedef struct {
     void *key;   // The key (weak reference to the actual key stored in the arc resource)
     size_t klen; // The length of the key
 
+    char buf[256]; // internal storage for data which doesn't exceeds 256 bytes.
+                   // If the complete data is bigger than 256 bytes, the required
+                   // memory will be allocated and the data pointer will be set
+                   // to point to the newly allocated memory.
+
     void *data;  // The data (if any, NULL otherwise)
+                 // Note that if the data is less than 256 bytes this pointer
+                 // will point back to the internal buffer (buf pointer)
+
     size_t dlen; // The length of the data (if any, 0 otherwise)
 
     struct timeval ts; // the timestamp of when the object has been loaded
                        // into the cache
 
     linked_list_t *listeners; // list of listeners which will be notified
-                              // while the object data is being retreived 
+                              // while the object data is being retreived
 
     uint16_t flags;
     #define COBJ_FLAG_ASYNC    (1)
@@ -24,9 +32,7 @@ typedef struct {
 
     pthread_mutex_t lock; // All operations on this structure should be
                           // synchronized using this lock
-                          // NOTE :we want a mutex here because the object
-                          // might be locked for long time if involved in a
-                          // fetch or store operation
+
     arc_resource_t *res;
 } cached_object_t;
 
