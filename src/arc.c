@@ -90,6 +90,7 @@ typedef struct __arc_object {
     arc_list_t head;
     size_t size;
     void *ptr;
+    char buf[64];
     void *key;
     size_t klen;
     pthread_mutex_t lock;
@@ -114,26 +115,28 @@ struct __arc {
 #define MAX(a, b) ( (a) > (b) ? (a) : (b) )
 #define MIN(a, b) ( (a) < (b) ? (a) : (b) )
 
+#define ARC_OBJ_BASE_SIZE(o) (sizeof(arc_object_t) + (((o)->key == (o)->buf) ? 0 : (o)->klen))
+
 static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state);
 
 /* Initialize a new object with this function. */
 static arc_object_t *arc_object_create(arc_t *cache, const void *key, size_t len)
 {
     arc_object_t *obj = calloc(1, sizeof(arc_object_t));
-    obj->state = NULL;
 
     arc_list_init(&obj->head);
 
     MUTEX_INIT_RECURSIVE(&obj->lock);
 
     obj->node = new_node(cache->refcnt, obj, cache);
-    obj->key = malloc(len);
+    if (len > sizeof(obj->buf))
+        obj->key = malloc(len);
+    else
+        obj->key = obj->buf;
     memcpy(obj->key, key, len);
     obj->klen = len;
 
-    obj->size = sizeof(arc_object_t) + len;
-
-    //retain_ref(cache->refcnt, obj->node);
+    obj->size = ARC_OBJ_BASE_SIZE(obj);
 
     return obj;
 }
@@ -185,7 +188,7 @@ void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size)
         {
             MUTEX_LOCK(&cache->lock);
             obj->state->size -= obj->size;
-            obj->size = sizeof(arc_object_t) + obj->klen + size;
+            obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
             obj->state->size += obj->size;
             MUTEX_UNLOCK(&cache->lock);
         }
@@ -286,7 +289,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 release_ref(cache->refcnt, obj->node);
                 MUTEX_LOCK(&cache->lock);
             } else {
-                obj->size = sizeof(arc_object_t) + obj->klen + size;
+                obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
                 MUTEX_LOCK(&cache->lock);
 
                 arc_list_prepend(&obj->head, &state->head);
@@ -311,7 +314,7 @@ static void free_node_ptr_callback(void *node) {
     // we don't need locks here .... nobody references obj anymore
     arc_object_t *obj = (arc_object_t *)node;
 
-    if (obj->key)
+    if (obj->key != obj->buf)
         free(obj->key);
 
     MUTEX_DESTROY(&obj->lock);
