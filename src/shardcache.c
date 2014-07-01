@@ -666,6 +666,7 @@ shardcache_create(char *me,
     global_tcp_timeout(ATOMIC_READ(cache->tcp_timeout));
 
     cache->async_queue = queue_create();
+    queue_set_bpool_size(cache->async_queue, num_workers * 1024);
     cache->async_mux = iomux_create(1<<13, 0);
 
     if (pthread_create(&cache->async_io_th, NULL, shardcache_run_async, cache) != 0) {

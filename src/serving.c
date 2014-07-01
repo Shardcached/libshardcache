@@ -1154,6 +1154,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers)
         wrk->jobs = queue_create();
         queue_set_free_value_callback(wrk->jobs,
                 (queue_free_value_callback_t)shardcache_connection_context_destroy);
+        queue_set_bpool_size(wrk->jobs, 1<<13);
         wrk->prune = list_create();
         list_set_free_value_callback(wrk->prune, (free_value_callback_t)shardcache_connection_context_destroy);
 

@@ -81,6 +81,7 @@ get_connection_queue(connections_pool_t *cc, char *addr)
     if (!connection_queue) {
         // there is no queue, so we are the first one opening a connection to 'addr'
         connection_queue = queue_create();
+        queue_set_bpool_size(connection_queue, cc->max_spare);
         queue_set_free_value_callback(connection_queue, free_connection);
         if (ht_set(cc->table, addr, strlen(addr), connection_queue, 0) != 0) {
             // ERRORS
