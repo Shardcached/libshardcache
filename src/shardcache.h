@@ -1065,7 +1065,7 @@ void shardcache_log_message(int prio, int dbglevel, const char *fmt, ...);
  * @param len The size of the input buffer
  * @param limit Don't output more than 'limit' bytes
  */
-char *shardcache_hex_escape(char *buf, int len, int limit);
+char *shardcache_hex_escape(char *buf, int len, int limit, int use_prefix);
 
 /**
  * @brief Escape all occurences of a specific byte using the provided escape character

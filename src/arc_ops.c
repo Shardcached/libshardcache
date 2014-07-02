@@ -381,7 +381,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                      obj);
     if (obj->data && obj->dlen) {
         SHC_DEBUG3("Found volatile value %s (%lu) for key %s",
-               shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
+               shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE, 0),
                (unsigned long)obj->dlen, keystr);
     } else if (cache->use_persistent_storage && cache->storage.fetch) {
         int rc = cache->storage.fetch(obj->key, obj->klen, &obj->data, &obj->dlen, cache->storage.priv);
@@ -393,7 +393,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         }
         if (obj->data && obj->dlen) {
             SHC_DEBUG3("Fetch storage callback returned value %s (%lu) for key %s",
-                   shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE),
+                   shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE, 0),
                    (unsigned long)obj->dlen, keystr);
         } else {
             SHC_DEBUG3("Fetch storage callback returned an empty value for key %s", keystr);

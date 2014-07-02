@@ -317,11 +317,11 @@ async_read_context_update(async_read_ctx_t *ctx)
 
             if (shardcache_log_level() >= LOG_DEBUG) {
                 SHC_DEBUG3("computed digest for received data: %s",
-                          shardcache_hex_escape((char *)&digest, sizeof(digest), 0));
+                          shardcache_hex_escape((char *)&digest, sizeof(digest), 0, 0));
 
                 uint8_t *remote = (uint8_t *)&received_digest;
                 SHC_DEBUG3("digest from received data: %s (%s)",
-                          shardcache_hex_escape(remote, sizeof(digest), 0),
+                          shardcache_hex_escape(remote, sizeof(digest), 0, 0),
                           match ? "MATCH" : "MISMATCH");
             }
 
@@ -637,10 +637,10 @@ read_and_check_siphash_signature(int fd, sip_hash *shash)
     int match = (memcmp(&digest, &received_digest, sizeof(digest)) == 0);
 
     SHC_DEBUG2("computed digest for received data: %s",
-            shardcache_hex_escape((unsigned char *)&digest, sizeof(digest), 0));
+            shardcache_hex_escape((unsigned char *)&digest, sizeof(digest), 0, 0));
 
     SHC_DEBUG2("digest from received data: %s (%s)",
-              shardcache_hex_escape((unsigned char *)&received_digest, sizeof(digest), 0),
+              shardcache_hex_escape((unsigned char *)&received_digest, sizeof(digest), 0, 0),
               match ? "MATCH" : "MISMATCH");
 
 
@@ -1012,11 +1012,11 @@ write_message(int fd,
     size_t mlen = fbuf_used(&msg);
     size_t dlen = auth ? sizeof(uint64_t) : 0;
     SHC_DEBUG2("sending message: %s",
-           shardcache_hex_escape(fbuf_data(&msg), mlen-dlen, DEBUG_DUMP_MAXSIZE));
+           shardcache_hex_escape(fbuf_data(&msg), mlen-dlen, DEBUG_DUMP_MAXSIZE, 0));
 
     if (dlen && fbuf_used(&msg) >= dlen) {
         SHC_DEBUG2("computed digest: %s",
-                  shardcache_hex_escape(fbuf_end(&msg)-dlen, dlen, 0));
+                  shardcache_hex_escape(fbuf_end(&msg)-dlen, dlen, 0, 0));
     }
 
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) & ~O_NONBLOCK);
@@ -1277,7 +1277,7 @@ fetch_from_peer(char *peer,
                     memcpy(keystr, key, len < 1024 ? len : 1024);
                     keystr[len] = 0;
                     SHC_DEBUG2("Got new data from peer %s : %s => %s", peer, keystr,
-                              shardcache_hex_escape(fbuf_data(out), fbuf_used(out), DEBUG_DUMP_MAXSIZE));
+                              shardcache_hex_escape(fbuf_data(out), fbuf_used(out), DEBUG_DUMP_MAXSIZE, 0));
                 }
                 if (should_close)
                     close(fd);
@@ -1338,7 +1338,7 @@ offset_from_peer(char *peer,
                     memcpy(keystr, key, len < 1024 ? len : 1024);
                     keystr[len] = 0;
                     SHC_DEBUG2("Got new data from peer %s : %s => %s", peer, keystr,
-                              shardcache_hex_escape(fbuf_data(out), fbuf_used(out), DEBUG_DUMP_MAXSIZE));
+                              shardcache_hex_escape(fbuf_data(out), fbuf_used(out), DEBUG_DUMP_MAXSIZE, 0));
                 }
                 if (should_close)
                     close(fd);

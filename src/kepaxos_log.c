@@ -25,10 +25,26 @@ kepaxos_log_create(char *dbpath)
 {
 
     struct stat st;
+    size_t ballots_path_len = strlen(dbpath) + 10;
+    char ballots_path[ballots_path_len];
+    snprintf(ballots_path, ballots_path_len, "%s/ballots", dbpath);
 
     if (stat(dbpath, &st) != 0) {
-        SHC_ERROR("Can't stat the dbpath %s: %s", dbpath, strerror(errno));
-        return NULL;
+        if (mkdir(dbpath, 0700) != 0) {
+            SHC_ERROR("Can't create the dbpath %s: %s", dbpath, strerror(errno));
+            return NULL;
+        }
+        if (stat(dbpath, &st) != 0) {
+            SHC_ERROR("Can't stat the dbpath %s: %s", dbpath, strerror(errno));
+            return NULL;
+        }
+        mkdir(ballots_path, 0700);
+    }
+    if (stat(ballots_path, &st) != 0) {
+        if (mkdir(ballots_path, 0700) != 0) {
+            SHC_ERROR("Can't create the ballots path %s: %s", ballots_path, strerror(errno));
+            return NULL;
+        }
     }
     
     if (!S_ISDIR(st.st_mode)) {
@@ -105,21 +121,28 @@ kepaxos_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_t *b
     uint64_t seq = 0;
 
     kepaxos_compute_key_hashes(key, klen, &keyhash1, &keyhash2);
-    char kstr[33];
+    char kstr[35]; // 32 + 0x + null-terminator
     snprintf(kstr, sizeof(kstr), "%s%s",
-             shardcache_hex_escape((char *)&keyhash1, sizeof(keyhash1), 16),
-             shardcache_hex_escape((char *)&keyhash2, sizeof(keyhash2), 16));
+             shardcache_hex_escape((char *)&keyhash1, sizeof(keyhash1), 16, 0),
+             shardcache_hex_escape((char *)&keyhash2, sizeof(keyhash2), 16, 0));
 
 
     struct stat st;
-    size_t kpath_len = strlen(log->dbpath) + 1 + strlen(kstr) + 1;
+    size_t kprefix_path_len = strlen(log->dbpath) + 6;
+    char kprefix_path[kprefix_path_len];
+    snprintf(kprefix_path, kprefix_path_len, "%s/%02x%02x", log->dbpath, ((char *)key)[0], ((char *)key)[klen-1]);
+
+    size_t kpath_len = kprefix_path_len + 1 + strlen(kstr) + 1;
     char kpath[kpath_len];
-    snprintf(kpath, sizeof(kpath), "%s/%s", log->dbpath, kstr);
+    snprintf(kpath, sizeof(kpath), "%s/%s", kprefix_path, kstr);
+    
+    if (stat(kprefix_path, &st) != 0 || !S_ISDIR(st.st_mode))
+        return 0;
     
     if (stat(kpath, &st) != 0 || !S_ISDIR(st.st_mode))
         return 0;
 
-    char seq_path[kpath_len + 5];
+    char seq_path[kpath_len + 5]; // kpath_len + / + "seq" + null-terminator
     snprintf(seq_path, sizeof(seq_path), "%s/seq", kpath);
 
     FILE *seq_file = fopen(seq_path, "r");
@@ -158,20 +181,44 @@ kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_
     uint64_t keyhash1, keyhash2;
 
     kepaxos_compute_key_hashes(key, klen, &keyhash1, &keyhash2);
-    char kstr[33];
+    char kstr[35]; // 32 + 0x + null-terminator
     snprintf(kstr, sizeof(kstr), "%s%s",
-             shardcache_hex_escape((char *)&keyhash1, sizeof(keyhash1), 16),
-             shardcache_hex_escape((char *)&keyhash2, sizeof(keyhash2), 16));
+             shardcache_hex_escape((char *)&keyhash1, sizeof(keyhash1), 16, 0),
+             shardcache_hex_escape((char *)&keyhash2, sizeof(keyhash2), 16, 0));
 
 
     struct stat st;
-    size_t kpath_len = strlen(log->dbpath) + 1 + strlen(kstr) + 1;
+    size_t kprefix_path_len = strlen(log->dbpath) + 6;
+    char kprefix_path[kprefix_path_len];
+    snprintf(kprefix_path, kprefix_path_len, "%s/%02x%02x", log->dbpath, ((char *)key)[0], ((char *)key)[klen-1]);
+
+    size_t kpath_len = kprefix_path_len + 1 + strlen(kstr) + 1;
     char kpath[kpath_len];
-    snprintf(kpath, sizeof(kpath), "%s/%s", log->dbpath, kstr);
+    snprintf(kpath, sizeof(kpath), "%s/%s", kprefix_path, kstr);
     
-    if (stat(kpath, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        SHC_ERROR("Can't stat the key_path %s: %s", kpath, strerror(errno));
+    if (stat(kprefix_path, &st) != 0 && mkdir(kprefix_path, 0700) != 0) {
+        SHC_ERROR("Can't create the key_prefix_path %s: %s", kprefix_path, strerror(errno));
         return;
+    }
+
+    if (stat(kpath, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        if (mkdir(kpath, 0700) != 0) {
+            SHC_ERROR("Can't create the key_path %s: %s", kpath, strerror(errno));
+            return;
+        }
+    }
+
+    size_t kfile_path_len = kpath_len + 5;
+    char kfile_path[kfile_path_len];
+    snprintf(kfile_path, sizeof(kfile_path), "%s/key", kpath);
+
+    if (stat(kfile_path, &st) != 0 || !S_ISREG(st.st_mode)) {
+        FILE *key_file = fopen(kfile_path, "w");
+        if (key_file) {
+            if (fwrite(key, klen, 1, key_file) != 1)
+                SHC_ERROR("Can't update the key file %s: %s", kfile_path, strerror(errno));
+            fclose(key_file);
+        }
     }
 
     char seq_path[kpath_len + 5];
@@ -193,58 +240,133 @@ kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_
     char ballot_path[kpath_len + 8];
     snprintf(ballot_path, sizeof(ballot_path), "%s/ballot", kpath);
 
-    FILE *ballot_file = fopen(ballot_path, "w");
+    size_t ballot_link_path_len = strlen(log->dbpath) + 10;
+    char ballot_link_path[ballot_link_path_len]; 
+    snprintf(ballot_link_path, sizeof(ballot_link_path), "%s/ballots", log->dbpath);
+
+    FILE *ballot_file = fopen(ballot_path, "r+");
+    if (ballot_file) {
+
+        uint64_t old_ballot = 0;
+        if (fread(&old_ballot, sizeof(old_ballot), 1, ballot_file) != 1) {
+            SHC_ERROR("Can't read the ballot file %s: %s", ballot_path, strerror(errno));
+        }
+        if (old_ballot) {
+            char old_ballot_path[ballot_link_path_len + 64];
+            snprintf(old_ballot_path, sizeof(old_ballot_path), "%s/%" PRIu64, ballot_link_path, old_ballot);
+            if (unlink(old_ballot_path) != 0)
+                SHC_ERROR("Can't remove ballot symlink %s: %s", old_ballot_path, strerror(errno));
+        }
+        rewind(ballot_file);
+    } else {
+        ballot_file = fopen(ballot_path, "w");
+    }
+
     if (ballot_file) {
         nitems = fwrite(&ballot, sizeof(ballot), 1, ballot_file);
-        if (nitems < 1)
+        if (nitems == 1) {
+            char new_ballot_path[ballot_link_path_len + 64];
+            snprintf(new_ballot_path, sizeof(new_ballot_path), "%s/%" PRIu64, ballot_link_path, ballot);
+            if (symlink(kpath, new_ballot_path) != 0) {
+                SHC_ERROR("Error creating the ballot_file link %s (%s): %s", new_ballot_path, ballot_path, strerror(errno));
+            }
+        } else {
             SHC_ERROR("Error updating the ballot_file %s: %s", ballot_path, strerror(errno));
+        }
         fclose(ballot_file);
     } else {
         SHC_ERROR("Error updating the ballot_file %s: %s", ballot_path, strerror(errno));
     }
+
 }
 
 
 int 
 kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t **items, int *num_items)
 {
-    /*
-    const char *tail = NULL;
-    sqlite3_stmt *stmt = NULL;
-
-    int rc = sqlite3_prepare_v2(log->dbh,
-                                "SELECT ballot, seq, key FROM ReplicaLog WHERE ballot > ? ORDER BY ballot ASC",
-                                -1, &stmt, &tail);
-    if (rc != SQLITE_OK) {
-        SHC_ERROR("Can't initialize the select-seq prepared statement: %s",
-                  sqlite3_errmsg(log->dbh));
-        sqlite3_close(log->dbh);
+    size_t ballots_path_len = strlen(log->dbpath) + 9;
+    char ballots_path[ballots_path_len];
+    snprintf(ballots_path, strlen(ballots_path), "%s/ballots", log->dbpath);
+    DIR *ballots_dir = opendir(ballots_path);
+    if (!ballots_dir) {
+        SHC_ERROR("Can't open the ballots dir %s: %s", ballots_path, strerror(errno));
         return -1;
-    }
-
-    rc = sqlite3_bind_int64(stmt, 1, ballot);
-    if (rc != SQLITE_OK) {
-        SHC_ERROR("Can't bind the ballot column (select_diff): %s",
-                  sqlite3_errmsg(log->dbh));
-        return 0;
     }
 
     int nitems = 0;
     kepaxos_log_item_t *itms = NULL;
-    while(sqlite3_step(stmt) == SQLITE_ROW) {
-        itms = realloc(itms, sizeof(kepaxos_log_item_t) * (nitems + 1));
-        kepaxos_log_item_t *item = &itms[nitems++];
-        item->ballot = sqlite3_column_int64(stmt, 0);
-        item->seq = sqlite3_column_int64(stmt, 1);
-        item->klen = sqlite3_column_bytes(stmt, 2); 
-        item->key = malloc(item->klen);
-        memcpy(item->key, sqlite3_column_blob(stmt, 2), item->klen); 
-    } 
-    
-    sqlite3_finalize(stmt);
+    struct dirent *item = readdir(ballots_dir);
+    while (item) {
+        if (item->d_name[0] != '.' && item->d_type == DT_LNK) {
+            uint64_t b = strtoll(item->d_name, NULL, 10);
+            if (b && b > ballot) {
+                struct stat st;
+                size_t kpath_len = ballots_path_len + 1 + strlen(item->d_name) + 1;
+                char kpath[kpath_len];
+                snprintf(kpath, sizeof(kpath), "%s/%s", ballots_path, item->d_name);
+
+                size_t kfile_path_len = kpath_len + 5;
+                char kfile_path[kfile_path_len];
+                snprintf(kfile_path, sizeof(kfile_path), "%s/key", kpath);
+                if (stat(kfile_path, &st) != 0 || !S_ISREG(st.st_mode)) {
+                    SHC_ERROR("Can't stat the key file %s: %s", kfile_path, strerror(errno));
+                    item = readdir(ballots_dir);
+                    continue;
+                }
+                FILE *kfile = fopen(kfile_path, "r");
+                if (!kfile) {
+                    SHC_ERROR("Can't open the key file %s: %s", kfile_path, strerror(errno));
+                    item = readdir(ballots_dir);
+                    continue;
+                }
+
+                char *key = malloc(st.st_size);
+                if (fread(key, st.st_size, 1, kfile) != st.st_size) {
+                    SHC_ERROR("Can't read the key file %s: %s", kfile_path, strerror(errno));
+                    free(key);
+                    fclose(kfile);
+                    item = readdir(ballots_dir);
+                    continue;
+
+                }
+                fclose(kfile);
+ 
+                size_t sfile_path_len = kpath_len + 5;
+                char sfile_path[sfile_path_len];
+                snprintf(sfile_path, sizeof(sfile_path), "%s/seq", kpath);
+                FILE *sfile = fopen(sfile_path, "r");
+                if (!sfile) {
+                    SHC_ERROR("Can't read the key file %s: %s", kfile_path, strerror(errno));
+                    free(key);
+                    fclose(kfile);
+                    item = readdir(ballots_dir);
+                    continue;
+                }
+                uint64_t seq = 0;
+                if (fread(&seq, sizeof(seq), 1, sfile) != sizeof(seq)) {
+                    SHC_ERROR("Can't read the key file %s: %s", kfile_path, strerror(errno));
+                    free(key);
+                    fclose(kfile);
+                    fclose(sfile);
+                    item = readdir(ballots_dir);
+                    continue;
+                }
+                fclose(sfile);
+
+                itms = realloc(itms, sizeof(kepaxos_log_item_t) * (nitems + 1));
+                kepaxos_log_item_t *item = &itms[nitems++];
+                item->ballot = b;
+                item->seq = seq;
+                item->klen = st.st_size;
+                item->key = key;
+            }
+        }
+            
+        item = readdir(ballots_dir);
+    }
+    closedir(ballots_dir);
     *items = itms;
     *num_items = nitems;
-    */
 
     return 0;
 }

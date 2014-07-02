@@ -634,7 +634,7 @@ shardcache_create(char *me,
 
     if (secret && *secret) {
         SHC_DEBUG("AUTH KEY (secret: %s) : %s", secret,
-                  shardcache_hex_escape(cache->auth, SHARDCACHE_MSG_SIG_LEN, DEBUG_DUMP_MAXSIZE));
+                  shardcache_hex_escape((char *)cache->auth, SHARDCACHE_MSG_SIG_LEN, DEBUG_DUMP_MAXSIZE, 0));
     }
 
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
@@ -1563,7 +1563,7 @@ shardcache_set_internal(shardcache_t *cache,
     {
         int rc = -1;
         SHC_DEBUG2("Storing value %s (%d) for key %s",
-                   shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
+                   shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE, 0),
                    (int)vlen, keystr);
 
         volatile_object_t *prev = NULL;
@@ -1666,7 +1666,7 @@ shardcache_set_internal(shardcache_t *cache,
     else if (node_len)
     {
         SHC_DEBUG2("Forwarding set command %s => %s (%d) to %s",
-                keystr, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE),
+                keystr, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE, 0),
                 (int)vlen, node_name);
 
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);

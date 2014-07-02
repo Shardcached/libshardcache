@@ -56,7 +56,7 @@ unsigned long shardcache_byte_escape(char ch,
     return cnt;
 }
 
-char *shardcache_hex_escape(char *buf, int len, int limit)
+char *shardcache_hex_escape(char *buf, int len, int limit, int include_prefix)
 {
     int i;
     static __thread char str[SHC_ESCAPE_BUFFER_SIZE_MAX+6];
@@ -66,8 +66,11 @@ char *shardcache_hex_escape(char *buf, int len, int limit)
     if (olen > SHC_ESCAPE_BUFFER_SIZE_MAX/2)
         olen = SHC_ESCAPE_BUFFER_SIZE_MAX/2;
 
-    strcpy(str, "0x");
-    char *p = str+2;
+    char *p = str;
+    if (include_prefix) {
+        strcpy(str, "0x");
+        p += 2;
+    }
     for (i = 0; i < olen; i++) {
         sprintf(p, "%02x", (unsigned char)buf[i]);
         p+=2;
