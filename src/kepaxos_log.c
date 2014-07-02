@@ -65,11 +65,14 @@ kepaxos_log_create(char *dbpath)
     char ballot_path[ballot_path_size];
     snprintf(ballot_path, ballot_path_size, "%s/ballot", dbpath);
 
-    FILE *ballot_file = fopen(ballot_path, "w+");
+    FILE *ballot_file = fopen(ballot_path, "r+");
     if (!ballot_file) {
-        SHC_ERROR("Can't open/create the ballot_file %s: %s", ballot_path, strerror(errno));
-        //closedir(dbdir);
-        return NULL;
+        ballot_file = fopen(ballot_path, "w+");
+        if (!ballot_file) {
+            SHC_ERROR("Can't open/create the ballot_file %s: %s", ballot_path, strerror(errno));
+            //closedir(dbdir);
+            return NULL;
+        }
     }
 
     uint64_t ballot = 0;
@@ -278,6 +281,13 @@ kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_
         SHC_ERROR("Error updating the ballot_file %s: %s", ballot_path, strerror(errno));
     }
 
+    if (ballot > log->max_ballot) {
+        rewind(log->bfile);
+        size_t nitems = fwrite(&ballot, sizeof(ballot), 1, log->bfile);
+        if (nitems < 1 && ferror(ballot_file))
+            SHC_ERROR("Error updating the max_ballot file in the dbpath %s: %s", log->dbpath, strerror(errno));
+        log->max_ballot = ballot;
+    }
 }
 
 
