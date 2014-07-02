@@ -580,7 +580,6 @@ main (int argc, char **argv)
     shardcache_release_counters(counters);
 
     if (stats_file) {
-        fflush(stats_file);
         fclose(stats_file);
     }
 
