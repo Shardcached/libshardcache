@@ -8,6 +8,9 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 #define HAVE_UINT64_T
 #include <siphash.h>
@@ -93,8 +96,83 @@ typedef struct {
     uint32_t ballot;
 } kepaxos_log_item;
 
+char *hex_escape(char *buf, int len)
+{
+    int i;
+    static char str[1024];
+
+    if (len > 512)
+        len = 512;
+
+    char *p = str;
+
+    for (i = 0; i < len; i++) {
+        sprintf(p, "%02x", (unsigned char)buf[i]);
+        p+=2;
+    }
+    return str;
+}
+
+
 int fetch_log(char *dbfile, void *key, size_t klen, kepaxos_log_item *item)
 {
+    uint64_t keyhash1 = sip_hash24((unsigned char *)"0123456789ABCDEF", key, klen);
+    uint64_t keyhash2 = sip_hash24((unsigned char *)"ABCDEF0987654321", key, klen);
+
+    char kstr[35]; // 32 + 0x + null-terminator
+    snprintf(kstr, sizeof(kstr), "%s%s",
+             hex_escape((char *)&keyhash1, sizeof(keyhash1)),
+             hex_escape((char *)&keyhash2, sizeof(keyhash2)));
+
+
+    struct stat st;
+    size_t kprefix_path_len = strlen(dbfile) + 6;
+    char kprefix_path[kprefix_path_len];
+    snprintf(kprefix_path, kprefix_path_len, "%s/%02x%02x", dbfile, ((char *)key)[0], ((char *)key)[klen-1]);
+
+    size_t kpath_len = kprefix_path_len + 1 + strlen(kstr) + 1;
+    char kpath[kpath_len];
+    snprintf(kpath, sizeof(kpath), "%s/%s", kprefix_path, kstr);
+
+    if (stat(kprefix_path, &st) != 0 || !S_ISDIR(st.st_mode))
+        return 0;
+    
+    if (stat(kpath, &st) != 0 || !S_ISDIR(st.st_mode))
+        return 0;
+
+    char seq_path[kpath_len + 5]; // kpath_len + / + "seq" + null-terminator
+    snprintf(seq_path, sizeof(seq_path), "%s/seq", kpath);
+
+    FILE *seq_file = fopen(seq_path, "r");
+    if (!seq_file)
+        return 0;
+
+    uint64_t seq = 0;
+    size_t nitems = fread(&seq, sizeof(seq), 1, seq_file);
+
+
+    if (nitems < 1 && ferror(seq_file))
+        fprintf(stderr, "Error reading the seq_file %s: %s\n", seq_path, strerror(errno));
+
+    fclose(seq_file);
+
+    uint64_t ballot = 0;
+    char ballot_path[kpath_len + 8];
+    snprintf(ballot_path, sizeof(ballot_path), "%s/ballot", kpath);
+
+    FILE *ballot_file = fopen(ballot_path, "r");
+    if (ballot_file) {
+        nitems = fread(&ballot, sizeof(ballot), 1, ballot_file);
+        if (nitems < 1 && ferror(ballot_file))
+            fprintf(stderr, "Error reading the ballot_file %s: %s\n", ballot_path, strerror(errno));
+        fclose(ballot_file);
+    } else {
+        fprintf(stderr, "Error reading the ballot_file %s: %s\n", ballot_path, strerror(errno));
+    }
+
+    item->seq = seq;
+    item->ballot = ballot;
+ 
     return 0;
 }
 
@@ -179,11 +257,11 @@ int main(int argc, char **argv)
 
     ut_testing("log is consistent on all replicas");
     
-    //int check = check_log_consistency(contexts, 0, 4);
-    //if (check)
+    int check = check_log_consistency(contexts, 0, 4);
+    if (check)
         ut_success();
-    //else
-    //    ut_failure("Log is not aligned on all replicas");
+    else
+        ut_failure("Log is not aligned on all replicas");
 
 
     // bring down 2 replicas (node4 and node5) , 3 should be enough to keep working
@@ -191,17 +269,17 @@ int main(int argc, char **argv)
     contexts[4].online = 0;
     rc = kepaxos_run_command(contexts[0].ke, 0x00, "test_key", 8, "test_value", 10);
     ut_testing("kepaxos_run_command() succeeds with only N/2+1 active replicas");
-    //check = check_log_consistency(contexts, 0, 2);
-    //if (check) {
-   //     check = check_log_consistency(contexts, 0, 4);
-   //     if (!check) {
+    check = check_log_consistency(contexts, 0, 2);
+    if (check) {
+        check = check_log_consistency(contexts, 0, 4);
+        if (!check) {
             ut_success();
-  //      } else {
-  //          ut_failure("Log doesn't differ on the offline replicas");
-  //      }
-  //  } else {
-  //      ut_failure("Log is not aligned on the active replicas");
-  //  }
+        } else {
+            ut_failure("Log doesn't differ on the offline replicas");
+        }
+    } else {
+        ut_failure("Log is not aligned on the active replicas");
+    }
 
 
     int committed = total_values_committed;
@@ -221,11 +299,11 @@ int main(int argc, char **argv)
     // the crashed replicas (3 and 4) which are behind (they missed a command)
     rc = kepaxos_run_command(contexts[3].ke, 0x00, "test_key", 8, "test_value", 10);
     // now all replicas should be aligned
-    //check = check_log_consistency(contexts, 0, 4);
-   // if (check)
+    check = check_log_consistency(contexts, 0, 4);
+    if (check)
         ut_success();
-   // else
-   //     ut_failure("Log is not aligned on all the replicas");
+    else
+        ut_failure("Log is not aligned on all the replicas");
 
     // now let's test concurrency when the same key is tried to be changed
     // by multiple replicas at the same time
@@ -239,12 +317,12 @@ int main(int argc, char **argv)
         pthread_join(threads[i], NULL);
     }
 
-   // check = check_log_consistency(contexts, 0, 4);
-    //if (check)
+    check = check_log_consistency(contexts, 0, 4);
+    if (check)
         ut_success();
-   // else
- //       ut_failure("Log is not aligned on all the replicas");
-//
+    else
+        ut_failure("Log is not aligned on all the replicas");
+
     for (i = 0; i < 5; i++) {
         kepaxos_context_destroy(contexts[i].ke);
         char dbfile[2048];
