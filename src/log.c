@@ -56,7 +56,7 @@ unsigned long shardcache_byte_escape(char ch,
     return cnt;
 }
 
-char *shardcache_hex_escape(const char *buf, int len, int limit)
+char *shardcache_hex_escape(char *buf, int len, int limit)
 {
     int i;
     static __thread char str[SHC_ESCAPE_BUFFER_SIZE_MAX+6];
