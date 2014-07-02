@@ -181,8 +181,8 @@ kepaxos_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_t *b
 void
 kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_t ballot, uint64_t seq)
 {
+    // let's compute the path where this key should be stored in the log
     uint64_t keyhash1, keyhash2;
-
     kepaxos_compute_key_hashes(key, klen, &keyhash1, &keyhash2);
     char kstr[35]; // 32 + 0x + null-terminator
     snprintf(kstr, sizeof(kstr), "%s%s",
@@ -199,6 +199,7 @@ kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_
     char kpath[kpath_len];
     snprintf(kpath, sizeof(kpath), "%s/%s", kprefix_path, kstr);
     
+    // if the directory doesn't exist we must create it
     if (stat(kprefix_path, &st) != 0 && mkdir(kprefix_path, 0700) != 0) {
         SHC_ERROR("Can't create the key_prefix_path %s: %s", kprefix_path, strerror(errno));
         return;
@@ -211,6 +212,7 @@ kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_
         }
     }
 
+    // first store the complete key
     size_t kfile_path_len = kpath_len + 5;
     char kfile_path[kfile_path_len];
     snprintf(kfile_path, sizeof(kfile_path), "%s/key", kpath);
@@ -224,6 +226,7 @@ kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_
         }
     }
 
+    // store the seq
     char seq_path[kpath_len + 5];
     snprintf(seq_path, sizeof(seq_path), "%s/seq", kpath);
 
@@ -240,6 +243,8 @@ kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_
     }
     fclose(seq_file);
 
+    // store the ballot to the key directory
+    // note that we also need to remove the symlink to the previous ballot
     char ballot_path[kpath_len + 8];
     snprintf(ballot_path, sizeof(ballot_path), "%s/ballot", kpath);
 
@@ -249,7 +254,7 @@ kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_
 
     FILE *ballot_file = fopen(ballot_path, "r+");
     if (ballot_file) {
-
+        // if a previous symlink exists, let's get it out of the way
         uint64_t old_ballot = 0;
         if (fread(&old_ballot, sizeof(old_ballot), 1, ballot_file) != 1) {
             SHC_ERROR("Can't read the ballot file %s: %s", ballot_path, strerror(errno));
@@ -281,6 +286,7 @@ kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_
         SHC_ERROR("Error updating the ballot_file %s: %s", ballot_path, strerror(errno));
     }
 
+    // and finally update the stored max_ballot if necessary (it should always be true)
     if (ballot > log->max_ballot) {
         rewind(log->bfile);
         size_t nitems = fwrite(&ballot, sizeof(ballot), 1, log->bfile);
@@ -294,6 +300,9 @@ kepaxos_set_last_seq_for_key(kepaxos_log_t *log, void *key, size_t klen, uint64_
 int 
 kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t **items, int *num_items)
 {
+
+    // access the directory where we store the symlinks to all the keys in the log
+    // indexed by their ballot, for easy comparison and access when calculating the diff
     size_t ballots_path_len = strlen(log->dbpath) + 9;
     char ballots_path[ballots_path_len];
     snprintf(ballots_path, strlen(ballots_path), "%s/ballots", log->dbpath);
@@ -311,10 +320,13 @@ kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t
             uint64_t b = strtoll(item->d_name, NULL, 10);
             if (b && b > ballot) {
                 struct stat st;
+
+                // compute the path to this key in the replica log
                 size_t kpath_len = ballots_path_len + 1 + strlen(item->d_name) + 1;
                 char kpath[kpath_len];
                 snprintf(kpath, sizeof(kpath), "%s/%s", ballots_path, item->d_name);
 
+                // get the key
                 size_t kfile_path_len = kpath_len + 5;
                 char kfile_path[kfile_path_len];
                 snprintf(kfile_path, sizeof(kfile_path), "%s/key", kpath);
@@ -330,6 +342,7 @@ kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t
                     continue;
                 }
 
+                // we got a key
                 char *key = malloc(st.st_size);
                 if (fread(key, st.st_size, 1, kfile) != st.st_size) {
                     SHC_ERROR("Can't read the key file %s: %s", kfile_path, strerror(errno));
@@ -341,6 +354,7 @@ kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t
                 }
                 fclose(kfile);
  
+                // get the seq
                 size_t sfile_path_len = kpath_len + 5;
                 char sfile_path[sfile_path_len];
                 snprintf(sfile_path, sizeof(sfile_path), "%s/seq", kpath);
@@ -363,6 +377,7 @@ kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t
                 }
                 fclose(sfile);
 
+                // now that we have everything we can fill in the item to return
                 itms = realloc(itms, sizeof(kepaxos_log_item_t) * (nitems + 1));
                 kepaxos_log_item_t *item = &itms[nitems++];
                 item->ballot = b;
