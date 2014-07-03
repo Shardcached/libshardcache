@@ -11,7 +11,6 @@
 #include <errno.h>
 #include <iomux.h>
 #include <queue.h>
-#include <rqueue.h>
 #include <linklist.h>
 #include <bsd_queue.h>
 #include <hashtable.h>
@@ -32,6 +31,7 @@
 #endif
 #include <siphash.h>
 
+#pragma pack(push, 1)
 typedef struct {
     pthread_t thread;
     queue_t *jobs;
@@ -101,8 +101,8 @@ struct __shardcache_connection_context_s {
     shardcache_worker_context_t *worker;
     int closed;
     struct timeval in_prune_since;
-    rqueue_t *output_buffers;
 };
+#pragma pack(pop)
 
 static int
 async_read_handler(void *data, size_t len, int idx, void *priv)
@@ -132,8 +132,6 @@ shardcache_connection_context_create(shardcache_serving_t *serv, int fd)
                                                     async_read_handler,
                                                     ctx);
     TAILQ_INIT(&ctx->requests);
-    ctx->output_buffers = rqueue_create(serv->cache->serving_look_ahead * 2, RQUEUE_MODE_BLOCKING);
-    rqueue_set_free_value_callback(ctx->output_buffers, (rqueue_free_value_callback_t)free);
     return ctx;
 }
 
@@ -142,16 +140,6 @@ shardcache_request_destroy(shardcache_request_t *req)
 {
     int i;
     for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
-        char *rbuf = NULL;
-        int rlen = fbuf_detach(&req->records[i], &rbuf, &rlen);
-        if (LIKELY(rlen >= 4)) {
-            *((int *)rbuf) = rlen;
-            if (UNLIKELY(rqueue_write(req->ctx->output_buffers, (void *)rbuf) != 0))
-                free(rbuf);
-        } else if (rbuf) {
-            free(rbuf);
-        }
-        // XXX - this shouldn't be necessary now that we detached the buffer
         fbuf_destroy(&req->records[i]);
     }
     SPIN_DESTROY(&req->output_lock);
@@ -177,7 +165,6 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
         req = TAILQ_FIRST(&ctx->requests);
     }
     async_read_context_destroy(ctx->reader_ctx);
-    rqueue_destroy(ctx->output_buffers);
     free(ctx);
 }
 
@@ -794,12 +781,12 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
     req->sig_hdr = async_read_context_sig_hdr(ctx->reader_ctx);
     req->ctx = ctx;
     SPIN_INIT(&req->output_lock);
-    int len = 0;
-    char *buf = (char *)rqueue_read(ctx->output_buffers);
-    if (LIKELY(buf != NULL)) {
-        len = *((int *)buf);
-        fbuf_attach(&req->output, buf, len + 1, 0);
+
+    int i;
+    for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
+        fbuf_copy(&ctx->records[i], &req->records[i]);
     }
+    req->fetch_accumulator = rbuf_create(1<<16);
     return req;
 }
 
@@ -815,20 +802,10 @@ shardcache_check_context_state(iomux_t *iomux,
         // create a new request
         ctx->retries = 0;
         shardcache_request_t *req = shardcache_request_create(ctx);
-        // swap the records buffers
         int i;
         for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
-            char *rbuf = NULL;
-            int rlen = fbuf_detach(&ctx->records[i], &rbuf, NULL);
-            if (rlen)
-                fbuf_attach(&req->records[i], rbuf, rlen + 1, rlen); // XXX
-            rbuf = (char *)rqueue_read(ctx->output_buffers);
-            if (LIKELY(rbuf != NULL)) {
-                rlen = *((int *)rbuf);
-                fbuf_attach(&ctx->records[i], rbuf, rlen + 1, 0);
-            }
+            fbuf_clear(&ctx->records[i]);
         }
-        req->fetch_accumulator = rbuf_create(1<<16);
         TAILQ_INSERT_TAIL(&ctx->requests, req, next);
         ctx->num_requests++;
         process_request(req);
@@ -982,19 +959,6 @@ shardcache_connection_handler(iomux_t *iomux, int fd, void *priv)
     }
 }
 
-static void
-shardcache_release_buffer_handler(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
-{
-    shardcache_connection_context_t *ctx =
-        (shardcache_connection_context_t *)priv;
-    if (LIKELY(len >= 4)) {
-        *((int *)data) = len + 1;
-        if (rqueue_write(ctx->output_buffers, (void *)data) == 0)
-            return;
-    }
-    free(data);
-}
-
 
 static void *
 worker(void *priv)
@@ -1010,7 +974,6 @@ worker(void *priv)
                 .mux_input = shardcache_input_handler,
                 .mux_output = NULL,
                 .mux_eof = shardcache_eof_handler,
-                .mux_free_data = shardcache_release_buffer_handler,
                 .priv = ctx
             };
             if (!iomux_add(wrkctx->iomux, ctx->fd, &connection_callbacks)) {
@@ -1154,7 +1117,6 @@ shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers)
         wrk->jobs = queue_create();
         queue_set_free_value_callback(wrk->jobs,
                 (queue_free_value_callback_t)shardcache_connection_context_destroy);
-        queue_set_bpool_size(wrk->jobs, 1<<13);
         wrk->prune = list_create();
         list_set_free_value_callback(wrk->prune, (free_value_callback_t)shardcache_connection_context_destroy);
 
