@@ -1,14 +1,25 @@
 /* The cached object.
  * The data will be loaded when ARC instruct us to do so.
  */
+
+#include <stdint.h>
+
+#pragma pack(push, 1)
 typedef struct {
     void *key;   // The key (weak reference to the actual key stored in the arc resource)
     size_t klen; // The length of the key
 
-    char buf[256]; // internal storage for data which doesn't exceeds 256 bytes.
-                   // If the complete data is bigger than 256 bytes, the required
-                   // memory will be allocated and the data pointer will be set
-                   // to point to the newly allocated memory.
+    // internal storage for data which doesn't exceeds 256 bytes.
+    // If the complete data is bigger than 256 bytes, the required
+    // memory will be allocated and the data pointer will be set
+    // to point to the newly allocated memory.
+#if UINTPTR_MAX == 0xffffffff
+    char buf[198];
+#elif UINTPTR_MAX == 0xffffffffffffffff
+    char buf[150];
+#else
+    char buf[128];
+#endif
 
     void *data;  // The data (if any, NULL otherwise)
                  // Note that if the data is less than 256 bytes this pointer
@@ -35,6 +46,7 @@ typedef struct {
 
     arc_resource_t *res;
 } cached_object_t;
+#pragma pack(pop)
 
 #define COBJ_CHECK_FLAGS(__o, __f) ((((__o)->flags) & (__f)) == (__f))
 #define COBJ_SET_FLAG(__o, __f) ((__o)->flags |= (__f))

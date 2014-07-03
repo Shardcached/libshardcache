@@ -22,9 +22,11 @@
  * Simple double-linked list, inspired by the implementation used in the
  * linux kernel.
  */
+#pragma pack(push, 1)
 typedef struct __arc_list {
     struct __arc_list *prev, *next;
 } arc_list_t;
+#pragma pack(pop)
 
 #define arc_list_entry(ptr, type, field) \
     ((type*) (((char*)ptr) - offsetof(type, field)))
@@ -77,26 +79,36 @@ arc_list_prepend(arc_list_t *head, arc_list_t *list)
 /**********************************************************************
  * The arc state represents one of the m{r,f}u{g,} lists
  */
+#pragma pack(push, 1)
 typedef struct __arc_state {
     size_t size;
     arc_list_t head;
 } arc_state_t;
+#pragma pack(pop)
 
 /* This structure represents an object that is stored in the cache. Consider
  * this structure private, don't access the fields directly. When creating
  * a new object, use the arc_object_create() function to allocate and initialize it. */
+#pragma pack(push, 1)
 typedef struct __arc_object {
     arc_state_t *state;
     arc_list_t head;
     size_t size;
     void *ptr;
-    char buf[64];
+#if UINTPTR_MAX == 0xffffffff
+    char buf[196];
+#elif UINTPTR_MAX == 0xffffffffffffffff
+    char buf[148];
+#else
+    char buf[128];
+#endif
     void *key;
     size_t klen;
     pthread_mutex_t lock;
     refcnt_node_t *node;
     int async;
 } arc_object_t;
+#pragma pack(pop)
 
 /* The actual cache. */
 struct __arc {
