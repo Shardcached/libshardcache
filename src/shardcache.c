@@ -506,26 +506,41 @@ shardcache_expire_keys(void *priv)
     return NULL;
 }
 
+void
+shardcache_queue_async_read_wrk(shardcache_t *cache, async_read_wrk_t *wrk)
+{
+    queue_push_right(cache->async_context[ATOMIC_INCREASE(cache->async_index, 1)%2].queue, wrk);
+}
+
+typedef struct {
+    shardcache_t *cache;
+    int index;
+} shardcache_run_async_arg_t;
+
 void *
 shardcache_run_async(void *priv)
 {
-    shardcache_t *cache = (shardcache_t *)priv;
+    shardcache_run_async_arg_t *arg = (shardcache_run_async_arg_t *)priv;
+    shardcache_t *cache = arg->cache;
+    iomux_t *async_mux = arg->cache->async_context[arg->index%2].mux;
+    queue_t *async_queue = arg->cache->async_context[arg->index%2].queue;
     while (!ATOMIC_READ(cache->async_quit)) {
         int timeout = ATOMIC_READ(cache->iomux_run_timeout_low);
         struct timeval tv = { timeout/1e6, timeout%(int)1e6 };
-        iomux_run(cache->async_mux, &tv);
-        async_read_wrk_t *wrk = queue_pop_left(cache->async_queue);
+        iomux_run(async_mux, &tv);
+        async_read_wrk_t *wrk = queue_pop_left(async_queue);
         while (wrk) {
-            if (wrk->fd < 0 || !iomux_add(cache->async_mux, wrk->fd, &wrk->cbs)) {
+            if (wrk->fd < 0 || !iomux_add(async_mux, wrk->fd, &wrk->cbs)) {
                  if (wrk->fd >= 0)
-                     wrk->cbs.mux_eof(cache->async_mux, wrk->fd, wrk->cbs.priv);
+                     wrk->cbs.mux_eof(async_mux, wrk->fd, wrk->cbs.priv);
                  else
                      async_read_context_destroy(wrk->ctx);
             }
             free(wrk);
-            wrk = queue_pop_left(cache->async_queue);
+            wrk = queue_pop_left(async_queue);
         }
     }
+    free(arg);
     return NULL;
 }
 
@@ -665,15 +680,20 @@ shardcache_create(char *me,
     cache->connections_pool = connections_pool_create(cache->tcp_timeout, (num_workers/2)+ 1);
     global_tcp_timeout(ATOMIC_READ(cache->tcp_timeout));
 
-    cache->async_queue = queue_create();
-    queue_set_bpool_size(cache->async_queue, num_workers * 1024);
-    cache->async_mux = iomux_create(1<<13, 0);
-
-    if (pthread_create(&cache->async_io_th, NULL, shardcache_run_async, cache) != 0) {
-        SHC_ERROR("Can't create the async i/o thread: %s", strerror(errno));
-        shardcache_destroy(cache);
-        return NULL;
+    for (i = 0; i < 2; i++) {
+        cache ->async_context[i].queue = queue_create();
+        queue_set_bpool_size(cache->async_context[i].queue, num_workers * 1024);
+        cache->async_context[i].mux = iomux_create(1<<13, 0);
+        shardcache_run_async_arg_t *arg = malloc(sizeof(shardcache_run_async_arg_t));
+        arg->cache = cache;
+        arg->index = i;
+        if (pthread_create(&cache->async_context[i].io_th, NULL, shardcache_run_async, arg) != 0) {
+            SHC_ERROR("Can't create the async i/o thread: %s", strerror(errno));
+            shardcache_destroy(cache);
+            return NULL;
+        }
     }
+
 
     cache->serv = start_serving(cache, num_workers); 
 
@@ -707,12 +727,14 @@ shardcache_destroy(shardcache_t *cache)
 
     ATOMIC_INCREMENT(cache->quit);
 
-    if (cache->async_mux) {
-        ATOMIC_INCREMENT(cache->async_quit);
-        SHC_DEBUG2("Stopping the async i/o thread");
-        pthread_join(cache->async_io_th, NULL);
-        SHC_DEBUG2("Async i/o thread stopped");
-        iomux_clear(cache->async_mux);
+    ATOMIC_INCREMENT(cache->async_quit);
+    for (i = 0; i < 2; i ++) {
+        if (cache->async_context[i].mux) {
+            SHC_DEBUG2("Stopping the async i/o thread");
+            pthread_join(cache->async_context[i].io_th, NULL);
+            SHC_DEBUG2("Async i/o thread stopped");
+            iomux_clear(cache->async_context[i].mux);
+        }
     }
 
     if (cache->serv)
@@ -720,20 +742,22 @@ shardcache_destroy(shardcache_t *cache)
 
     // NOTE : should be destroyed only after
     //        the serving subsystem has been stopped
-    if (cache->async_queue) {
-        async_read_wrk_t *wrk = queue_pop_left(cache->async_queue);
-        while(wrk) {
-             if (wrk->fd >= 0)
-                 wrk->cbs.mux_eof(cache->async_mux, wrk->fd, wrk->cbs.priv);
-             else
-                 async_read_context_destroy(wrk->ctx);
-            free(wrk);
-            wrk = queue_pop_left(cache->async_queue);
+    for (i = 0; i < 2; i ++) {
+        if (cache->async_context[i].queue) {
+            async_read_wrk_t *wrk = queue_pop_left(cache->async_context[i].queue);
+            while(wrk) {
+                 if (wrk->fd >= 0)
+                     wrk->cbs.mux_eof(cache->async_context[i].mux, wrk->fd, wrk->cbs.priv);
+                 else
+                     async_read_context_destroy(wrk->ctx);
+                free(wrk);
+                wrk = queue_pop_left(cache->async_context[i].queue);
+            }
+            queue_destroy(cache->async_context[i].queue);
         }
-        queue_destroy(cache->async_queue);
+        if (cache->async_context[i].mux)
+            iomux_destroy(cache->async_context[i].mux);
     }
-    if (cache->async_mux)
-        iomux_destroy(cache->async_mux);
 
     if (ATOMIC_READ(cache->evict_on_delete) && cache->evictor_jobs)
     {
@@ -1384,7 +1408,7 @@ shardcache_exists_async(shardcache_t *cache,
                 async_read_wrk_t *wrk = NULL;
                 rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
                 if (rc == 0 && wrk) {
-                    queue_push_right(cache->async_queue, wrk);
+                    shardcache_queue_async_read_wrk(cache, wrk);
                 }
             } else {
                 cb(key, klen, -1, priv);
@@ -1698,7 +1722,7 @@ shardcache_set_internal(shardcache_t *cache,
                     async_read_wrk_t *wrk = NULL;
                     rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
                     if (rc == 0 && wrk) {
-                        queue_push_right(cache->async_queue, wrk);
+                        shardcache_queue_async_read_wrk(cache, wrk);
                     } else {
                         free(arg->key);
                         free(arg);
@@ -1731,7 +1755,7 @@ shardcache_set_internal(shardcache_t *cache,
                 async_read_wrk_t *wrk = NULL;
                 rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
                 if (rc == 0 && wrk) {
-                    queue_push_right(cache->async_queue, wrk);
+                    shardcache_queue_async_read_wrk(cache, wrk);
                 } else {
                     free(arg->key);
                     free(arg);
@@ -1951,7 +1975,7 @@ shardcache_del_internal(shardcache_t *cache,
                 async_read_wrk_t *wrk = NULL;
                 rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
                 if (rc == 0 && wrk) {
-                    queue_push_right(cache->async_queue, wrk);
+                    shardcache_queue_async_read_wrk(cache, wrk);
                 } else {
                     free(arg->key);
                     free(arg);

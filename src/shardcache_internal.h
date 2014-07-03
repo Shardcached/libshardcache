@@ -241,11 +241,16 @@ struct __shardcache_s {
                                           // connections
 
     int tcp_timeout;        // the tcp timeout to use when setting up new connections
-    pthread_t async_io_th;  // the thread taking care of spooling the asynchronous
-                            // i/o operations
-    iomux_t *async_mux;     // the iomux instance used for the asynchronous i/o;
-                            // operations
-    queue_t *async_queue;
+
+    struct {
+        pthread_t io_th; // the thread taking care of spooling the asynchronous
+                         // i/o operations
+        iomux_t *mux;    // the iomux instance used for the asynchronous i/o;
+                         // operations
+        queue_t *queue;
+    } async_context[2];
+
+    int async_index;
     int async_quit;
     int quit;
 };
@@ -285,3 +290,5 @@ int shardcache_set_migration_continuum(shardcache_t *cache, shardcache_node_t **
 
 int shardcache_schedule_expiration(shardcache_t *cache, void *key, size_t klen, time_t expire, int is_volatile);
 int shardcache_unschedule_expiration(shardcache_t *cache, void *key, size_t klen, int is_volatile);
+
+void shardcache_queue_async_read_wrk(shardcache_t *cache, async_read_wrk_t *wrk);
