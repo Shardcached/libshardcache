@@ -95,12 +95,10 @@ typedef struct __arc_object {
     arc_list_t head;
     size_t size;
     void *ptr;
-#if UINTPTR_MAX == 0xffffffff
-    char buf[196];
-#elif UINTPTR_MAX == 0xffffffffffffffff
+#if UINTPTR_MAX == 0xffffffffffffffff
     char buf[148];
 #else
-    char buf[128];
+    char buf[196];
 #endif
     void *key;
     size_t klen;

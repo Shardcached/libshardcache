@@ -13,12 +13,10 @@ typedef struct {
     // If the complete data is bigger than 256 bytes, the required
     // memory will be allocated and the data pointer will be set
     // to point to the newly allocated memory.
-#if UINTPTR_MAX == 0xffffffff
-    char buf[198];
-#elif UINTPTR_MAX == 0xffffffffffffffff
+#if UINTPTR_MAX == 0xffffffffffffffff
     char buf[150];
 #else
-    char buf[128];
+    char buf[198];
 #endif
 
     void *data;  // The data (if any, NULL otherwise)
