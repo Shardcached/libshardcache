@@ -173,7 +173,7 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
 
     // flush as much as we can
     if (fbuf_used(output_buffer)) {
-        *len = fbuf_detach(output_buffer, (char **)data);
+        fbuf_detach(output_buffer, (char **)data, len);
     } else {
         *len = 0;
     }
@@ -327,7 +327,6 @@ parse_hosts_string(char *str)
     return num_hosts;
 }
 
-
 int
 main (int argc, char **argv)
 {
@@ -421,7 +420,7 @@ main (int argc, char **argv)
     if (use_index) {
         printf("Fetching index ... ");
         keys_index = shardcache_client_index(client, shardcache_node_get_label(hosts[0]));
-        printf("done! (%lu items) \nStarting clients ... ", keys_index->size);
+        printf("done! (%zu items) \nStarting clients ... ", keys_index->size);
     } else {
         int n;
         keys_index = calloc(1, sizeof(shardcache_storage_index_t));
