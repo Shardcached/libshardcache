@@ -23,6 +23,7 @@
 
 #define DEBUG_DUMP_MAXSIZE 128
 
+#pragma pack(push, 1)
 struct __async_read_ctx_s {
     async_read_callback_t cb;
     shardcache_hdr_t hdr;
@@ -44,6 +45,7 @@ struct __async_read_ctx_s {
     int blocking;
     struct timeval last_update;
 };
+#pragma pack(pop)
 
 static int _tcp_timeout = SHARDCACHE_TCP_TIMEOUT_DEFAULT;
 
@@ -512,6 +514,7 @@ typedef struct {
     int fd;
     fetch_from_peer_async_cb cb;
     void *priv;
+    char buf[32];
 } fetch_from_peer_helper_arg_t;
 
 int
@@ -548,7 +551,8 @@ fetch_from_peer_helper(void *data,
         // and eventually close the filedescriptor
         if (arg->fd >= 0)
             close(arg->fd);
-        free(arg->key);
+        if (arg->key != arg->buf)
+            free(arg->key);
         free(arg);
     }
 
@@ -601,7 +605,10 @@ fetch_from_peer_async(char *peer,
         if (rc == 0) {
             fetch_from_peer_helper_arg_t *arg = calloc(1, sizeof(fetch_from_peer_helper_arg_t));
             arg->peer = peer;
-            arg->key = malloc(klen);
+            if (klen > sizeof(arg->buf))
+                arg->key = malloc(klen);
+            else
+                arg->key = arg->buf;
             memcpy(arg->key, key, klen);
             arg->klen = klen;
             arg->fd = should_close ? fd : -1;
@@ -611,7 +618,8 @@ fetch_from_peer_async(char *peer,
             if (rc != 0) {
                 if (should_close)
                     close(fd);
-                free(arg->key);
+                if (arg->key != arg->buf)
+                    free(arg->key);
                 free(arg);
             }
         }

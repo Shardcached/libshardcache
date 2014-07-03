@@ -271,11 +271,13 @@ typedef int (*fetch_from_peer_async_cb)(char *peer,
 //       connection and retreive the data asynchronously.
 //       If the async_read_wrk_t param is not provided the functions
 //       will block until the response has been fully retrieved
+#pragma pack(push, 1)
 typedef struct {
     async_read_ctx_t *ctx;
     iomux_callbacks_t cbs;
     int fd;
 } async_read_wrk_t;
+#pragma pack(pop)
 
 int fetch_from_peer_async(char *peer,
                           char *auth,
