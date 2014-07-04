@@ -385,7 +385,9 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     } else if (cache->use_persistent_storage && cache->storage.fetch) {
         int rc = cache->storage.fetch(obj->key, obj->klen, &obj->data, &obj->dlen, cache->storage.priv);
         if (rc == -1) {
-            SHC_ERROR("Fetch storage callback retunrned an error (%d)", rc);
+	    if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC) && obj->listeners)
+	        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+            SHC_ERROR("Fetch storage callback returned an error (%d)", rc);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_ERRORS].value);
             MUTEX_UNLOCK(&obj->lock);
             return -1;
