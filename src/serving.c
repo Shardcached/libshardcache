@@ -784,7 +784,11 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
 
     int i;
     for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
-        fbuf_copy(&ctx->records[i], &req->records[i]);
+	char *buf = NULL;
+	int len = 0;
+	int used = fbuf_detach(&ctx->records[i], &buf, &len);
+	if (buf)
+            fbuf_attach(&req->records[i], buf, len, used);
     }
     req->fetch_accumulator = rbuf_create(1<<16);
     return req;
@@ -802,10 +806,6 @@ shardcache_check_context_state(iomux_t *iomux,
         // create a new request
         ctx->retries = 0;
         shardcache_request_t *req = shardcache_request_create(ctx);
-        int i;
-        for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
-            fbuf_clear(&ctx->records[i]);
-        }
         TAILQ_INSERT_TAIL(&ctx->requests, req, next);
         ctx->num_requests++;
         process_request(req);
