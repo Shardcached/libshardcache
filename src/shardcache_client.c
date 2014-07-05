@@ -904,7 +904,7 @@ shardcache_client_multi(shardcache_client_t *c,
                 gettimeofday(&hang_time, NULL);
             } else {
                 gettimeofday(&now, NULL);
-                timersub(&hang_time, &now, &diff);
+                timersub(&now, &hang_time, &diff);
                 if (timercmp(&diff, &max_hang_time, >)) {
                     rc = -1;
                     break;
