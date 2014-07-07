@@ -14,10 +14,6 @@
 
 #include "arc.h"
 
-
-#define LIKELY(__e) __builtin_expect((__e), 1)
-#define UNLIKELY(__e) __builtin_expect((__e), 0)
-
 /**********************************************************************
  * Simple double-linked list, inspired by the implementation used in the
  * linux kernel.
@@ -26,7 +22,40 @@
 typedef struct __arc_list {
     struct __arc_list *prev, *next;
 } arc_list_t;
+
+/**********************************************************************
+ * The arc state represents one of the m{r,f}u{g,} lists
+ */
+typedef struct __arc_state {
+    size_t size;
+    arc_list_t head;
+} arc_state_t;
+
+/* This structure represents an object that is stored in the cache. Consider
+ * this structure private, don't access the fields directly. When creating
+ * a new object, use the arc_object_create() function to allocate and initialize it. */
+typedef struct __arc_object {
+    arc_state_t *state;
+    arc_list_t head;
+    size_t size;
+    void *ptr;
+    char buf[32];
+    void *key;
+    size_t klen;
+    pthread_mutex_t lock;
+    refcnt_node_t *node;
+    int async;
+    struct __arc_object *next;
+    struct __arc_object *prev;
+    unsigned short  used;
+    uint8_t         it_flags;   /* ITEM_* above */
+    uint8_t         slabs_clsid;/* which slab class we're in */
+} arc_object_t;
 #pragma pack(pop)
+
+
+#define LIKELY(__e) __builtin_expect((__e), 1)
+#define UNLIKELY(__e) __builtin_expect((__e), 0)
 
 #define arc_list_entry(ptr, type, field) \
     ((type*) (((char*)ptr) - offsetof(type, field)))
@@ -75,34 +104,6 @@ arc_list_prepend(arc_list_t *head, arc_list_t *list)
     arc_list_insert(head, list, list->next);
 }
 
-
-/**********************************************************************
- * The arc state represents one of the m{r,f}u{g,} lists
- */
-#pragma pack(push, 1)
-typedef struct __arc_state {
-    size_t size;
-    arc_list_t head;
-} arc_state_t;
-#pragma pack(pop)
-
-/* This structure represents an object that is stored in the cache. Consider
- * this structure private, don't access the fields directly. When creating
- * a new object, use the arc_object_create() function to allocate and initialize it. */
-#pragma pack(push, 1)
-typedef struct __arc_object {
-    arc_state_t *state;
-    arc_list_t head;
-    size_t size;
-    void *ptr;
-    char buf[32];
-    void *key;
-    size_t klen;
-    pthread_mutex_t lock;
-    refcnt_node_t *node;
-    int async;
-} arc_object_t;
-#pragma pack(pop)
 
 /* The actual cache. */
 struct __arc {
