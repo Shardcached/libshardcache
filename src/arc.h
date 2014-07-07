@@ -21,7 +21,7 @@ typedef struct __arc_ops {
      * this time. Use the arc_object_init() function to initialize
      * the arc_object structure.
      */
-    void *(*create) (const void *key, size_t klen, int async, arc_resource_t *res, void *priv);
+    void (*create) (const void *key, size_t klen, int async, arc_resource_t *res, void *ptr, void *priv);
     
     /**
      * @brief Fetch the data associated with the object.
@@ -61,7 +61,7 @@ typedef struct __arc_ops {
  * @param c   : The size of the cache
  * @return    : A valid pointer to an initialized arc_t structure
  */
-arc_t *arc_create(arc_ops_t *ops, size_t c);
+arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size);
 
 /**
  * @brief Release an existing ARC cache instance

@@ -110,6 +110,7 @@ struct __arc {
     hashtable_t *hash;
 
     size_t c, p;
+    size_t cos;
     struct __arc_state mrug, mru, mfu, mfug;
 
     pthread_mutex_t lock;
@@ -128,7 +129,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state);
 /* Initialize a new object with this function. */
 static arc_object_t *arc_object_create(arc_t *cache, const void *key, size_t len)
 {
-    arc_object_t *obj = calloc(1, sizeof(arc_object_t));
+    arc_object_t *obj = calloc(1, sizeof(arc_object_t) + cache->cos);
 
     arc_list_init(&obj->head);
 
@@ -143,6 +144,8 @@ static arc_object_t *arc_object_create(arc_t *cache, const void *key, size_t len
     obj->klen = len;
 
     obj->size = ARC_OBJ_BASE_SIZE(obj);
+
+    obj->ptr = (void *)((char *)cache + sizeof(cache));
 
     return obj;
 }
@@ -345,7 +348,7 @@ static void terminate_node_callback(refcnt_node_t *node, void *priv) {
 }
 
 /* Create a new cache. */
-arc_t *arc_create(arc_ops_t *ops, size_t c)
+arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size)
 {
     arc_t *cache = calloc(1, sizeof(arc_t));
 
@@ -355,6 +358,7 @@ arc_t *arc_create(arc_ops_t *ops, size_t c)
 
     cache->c = c;
     cache->p = c >> 1;
+    cache->cos = cached_object_size;
 
     arc_list_init(&cache->mrug.head);
     arc_list_init(&cache->mru.head);
@@ -459,8 +463,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     obj = arc_object_create(cache, key, len);
     if (!obj)
         return NULL;
-    void *ptr = cache->ops->create(key, len, async, (arc_resource_t *)obj, cache->ops->priv);
-    obj->ptr = ptr;
+    cache->ops->create(key, len, async, (arc_resource_t *)obj, obj->ptr, cache->ops->priv);
     obj->async = async;
 
     if (!obj) {

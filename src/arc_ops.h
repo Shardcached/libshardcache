@@ -51,7 +51,7 @@ typedef struct {
     void *priv;
 } shardcache_get_listener_t;
 
-void *arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void *priv);
+void arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void *ptr, void *priv);
 int arc_ops_fetch(void *item, size_t *size, void * priv);
 void arc_ops_evict(void *item, void *priv);
 void arc_ops_destroy(void *item, void *priv);

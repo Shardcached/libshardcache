@@ -627,7 +627,9 @@ shardcache_create(char *me,
 
     cache->chash = chash_create((const char **)shard_names, shard_lens, cache->num_shards, 200);
 
-    cache->arc = arc_create(&cache->ops, cache_size);
+    // we need to tell the arc subsystem how big are the cached objects (well ... at least the container struct
+    // which is attached to each cached object to encapsulate its actual data and extra flags/members
+    cache->arc = arc_create(&cache->ops, cache_size, sizeof(cached_object_t));
     cache->arc_size = cache_size;
 
     // check if there is already signal handler registered on SIGPIPE

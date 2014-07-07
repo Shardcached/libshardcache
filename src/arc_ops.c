@@ -277,10 +277,13 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
     return rc;
 }
 
-void *
-arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void *priv)
+void
+arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void *ptr, void *priv)
 {
-    cached_object_t *obj = calloc(1, sizeof(cached_object_t));
+    // NOTE: the arc subsystem already allocates for us the memory where the
+    // cached object needs to be stored. Such size was specified at creation time
+    // as argument to arc_create()
+    cached_object_t *obj = (cached_object_t *)ptr;
 
     obj->klen = len;
     obj->key = (void *)key;
@@ -293,8 +296,6 @@ arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void
         list_set_free_value_callback(obj->listeners, free);
     }
     MUTEX_INIT(&obj->lock);
-
-    return obj;
 }
 
 static void *
@@ -461,7 +462,9 @@ arc_ops_destroy(void *item, void *priv)
 {
     cached_object_t *obj = (cached_object_t *)item;
 
-    MUTEX_LOCK(&obj->lock); // XXX - this is not really necessary
+    MUTEX_LOCK(&obj->lock); // XXX - this shouldn't be really necessary
+                            // TODO : try removing it and see what happens
+                            //        during stress tests
     if (obj->listeners) {
         // safety belts, just to ensure not leaking listeners by notifying them an error
         // before relasing the object completely
@@ -480,7 +483,9 @@ arc_ops_destroy(void *item, void *priv)
         free(obj->data);
 
     MUTEX_DESTROY(&obj->lock);
-    free(obj);
+    // NOTE : we don't need to free the memory used to store the actual cached_object_t
+    // structure because it's managed by the arc subsystem, which provided us a pointer
+    // to the prealloc'd memory as argument to the arc_ops_create() callback
 }
 
 
