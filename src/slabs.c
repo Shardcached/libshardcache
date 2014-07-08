@@ -180,18 +180,19 @@ unsigned int slabs_clsid(slabs_t *sl, const size_t size) {
  * Determines the chunk sizes and initializes the slab class descriptors
  * accordingly.
  */
-slabs_t *slabs_create(const size_t limit, const double factor, const int prealloc, const size_t max_size)
+slabs_t *slabs_create(const size_t limit, const double factor, const int prealloc, const size_t base_size, const size_t max_size)
 {
     int i = POWER_SMALLEST - 1;
-    unsigned int size = sizeof(item_t);
+    unsigned int size = sizeof(item_t) + base_size;
 
     slabs_t *sl = calloc(1, sizeof(slabs_t));
-    sl->item_size_max = DEFAULT_ITEM_SIZE_MAX;
+    sl->item_size_max = sizeof(item_t) + (max_size ? max_size : DEFAULT_ITEM_SIZE_MAX);
     sl->mem_limit = limit;
     sl->slab_bulk_check = DEFAULT_SLAB_BULK_CHECK;
 
-    if (max_size)
-        sl->item_size_max = max_size;
+    double grow_factor = factor;
+    if (grow_factor < 2)
+        grow_factor = 2;
 
     if (prealloc) {
         /* Allocate everything in a big chunk with malloc */
@@ -207,14 +208,14 @@ slabs_t *slabs_create(const size_t limit, const double factor, const int preallo
 
     memset(sl->slabclass, 0, sizeof(slabclass_t));
 
-    while (++i < POWER_LARGEST && size <= sl->item_size_max / factor) {
+    while (++i < POWER_LARGEST && size <= sl->item_size_max / grow_factor) {
         /* Make sure items are always n-byte aligned */
         if (size % CHUNK_ALIGN_BYTES)
             size += CHUNK_ALIGN_BYTES - (size % CHUNK_ALIGN_BYTES);
 
         sl->slabclass[i].size = size;
         sl->slabclass[i].perslab = sl->item_size_max / sl->slabclass[i].size;
-        size *= factor;
+        size *= grow_factor;
         SHC_DEBUG3("slab class %3d: chunk size %9u perslab %7u",
                 i, sl->slabclass[i].size, sl->slabclass[i].perslab);
     }
@@ -258,6 +259,10 @@ void slabs_destroy(slabs_t *sl)
     if (sl->rebalance_tid > 0)
         stop_slab_rebalance_thread(sl);
 
+    if (sl->mem_base)
+        free(sl->mem_base);
+
+    free(sl);
 }
 
 static void slabs_preallocate (slabs_t *sl, const unsigned int maxslabs) {
@@ -507,18 +512,22 @@ static void *memory_allocate(slabs_t *sl, size_t size) {
     return ret;
 }
 
-void *slabs_alloc(slabs_t *sl, size_t size, unsigned int id) {
+void *slabs_alloc(slabs_t *sl, size_t size)
+{
     void *ret;
 
+    unsigned int id = slabs_clsid(sl, size);
     pthread_mutex_lock(&sl->lock);
     ret = do_slabs_alloc(sl, size, id);
     pthread_mutex_unlock(&sl->lock);
-    return ret + sizeof(item_t);
+    return ((char *)ret) + sizeof(item_t);
 }
 
-void slabs_free(slabs_t *sl, void *ptr, size_t size, unsigned int id) {
+void slabs_free(slabs_t *sl, void *ptr, size_t size)
+{
+    unsigned int id = slabs_clsid(sl, size);
     pthread_mutex_lock(&sl->lock);
-    do_slabs_free(sl, ptr - sizeof(item_t), size, id);
+    do_slabs_free(sl, ((char *)ptr) - sizeof(item_t), size, id);
     pthread_mutex_unlock(&sl->lock);
 }
 

@@ -13,6 +13,7 @@
 #include "shardcache_internal.h" // for MUTEX_* macros
 
 #include "arc.h"
+#include "slabs.h"
 
 /**********************************************************************
  * Simple double-linked list, inspired by the implementation used in the
@@ -50,6 +51,7 @@ typedef struct __arc_object {
     unsigned short  used;
     uint8_t         it_flags;   /* ITEM_* above */
     uint8_t         slabs_clsid;/* which slab class we're in */
+    arc_t *cache;
 } arc_object_t;
 #pragma pack(pop)
 
@@ -117,6 +119,8 @@ struct __arc {
     pthread_mutex_t lock;
 
     refcnt_t *refcnt;
+
+    slabs_t *slabs;
 };
 
 
@@ -130,7 +134,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state);
 /* Initialize a new object with this function. */
 static arc_object_t *arc_object_create(arc_t *cache, const void *key, size_t len)
 {
-    arc_object_t *obj = calloc(1, sizeof(arc_object_t) + cache->cos);
+    arc_object_t *obj = (arc_object_t *)slabs_alloc(cache->slabs, sizeof(arc_object_t) + cache->cos);
 
     arc_list_init(&obj->head);
 
@@ -147,6 +151,8 @@ static arc_object_t *arc_object_create(arc_t *cache, const void *key, size_t len
     obj->size = ARC_OBJ_BASE_SIZE(obj);
 
     obj->ptr = (void *)obj + sizeof(arc_object_t);
+
+    obj->cache = cache;
 
     return obj;
 }
@@ -329,7 +335,7 @@ static void free_node_ptr_callback(void *node) {
 
     MUTEX_DESTROY(&obj->lock);
 
-    free(obj);
+    slabs_free(obj->cache->slabs, obj, sizeof(arc_object_t) + obj->cache->cos);
 }
 
 static void terminate_node_callback(refcnt_node_t *node, void *priv) {
@@ -369,6 +375,8 @@ arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size)
     MUTEX_INIT_RECURSIVE(&cache->lock);
 
     cache->refcnt = refcnt_create(1<<8, terminate_node_callback, free_node_ptr_callback);
+
+    cache->slabs = slabs_create(cache->c + (cache->c/2), 1, 0, sizeof(arc_object_t) + cache->cos, sizeof(arc_object_t) + cache->cos);
     return cache;
 }
 static void arc_list_destroy(arc_t *cache, arc_list_t *head) {
@@ -393,6 +401,7 @@ void arc_destroy(arc_t *cache)
     ht_destroy(cache->hash);
     refcnt_destroy(cache->refcnt);
     MUTEX_DESTROY(&cache->lock);
+    slabs_destroy(cache->slabs);
     free(cache);
 }
 

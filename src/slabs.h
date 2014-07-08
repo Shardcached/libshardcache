@@ -42,7 +42,7 @@ typedef struct __slabs_s slabs_t;
     3rd argument specifies if the slab allocator should allocate all memory
     up front (if true), or allocate memory in chunks as it is needed (if false)
 */
-slabs_t *slabs_create(const size_t limit, const double factor, const int prealloc, size_t max_size);
+slabs_t *slabs_create(const size_t limit, const double factor, const int prealloc, const size_t base_size, const size_t max_size);
 
 void slabs_destroy(slabs_t *sl);
 
@@ -54,10 +54,10 @@ void slabs_destroy(slabs_t *sl);
 unsigned int slabs_clsid(slabs_t *sl, const size_t size);
 
 /** Allocate object of given length. 0 on error */ /*@null@*/
-void *slabs_alloc(slabs_t *sl, const size_t size, unsigned int id);
+void *slabs_alloc(slabs_t *sl, const size_t size);
 
 /** Free previously allocated object */
-void slabs_free(slabs_t *sl, void *ptr, size_t size, unsigned int id);
+void slabs_free(slabs_t *sl, void *ptr, size_t size);
 
 /** Adjust the stats for memory requested */
 void slabs_adjust_mem_requested(slabs_t *sl, unsigned int id, size_t old, size_t ntotal);
