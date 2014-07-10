@@ -128,6 +128,7 @@ select_node(shardcache_client_t *c, void *key, size_t klen, int *fd)
         for (i = 0; i < c->num_shards; i++) {
             if (strncmp(node_name, shardcache_node_get_label(c->shards[i]), name_len) == 0) {
                 node = c->shards[i];
+                c->current_node = node;
                 break;
             }
         }
