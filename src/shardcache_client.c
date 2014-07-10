@@ -669,7 +669,7 @@ shc_multi_item_destroy(shc_multi_item_t *item)
 }
 
 static linked_list_t *
-shc_split_buckets(shardcache_client_t *c, shc_multi_item_t **items)
+shc_split_buckets(shardcache_client_t *c, shc_multi_item_t **items, int *num_items)
 {
     linked_list_t *pools = list_create();
     int i;
@@ -692,6 +692,9 @@ shc_split_buckets(shardcache_client_t *c, shc_multi_item_t **items)
         list_push_value((linked_list_t *)tval->value, item);
 
     }
+
+    if (num_items)
+        *num_items = i;
 
     return pools;
 }
@@ -844,7 +847,8 @@ shardcache_client_multi(shardcache_client_t *c,
                          shc_multi_item_t **items,
                          shardcache_hdr_t cmd)
 {
-    linked_list_t *pools = shc_split_buckets(c, items);
+    int num_items = 0;
+    linked_list_t *pools = shc_split_buckets(c, items, &num_items);
 
     uint32_t total_count = 0;
     uint32_t total_requests = 0;
@@ -895,7 +899,7 @@ shardcache_client_multi(shardcache_client_t *c,
         struct timeval tv = { 1, 0 };
         iomux_run(iomux, &tv);
 
-        if (iomux_isempty(iomux))
+        if (iomux_isempty(iomux) || total_count == num_items)
             break;
 
         if (previous_count == total_count) {
@@ -907,7 +911,7 @@ shardcache_client_multi(shardcache_client_t *c,
                 gettimeofday(&now, NULL);
                 timersub(&now, &hang_time, &diff);
                 if (timercmp(&diff, &max_hang_time, >)) {
-                    rc = -1;
+                    rc = (total_count == 0) ? -1 : 1;
                     break;
                 }
             }
