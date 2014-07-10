@@ -471,3 +471,16 @@ shardcache_client_set_multi(c, keys)
     OUTPUT:
         RETVAL
 
+SV *
+shardcache_client_current_node(c)
+        shardcache_client_t *c
+    CODE:
+        RETVAL = &PL_sv_undef;
+        shardcache_node_t *node = shardcache_client_current_node(c);
+        if (node) {
+            char *string = shardcache_node_get_string(node);
+            RETVAL = newSVpv(string, strlen(string));
+        }
+    OUTPUT:
+        RETVAL
+

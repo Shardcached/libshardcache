@@ -37,6 +37,7 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
         shardcache_client_multi_command_max_wait
         shardcache_client_use_random_node
         shardcache_client_pipeline_max
+        shardcache_client_current_node
 ) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
@@ -145,6 +146,11 @@ sub use_random_node {
 sub pipeline_max {
     my ($self, $new_value) = @_;
     return shardcache_client_pipeline_max($self->{_client}, $new_value);
+}
+
+sub current_node {
+    my ($self) = @_;
+    return shardcache_client_current_node($self->{_client});
 }
 
 sub get {
@@ -532,27 +538,6 @@ None by default.
     Note that multi-commands are not all-or-nothing, some operations may succeed, while others may fail.
 
 =back
-
-=head2 Exportable functions
-
-  shardcache_client_t *shardcache_client_create(shardcache_node_t *nodes, int num_nodes, char *auth)
-  int shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
-  void shardcache_client_destroy(shardcache_client_t *c)
-  int shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
-  size_t shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **data)
-  int shardcache_get_async(shardcache_t *cache, void *key, size_t klen, shardcache_get_async_callback_t cb, void *priv);
-  int shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
-  int shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen)
-  int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
-  int shardcache_client_add(shardcache_client_t *c, void *key, size_t klen)
-  int shardcache_client_stats(shardcache_client_t *c, char *node, char **buf, size_t *len);
-  int shardcache_client_check(shardcache_client_t *c, char *node);
-  int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value);
-  int shardcache_client_use_random_node(shardcache_client_t *c, int new_value);
-  int shardcache_client_pipeline_max(shardcache_client_t *c, int new_value);
-  shardcache_storage_index_t *shardcache_client_index(shardcache_client_t *c, char *node);
-  int shardcache_client_errno(shardcache_client_t *c)
-  char *shardcache_client_errstr(shardcache_client_t *c)
 
 =head1 SEE ALSO
 
