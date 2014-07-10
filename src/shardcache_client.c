@@ -937,3 +937,9 @@ shardcache_client_set_multi(shardcache_client_t *c,
 {
     return shardcache_client_multi(c, items, SHC_HDR_SET);
 }
+
+shardcache_node_t *
+shardcache_client_current_node(shardcache_client_t *c)
+{
+    return c->current_node;
+}

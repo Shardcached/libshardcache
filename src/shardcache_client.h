@@ -380,4 +380,10 @@ int shardcache_client_get_multi(shardcache_client_t *c,
 int shardcache_client_set_multi(shardcache_client_t *c,
                                 shc_multi_item_t **items);
 
+/**
+ * @brief get the node used to fulfil last request
+ * @param c          A valid pointer to a shardcache_Client_t structure
+ */
+shardcache_node_t *shardcache_client_current_node(shardcache_client_t *c);
+
 #endif
