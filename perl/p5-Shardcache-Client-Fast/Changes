@@ -1,5 +1,8 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.14  Fri Jul 11 13:26:29 CEST 2014
+        - allow to access/control the check_connection option on the underlying shardcache_client instance
+
 0.13  Thu Jul 10 12:19:59 CEST 2014
         - allow to query the current node from libshardcache
         - better handling of get_multi()/set_multi() return code
