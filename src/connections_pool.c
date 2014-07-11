@@ -46,13 +46,13 @@ is_connection_time_valid(connections_pool_t *cc, struct timeval *conn_time)
 }
 
 connections_pool_t *
-connections_pool_create(int tcp_timeout, int max_spare)
+connections_pool_create(int tcp_timeout, int expire_time, int max_spare)
 {
     connections_pool_t *cc = calloc(1, sizeof(connections_pool_t));
     cc->table = ht_create(128, 65535, (ht_free_item_callback_t)queue_destroy);
     cc->tcp_timeout = tcp_timeout;
     cc->max_spare = max_spare;
-    cc->expire_time = SHARDCACHE_CONNECTION_EXPIRE_DEFAULT;
+    cc->expire_time = expire_time;
     return cc;
 }
 

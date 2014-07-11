@@ -360,7 +360,9 @@ evictor(void *priv)
     shardcache_t *cache = (shardcache_t *)priv;
     hashtable_t *jobs = cache->evictor_jobs;
 
-    connections_pool_t *connections = connections_pool_create(ATOMIC_READ(cache->tcp_timeout), 1);
+    connections_pool_t *connections = connections_pool_create(ATOMIC_READ(cache->tcp_timeout),
+                                                              SHARDCACHE_CONNECTION_EXPIRE_DEFAULT,
+                                                              1);
 
     while (!ATOMIC_READ(cache->quit))
     {
@@ -679,7 +681,10 @@ shardcache_create(char *me,
 
     cache->volatile_storage = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)destroy_volatile);
 
-    cache->connections_pool = connections_pool_create(cache->tcp_timeout, (num_workers/2)+ 1);
+    cache->connections_pool = connections_pool_create(cache->tcp_timeout,
+                                                      SHARDCACHE_CONNECTION_EXPIRE_DEFAULT,
+                                                      (num_workers/2)+ 1);
+
     global_tcp_timeout(ATOMIC_READ(cache->tcp_timeout));
 
     for (i = 0; i < 2; i++) {
