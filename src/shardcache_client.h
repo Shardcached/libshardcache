@@ -37,6 +37,19 @@ shardcache_client_t *shardcache_client_create(shardcache_node_t **nodes, int num
  */
 int shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value);
 
+
+/**
+ * @brief Get and/or set the timeout used when determining if a spare connection needs
+ *        to be checked before being returned to the caller for further usage
+ * @param c         A valid pointer to a shardcache_client_t structure
+ * @param new_value If greater or equal to 0 the new value will be set.
+ *                  Otherwise the old value will be queried but no new value
+ *                  will be set
+ * @return The previously configured check_connection timeout
+ *         (still valid if no new value has been provided)
+ */
+int shardcache_client_check_connection_timeout(shardcache_client_t *c, int new_value);
+
 /**
  * @brief Get and/or set the maximum time (in seconds) to wait on multi commands
  *        (get_multi/set_multi) when no data is arriving.

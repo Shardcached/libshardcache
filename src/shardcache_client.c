@@ -43,6 +43,11 @@ shardcache_client_tcp_timeout(shardcache_client_t *c, int new_value)
     return connections_pool_tcp_timeout(c->connections, new_value);
 }
 
+int shardcache_client_check_connection_timeout(shardcache_client_t *c, int new_value)
+{
+    return connections_pool_expire_time(c->connections, new_value);
+}
+
 int
 shardcache_client_use_random_node(shardcache_client_t *c, int new_value)
 {
