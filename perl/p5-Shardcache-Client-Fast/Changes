@@ -1,5 +1,9 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.13  Thu Jul 10 12:19:59 CEST 2014
+        - allow to query the current node from libshardcache
+        - better handling of get_multi()/set_multi() return code
+
 0.12  Fri Jun 20 13:23:59 CEST 2014
         - introduced the multi_command_max_wait() method to allow
           setting the shardcache_client option with the same name
