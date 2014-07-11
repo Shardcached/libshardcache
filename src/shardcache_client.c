@@ -717,6 +717,7 @@ typedef struct {
     int num_requests;
     shardcache_hdr_t cmd;
     uint32_t *total_count;
+    int fd;
 } shc_multi_ctx_t;
 
 static int
@@ -862,6 +863,8 @@ shardcache_client_multi(shardcache_client_t *c,
     iomux_t *iomux = iomux_create(0, 0);
     uint32_t count = list_count(pools);
     int i;
+    linked_list_t *contexts = list_create();
+
     for (i = 0; i < count; i++) {
 
         tagged_value_t *tval = list_pick_tagged_value(pools, i);
@@ -891,7 +894,12 @@ shardcache_client_multi(shardcache_client_t *c,
             return -1;
         }
 
-        iomux_add(iomux, fd, &cbs);
+        ctx->fd = fd;
+        list_push_value(contexts, ctx);
+        if (!iomux_add(iomux, fd, &cbs)) {
+            // TODO - Error Messages
+        }
+
         char *output = NULL;
         unsigned int len = fbuf_detach(ctx->commands, &output, NULL);
         iomux_write(iomux, fd, (unsigned char *)output, len, 1);
@@ -928,6 +936,16 @@ shardcache_client_multi(shardcache_client_t *c,
 
         previous_count = total_count;
     }
+
+    shc_multi_ctx_t *ctx = NULL;
+    while ((ctx = list_shift_value(contexts))) {
+        if (iomux_remove(iomux, ctx->fd))
+            shc_multi_context_destroy(ctx);
+        // otherwise it means that the connection has already been closed
+        // and the context released (but this might not happen if a connection
+        // is just stuck and the hang_timeout triggered
+    }
+    list_destroy(contexts);
     iomux_destroy(iomux);
     list_destroy(pools);
     return rc;
