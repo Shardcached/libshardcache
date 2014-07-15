@@ -819,15 +819,6 @@ shc_multi_context_create(shardcache_client_t *c,
 }
 
 
-static void
-shc_multi_close_connection(iomux_t *iomux, int fd, void *priv)
-{
-    shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
-
-    shc_multi_context_destroy(ctx);
-
-}
-
 int
 shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *priv)
 {
@@ -882,7 +873,6 @@ shardcache_client_multi(shardcache_client_t *c,
             .mux_output = NULL,
             .mux_timeout = NULL,
             .mux_input = shc_multi_fetch_response,
-            .mux_eof = shc_multi_close_connection,
             .priv = ctx
         };
 
@@ -891,6 +881,12 @@ shardcache_client_multi(shardcache_client_t *c,
             c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
             snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", tval->tag);
             shc_multi_context_destroy(ctx);
+
+            while ((ctx = list_shift_value(contexts))) {
+                iomux_remove(iomux, ctx->fd);
+                shc_multi_context_destroy(ctx);
+            }
+
             iomux_destroy(iomux);
             list_destroy(pools);
             return -1;
@@ -940,11 +936,8 @@ shardcache_client_multi(shardcache_client_t *c,
 
     shc_multi_ctx_t *ctx = NULL;
     while ((ctx = list_shift_value(contexts))) {
-        if (iomux_remove(iomux, ctx->fd))
-            shc_multi_context_destroy(ctx);
-        // otherwise it means that the connection has already been closed
-        // and the context released (but this might not happen if a connection
-        // is just stuck and the hang_timeout triggered
+        iomux_remove(iomux, ctx->fd);
+        shc_multi_context_destroy(ctx);
     }
     list_destroy(contexts);
     iomux_destroy(iomux);
