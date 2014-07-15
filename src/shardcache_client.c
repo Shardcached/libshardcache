@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <arpa/inet.h>
 #include <time.h>
 #include <limits.h>
 #include <chash.h>

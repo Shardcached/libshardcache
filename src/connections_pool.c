@@ -17,6 +17,7 @@
 
 
 #include <time.h>
+#include <sys/resource.h>
 
 struct __connections_pool_s {
     hashtable_t *table;
