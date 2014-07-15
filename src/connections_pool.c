@@ -1,6 +1,8 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <sys/select.h>
+
 
 #include <fbuf.h>
 #include <hashtable.h>
@@ -107,6 +109,64 @@ connections_queue_empty(hashtable_t *table, void *value, size_t vlen, void *user
     return 1;
 }
 
+static int
+write_noop(connections_pool_t *cc, int fd, int flags)
+{
+    int rc = -1;
+    flags |= O_NONBLOCK;
+    fcntl(fd, F_SETFL, flags);
+    char noop = SHC_HDR_NOOP;
+
+    // XXX - hack to overcome the 1024 FD_SETSIZE limit on some
+    //       system's select() implementation (notably linux)
+    struct rlimit rlim;
+    int fdset_size = sizeof(fd_set) * 8; // defaults to at least 8192 fds
+    if (getrlimit(RLIMIT_NOFILE, &rlim) == 0) {
+        int limit = sizeof(fd_set) * rlim.rlim_max;
+        if (!limit)
+            limit = sizeof(fd_set) * rlim.rlim_cur;
+        if (limit > 0)
+            fdset_size = limit/FD_SETSIZE;
+    }
+
+    void *fdset = calloc(1, fdset_size); // we want to fit at most 8192 filedescriptors
+
+    struct timeval before;
+    gettimeofday(&before, NULL);
+    for (;;) {
+        FD_SET(fd, (fd_set *)fdset);
+        struct timeval timeout = { 1, 0 };
+        int rc = select(fd + 1, NULL, (fd_set *)fdset, NULL, &timeout);
+        switch (rc) {
+            case -1:
+                if (errno == EINTR || errno == EAGAIN)
+                    continue;
+                break;
+            case 1:
+                rc = write(fd, &noop, 1);
+                if (rc <= 0 && errno != EINTR && errno != EAGAIN)
+                    continue;
+                break;
+            default:
+            {
+                suseconds_t msecs = ATOMIC_READ(cc->tcp_timeout);
+                struct timeval limit = { msecs/1000, ((msecs*1000) % 1000000) };
+                struct timeval now;
+                struct timeval diff = { 0, 0 };
+                gettimeofday(&now, NULL);
+                timersub(&now, &before, &diff);
+                if (timercmp(&diff, &limit, >))
+                    break;
+            }
+        }
+    }
+
+    free(fdset);
+    flags &= ~O_NONBLOCK;
+    fcntl(fd, F_SETFL, flags);
+    return rc;
+}
+
 int
 connections_pool_get(connections_pool_t *cc, char *addr)
 {
@@ -129,12 +189,8 @@ connections_pool_get(connections_pool_t *cc, char *addr)
         if (!ATOMIC_READ(cc->check))
             return fd;
 
-        flags &= ~O_NONBLOCK;
-        fcntl(fd, F_SETFL, flags);
-        char noop = SHC_HDR_NOOP;
-
         // XXX - this is a blocking write
-        if (is_connection_time_valid(cc, &last_access) || write(fd, &noop, 1) == 1)
+        if (is_connection_time_valid(cc, &last_access) || write_noop(cc, fd, flags) == 1)
             return fd;
         else
             close(fd);
@@ -148,7 +204,7 @@ connections_pool_get(connections_pool_t *cc, char *addr)
         // give us one more chance
         new_fd = connect_to_peer(addr, ATOMIC_READ(cc->tcp_timeout));
     }
-    return new_fd; 
+    return new_fd;
 }
 
 
