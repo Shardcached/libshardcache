@@ -25,6 +25,7 @@ struct __connections_pool_s {
     int max_spare;
     int check;
     int expire_time;
+    int fds_limit;
 };
 
 struct __connection_pool_entry_s {
@@ -56,6 +57,18 @@ connections_pool_create(int tcp_timeout, int expire_time, int max_spare)
     cc->tcp_timeout = tcp_timeout;
     cc->max_spare = max_spare;
     cc->expire_time = expire_time;
+
+    // XXX - hack to overcome the 1024 FD_SETSIZE limit on some
+    //       system's select() implementation (notably linux)
+    struct rlimit rlim;
+    if (getrlimit(RLIMIT_NOFILE, &rlim) == 0) {
+        int limit = sizeof(fd_set) * rlim.rlim_max;
+        if (!limit)
+            limit = sizeof(fd_set) * rlim.rlim_cur;
+        // defaults to at least 8192 fds
+        cc->fds_limit = (limit > 0) ? limit/FD_SETSIZE : 8192;
+    }
+
     return cc;
 }
 
@@ -118,19 +131,9 @@ write_noop(connections_pool_t *cc, int fd, int flags)
     fcntl(fd, F_SETFL, flags);
     char noop = SHC_HDR_NOOP;
 
-    // XXX - hack to overcome the 1024 FD_SETSIZE limit on some
-    //       system's select() implementation (notably linux)
-    struct rlimit rlim;
-    int fdset_size = sizeof(fd_set) * 8; // defaults to at least 8192 fds
-    if (getrlimit(RLIMIT_NOFILE, &rlim) == 0) {
-        int limit = sizeof(fd_set) * rlim.rlim_max;
-        if (!limit)
-            limit = sizeof(fd_set) * rlim.rlim_cur;
-        if (limit > 0)
-            fdset_size = limit/FD_SETSIZE;
-    }
-
-    void *fdset = calloc(1, fdset_size); // we want to fit at most 8192 filedescriptors
+    int fdset_size = sizeof(fd_set) * cc->fds_limit;
+    // we want to fit at most cc->fds_limit filedescriptors
+    char fdset[fdset_size];
 
     struct timeval before;
     gettimeofday(&before, NULL);
@@ -162,7 +165,6 @@ write_noop(connections_pool_t *cc, int fd, int flags)
         }
     }
 
-    free(fdset);
     flags &= ~O_NONBLOCK;
     fcntl(fd, F_SETFL, flags);
     return rc;
