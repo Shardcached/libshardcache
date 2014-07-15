@@ -1,6 +1,4 @@
 #include <sys/types.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -507,7 +505,7 @@ shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t **no
 
     int i;
     for (i = 0; i < num_nodes; i++) {
-        if (i > 0) 
+        if (i > 0)
             fbuf_add(&mgb_message, ",");
         fbuf_printf(&mgb_message, "%s:%s", shardcache_node_get_string(nodes[i]));
     }
@@ -533,7 +531,7 @@ shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t **no
             snprintf(c->errstr, sizeof(c->errstr), "Node '%s' (%s) didn't aknowledge the migration\n",
                     shardcache_node_get_label(c->shards[i]), addr);
             fbuf_destroy(&mgb_message);
-            // XXX - should we abort migration on peers that have been notified (if any)? 
+            // XXX - should we abort migration on peers that have been notified (if any)?
             return -1;
         }
         connections_pool_add(c->connections, addr, fd);
@@ -572,7 +570,7 @@ shardcache_client_migration_abort(shardcache_client_t *c)
         }
         connections_pool_add(c->connections, addr, fd);
     }
- 
+
     c->errno = SHARDCACHE_CLIENT_OK;
     c->errstr[0] = 0;
 
@@ -712,7 +710,7 @@ typedef struct {
     char *peer;
     fbuf_t *commands;
     shc_multi_item_t **items;
-    async_read_ctx_t *reader; 
+    async_read_ctx_t *reader;
     int response_index;
     int num_requests;
     shardcache_hdr_t cmd;
@@ -745,6 +743,14 @@ shc_multi_context_destroy(shc_multi_ctx_t *ctx)
     async_read_context_destroy(ctx->reader);
     fbuf_free(ctx->commands);
     free(ctx->items);
+
+    if (ctx->fd >= 0) {
+        if (ctx->response_index == ctx->num_requests)
+            connections_pool_add(ctx->client->connections, ctx->peer, ctx->fd);
+        else
+            close(ctx->fd);
+    }
+
     free(ctx);
 }
 
@@ -769,7 +775,7 @@ shc_multi_context_create(shardcache_client_t *c,
     for (n = 0; n < ctx->num_requests; n++) {
         shc_multi_item_t *item = list_pick_value(items, n);
         ctx->items[n] = item;
-        
+
         shardcache_record_t record[3] = {
             {
                 .v = item->key,
@@ -817,11 +823,6 @@ shc_multi_close_connection(iomux_t *iomux, int fd, void *priv)
 {
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
 
-    if (ctx->response_index == ctx->num_requests)
-        connections_pool_add(ctx->client->connections, ctx->peer, fd);
-    else
-        close(fd);
-
     shc_multi_context_destroy(ctx);
 
 }
@@ -831,7 +832,7 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
 {
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
     int processed = 0;
-    
+
     //printf("received %d\n", len);
     async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
     while (state == SHC_STATE_READING_DONE) {
@@ -884,8 +885,8 @@ shardcache_client_multi(shardcache_client_t *c,
             .priv = ctx
         };
 
-        int fd = connections_pool_get(c->connections, tval->tag);
-        if (fd < 0) {
+        ctx->fd = connections_pool_get(c->connections, tval->tag);
+        if (ctx->fd < 0) {
             c->errno = SHARDCACHE_CLIENT_ERROR_NETWORK;
             snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", tval->tag);
             shc_multi_context_destroy(ctx);
@@ -894,15 +895,14 @@ shardcache_client_multi(shardcache_client_t *c,
             return -1;
         }
 
-        ctx->fd = fd;
         list_push_value(contexts, ctx);
-        if (!iomux_add(iomux, fd, &cbs)) {
+        if (!iomux_add(iomux, ctx->fd, &cbs)) {
             // TODO - Error Messages
         }
 
         char *output = NULL;
         unsigned int len = fbuf_detach(ctx->commands, &output, NULL);
-        iomux_write(iomux, fd, (unsigned char *)output, len, 1);
+        iomux_write(iomux, ctx->fd, (unsigned char *)output, len, 1);
         total_requests += ctx->num_requests;
     }
 
