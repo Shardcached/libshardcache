@@ -64,12 +64,13 @@ MODULE = Shardcache::Client::Fast		PACKAGE = Shardcache::Client::Fast
 INCLUDE: const-xs.inc
 
 shardcache_client_t *
-shardcache_client_create(nodes, auth=NULL)
+shardcache_client_create(nodes, auth=NULL, log_level=0)
 	SV *	nodes
 	char *	auth
+    int log_level
     CODE:
         int i;
-	int	num_nodes = 0;
+        int	num_nodes = 0;
         shardcache_node_t **shards = NULL;
 
         if (SvOK(nodes)) {
@@ -120,6 +121,7 @@ shardcache_client_create(nodes, auth=NULL)
         if (shards) {
             RETVAL = shardcache_client_create(shards, num_nodes, auth);
             shardcache_free_nodes(shards, num_nodes);
+            shardcache_log_init("shardcache_client", LOG_INFO + log_level);
         } else {
             RETVAL = NULL;
         }

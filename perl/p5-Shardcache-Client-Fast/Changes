@@ -1,5 +1,8 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.15  Tue Jul 15 14:46:10 CEST 2014
+        - allow to set the log_level when creating a new shardcache_client object
+
 0.14  Fri Jul 11 13:26:29 CEST 2014
         - allow to access/control the check_connection option on the underlying shardcache_client instance
 

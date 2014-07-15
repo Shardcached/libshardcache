@@ -47,7 +47,7 @@ our @EXPORT = qw(
     
 );
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -80,7 +80,7 @@ XSLoader::load('Shardcache::Client::Fast', $VERSION);
 # Autoload methods go after =cut, and are processed by the autosplit program.
 
 sub new {
-    my ($class, $nodes, $secret) = @_;
+    my ($class, $nodes, $secret, $log_level) = @_;
 
     my $self = {
         _nodes  => [],
@@ -120,7 +120,7 @@ sub new {
         push(@{$self->{_nodes}}, [ $label, $addr ]);
     }
 
-    $self->{_client} = shardcache_client_create($self->{_nodes}, $secret // '');
+    $self->{_client} = shardcache_client_create($self->{_nodes}, $secret // '', $log_level // 0);
 
     return undef unless ($self->{_client});
 
@@ -350,7 +350,7 @@ Shardcache::Client::Fast - Perl extension for the client part of libshardcache
   use Shardcache::Client::Fast;
   @hosts = ("peer1:localhost:4444", "peer2:localhost:4445", "peer3:localhost:4446" );
   $secret = "some_secret";
-  $c = Shardcache::Client::Fast->new(\@hosts, $secret);
+  $c = Shardcache::Client::Fast->new(\@hosts, $secret, $log_level);
 
   # Set a new value for key "key"
   $rc = $c->set("key", "value");
@@ -396,7 +396,7 @@ None by default.
 
 =over 4
 
-=item * new ( %params )
+=item * new ( @$hosts, [ $secret, $log_level ] )
 
 =back
 
