@@ -11,7 +11,7 @@ int open_lsocket(const char *filename);
 int open_fifo(const char *filename);
 
 int write_socket(int fd, char *buf, int len);
-int read_socket(int fd, char *buf, int len);
+int read_socket(int fd, char *buf, int len, int ignore_timeout);
 
 #ifdef __cplusplus
 }

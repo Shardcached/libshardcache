@@ -185,13 +185,18 @@ int write_socket(int fd, char *buf, int len) {
  * \param buf buffer where to store the read data
  * \param len pointer to an integer indicating the size of the buffer in input
  *            and the actual size written on output
+ * \param ignore_timeout if true the tcp timeout will be ignored
  * \returns the number of read bytes (or 0) on success, -1 on error (errno is set to the underlying error)
  */
-int read_socket(int fd, char *buf, int len) {
+int read_socket(int fd, char *buf, int len, int ignore_timeout) {
     int rb = 0;
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1)
+        return -1;
+
     do {
         rb =  read(fd, buf, len);
-    } while(rb < 0 && errno == EINTR);
+    } while(rb < 0 && (errno == EINTR || (!(flags&O_NONBLOCK) && ignore_timeout && errno == EAGAIN)));
     return rb;
 }
 
