@@ -18,6 +18,9 @@
 
 #include <inttypes.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 static int quit = 0;
 static shardcache_node_t **hosts = NULL;
 static int num_hosts = 0;
@@ -40,6 +43,7 @@ static uint64_t num_gets = 0;
 static uint64_t num_sets = 0;
 static uint64_t num_responses = 0;
 static uint64_t num_running_clients = 0;
+char *index_file = NULL;
 shardcache_counters_t *counters = NULL;
 hashtable_t *prev_counts = NULL;
 
@@ -120,7 +124,7 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
     fbuf_t *output_buffer = ctx->output;
 
     // don't pipeline more than 1024 requests ahead
-    if (__sync_fetch_and_add(&ctx->num_requests, 0) - __sync_fetch_and_add(&ctx->num_responses, 0) < 1024 &&
+    if (__sync_fetch_and_add(&ctx->num_requests, 0) - __sync_fetch_and_add(&ctx->num_responses, 0) < 128 &&
        (!max_requests || max_requests > __sync_fetch_and_add(&ctx->num_requests, 0)))
     {
         uint32_t idx = random() % (num_keys && num_keys < keys_index->size ? num_keys : keys_index->size);
@@ -173,7 +177,7 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
 
     // flush as much as we can
     if (fbuf_used(output_buffer)) {
-        fbuf_detach(output_buffer, (char **)data, len);
+        *len = fbuf_detach(output_buffer, (char **)data, NULL);
     } else {
         *len = 0;
     }
@@ -197,7 +201,7 @@ discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *pri
         fprintf(stderr, "Async context returned error\n");
     }
     if (max_requests && __sync_fetch_and_add(&ctx->num_responses, 0) >= max_requests) {
-        int newfd = connect_to_peer(ctx->node, 5000);
+        int newfd = connect_to_peer(ctx->node, 10000);
         if (newfd < 0) {
             fprintf(stderr, "Can't connect to %s: %s\n", ctx->node, strerror(errno));
             exit(-99);
@@ -337,6 +341,7 @@ main (int argc, char **argv)
         { "hosts", 2, 0, 'H' },
         { "expire_time", 2, 0, 'e' },
         { "index", 0, 0, 'i' },
+        { "index_file", 2, 0, 'I' },
         { "keys", 2, 0, 'k' },
         { "max_requests", 2, 0, 'm' },
         { "prefix", 2, 0, 'p' },
@@ -349,7 +354,7 @@ main (int argc, char **argv)
     hosts_string = getenv("SHC_HOSTS");
     int option_index = 0;
     char c;
-    while ((c = getopt_long(argc, argv, "c:hH:im:k:p:s:Pt:w:W:v", long_options, &option_index))) {
+    while ((c = getopt_long(argc, argv, "c:hH:iI:m:k:p:s:Pt:w:W:v", long_options, &option_index))) {
         if (c == -1)
             break;
         switch(c) {
@@ -367,6 +372,10 @@ main (int argc, char **argv)
                 break;
             case 'i':
                 use_index = 1;
+                break;
+            case 'I':
+                use_index = 1;
+                index_file = optarg;
                 break;
             case 'm':
                 max_requests = strtol(optarg, NULL, 10);
@@ -418,9 +427,28 @@ main (int argc, char **argv)
     }
 
     if (use_index) {
-        printf("Fetching index ... ");
-        keys_index = shardcache_client_index(client, shardcache_node_get_label(hosts[0]));
-        printf("done! (%zu items) \nStarting clients ... ", keys_index->size);
+        if (index_file) {
+            int fd = open(index_file, O_RDONLY);
+            if (fd < 0) {
+                fprintf(stderr, "Can't open the index file %s : %s\n", index_file, strerror(errno));
+                exit(-1);
+            }
+            fbuf_t buf = FBUF_STATIC_INITIALIZER;
+            keys_index = calloc(1, sizeof(shardcache_storage_index_t));
+            while (fbuf_read_ln(&buf, fd) > 0) {
+                char *ln = (char *)fbuf_data(&buf);
+                keys_index->items = realloc(keys_index->items, sizeof(shardcache_storage_index_item_t) * (keys_index->size + 1));
+                shardcache_storage_index_item_t *item = &keys_index->items[keys_index->size++];
+                item->key = strdup(ln);
+                item->klen = strlen(ln);
+                item->vlen = 4;
+                fbuf_remove(&buf, fbuf_used(&buf));
+            }
+        } else {
+            printf("Fetching index ... ");
+            keys_index = shardcache_client_index(client, shardcache_node_get_label(hosts[0]));
+            printf("done! (%zu items) \nStarting clients ... ", keys_index->size);
+        }
     } else {
         int n;
         keys_index = calloc(1, sizeof(shardcache_storage_index_t));
