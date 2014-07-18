@@ -185,13 +185,13 @@ int write_socket(int fd, char *buf, int len) {
  * \param buf buffer where to store the read data
  * \param len pointer to an integer indicating the size of the buffer in input
  *            and the actual size written on output
- * \returns the number of read bytes (or 0) on success, -1 on error (errno is se to the underlying error)
+ * \returns the number of read bytes (or 0) on success, -1 on error (errno is set to the underlying error)
  */
 int read_socket(int fd, char *buf, int len) {
     int rb = 0;
     do {
         rb =  read(fd, buf, len);
-    } while(rb < 0 && (errno == EINTR || errno == EAGAIN));
+    } while(rb < 0 && errno == EINTR);
     return rb;
 }
 
