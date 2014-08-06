@@ -966,6 +966,8 @@ worker(void *priv)
     shardcache_worker_context_t *wrkctx = (shardcache_worker_context_t *)priv;
     queue_t *jobs = wrkctx->jobs;
 
+    shardcache_thread_init(wrkctx->serv->cache);
+
     while (ATOMIC_READ(wrkctx->leave) == 0) {
         shardcache_connection_context_t *ctx = queue_pop_left(jobs);
         while(ctx) {
@@ -1036,7 +1038,8 @@ worker(void *priv)
         }
     }
 
-    SHC_THREAD_EXIT(wrkctx->serv->cache, NULL);
+    shardcache_thread_end(wrkctx->serv->cache);
+    return NULL;
 }
 
 void *
@@ -1128,7 +1131,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers)
         MUTEX_INIT(&wrk->wakeup_lock);
         CONDITION_INIT(&wrk->wakeup_cond);
         wrk->iomux = iomux_create(1<<13, 0);
-        SHC_THREAD_START(cache, &wrk->thread, worker, wrk);
+        pthread_create(&wrk->thread, NULL, worker, wrk);
         list_push_value(s->workers, wrk);
         ATOMIC_INCREMENT(s->total_workers);
     }

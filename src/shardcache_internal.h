@@ -293,14 +293,3 @@ int shardcache_unschedule_expiration(shardcache_t *cache, void *key, size_t klen
 
 void shardcache_queue_async_read_wrk(shardcache_t *cache, async_read_wrk_t *wrk);
 
-#define SHC_THREAD_START(__shc, __t, __f, __p) \
-{ \
-    pthread_create((__t), NULL, (__f), (__p)); \
-    shardcache_thread_init(__shc); \
-}
-
-#define SHC_THREAD_EXIT(__shc, __v) \
-{ \
-    shardcache_thread_end(__shc); \
-    pthread_exit(__v); \
-}

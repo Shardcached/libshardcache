@@ -526,6 +526,7 @@ shardcache_run_async(void *priv)
     shardcache_t *cache = arg->cache;
     iomux_t *async_mux = arg->cache->async_context[arg->index%2].mux;
     queue_t *async_queue = arg->cache->async_context[arg->index%2].queue;
+    shardcache_thread_init(cache);
     while (!ATOMIC_READ(cache->async_quit)) {
         int timeout = ATOMIC_READ(cache->iomux_run_timeout_low);
         struct timeval tv = { timeout/1e6, timeout%(int)1e6 };
@@ -543,7 +544,8 @@ shardcache_run_async(void *priv)
         }
     }
     free(arg);
-    SHC_THREAD_EXIT(cache, NULL);
+    shardcache_thread_end(cache);
+    return NULL;
 }
 
 shardcache_t *
@@ -699,8 +701,7 @@ shardcache_create(char *me,
         shardcache_run_async_arg_t *arg = malloc(sizeof(shardcache_run_async_arg_t));
         arg->cache = cache;
         arg->index = i;
-        SHC_THREAD_START(cache, &cache->async_context[i].io_th, shardcache_run_async, arg);
-        if (!cache->async_context[i].io_th) {
+        if (pthread_create(&cache->async_context[i].io_th, NULL, shardcache_run_async, arg) != 0) {
             SHC_ERROR("Can't create the async i/o thread: %s", strerror(errno));
             shardcache_destroy(cache);
             return NULL;
@@ -2179,6 +2180,8 @@ migrate(void *priv)
     uint64_t errors = 0;
     uint64_t total_items = 0;
 
+    shardcache_thread_init(cache);
+
     if (index) {
         total_items = index->size;
 
@@ -2288,7 +2291,8 @@ migrate(void *priv)
     if (index)
         shardcache_free_index(index);
 
-    SHC_THREAD_EXIT(cache, NULL);
+    shardcache_thread_end(cache);
+    return NULL;
 }
 
 static int
@@ -2379,7 +2383,7 @@ shardcache_migration_begin_internal(shardcache_t *cache,
 
     SHC_NOTICE("Starting migration");
 
-    SHC_THREAD_START(cache, &cache->migrate_th, migrate, cache);
+    pthread_create(&cache->migrate_th, NULL, migrate, cache);
 
     if (forward) {
         fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
