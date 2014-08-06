@@ -1075,6 +1075,11 @@ int shardcache_migration_abort(shardcache_t *cache);
  */
 int shardcache_migration_end(shardcache_t *cache);
 
+
+void shardcache_thread_init(shardcache_t *cache);
+
+void shardcache_thread_end(shardcache_t *cache);
+
 /*
  *******************************************************************************
  * LOG API 

@@ -21,7 +21,7 @@
 #include "messaging.h"
 #include "shardcache_replica.h"
 
-const char *LIBSHARDCACHE_VERSION = "0.28";
+const char *LIBSHARDCACHE_VERSION = "0.29";
 
 extern int shardcache_log_initialized;
 
@@ -543,7 +543,7 @@ shardcache_run_async(void *priv)
         }
     }
     free(arg);
-    return NULL;
+    SHC_THREAD_EXIT(cache, NULL);
 }
 
 shardcache_t *
@@ -699,7 +699,8 @@ shardcache_create(char *me,
         shardcache_run_async_arg_t *arg = malloc(sizeof(shardcache_run_async_arg_t));
         arg->cache = cache;
         arg->index = i;
-        if (pthread_create(&cache->async_context[i].io_th, NULL, shardcache_run_async, arg) != 0) {
+        SHC_THREAD_START(cache, &cache->async_context[i].io_th, shardcache_run_async, arg);
+        if (!cache->async_context[i].io_th) {
             SHC_ERROR("Can't create the async i/o thread: %s", strerror(errno));
             shardcache_destroy(cache);
             return NULL;
@@ -2287,7 +2288,7 @@ migrate(void *priv)
     if (index)
         shardcache_free_index(index);
 
-    return NULL;
+    SHC_THREAD_EXIT(cache, NULL);
 }
 
 static int
@@ -2378,7 +2379,7 @@ shardcache_migration_begin_internal(shardcache_t *cache,
 
     SHC_NOTICE("Starting migration");
 
-    pthread_create(&cache->migrate_th, NULL, migrate, cache);
+    SHC_THREAD_START(cache, &cache->migrate_th, migrate, cache);
 
     if (forward) {
         fbuf_t mgb_message = FBUF_STATIC_INITIALIZER;
@@ -2565,4 +2566,16 @@ int
 shardcache_lazy_expiration(shardcache_t *cache, int new_value)
 {
     return shardcache_get_set_option(&cache->lazy_expiration, new_value);
+}
+
+void shardcache_thread_init(shardcache_t *cache)
+{
+    if (cache->storage.thread_start)
+        cache->storage.thread_start(cache->storage.priv);
+}
+
+void shardcache_thread_end(shardcache_t *cache)
+{
+    if (cache->storage.thread_exit)
+        cache->storage.thread_exit(cache->storage.priv);
 }

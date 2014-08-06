@@ -1036,10 +1036,7 @@ worker(void *priv)
         }
     }
 
-    if (wrkctx->serv->cache->storage.thread_exit)
-        wrkctx->serv->cache->storage.thread_exit(wrkctx->serv->cache->storage.priv);
-
-    return NULL;
+    SHC_THREAD_EXIT(wrkctx->serv->cache, NULL);
 }
 
 void *
@@ -1131,9 +1128,7 @@ shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers)
         MUTEX_INIT(&wrk->wakeup_lock);
         CONDITION_INIT(&wrk->wakeup_cond);
         wrk->iomux = iomux_create(1<<13, 0);
-        pthread_create(&wrk->thread, NULL, worker, wrk);
-        if (cache->storage.thread_start)
-            cache->storage.thread_start(cache->storage.priv);
+        SHC_THREAD_START(cache, &wrk->thread, worker, wrk);
         list_push_value(s->workers, wrk);
         ATOMIC_INCREMENT(s->total_workers);
     }
