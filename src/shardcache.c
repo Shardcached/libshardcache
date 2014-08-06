@@ -572,8 +572,8 @@ shardcache_create(char *me,
     SPIN_INIT(&cache->migration_lock);
 
     if (st) {
-        if (st->version != SHARDCACHE_STORAGE_PLUGIN_VERSION) {
-            SHC_ERROR("Storage module version mismatch: %u != %u", st->version, SHARDCACHE_STORAGE_PLUGIN_VERSION);
+        if (st->version != SHARDCACHE_STORAGE_API_VERSION) {
+            SHC_ERROR("Storage module version mismatch: %u != %u", st->version, SHARDCACHE_STORAGE_API_VERSION);
             shardcache_destroy(cache);
             return NULL;
         }

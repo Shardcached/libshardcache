@@ -196,7 +196,7 @@ typedef void (*shardcache_thread_start_callback_t)(void *priv);
  */
 typedef void (*shardcache_thread_exit_callback_t)(void *priv);
 
-#define SHARDCACHE_STORAGE_PLUGIN_VERSION 0x01
+#define SHARDCACHE_STORAGE_API_VERSION 0x01
 
 /**
  * @struct shardcache_storage_t
