@@ -572,6 +572,11 @@ shardcache_create(char *me,
     SPIN_INIT(&cache->migration_lock);
 
     if (st) {
+        if (st->version != SHARDCACHE_STORAGE_PLUGIN_VERSION) {
+            SHC_ERROR("Storage module version mismatch: %u != %u", st->version, SHARDCACHE_STORAGE_PLUGIN_VERSION);
+            shardcache_destroy(cache);
+            return NULL;
+        }
         memcpy(&cache->storage, st, sizeof(cache->storage));
         cache->use_persistent_storage = 1;
     } else {
@@ -822,10 +827,14 @@ shardcache_destroy(shardcache_t *cache)
     if (cache->chash)
         chash_free(cache->chash);
 
-    free(cache->me);
+    if (cache->me)
+        free(cache->me);
+
     if (cache->addr)
         free(cache->addr);
-    shardcache_free_nodes(cache->shards, cache->num_shards);
+
+    if (cache->shards)
+        shardcache_free_nodes(cache->shards, cache->num_shards);
 
     if (cache->connections_pool)
         connections_pool_destroy(cache->connections_pool);

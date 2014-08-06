@@ -173,12 +173,40 @@ typedef size_t (*shardcache_get_index_callback_t)
     (shardcache_storage_index_item_t *index, size_t isize, void *priv);
 
 /**
+ * @brief Callback used to notify the underlying storage about the creation of a new worker thread
+ *
+ * @param priv The priv pointer owned by the storage
+ *
+ * @return The total number of items in the storage
+ * @note This callback is mandatory if the index callback is set, otherwise it's optional
+ * @see shardcache_get_index_callback_t
+ * @see shardcache_get_index()
+ */
+typedef void (*shardcache_thread_start_callback_t)(void *priv);
+
+/**
+ * @brief Callback returning the number of items in the index
+ *
+ * @brief Callback used to notify the underlying storage about the destruction of a new worker thread
+ *
+ * @return The total number of items in the storage
+ * @note This callback is mandatory if the index callback is set, otherwise it's optional
+ * @see shardcache_get_index_callback_t
+ * @see shardcache_get_index()
+ */
+typedef void (*shardcache_thread_exit_callback_t)(void *priv);
+
+#define SHARDCACHE_STORAGE_PLUGIN_VERSION 0x01
+
+/**
  * @struct shardcache_storage_t
  *
  * @brief      Structure holding all the callback pointers required
  *             by shardcache to interact with underlying storage
  */
 typedef struct __shardcache_storage_s {
+    uint32_t version; // The version of the storage structure
+
     //! The fecth callback
     shardcache_fetch_item_callback_t       fetch;
     //! The store callback (optional if the storage is indended to be read-only)
@@ -202,6 +230,20 @@ typedef struct __shardcache_storage_s {
      * @note check shardcache_get_index() documentation for more details
      */
     shardcache_count_items_callback_t      count;
+
+    
+    /**
+     * @brief Optional callback which, if set, will be called everytime a new worker
+     *        thread (which could access the storage) has been created
+     */
+    shardcache_thread_start_callback_t     thread_start;
+
+    /**
+     * @brief Optional callback which, if set, will be called everytime a new worker
+     *        thread (which could have accessed the storage) has been destroyed
+     */
+    shardcache_thread_exit_callback_t      thread_exit;
+
     /**
      * @brief If set to a non zero value, shardcache will assume that all the peers
      *        can access the same keys on the storage (for example a shared database,
@@ -221,6 +263,7 @@ typedef struct __shardcache_storage_s {
      * @note The implementation can use this pointer to keep its internal data/status/handlers/whatever
      */
     void                                   *priv;
+
 } shardcache_storage_t;
 
 /**
