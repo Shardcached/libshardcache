@@ -20,7 +20,6 @@
 #include "connections.h"
 #include "shardcache.h"
 #include "counters.h"
-#include "rbuf.h"
 
 #include "serving.h"
 
@@ -60,9 +59,10 @@ struct __shardcache_serving_s {
 
 typedef struct __shardcache_connection_context_s shardcache_connection_context_t;
 
+#define SHARDCACHE_REQUEST_RECORDS_MAX 4
+
 typedef struct __shardcache_request_s {
-#define SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX 4
-    fbuf_t records[SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX];
+    fbuf_t records[SHARDCACHE_REQUEST_RECORDS_MAX];
     int fd;
     shardcache_hdr_t hdr;
     shardcache_hdr_t sig_hdr;
@@ -78,7 +78,7 @@ typedef struct __shardcache_request_s {
     int skipped;
     int copied;
     int done;
-    rbuf_t *fetch_accumulator;
+    fbuf_t fetch_accumulator;
     TAILQ_ENTRY(__shardcache_request_s) next;
 } shardcache_request_t;
 
@@ -89,8 +89,7 @@ struct __shardcache_connection_context_s {
     TAILQ_HEAD (, __shardcache_request_s) requests;
     int num_requests;
 
-#define SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX 4
-    fbuf_t records[SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX];
+    fbuf_t records[SHARDCACHE_REQUEST_RECORDS_MAX];
 
     shardcache_serving_t *serv;
 
@@ -110,7 +109,7 @@ async_read_handler(void *data, size_t len, int idx, void *priv)
     shardcache_connection_context_t *ctx =
         (shardcache_connection_context_t *)priv;
 
-    if (idx >= 0 && idx < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX)
+    if (idx >= 0 && idx < SHARDCACHE_REQUEST_RECORDS_MAX)
         fbuf_add_binary(&ctx->records[idx], data, len);
 
     // idx == -1 means that reading finished
@@ -132,6 +131,13 @@ shardcache_connection_context_create(shardcache_serving_t *serv, int fd)
                                                     async_read_handler,
                                                     ctx);
     TAILQ_INIT(&ctx->requests);
+
+    int i;
+    for (i = 0; i < SHARDCACHE_REQUEST_RECORDS_MAX; i++) {
+        fbuf_minlen(&ctx->records[i], 64);
+        fbuf_fastgrowsize(&ctx->records[i], 1024);
+        fbuf_slowgrowsize(&ctx->records[i], 512);
+    }
     return ctx;
 }
 
@@ -139,14 +145,14 @@ static void
 shardcache_request_destroy(shardcache_request_t *req)
 {
     int i;
-    for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
+    for (i = 0; i < SHARDCACHE_REQUEST_RECORDS_MAX; i++) {
         fbuf_destroy(&req->records[i]);
     }
     SPIN_DESTROY(&req->output_lock);
     fbuf_destroy(&req->output);
     if (req->fetch_shash)
         sip_hash_free(req->fetch_shash);
-    rbuf_destroy(req->fetch_accumulator);
+    fbuf_destroy(&req->fetch_accumulator);
     free(req);
 }
 
@@ -154,7 +160,7 @@ static void
 shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
 {
     int i;
-    for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
+    for (i = 0; i < SHARDCACHE_REQUEST_RECORDS_MAX; i++) {
         fbuf_destroy(&ctx->records[i]);
     }
     shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
@@ -211,6 +217,9 @@ write_status(shardcache_request_t *req, int rc, char mode)
 
     uint32_t magic = htonl(SHC_MAGIC);
     fbuf_t output = FBUF_STATIC_INITIALIZER;
+    fbuf_minlen(&output, 64);
+    fbuf_fastgrowsize(&output, 1024);
+    fbuf_slowgrowsize(&output, 512);
 
     fbuf_add_binary(&output, (char *)&magic, sizeof(magic));
 
@@ -264,6 +273,9 @@ static int get_async_data_handler(void *key,
         uint32_t magic = htonl(SHC_MAGIC);
 
         fbuf_t output = FBUF_STATIC_INITIALIZER;
+        fbuf_minlen(&output, 64);
+        fbuf_fastgrowsize(&output, 1024);
+        fbuf_slowgrowsize(&output, 512);
         fbuf_add_binary(&output, (char *)&magic, sizeof(magic));
 
         if (req->ctx->serv->cache->auth) {
@@ -305,6 +317,10 @@ static int get_async_data_handler(void *key,
         uint16_t eor = 0;
         char eom = 0;
         fbuf_t output = FBUF_STATIC_INITIALIZER;
+        fbuf_minlen(&output, 64);
+        fbuf_fastgrowsize(&output, 1024);
+        fbuf_slowgrowsize(&output, 512);
+
         fbuf_add_binary(&output, (void *)&eor, 2);
         fbuf_add_binary(&output, &eom, 1);
         if (req->fetch_shash) {
@@ -346,11 +362,14 @@ static int get_async_data_handler(void *key,
 
     static int max_chunk_size = (1<<16)-1;
 
-    uint16_t accumulated_size = rbuf_used(req->fetch_accumulator);
+    uint16_t accumulated_size = fbuf_used(&req->fetch_accumulator);
     size_t to_process = accumulated_size + dlen;
     size_t data_offset = 0;
     while(to_process >= max_chunk_size) {
         fbuf_t output = FBUF_STATIC_INITIALIZER;
+        fbuf_minlen(&output, 64);
+        fbuf_fastgrowsize(&output, 1024);
+        fbuf_slowgrowsize(&output, 512);
         size_t copy_size = max_chunk_size;
 
         uint16_t clen = htons((uint16_t)copy_size);
@@ -361,13 +380,12 @@ static int get_async_data_handler(void *key,
             sip_hash_update(req->fetch_shash, (void *)&clen, sizeof(clen));
 
         if (accumulated_size) {
-            unsigned char buf[accumulated_size];
-            rbuf_read(req->fetch_accumulator, buf, accumulated_size);
-            fbuf_add_binary(&output, (char *)buf, accumulated_size);
+            int copied = fbuf_concat(&output, &req->fetch_accumulator);
             if (req->fetch_shash)
-                sip_hash_update(req->fetch_shash, buf, accumulated_size);
-            copy_size -= accumulated_size;
-            accumulated_size = 0;
+                sip_hash_update(req->fetch_shash, fbuf_data(&req->fetch_accumulator), copied);
+            copy_size -= copied;
+            accumulated_size -= copied;
+            fbuf_remove(&req->fetch_accumulator, copied);
         }
         if (dlen - data_offset >= copy_size) {
             fbuf_add_binary(&output, data + data_offset, copy_size);
@@ -399,7 +417,7 @@ static int get_async_data_handler(void *key,
     if (dlen > data_offset) {
         int remainder = dlen - data_offset;
         if (remainder) {
-            rbuf_write(req->fetch_accumulator, data + data_offset, remainder);
+            fbuf_add_binary(&req->fetch_accumulator, data + data_offset, remainder);
             accumulated_size = remainder;
             req->copied += remainder;
         }
@@ -407,6 +425,9 @@ static int get_async_data_handler(void *key,
 
     if (total_size > 0 && timestamp) {
         fbuf_t output = FBUF_STATIC_INITIALIZER;
+        fbuf_minlen(&output, 64);
+        fbuf_fastgrowsize(&output, 1024);
+        fbuf_slowgrowsize(&output, 512);
         uint16_t eor = 0;
         char eom = 0;
         if (accumulated_size) {
@@ -415,11 +436,9 @@ static int get_async_data_handler(void *key,
             fbuf_add_binary(&output, (void *)&clen, sizeof(clen));
             if (req->fetch_shash)
                 sip_hash_update(req->fetch_shash, (void *)&clen, sizeof(clen));
-            unsigned char buf[accumulated_size];
-            rbuf_read(req->fetch_accumulator, buf, accumulated_size);
-            fbuf_add_binary(&output, (char *)buf, accumulated_size);
+            int copied = fbuf_concat(&output, &req->fetch_accumulator);
             if (req->fetch_shash) {
-                sip_hash_update(req->fetch_shash, buf, accumulated_size);
+                sip_hash_update(req->fetch_shash, fbuf_data(&req->fetch_accumulator), copied);
                 if (req->sig_hdr&0x01) {
                     uint64_t digest;
                     if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
@@ -433,6 +452,8 @@ static int get_async_data_handler(void *key,
                     fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
                 }
             }
+            if (copied)
+                fbuf_remove(&req->fetch_accumulator, copied);
         }
         fbuf_add_binary(&output, (void *)&eor, 2);
         fbuf_add_binary(&output, &eom, 1);
@@ -617,6 +638,10 @@ process_request(shardcache_request_t *req)
         case SHC_HDR_STATS:
         {
             fbuf_t buf = FBUF_STATIC_INITIALIZER;
+            fbuf_minlen(&buf, 64);
+            fbuf_fastgrowsize(&buf, 1024);
+            fbuf_slowgrowsize(&buf, 512);
+
             shardcache_counter_t *counters = NULL;
             int i, num_nodes;
 
@@ -640,6 +665,9 @@ process_request(shardcache_request_t *req)
                 }
 
                 fbuf_t out = FBUF_STATIC_INITIALIZER;
+                fbuf_minlen(&out, 64);
+                fbuf_fastgrowsize(&out, 1024);
+                fbuf_slowgrowsize(&out, 512);
                 shardcache_record_t record = {
                     .v = fbuf_data(&buf),
                     .l = fbuf_used(&buf)
@@ -728,6 +756,10 @@ process_request(shardcache_request_t *req)
                                                     &response_len);
             if (response_len) {
                 fbuf_t out = FBUF_STATIC_INITIALIZER;
+                fbuf_minlen(&out, 64);
+                fbuf_fastgrowsize(&out, 1024);
+                fbuf_slowgrowsize(&out, 512);
+
                 shardcache_record_t record = {
                     .v = response,
                     .l = response_len
@@ -783,14 +815,20 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
     SPIN_INIT(&req->output_lock);
 
     int i;
-    for (i = 0; i < SHARDCACHE_CONNECTION_CONTEX_RECORDS_MAX; i++) {
-	char *buf = NULL;
-	int len = 0;
-	int used = fbuf_detach(&ctx->records[i], &buf, &len);
-	if (buf)
+    for (i = 0; i < SHARDCACHE_REQUEST_RECORDS_MAX; i++) {
+        fbuf_minlen(&req->records[i], 64);
+        fbuf_fastgrowsize(&req->records[i], 1024);
+        fbuf_slowgrowsize(&req->records[i], 512);
+        char *buf = NULL;
+        int len = 0;
+        int used = fbuf_detach(&ctx->records[i], &buf, &len);
+        if (buf)
             fbuf_attach(&req->records[i], buf, len, used);
     }
-    req->fetch_accumulator = rbuf_create(1<<16);
+
+    fbuf_minlen(&req->fetch_accumulator, 64);
+    fbuf_fastgrowsize(&req->fetch_accumulator, 1024);
+    fbuf_slowgrowsize(&req->fetch_accumulator, 512);
     return req;
 }
 
