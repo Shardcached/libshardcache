@@ -1076,8 +1076,25 @@ int shardcache_migration_abort(shardcache_t *cache);
 int shardcache_migration_end(shardcache_t *cache);
 
 
+/**
+ * @brief   Notify the internal shardcache core about a new woerker thread which might
+ *          access the API.
+ *          This function must be called early within each user-created thread (which is
+ *          intended to access the shardcache API at some stage during its lifespan)
+ *          to initialize thread-specific variables.
+ * @note    shardcache_thread_end() MUST be esplicitly called before the background thread
+ *          exits to avoid memory leakage.
+ */
 void shardcache_thread_init(shardcache_t *cache);
 
+/**
+ * @brief   Release the resources allocated by shardcache_thread_init()
+ *          This function needs to be called before calling pthread_exit()
+ *          to free memory allocated by shardcache_thread_init().
+ *
+ * @note   shardcache_thread_end() is not invoked automatically by the client library.
+ *         It must be called explicitly to avoid a memory leak.
+ */
 void shardcache_thread_end(shardcache_t *cache);
 
 /*
