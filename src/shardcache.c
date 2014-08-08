@@ -1094,9 +1094,8 @@ shardcache_get_async(shardcache_t *cache,
         SHC_DEBUG3("Getting value for key: %s", keystr);
     }
 
-    void *obj_ptr;
+    void *obj_ptr = NULL;
     arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 1);
-
     if (!res)
         return -1;
 
@@ -1109,11 +1108,32 @@ shardcache_get_async(shardcache_t *cache,
     MUTEX_LOCK(&obj->lock);
     if (UNLIKELY(COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED))) {
         // if marked for eviction we don't want to return this object
+        // but we will try to fetch it again
         MUTEX_UNLOCK(&obj->lock);
         arc_release_resource(cache->arc, res);
-        // but we will try to fetch it again
+
+        usleep(500);
+
+        obj_ptr = NULL;
+        res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 1);
+        if (!res)
+            return -1;
+
+        if (!obj_ptr) {
+            arc_release_resource(cache->arc, res);
+            return -1;
+        }
+
+        obj = (cached_object_t *)obj_ptr;
+        MUTEX_LOCK(&obj->lock);
+    }
+
+    if (UNLIKELY(COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED))) {
+        // if marked for eviction we don't want to return this object
+        MUTEX_UNLOCK(&obj->lock);
+        arc_release_resource(cache->arc, res);
         SHC_DEBUG("The retreived object has been already evicted, try fetching it again");
-        return shardcache_get_async(cache, key, klen, cb, priv);
+        return -1;
     } else if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_COMPLETE)) {
         time_t obj_expiration = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
                               ? 0
