@@ -145,7 +145,7 @@ static arc_object_t *arc_object_create(arc_t *cache, const void *key, size_t len
 
     obj->size = ARC_OBJ_BASE_SIZE(obj);
 
-    obj->ptr = (void *)obj + sizeof(arc_object_t);
+    obj->ptr = (void *)((char *)obj + sizeof(arc_object_t));
 
     return obj;
 }
