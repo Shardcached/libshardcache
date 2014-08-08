@@ -53,6 +53,7 @@ arc_ops_fetch_from_peer_notify_listener_error(void *item, uint32_t idx, void *us
     return -1;
 }
 
+// XXX: this MUST be always called while obj->lock is retained
 static void
 arc_ops_evict_object(shardcache_t *cache, cached_object_t *obj)
 {
@@ -60,7 +61,7 @@ arc_ops_evict_object(shardcache_t *cache, cached_object_t *obj)
         COBJ_SET_FLAG(obj, COBJ_FLAG_EVICT);
         return;
     }
-    if (obj->data != obj->buf)
+    if (obj->data != obj->dbuf)
         free(obj->data);
     obj->data = NULL;
     obj->dlen = 0;
@@ -133,16 +134,16 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     } else if (len) {
         size_t olen = obj->dlen;
         obj->dlen += len;
-        if (obj->dlen > sizeof(obj->buf)) {
-            if (obj->data == obj->buf) {
+        if (obj->dlen > sizeof(obj->dbuf)) {
+            if (obj->data == obj->dbuf) {
                 obj->data = malloc(obj->dlen);
                 if (olen)
-                    memcpy(obj->data, obj->buf, olen);
+                    memcpy(obj->data, obj->dbuf, olen);
             } else {
                 obj->data = realloc(obj->data, obj->dlen);
             }
         } else {
-            obj->data = obj->buf;
+            obj->data = obj->dbuf;
         }
         memcpy(obj->data + olen, data, len);
         shardcache_fetch_from_peer_notify_arg arg = {
@@ -166,7 +167,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
 
         if (total_len && !drop) {
             arc_update_size(cache->arc, key, klen,
-                    sizeof(cached_object_t) + ((obj->data == obj->buf) ? 0 : total_len));
+                    sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : total_len));
 
             int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
                           COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
@@ -286,7 +287,11 @@ arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void
     cached_object_t *obj = (cached_object_t *)ptr;
 
     obj->klen = len;
-    obj->key = (void *)key;
+    if (obj->klen > sizeof(obj->kbuf))
+        obj->key = malloc(obj->klen);
+    else
+        obj->key = obj->kbuf;
+    memcpy(obj->key, key, obj->klen);
     obj->data = NULL;
     COBJ_UNSET_FLAG(obj, COBJ_FLAG_COMPLETE);
     obj->res = res;
@@ -304,7 +309,7 @@ arc_ops_fetch_copy_volatile_object_cb(void *ptr, size_t len, void *user)
     cached_object_t *obj = (cached_object_t *)user;
     volatile_object_t *item = (volatile_object_t *)ptr;
     if (item->dlen) {
-        obj->data = (item->dlen > sizeof(obj->buf)) ? malloc(item->dlen) : obj->buf;
+        obj->data = (item->dlen > sizeof(obj->dbuf)) ? malloc(item->dlen) : obj->dbuf;
         memcpy(obj->data, item->data, item->dlen);
         obj->dlen = item->dlen;
     }
@@ -354,7 +359,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             if (ret == 0) {
                 ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value);
                 gettimeofday(&obj->ts, NULL);
-                *size = sizeof(cached_object_t) + ((obj->data == obj->buf) ? 0 : obj->dlen);
+                *size = sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : obj->dlen);
                 MUTEX_UNLOCK(&obj->lock);
                 return COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP|COBJ_FLAG_COMPLETE) ? 1 : 0;
             }
@@ -429,7 +434,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             arc_ops_evict_object(cache, obj);
     }
 
-    *size = sizeof(cached_object_t) + ((obj->data == obj->buf) ? 0 : obj->dlen);
+    *size = sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : obj->dlen);
 
     int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
                   COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
@@ -479,8 +484,11 @@ arc_ops_destroy(void *item, void *priv)
 
     // no lock is necessary here ... if we are here
     // nobody is referencing us anymore
-    if (obj->data && obj->data != obj->buf)
+    if (obj->data && obj->data != obj->dbuf)
         free(obj->data);
+
+    if (obj->key && obj->key != obj->kbuf)
+        free(obj->key);
 
     MUTEX_DESTROY(&obj->lock);
     // NOTE : we don't need to free the memory used to store the actual cached_object_t

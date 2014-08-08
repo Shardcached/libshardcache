@@ -8,12 +8,13 @@
 typedef struct {
     void *key;   // The key (weak reference to the actual key stored in the arc resource)
     size_t klen; // The length of the key
+    char kbuf[32];
 
     // internal storage for data which doesn't exceeds 256 bytes.
     // If the complete data is bigger than 256 bytes, the required
     // memory will be allocated and the data pointer will be set
     // to point to the newly allocated memory.
-    char buf[32];
+    char dbuf[32];
 
     void *data;  // The data (if any, NULL otherwise)
                  // Note that if the data is less than 256 bytes this pointer
