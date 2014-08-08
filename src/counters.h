@@ -15,3 +15,6 @@ int shardcache_counter_value_sub(shardcache_counters_t *c, char *name, int value
 int shardcache_counter_value_set(shardcache_counters_t *c, char *name, int value);
 
 #endif
+
+/* vim: tabstop=4 shiftwidth=4 expandtab: */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

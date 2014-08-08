@@ -496,4 +496,5 @@ arc_ops_destroy(void *item, void *priv)
     // to the prealloc'd memory as argument to the arc_ops_create() callback
 }
 
-
+/* vim: tabstop=4 shiftwidth=4 expandtab: */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

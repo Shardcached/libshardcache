@@ -84,3 +84,6 @@ uint64_t kepaxos_ballot(kepaxos_t *ke); // returns the current ballot
 uint64_t kepaxos_seq(kepaxos_t *ke, void *key, size_t klen);
 
 #endif
+
+/* vim: tabstop=4 shiftwidth=4 expandtab: */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

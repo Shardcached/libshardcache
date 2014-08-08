@@ -132,3 +132,6 @@ void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size);
 size_t arc_size(arc_t *cache);
 
 #endif /* __ARC_H__ */
+
+/* vim: tabstop=4 shiftwidth=4 expandtab: */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

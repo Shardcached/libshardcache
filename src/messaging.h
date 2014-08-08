@@ -299,3 +299,6 @@ int read_message_async(int fd,
                    async_read_wrk_t **worker);
 
 #endif
+
+/* vim: tabstop=4 shiftwidth=4 expandtab: */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

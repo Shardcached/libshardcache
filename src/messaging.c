@@ -1714,3 +1714,6 @@ connect_to_peer(char *address_string, unsigned int timeout)
         SHC_DEBUG("Can't connect to %s", address_string);
     return fd;
 }
+
+/* vim: tabstop=4 shiftwidth=4 expandtab: */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

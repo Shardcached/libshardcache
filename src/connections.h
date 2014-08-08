@@ -16,3 +16,6 @@ int read_socket(int fd, char *buf, int len, int ignore_timeout);
 #ifdef __cplusplus
 }
 #endif
+
+/* vim: tabstop=4 shiftwidth=4 expandtab: */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

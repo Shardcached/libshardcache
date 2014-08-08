@@ -1014,3 +1014,6 @@ uint64_t kepaxos_seq(kepaxos_t *ke, void *key, size_t klen)
     MUTEX_UNLOCK(&ke->lock);
     return seq;
 }
+
+/* vim: tabstop=4 shiftwidth=4 expandtab: */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

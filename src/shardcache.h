@@ -1163,3 +1163,6 @@ unsigned long shardcache_byte_escape(char ch, char esc, char *buffer, unsigned l
 #define SHC_DEBUG5(__fmt, __args...) __SHC_DEBUG(4, __fmt, ## __args)
 
 #endif
+
+/* vim: tabstop=4 shiftwidth=4 expandtab: */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
