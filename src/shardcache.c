@@ -934,6 +934,8 @@ shardcache_get_async(shardcache_t *cache,
             SHC_DEBUG("The retreived object has been already evicted, try fetching it again");
             return -1;
         }
+
+        SHC_DEBUG("Got an evicted object, retrying in %u microseconds", retry_timeout);
         usleep(retry_timeout);
         retry_timeout <<= 1;
 
