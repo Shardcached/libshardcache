@@ -159,4 +159,7 @@ install:
 	 echo "Installing headers in $(SHARDCACHE_INSTALL_INCDIR)"; \
 	 cp -v src/shardcache.h $(SHARDCACHE_INSTALL_INCDIR)/; \
 	 cp -v src/shardcache_client.h $(SHARDCACHE_INSTALL_INCDIR)/; \
+	 cp -v src/shardcache_node.h $(SHARDCACHE_INSTALL_INCDIR)/; \
+	 cp -v src/shardcache_storage.h $(SHARDCACHE_INSTALL_INCDIR)/; \
+	 cp -v src/shardcache_log.h $(SHARDCACHE_INSTALL_INCDIR)/; \
 

@@ -12,7 +12,6 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <regex.h>
 
 #include "shardcache.h"
 #include "shardcache_internal.h"
@@ -24,193 +23,6 @@
 const char *LIBSHARDCACHE_VERSION = "0.29";
 
 extern int shardcache_log_initialized;
-
-#define ADDR_REGEXP "^[a-z0-9_\\.\\-]+(:[0-9]+)?$"
-
-static int
-shardcache_check_address_string(char *str)
-{
-    regex_t addr_regexp;
-    int rc = regcomp(&addr_regexp, ADDR_REGEXP, REG_EXTENDED|REG_ICASE);
-    if (rc != 0) {
-        char errbuf[1024];
-        regerror(rc, &addr_regexp, errbuf, sizeof(errbuf));
-        SHC_ERROR("Can't compile regexp %s: %s", ADDR_REGEXP, errbuf);
-        return -1;
-    }
-
-    int matched = regexec(&addr_regexp, str, 0, NULL, 0);
-    regfree(&addr_regexp);
-
-    if (matched != 0) {
-        return -1;
-    }
-
-    return 0;
-}
-
-
-shardcache_node_t *
-shardcache_node_create_from_string(char *str)
-{
-    char *copy = strdup(str);
-    char *string = copy;
-    char *label = strsep(&string, ":");
-    char *addrstring = string;
-    char *addr = NULL;
-    char **addrlist = NULL;
-    int num_addresses = 0;
-
-    while ((addr = strsep(&addrstring, ";")) != NULL) {
-        if (!addr || shardcache_check_address_string(addr) != 0) {
-            SHC_ERROR("Bad address format for peer: '%s'", addr);
-            int i;
-            for (i = 0; i < num_addresses; i++)
-                free(addrlist[i]);
-            free(addrlist);
-            free(copy);
-            return NULL;
-        }
-        addrlist = realloc(addrlist, sizeof(shardcache_node_t *) * (num_addresses + 1));
-        addrlist[num_addresses] = strdup(addr);
-        num_addresses++;
-    }
-
-    shardcache_node_t *node = malloc(sizeof(shardcache_node_t));
-    node->label = strdup(label);
-    node->address = addrlist;
-    node->string = strdup(str);
-    node->num_replicas = num_addresses;
-
-    free(copy);
-    return node;
-}
-
-shardcache_node_t *
-shardcache_node_create(char *label, char **addresses, int num_addresses)
-{
-    int i;
-    shardcache_node_t *node = calloc(1, sizeof(shardcache_node_t));
-    node->label = strdup(label);
-    node->num_replicas = num_addresses;
-    node->address = calloc(num_addresses, sizeof(char *));
-    int slen = strlen(node->label) + 3;
-    char *node_string = malloc(slen);
-    snprintf(node_string, slen, "%s:", node->label);
-    for (i = 0; i < num_addresses; i++) {
-        if (i > 0)
-            strcat(node_string, ";");
-        slen += strlen(addresses[i]) + 1;
-        node_string = realloc(node_string, slen);
-        strcat(node_string, addresses[i]);
-        node->address[i] = strdup(addresses[i]);
-    }
-    node->string = node_string;
-    return node;
-}
-
-shardcache_node_t *
-shardcache_node_copy(shardcache_node_t *node)
-{
-    int i;
-
-    shardcache_node_t *copy = malloc(sizeof(shardcache_node_t));
-    copy->label = strdup(node->label);
-    copy->address = malloc(sizeof(char *) * node->num_replicas);
-    for (i = 0; i < node->num_replicas; i++)
-        copy->address[i] = strdup(node->address[i]);
-    copy->num_replicas = node->num_replicas;
-    copy->string = strdup(node->string);
-    return copy;
-}
-
-void
-shardcache_node_destroy(shardcache_node_t *node)
-{
-    int i;
-    free(node->label);
-    for (i = 0; i < node->num_replicas; i++)
-        free(node->address[i]);
-    free(node->address);
-    free(node->string);
-    free(node);
-}
-
-char *
-shardcache_node_get_string(shardcache_node_t *node)
-{
-    return node->string;
-}
-
-char *
-shardcache_node_get_label(shardcache_node_t *node)
-{
-    return node->label;
-}
-
-char *
-shardcache_node_get_address(shardcache_node_t *node)
-{
-    return node->address[random() % node->num_replicas];
-}
-
-shardcache_node_t *
-shardcache_node_select(shardcache_t *cache, char *label)
-{
-    shardcache_node_t *node = NULL;
-    int i;
-    for (i = 0; i < cache->num_shards; i++ ){
-        if (strcmp(cache->shards[i]->label, label) == 0) {
-            node = cache->shards[i];
-            break;
-        }
-    }
-    SPIN_LOCK(&cache->migration_lock);
-    if (cache->migration && !node) {
-        for (i = 0; i < cache->num_migration_shards; i++) {
-            if (strcmp(cache->migration_shards[i]->label, label) == 0) {
-                node = cache->migration_shards[i];
-                break;
-            }
-        }
-    }
-    SPIN_UNLOCK(&cache->migration_lock);
-    return node;
-}
-
-int
-shardcache_node_num_addresses(shardcache_node_t *node)
-{
-    return node->num_replicas;
-
-}
-
-int
-shardcache_node_get_all_addresses(shardcache_node_t *node, char **addresses, int num_addresses)
-{
-    int i;
-    for (i = 0; i < num_addresses && i < node->num_replicas; i++)
-        addresses[i] = node->address[i];
-    return node->num_replicas;
-}
-
-int
-shardcache_node_get_all_labels(shardcache_node_t *node, char **labels, int num_labels)
-{
-    int i;
-    for (i = 0; i < num_labels && i < node->num_replicas; i++)
-        labels[i] = node->label;
-    return node->num_replicas;
-}
-
-char *
-shardcache_node_get_address_at_index(shardcache_node_t *node, int index)
-{
-    if (index < node->num_replicas)
-        return node->address[index];
-    return NULL;
-}
-
 
 static int
 shardcache_test_ownership_internal(shardcache_t *cache,
@@ -380,11 +192,12 @@ evictor(void *priv)
 
             int i;
             for (i = 0; i < cache->num_shards; i++) {
-                char *peer = cache->shards[i]->label;
+                char *peer = shardcache_node_get_label(cache->shards[i]);
                 if (strcmp(peer, cache->me) != 0) {
                     SHC_DEBUG3("Sending Eviction command to %s", peer);
-                    int rindex = random()%cache->shards[i]->num_replicas;
-                    int fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
+                    int rindex = random()%shardcache_node_num_addresses(cache->shards[i]);
+                    char *addr = shardcache_node_get_address_at_index(cache->shards[i], rindex);
+                    int fd = connections_pool_get(connections, addr);
                     if (fd < 0)
                         break;
 
@@ -393,7 +206,7 @@ evictor(void *priv)
                         int flags = fcntl(fd, F_GETFL, 0);
                         if (flags == -1) {
                             close(fd);
-                            fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
+                            fd = connections_pool_get(connections, addr);
                             if (fd < 0)
                                 break;
                             continue;
@@ -410,7 +223,7 @@ evictor(void *priv)
 
                         if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
                             close(fd);
-                            fd = connections_pool_get(connections, cache->shards[i]->address[rindex]);
+                            fd = connections_pool_get(connections, addr);
                             if (fd < 0)
                                 break;
                             if (retries++ < 5)
@@ -421,9 +234,9 @@ evictor(void *priv)
                         break;
                     }
 
-                    int rc = evict_from_peer(cache->shards[i]->address[rindex], (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 0);
+                    int rc = evict_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 0);
                     if (rc == 0) {
-                        connections_pool_add(connections, cache->shards[i]->address[rindex], fd);
+                        connections_pool_add(connections, addr, fd);
                     } else {
                         SHC_WARNING("evict_from_peer return %d for peer %s", rc, peer);
                         close(fd);
@@ -600,23 +413,26 @@ shardcache_create(char *me,
     int me_found = 0;
     int my_index = -1;
     for (i = 0; i < nnodes; i++) {
-        shard_names[i] = nodes[i]->label;
+        shard_names[i] = shardcache_node_get_label(nodes[i]);
         shard_lens[i] = strlen(shard_names[i]);
-        cache->shards[i] = shardcache_node_create(nodes[i]->label,
-                                                  nodes[i]->address,
-                                                  nodes[i]->num_replicas);
-        if (strcmp(nodes[i]->label, me) == 0) {
+        int num_replicas = shardcache_node_num_addresses(nodes[i]);
+        char *replicas[num_replicas];
+        shardcache_node_get_all_addresses(nodes[i], replicas, num_replicas);
+        cache->shards[i] = shardcache_node_create(shard_names[i], replicas, num_replicas);
+        char *label = shardcache_node_get_label(nodes[i]);
+        if (strcmp(label, me) == 0) {
             me_found = 1;
-            for (n = 0; n < nodes[i]->num_replicas; n++) {
-                int fd = open_socket(nodes[i]->address[n], 0);
+            for (n = 0; n < num_replicas; n++) {
+                char *address = shardcache_node_get_address_at_index(nodes[i], n);
+                int fd = open_socket(address, 0);
                 if (fd >= 0) {
-                    SHC_DEBUG("Using address %s", nodes[i]->address[n]);
-                    cache->addr = strdup(nodes[i]->address[n]);
+                    SHC_DEBUG("Using address %s", address);
+                    cache->addr = strdup(address);
                     my_index = n;
                     close(fd);
                     break;
                 } else {
-                    SHC_DEBUG("Skipping address %s", nodes[i]->address[n]);
+                    SHC_DEBUG("Skipping address %s", address);
                 }
             }
         }
@@ -728,7 +544,7 @@ shardcache_create(char *me,
     // start the replica subsystem now
     // NOTE: this needs to happen after the cache has been fully initialized
     for (i = 0; i < nnodes; i++) {
-        if (nodes[i]->num_replicas > 1 && my_index >= 0)
+        if (shardcache_node_num_addresses(nodes[i]) > 1 && my_index >= 0)
             cache->replica = shardcache_replica_create(cache, cache->shards[i], my_index, NULL);
     }
     return cache;
@@ -2097,7 +1913,11 @@ shardcache_get_nodes(shardcache_t *cache, int *num_nodes)
     shardcache_node_t **list = malloc(sizeof(shardcache_node_t *) * num);
     for (i = 0; i < num; i++) {
         shardcache_node_t *orig = cache->shards[i];
-        list[i] = shardcache_node_create(orig->label, orig->address, orig->num_replicas);
+        char *label = shardcache_node_get_label(orig);
+        int num_replicas = shardcache_node_num_addresses(orig);
+        char *addresses[num_replicas];
+        shardcache_node_get_all_addresses(orig, addresses, num_replicas);
+        list[i] = shardcache_node_create(label, addresses, num_replicas);
     }
     SPIN_UNLOCK(&cache->migration_lock);
     return list;
@@ -2332,7 +2152,9 @@ shardcache_check_migration_continuum(shardcache_t *cache,
         for (i = 0 ; i < num_nodes; i++) {
             int found = 0;
             for (n = 0; n < num_nodes; n++) {
-                if (strcmp(nodes[i]->label, cache->shards[n]->label) == 0) {
+                char *label1 = shardcache_node_get_label(nodes[i]);
+                char *label2 = shardcache_node_get_label(cache->shards[n]);
+                if (*label1 == *label2 && strcmp(label1, label2) == 0) {
                     found = 1;
                     break;
                 }
@@ -2375,8 +2197,11 @@ shardcache_set_migration_continuum(shardcache_t *cache,
     int i;
     for (i = 0; i < cache->num_migration_shards; i++) {
         shardcache_node_t *node = nodes[i];
-        cache->migration_shards[i] = shardcache_node_create(node->label, node->address, node->num_replicas);
-        shard_names[i] = nodes[i]->label;
+        shard_names[i] = shardcache_node_get_label(node);
+        int num_replicas = shardcache_node_num_addresses(node);
+        char *addresses[num_replicas];
+        shardcache_node_get_all_addresses(node, addresses, num_replicas);
+        cache->migration_shards[i] = shardcache_node_create(shard_names[i], addresses, num_replicas);
         shard_lens[i] = strlen(shard_names[i]);
     }
 
@@ -2412,23 +2237,29 @@ shardcache_migration_begin_internal(shardcache_t *cache,
         for (i = 0; i < num_nodes; i++) {
             if (i > 0) 
                 fbuf_add(&mgb_message, ",");
-            int rindex = random()%nodes[i]->num_replicas;
-            fbuf_printf(&mgb_message, "%s:%s", nodes[i]->label, nodes[i]->address[rindex]);
+            int num_replicas = shardcache_node_num_addresses(nodes[i]);
+            char *label = shardcache_node_get_label(nodes[i]);
+            int rindex = random()%num_replicas;
+            char *addr = shardcache_node_get_address_at_index(nodes[i], rindex);
+            fbuf_printf(&mgb_message, "%s:%s", label, addr);
         }
 
         for (i = 0; i < cache->num_shards; i++) {
-            if (strcmp(cache->shards[i]->label, cache->me) != 0) {
-                int rindex = random()%cache->shards[i]->num_replicas;
-                int fd = shardcache_get_connection_for_peer(cache, cache->shards[i]->address[rindex]);
-                int rc = migrate_peer(cache->shards[i]->address[rindex],
+            if (strcmp(shardcache_node_get_label(cache->shards[i]), cache->me) != 0) {
+                int num_replicas = shardcache_node_num_addresses(nodes[i]);
+                char *label = shardcache_node_get_label(nodes[i]);
+                int rindex = random()%num_replicas;
+                char *addr = shardcache_node_get_address_at_index(nodes[i], rindex);
+                int fd = shardcache_get_connection_for_peer(cache, addr);
+                int rc = migrate_peer(addr,
                                       (char *)cache->auth,
                                       SHC_HDR_SIGNATURE_SIP,
                                       fbuf_data(&mgb_message),
                                       fbuf_used(&mgb_message), fd);
-                shardcache_release_connection_for_peer(cache, cache->shards[i]->address[rindex], fd);
+                shardcache_release_connection_for_peer(cache, addr, fd);
                 if (rc != 0) {
                     SHC_ERROR("Node %s (%s) didn't aknowledge the migration",
-                              cache->shards[i]->label, cache->shards[i]->address[rindex]);
+                              label, addr);
                 }
             }
         }

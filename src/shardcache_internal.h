@@ -113,13 +113,6 @@
 
 typedef struct chash_t chash_t;
 
-struct __shardcache_node_s {
-    char *label;
-    char **address;
-    int num_replicas;
-    char *string;
-}; 
-
 struct __shardcache_s {
     char *me;   // a copy of the label for this node
                 // it won't be changed until destruction
