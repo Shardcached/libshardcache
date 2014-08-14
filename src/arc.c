@@ -161,6 +161,7 @@ static arc_object_t *arc_state_lru(arc_state_t *state)
  * the cache. */
 static void arc_balance(arc_t *cache, size_t size)
 {
+    MUTEX_LOCK(&cache->lock);
     /* First move objects from MRU/MFU to their respective ghost lists. */
     while (cache->mru.size + cache->mfu.size + size > cache->c) {
         if (cache->mru.size > cache->p) {
@@ -186,6 +187,7 @@ static void arc_balance(arc_t *cache, size_t size)
             break;
         }
     }
+    MUTEX_UNLOCK(&cache->lock);
 }
 
 void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size)
@@ -311,11 +313,11 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             obj->state->size += obj->size;
         }
 
-        arc_balance(cache, obj->size);
     }
 
     MUTEX_UNLOCK(&obj->lock);
     MUTEX_UNLOCK(&cache->lock);
+    arc_balance(cache, obj->size);
     return 0;
 }
 
