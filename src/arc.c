@@ -204,6 +204,7 @@ void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size)
             MUTEX_UNLOCK(&cache->lock);
         }
         MUTEX_UNLOCK(&obj->lock);
+        arc_balance(cache, obj->size);
     }
 }
 
@@ -274,19 +275,6 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 release_ref(cache->refcnt, obj->node);
                 return 0;
             } else if (rc == -1) {
-                /* If the fetch fails we can drop the object without
-                 * calling arc_balance() since we don't want a not-existing key
-                 * to affect the cache.
-                 * Note though that the ^ (p) marker has been updated since this
-                 * item was in a ghost list, so at next arc_balance() call it
-                 * will be taken into account.
-                 * This is a desired behaviour because it's still an indication
-                 * of 'frequency'/'recency' in terms of cache usage
-                 * (regardless of the actual presence of the key, if it
-                 * was in a ghost list it surely existed at some point in time)
-                 * and we want to balance the cache accordingly, it's just easier
-                 * (and still safe) to postpone it until next cache-related operation
-                 */
                 if (obj_state) {
                     /* The object is being removed from the cache, destroy it. */
                     ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
@@ -302,7 +290,6 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             } else {
                 obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
                 MUTEX_LOCK(&cache->lock);
-
                 arc_list_prepend(&obj->head, &state->head);
                 obj->state = state;
                 obj->state->size += obj->size;
@@ -317,7 +304,6 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 
     MUTEX_UNLOCK(&obj->lock);
     MUTEX_UNLOCK(&cache->lock);
-    arc_balance(cache, obj->size);
     return 0;
 }
 
@@ -459,6 +445,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
             *valuep = obj->ptr;
 
         MUTEX_UNLOCK(&obj->lock);
+        arc_balance(cache, obj->size);
         return obj;
     }
 
@@ -494,6 +481,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
                 MUTEX_UNLOCK(&obj->lock);
                 // the object is retained, the caller must call
                 // arc_release_resource(obj) to release it
+                arc_balance(cache, obj->size);
                 return obj;
             } else {
                 ht_delete(cache->hash, (void *)key, len, NULL, NULL);
