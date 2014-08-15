@@ -823,7 +823,8 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr, int ignore
                 } else {
                     // BOGUS RESPONSE
                     fbuf_set_used(out, initial_len);
-                    sip_hash_free(shash);
+                    if (shash)
+                        sip_hash_free(shash);
                     return -1;
                 }
             }
