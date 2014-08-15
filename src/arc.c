@@ -222,8 +222,8 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 {
     arc_state_t *obj_state = NULL;
 
-    MUTEX_LOCK(&cache->lock);
     MUTEX_LOCK(&obj->lock);
+    MUTEX_LOCK(&cache->lock);
 
     if (obj->state) {
 
@@ -283,11 +283,9 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 release_ref(cache->refcnt, obj->node);
                 return 0;
             } else if (rc == -1) {
-                if (obj_state) {
-                    /* The object is being removed from the cache, destroy it. */
-                    ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-                    release_ref(cache->refcnt, obj->node);
-                }
+                /* The object is being removed from the cache, destroy it. */
+                ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
+                release_ref(cache->refcnt, obj->node);
                 MUTEX_UNLOCK(&obj->lock);
                 return -1;
             } else if (size >= cache->c) {
@@ -297,17 +295,20 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 MUTEX_LOCK(&cache->lock);
             } else {
                 obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
+                MUTEX_UNLOCK(&obj->lock);
                 MUTEX_LOCK(&cache->lock);
+                MUTEX_LOCK(&obj->lock);
                 arc_list_prepend(&obj->head, &state->head);
                 obj->state = state;
                 obj->state->size += obj->size;
+                ATOMIC_CAS(cache->needs_rebalance, 0, 1);
             }
         } else {
             arc_list_prepend(&obj->head, &state->head);
             obj->state = state;
             obj->state->size += obj->size;
+            ATOMIC_CAS(cache->needs_rebalance, 0, 1);
         }
-        ATOMIC_CAS(cache->needs_rebalance, 0, 1);
     }
 
     MUTEX_UNLOCK(&obj->lock);
@@ -399,12 +400,9 @@ void arc_remove(arc_t *cache, const void *key, size_t len)
     if (objptr) {
         obj = (arc_object_t *)objptr;
         MUTEX_LOCK(&obj->lock);
-        if (obj && obj->state) {
-            MUTEX_UNLOCK(&obj->lock);
+        if (obj && obj->state)
             arc_move(cache, obj, NULL);
-        } else {
-            MUTEX_UNLOCK(&obj->lock);
-        }
+        MUTEX_UNLOCK(&obj->lock);
     }
 }
 
