@@ -170,10 +170,14 @@ static void arc_balance(arc_t *cache, size_t size)
     while (cache->mru.size + cache->mfu.size + size > cache->c) {
         if (cache->mru.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mru);
+            MUTEX_UNLOCK(&cache->lock);
             arc_move(cache, obj, &cache->mrug);
+            MUTEX_LOCK(&cache->lock);
         } else if (cache->mfu.size > 0) {
             arc_object_t *obj = arc_state_lru(&cache->mfu);
+            MUTEX_UNLOCK(&cache->lock);
             arc_move(cache, obj, &cache->mfug);
+            MUTEX_LOCK(&cache->lock);
         } else {
             break;
         }
@@ -183,10 +187,14 @@ static void arc_balance(arc_t *cache, size_t size)
     while (cache->mrug.size + cache->mfug.size > cache->c) {
         if (cache->mfug.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mfug);
+            MUTEX_UNLOCK(&cache->lock);
             arc_remove(cache, obj->key, obj->klen);
+            MUTEX_LOCK(&cache->lock);
         } else if (cache->mrug.size > 0) {
             arc_object_t *obj = arc_state_lru(&cache->mrug);
+            MUTEX_UNLOCK(&cache->lock);
             arc_remove(cache, obj->key, obj->klen);
+            MUTEX_LOCK(&cache->lock);
         } else {
             break;
         }
@@ -239,7 +247,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 cache->p = MAX(0, cache->p - MAX(cache->mfug.size ? (cache->mrug.size / cache->mfug.size) : cache->mrug.size/2, 1));
         }
 
-        obj->state->size -= obj->size;
+        ATOMIC_DECREASE(obj->state->size, obj->size);
         arc_list_remove(&obj->head);
         obj->state = NULL;
     }
@@ -261,7 +269,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             obj->async = 0;
             arc_list_prepend(&obj->head, &state->head);
             obj->state = state;
-            obj->state->size += obj->size;
+            ATOMIC_INCREASE(obj->state->size, obj->size);
 
         } else if (obj_state != &cache->mru && obj_state != &cache->mfu) {
             /* The object is being moved from one of the ghost lists into
@@ -300,13 +308,13 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 MUTEX_LOCK(&obj->lock);
                 arc_list_prepend(&obj->head, &state->head);
                 obj->state = state;
-                obj->state->size += obj->size;
+                ATOMIC_INCREASE(obj->state->size, obj->size);
                 ATOMIC_CAS(cache->needs_rebalance, 0, 1);
             }
         } else {
             arc_list_prepend(&obj->head, &state->head);
             obj->state = state;
-            obj->state->size += obj->size;
+            ATOMIC_INCREASE(obj->state->size, obj->size);
             ATOMIC_CAS(cache->needs_rebalance, 0, 1);
         }
     }
@@ -506,9 +514,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
 
 size_t arc_size(arc_t *cache)
 {
-    MUTEX_LOCK(&cache->lock);
-    size_t ret = cache->mru.size + cache->mfu.size;
-    MUTEX_UNLOCK(&cache->lock);
+    size_t ret = ATOMIC_READ(cache->mru.size) + ATOMIC_READ(cache->mfu.size);
     return ret;
 }
 
