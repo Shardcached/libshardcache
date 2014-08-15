@@ -114,6 +114,8 @@ struct __arc {
     struct __arc_state mrug, mru, mfu, mfug;
 
     int needs_rebalance;
+    uint64_t num_items;
+
     pthread_mutex_t lock;
 
     refcnt_t *refcnt;
@@ -258,6 +260,8 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         release_ref(cache->refcnt, obj->node);
 
         MUTEX_UNLOCK(&cache->lock);
+        if (obj_state == &cache->mru || obj_state == &cache->mfu)
+            ATOMIC_DECREMENT(cache->num_items);
         return -1;
     } else {
         if (state == &cache->mrug || state == &cache->mfug) {
@@ -270,7 +274,8 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             arc_list_prepend(&obj->head, &state->head);
             obj->state = state;
             ATOMIC_INCREASE(obj->state->size, obj->size);
-
+            if (obj_state == &cache->mru || obj_state == &cache->mfu)
+                ATOMIC_DECREMENT(cache->num_items);
         } else if (obj_state != &cache->mru && obj_state != &cache->mfu) {
             /* The object is being moved from one of the ghost lists into
              * the MRU or MFU list, fetch the object into the cache. */
@@ -301,6 +306,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 // to the getter without (re)adding it to the cache
                 release_ref(cache->refcnt, obj->node);
                 MUTEX_LOCK(&cache->lock);
+                ATOMIC_INCREMENT(cache->num_items);
             } else {
                 obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
                 MUTEX_UNLOCK(&obj->lock);
@@ -310,6 +316,7 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 obj->state = state;
                 ATOMIC_INCREASE(obj->state->size, obj->size);
                 ATOMIC_CAS(cache->needs_rebalance, 0, 1);
+                ATOMIC_INCREMENT(cache->num_items);
             }
         } else {
             arc_list_prepend(&obj->head, &state->head);
@@ -514,8 +521,12 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
 
 size_t arc_size(arc_t *cache)
 {
-    size_t ret = ATOMIC_READ(cache->mru.size) + ATOMIC_READ(cache->mfu.size);
-    return ret;
+    return ATOMIC_READ(cache->mru.size) + ATOMIC_READ(cache->mfu.size);
+}
+
+uint64_t arc_num_items(arc_t *cache)
+{
+    return ATOMIC_READ(cache->num_items);
 }
 
 /* vim: tabstop=4 shiftwidth=4 expandtab: */

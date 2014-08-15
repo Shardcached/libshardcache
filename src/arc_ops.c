@@ -68,7 +68,7 @@ arc_ops_evict_object(shardcache_t *cache, cached_object_t *obj)
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
     obj->flags = COBJ_FLAG_EVICTED; // reset all flags but leave the EVICTED bit on
     list_clear(obj->listeners);
-    ATOMIC_DECREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value);
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_num_items(cache->arc));
 }
 
 typedef struct
@@ -357,7 +357,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         if (done) {
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
             if (ret == 0) {
-                ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value);
+                ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_num_items(cache->arc));
                 gettimeofday(&obj->ts, NULL);
                 *size = sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : obj->dlen);
                 MUTEX_UNLOCK(&obj->lock);
@@ -391,8 +391,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     } else if (cache->use_persistent_storage && cache->storage.fetch) {
         int rc = cache->storage.fetch(obj->key, obj->klen, &obj->data, &obj->dlen, cache->storage.priv);
         if (rc == -1) {
-	    if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC) && obj->listeners)
-	        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+            if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC) && obj->listeners)
+                list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
             SHC_ERROR("Fetch storage callback returned an error (%d)", rc);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_ERRORS].value);
             MUTEX_UNLOCK(&obj->lock);
@@ -445,7 +445,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
 
     MUTEX_UNLOCK(&obj->lock);
 
-    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value);
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_num_items(cache->arc));
 
     return 0;
 }

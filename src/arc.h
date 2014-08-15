@@ -131,6 +131,13 @@ void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size);
  */
 size_t arc_size(arc_t *cache);
 
+/**
+ * @brief Returns the number of items actually cached
+ * @param cache : A valid pointer to an initialized arc_t structure
+ * @return The total number of items in the cache
+ */
+uint64_t arc_num_items(arc_t *cache);
+
 #endif /* __ARC_H__ */
 
 /* vim: tabstop=4 shiftwidth=4 expandtab: */
