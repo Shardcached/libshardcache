@@ -98,7 +98,6 @@ typedef struct __arc_object {
     char buf[32];
     void *key;
     size_t klen;
-    pthread_mutex_t lock;
     refcnt_node_t *node;
     int async;
 } arc_object_t;
@@ -136,8 +135,6 @@ static arc_object_t *arc_object_create(arc_t *cache, const void *key, size_t len
 
     arc_list_init(&obj->head);
 
-    MUTEX_INIT_RECURSIVE(&obj->lock);
-
     obj->node = new_node(cache->refcnt, obj, cache);
     if (len > sizeof(obj->buf))
         obj->key = malloc(len);
@@ -164,22 +161,21 @@ static arc_object_t *arc_state_lru(arc_state_t *state)
  * the cache. */
 static void arc_balance(arc_t *cache, size_t size)
 {
-    if (!ATOMIC_READ(cache->needs_rebalance))
-        return;
-
     MUTEX_LOCK(&cache->lock);
+
+    if (!cache->needs_rebalance) {
+        MUTEX_UNLOCK(&cache->lock);
+        return;
+    }
+
     /* First move objects from MRU/MFU to their respective ghost lists. */
     while (cache->mru.size + cache->mfu.size + size > cache->c) {
         if (cache->mru.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mru);
-            MUTEX_UNLOCK(&cache->lock);
             arc_move(cache, obj, &cache->mrug);
-            MUTEX_LOCK(&cache->lock);
         } else if (cache->mfu.size > 0) {
             arc_object_t *obj = arc_state_lru(&cache->mfu);
-            MUTEX_UNLOCK(&cache->lock);
             arc_move(cache, obj, &cache->mfug);
-            MUTEX_LOCK(&cache->lock);
         } else {
             break;
         }
@@ -189,20 +185,16 @@ static void arc_balance(arc_t *cache, size_t size)
     while (cache->mrug.size + cache->mfug.size > cache->c) {
         if (cache->mfug.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mfug);
-            MUTEX_UNLOCK(&cache->lock);
             arc_remove(cache, obj->key, obj->klen);
-            MUTEX_LOCK(&cache->lock);
         } else if (cache->mrug.size > 0) {
             arc_object_t *obj = arc_state_lru(&cache->mrug);
-            MUTEX_UNLOCK(&cache->lock);
             arc_remove(cache, obj->key, obj->klen);
-            MUTEX_LOCK(&cache->lock);
         } else {
             break;
         }
     }
 
-    ATOMIC_CAS(cache->needs_rebalance, 1, 0);
+    cache->needs_rebalance = 0;
 
     MUTEX_UNLOCK(&cache->lock);
 
@@ -212,17 +204,14 @@ void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size)
 {
     arc_object_t *obj = ht_get(cache->hash, key, klen, NULL);
     if (obj) {
-        MUTEX_LOCK(&obj->lock);
-        if (obj && (obj->state == &cache->mru || obj->state == &cache->mfu))
-        {
-            MUTEX_LOCK(&cache->lock);
+        MUTEX_LOCK(&cache->lock);
+        if (LIKELY(obj->state == &cache->mru || obj->state == &cache->mfu)) {
             obj->state->size -= obj->size;
             obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
             obj->state->size += obj->size;
-            MUTEX_UNLOCK(&cache->lock);
         }
-        MUTEX_UNLOCK(&obj->lock);
-        ATOMIC_CAS(cache->needs_rebalance, 0, 1);
+        cache->needs_rebalance = 1;
+        MUTEX_UNLOCK(&cache->lock);
     }
 }
 
@@ -232,10 +221,14 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 {
     arc_state_t *obj_state = NULL;
 
-    MUTEX_LOCK(&obj->lock);
     MUTEX_LOCK(&cache->lock);
 
     if (obj->state) {
+
+        if (obj->state == state) {
+            MUTEX_UNLOCK(&cache->lock);
+            return 0;
+        }
 
         obj_state = obj->state;
 
@@ -256,7 +249,6 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 
     if (state == NULL) {
         /* The object is being removed from the cache, destroy it. */
-        MUTEX_UNLOCK(&obj->lock);
         release_ref(cache->refcnt, obj->node);
 
         MUTEX_UNLOCK(&cache->lock);
@@ -264,7 +256,9 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             ATOMIC_DECREMENT(cache->num_items);
         return -1;
     } else {
-        if (state == &cache->mrug || state == &cache->mfug) {
+        if ((state == &cache->mrug || state == &cache->mfug) &&
+            obj_state && (obj_state == &cache->mfu || obj_state == &cache->mru))
+        {
             /* The object is being moved to one of the ghost lists, evict
              * the object from the cache. */
             if (obj->ptr)
@@ -287,19 +281,16 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             MUTEX_UNLOCK(&cache->lock);
             size_t size = 0;
             int rc = cache->ops->fetch(obj->ptr, &size, cache->ops->priv);
-
             if (rc == 1) {
                 // don't cache the object which has been retrieved
                 // using the fetch callback
                 ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-                MUTEX_UNLOCK(&obj->lock);
                 release_ref(cache->refcnt, obj->node);
                 return 0;
             } else if (rc == -1) {
                 /* The object is being removed from the cache, destroy it. */
                 ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
                 release_ref(cache->refcnt, obj->node);
-                MUTEX_UNLOCK(&obj->lock);
                 return -1;
             } else if (size >= cache->c) {
                 // the object doesn't fit in the cache, let's return it
@@ -308,33 +299,22 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 MUTEX_LOCK(&cache->lock);
                 ATOMIC_INCREMENT(cache->num_items);
             } else {
-                obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
-                // XXX  - we need  to play this unlock/lock game because we need
-                //        to ensure we don't retain any object lock before trying to
-                //        acquire the global lock again, otherwise a dead lock might
-                //        happen because who retains the global lock might be trying
-                //        to acquire the object lock before releasing the global one
-                // TODO - get rid of the object level lock by using the atomic builtins
-                //        (it's possible because we barely need to access the object
-                //        properties apart the state which already requires a global lock)
-                MUTEX_UNLOCK(&obj->lock);
                 MUTEX_LOCK(&cache->lock);
-                MUTEX_LOCK(&obj->lock);
+                obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
                 arc_list_prepend(&obj->head, &state->head);
                 obj->state = state;
                 ATOMIC_INCREASE(obj->state->size, obj->size);
-                ATOMIC_CAS(cache->needs_rebalance, 0, 1);
+                cache->needs_rebalance = 1;
                 ATOMIC_INCREMENT(cache->num_items);
             }
         } else {
             arc_list_prepend(&obj->head, &state->head);
             obj->state = state;
             ATOMIC_INCREASE(obj->state->size, obj->size);
-            ATOMIC_CAS(cache->needs_rebalance, 0, 1);
+            cache->needs_rebalance = 1;
         }
     }
 
-    MUTEX_UNLOCK(&obj->lock);
     MUTEX_UNLOCK(&cache->lock);
     return 0;
 }
@@ -346,15 +326,12 @@ static void free_node_ptr_callback(void *node) {
     if (obj->key != obj->buf)
         free(obj->key);
 
-    MUTEX_DESTROY(&obj->lock);
-
     free(obj);
 }
 
 static void terminate_node_callback(refcnt_node_t *node, void *priv) {
     arc_object_t *obj = (arc_object_t *)get_node_ptr(node);
     arc_t *cache = (arc_t *)priv;
-    MUTEX_LOCK(&obj->lock);
 
     if (obj->key) {
         ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
@@ -364,7 +341,6 @@ static void terminate_node_callback(refcnt_node_t *node, void *priv) {
 
     obj->ptr = NULL;
     obj->state = NULL;
-    MUTEX_UNLOCK(&obj->lock);
 }
 
 /* Create a new cache. */
@@ -422,10 +398,8 @@ void arc_remove(arc_t *cache, const void *key, size_t len)
     ht_delete(cache->hash, (void *)key, len, &objptr, NULL);
     if (objptr) {
         obj = (arc_object_t *)objptr;
-        MUTEX_LOCK(&obj->lock);
-        if (obj && obj->state)
+        if (obj)
             arc_move(cache, obj, NULL);
-        MUTEX_UNLOCK(&obj->lock);
     }
 }
 
@@ -439,9 +413,7 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res) {
 void arc_retain_resource(arc_t *cache, arc_resource_t *res) {
     arc_object_t *obj = (arc_object_t *)res;
 
-    MUTEX_LOCK(&obj->lock);
     retain_ref(cache->refcnt, obj->node);
-    MUTEX_UNLOCK(&obj->lock);
 }
 
 static void *
@@ -462,9 +434,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
             return obj;
         }
 
-        MUTEX_LOCK(&obj->lock);
         if (UNLIKELY(arc_move(cache, obj, &cache->mfu) != 0)) {
-            MUTEX_UNLOCK(&obj->lock);
             release_ref(cache->refcnt, obj->node);
             fprintf(stderr, "Can't move the object into the cache\n");
             return NULL;
@@ -473,7 +443,6 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
         if (valuep)
             *valuep = obj->ptr;
 
-        MUTEX_UNLOCK(&obj->lock);
         arc_balance(cache, obj->size);
         return obj;
     }
@@ -489,7 +458,6 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     }
 
     retain_ref(cache->refcnt, obj->node);
-    MUTEX_LOCK(&obj->lock);
     int rc = ht_set_if_not_exists(cache->hash, (void *)key, len, obj, sizeof(arc_object_t));
     switch(rc) {
         case -1:
@@ -499,7 +467,6 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
         case 1:
             // the object has been created in the meanwhile
             release_ref(cache->refcnt, obj->node);
-            MUTEX_UNLOCK(&obj->lock);
             // XXX - yes, we have to release it twice
             release_ref(cache->refcnt, obj->node);
             return arc_lookup(cache, key, len, valuep, async);
@@ -507,7 +474,6 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
             /* New objects are always moved to the MRU list. */
             if (arc_move(cache, obj, &cache->mru) == 0) {
                 *valuep = obj->ptr;
-                MUTEX_UNLOCK(&obj->lock);
                 // the object is retained, the caller must call
                 // arc_release_resource(obj) to release it
                 arc_balance(cache, obj->size);
@@ -522,7 +488,6 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
             release_ref(cache->refcnt, obj->node);
             break;
     } 
-    MUTEX_UNLOCK(&obj->lock);
     release_ref(cache->refcnt, obj->node);
     return NULL;
 }
