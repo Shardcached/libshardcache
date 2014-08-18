@@ -109,5 +109,5 @@ shardcache_counter_value_set(shardcache_counters_t *c, char *name, int value)
     return 0;
 }
 
-/* vim: tabstop=4 shiftwidth=4 expandtab: */
+// vim: tabstop=4 shiftwidth=4 expandtab:
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

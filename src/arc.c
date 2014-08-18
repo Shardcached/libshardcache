@@ -309,6 +309,14 @@ static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 ATOMIC_INCREMENT(cache->num_items);
             } else {
                 obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
+                // XXX  - we need  to play this unlock/lock game because we need
+                //        to ensure we don't retain any object lock before trying to
+                //        acquire the global lock again, otherwise a dead lock might
+                //        happen because who retains the global lock might be trying
+                //        to acquire the object lock before releasing the global one
+                // TODO - get rid of the object level lock by using the atomic builtins
+                //        (it's possible because we barely need to access the object
+                //        properties apart the state which already requires a global lock)
                 MUTEX_UNLOCK(&obj->lock);
                 MUTEX_LOCK(&cache->lock);
                 MUTEX_LOCK(&obj->lock);
@@ -529,5 +537,5 @@ uint64_t arc_num_items(arc_t *cache)
     return ATOMIC_READ(cache->num_items);
 }
 
-/* vim: tabstop=4 shiftwidth=4 expandtab: */
+// vim: tabstop=4 shiftwidth=4 expandtab:
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

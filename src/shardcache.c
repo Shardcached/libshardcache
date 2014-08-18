@@ -2438,5 +2438,5 @@ void shardcache_thread_end(shardcache_t *cache)
         cache->storage.thread_exit(cache->storage.priv);
 }
 
-/* vim: tabstop=4 shiftwidth=4 expandtab: */
+// vim: tabstop=4 shiftwidth=4 expandtab:
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

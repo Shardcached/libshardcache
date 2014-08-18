@@ -286,5 +286,5 @@ int shardcache_unschedule_expiration(shardcache_t *cache, void *key, size_t klen
 
 void shardcache_queue_async_read_wrk(shardcache_t *cache, async_read_wrk_t *wrk);
 
-/* vim: tabstop=4 shiftwidth=4 expandtab: */
+// vim: tabstop=4 shiftwidth=4 expandtab:
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

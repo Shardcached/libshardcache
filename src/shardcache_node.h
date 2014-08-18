@@ -155,5 +155,5 @@ void shardcache_free_labels(shardcache_node_t **labels, int num_labels);
 
 #endif
 
-/* vim: tabstop=4 shiftwidth=4 expandtab: */
+// vim: tabstop=4 shiftwidth=4 expandtab:
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */

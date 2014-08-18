@@ -199,4 +199,5 @@ shardcache_node_get_address_at_index(shardcache_node_t *node, int index)
     return NULL;
 }
 
-
+// vim: tabstop=4 shiftwidth=4 expandtab:
+// /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
