@@ -14,6 +14,15 @@
  * extend the storage API to support fetch_multi and store_multi which can be (optianlly, if exposed by the module)
    used to fulfill get_multi and set_multi requests which need to go down to the storage
 
+ * extend the storage API to allow asynchronous fetches.
+   Adding a fetch_async callback to the storage structure would be the easiest. Then arc_ops will
+   also expose a fetch_async which will be called by arc_lookup() if used in async mode,
+   otherwise the synchronous interface will still be used.
+
+ * get rid of the object-level lock in arc.c . The few accesses to the object members which are not related to the
+   state (hence the cache lists, which are already synchronized using the global-cache lock) can be implemented
+   using the atomic builtins
+
  * protocol V2 :
     - a new response header to distinguish between not-found and errors as response to
       GET/SET/OFFSET/HEAD commands
@@ -50,11 +59,6 @@
     NOTE: V2 implementation must ensure compatibility with V1 clients which, as long as the
           changes are the ones described above, means using the old response header when
           answering to a failing GET/SET/OFFSET/HEAD command.
-
- * extend the storage API to allow asynchronous fetches.
-   Adding a fetch_async callback to the storage structure would be the easiest. Then arc_ops will
-   also expose a fetch_async which will be called by arc_lookup() if used in async mode,
-   otherwise the synchronous interface will still be used.
 
  * complete and test the replica support
 
