@@ -125,7 +125,7 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
 
     // don't pipeline more than 1024 requests ahead
     if (__sync_fetch_and_add(&ctx->num_requests, 0) - __sync_fetch_and_add(&ctx->num_responses, 0) < 128 &&
-       (!max_requests || max_requests > __sync_fetch_and_add(&ctx->num_requests, 0)))
+       (!max_requests || max_requests > __sync_fetch_and_add(&ctx->num_requests, 0)) && keys_index->size)
     {
         uint32_t idx = random() % (num_keys && num_keys < keys_index->size ? num_keys : keys_index->size);
 
