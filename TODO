@@ -1,8 +1,3 @@
- * make schedule/unschedule expiration an asynchronous operation since it's going to be a log(n) operation
-   and we don't want to block the get/set request that triggers it.
-   The operation should be pushed to a queue and the expirer thread should take care of executing it
-   after running the its iomux
-
  * make use of a dynamic (configurable) number of threads to run the asynchronous inter-node communication.
    (it might also be determined in function of the configured number of workers)
 

@@ -161,7 +161,7 @@ struct __shardcache_s {
 
     iomux_t *expirer_mux; // iomux used to handle the expiration timers
     pthread_t expirer_th; // the thread taking care of propagating expiration commands
-
+    queue_t *expirer_queue; // the queue holding shedule/unschedule expiration jobs
 
     int evict_on_delete;  // boolean flag indicating if eviction will be automatically
                           // triggered when deleting an existing key 

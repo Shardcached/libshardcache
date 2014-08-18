@@ -308,12 +308,76 @@ shardcache_expire_key_cb(iomux_t *iomux, void *priv)
     free(ctx);
 }
 
+typedef struct {
+    int cmd;
+#define SHARDACHE_EXPIRE_SCHEDULE 1
+#define SHARDACHE_EXPIRE_UNSCHEDULE 2
+    void *key;
+    size_t klen;
+    time_t expire;
+    int is_volatile;
+} shardcache_expire_job_t;
+
 void *
 shardcache_expire_keys(void *priv)
 {
     shardcache_t *cache = (shardcache_t *)priv;
     while (!ATOMIC_READ(cache->quit))
     {
+        shardcache_expire_job_t *job = queue_pop_left(cache->expirer_queue);
+        while (job) {
+            if (job->cmd == SHARDACHE_EXPIRE_UNSCHEDULE) {
+                void *ptr = NULL;
+                hashtable_t *table = job->is_volatile ? cache->volatile_timeouts : cache->cache_timeouts;
+
+                ht_delete(table, job->key, job->klen, &ptr, NULL);
+                if (ptr) {
+                    iomux_timeout_id_t *tid = (iomux_timeout_id_t *)ptr;
+                    iomux_unschedule(cache->expirer_mux, *tid);
+                    free(tid);
+                } else {
+                    // TODO - Error messages ?
+                }
+                free(job->key);
+                free(job);
+                job = queue_pop_left(cache->expirer_queue);
+                continue;
+            }
+
+            expire_key_ctx_t *ctx = calloc(1, sizeof(expire_key_ctx_t));
+            ctx->item.key = job->key;
+            ctx->item.klen = job->klen;
+            ctx->cache = cache;
+            ctx->is_volatile = job->is_volatile;
+            hashtable_t *table = job->is_volatile ? cache->volatile_timeouts : cache->cache_timeouts;
+            struct timeval timeout = { job->expire, (int)random()%(int)1e6 };
+            iomux_timeout_id_t *tid_ptr = NULL;
+            void *prev = NULL;
+            iomux_timeout_id_t tid = 0;
+            ht_delete(table, job->key, job->klen, &prev, NULL);
+            if (prev) {
+                tid_ptr = (iomux_timeout_id_t *)prev;
+                tid = iomux_reschedule(cache->expirer_mux, *tid_ptr, &timeout, shardcache_expire_key_cb, ctx);
+                *tid_ptr = tid;
+            } else {
+                tid = iomux_schedule(cache->expirer_mux, &timeout, shardcache_expire_key_cb, ctx);
+                tid_ptr = malloc(sizeof(iomux_timeout_id_t));
+                *tid_ptr = tid;
+            }
+            if (tid && tid_ptr) {
+                ht_set(table, job->key, job->klen, tid_ptr, sizeof(iomux_timeout_id_t));
+            } else {
+                if (tid_ptr)
+                    free(tid_ptr);
+                free(ctx->item.key);
+                free(ctx);
+                // TODO - Erro message
+            }
+
+            free(job);
+            job = queue_pop_left(cache->expirer_queue);
+        }
+
         int timeout = ATOMIC_READ(cache->iomux_run_timeout_high);
         struct timeval tv = { timeout/1e6, timeout%(int)1e6 };
         iomux_run(cache->expirer_mux, &tv);
@@ -536,6 +600,7 @@ shardcache_create(char *me,
     cache->cache_timeouts = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)free);
     cache->volatile_timeouts = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)free);
     cache->expirer_mux = iomux_create(0, 1);
+    cache->expirer_queue = queue_create();
     pthread_create(&cache->expirer_th, NULL, shardcache_expire_keys, cache);
 
     if (!shardcache_log_initialized)
@@ -616,6 +681,16 @@ shardcache_destroy(shardcache_t *cache)
 
     if (cache->expirer_mux)
         iomux_destroy(cache->expirer_mux);
+
+    if (cache->expirer_queue) {
+        shardcache_expire_job_t *job = queue_pop_left(cache->expirer_queue);
+        while(job) {
+            free(job->key);
+            free(job);
+            job = queue_pop_left(cache->expirer_queue);
+        }
+        queue_destroy(cache->expirer_queue);
+    }
 
     if (cache->cache_timeouts)
         ht_destroy(cache->cache_timeouts);
@@ -1351,20 +1426,31 @@ shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
     MUTEX_UNLOCK(&cache->evictor_lock);
 }
 
+static inline int
+shardcache_queue_expiration_job(shardcache_t *cache, void *key, size_t klen, int expire, int is_volatile, int cmd)
+{
+    shardcache_expire_job_t *job = calloc(1, sizeof(shardcache_expire_job_t));
+    job->cmd = cmd;
+
+    job->key = malloc(klen);
+    job->klen = klen;
+    memcpy(job->key, key, klen);
+    job->expire = expire;
+    job->is_volatile = is_volatile;
+
+    int rc = queue_push_right(cache->expirer_queue, job);
+    if (rc != 0) {
+        free(job->key);
+        free(job);
+    }
+
+    return rc;
+}
+
 int
 shardcache_unschedule_expiration(shardcache_t *cache, void *key, size_t klen, int is_volatile)
 {
-    void *ptr = NULL;
-    hashtable_t *table = is_volatile ? cache->volatile_timeouts : cache->cache_timeouts;
-
-    ht_delete(table, key, klen, &ptr, NULL);
-    if (ptr) {
-        iomux_timeout_id_t *tid = (iomux_timeout_id_t *)ptr;
-        iomux_unschedule(cache->expirer_mux, *tid);
-        free(tid);
-        return 0;
-    }
-    return -1;
+    return shardcache_queue_expiration_job(cache, key, klen, 0, is_volatile, SHARDACHE_EXPIRE_UNSCHEDULE);
 }
 
 int
@@ -1375,37 +1461,7 @@ shardcache_schedule_expiration(shardcache_t *cache,
                                int is_volatile)
 {
 
-    expire_key_ctx_t *ctx = calloc(1, sizeof(expire_key_ctx_t));
-    ctx->item.key = malloc(klen);
-    memcpy(ctx->item.key, key, klen);
-    ctx->item.klen = klen;
-    ctx->cache = cache;
-    ctx->is_volatile = is_volatile;
-    hashtable_t *table = is_volatile ? cache->volatile_timeouts : cache->cache_timeouts;
-    struct timeval timeout = { expire, (int)random()%(int)1e6 };
-    iomux_timeout_id_t *tid_ptr = NULL;
-    void *prev = NULL;
-    iomux_timeout_id_t tid = 0;
-    ht_delete(table, key, klen, &prev, NULL);
-    if (prev) {
-        tid_ptr = (iomux_timeout_id_t *)prev;
-        tid = iomux_reschedule(cache->expirer_mux, *tid_ptr, &timeout, shardcache_expire_key_cb, ctx);
-        *tid_ptr = tid;
-    } else {
-        tid = iomux_schedule(cache->expirer_mux, &timeout, shardcache_expire_key_cb, ctx);
-        tid_ptr = malloc(sizeof(iomux_timeout_id_t));
-        *tid_ptr = tid;
-    }
-    if (tid && tid_ptr) {
-        ht_set(table, key, klen, tid_ptr, sizeof(iomux_timeout_id_t));
-        return 0;
-    }
-
-    if (tid_ptr)
-        free(tid_ptr);
-    free(ctx->item.key);
-    free(ctx);
-    return -1;
+    return shardcache_queue_expiration_job(cache, key, klen, expire, is_volatile, SHARDACHE_EXPIRE_SCHEDULE);
 }
 
 int
