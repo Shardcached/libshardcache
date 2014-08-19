@@ -450,12 +450,9 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     obj = arc_object_create(cache, key, len);
     if (!obj)
         return NULL;
+
     cache->ops->create(key, len, async, (arc_resource_t *)obj, obj->ptr, cache->ops->priv);
     obj->async = async;
-
-    if (!obj) {
-        return NULL;
-    }
 
     retain_ref(cache->refcnt, obj->node);
     int rc = ht_set_if_not_exists(cache->hash, (void *)key, len, obj, sizeof(arc_object_t));
