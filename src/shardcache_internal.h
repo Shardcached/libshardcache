@@ -243,6 +243,7 @@ struct __shardcache_s {
         queue_t *queue;
     } async_context[2];
 
+    int async_num;
     int async_index;
     int async_quit;
     int quit;

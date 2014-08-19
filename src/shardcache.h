@@ -32,6 +32,8 @@ typedef struct __shardcache_s shardcache_t;
 #define SHARDCACHE_CONNECTION_EXPIRE_DEFAULT  5000   // (in millisecs)
 #define SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT 16     // number of queued/pipelined
                                                      // requests to handle ahead
+#define SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT  1      // number of async i/o threads used
+                                                     // for inter-node communication
 extern const char *LIBSHARDCACHE_VERSION;
 
 /*
@@ -42,19 +44,26 @@ extern const char *LIBSHARDCACHE_VERSION;
 
 /**
  * @brief Create a new shardcache instance
- * @param me              a valid <address:port> null-terminated string
+ * @param me              A valid <address:port> null-terminated string
  *                        representing the new node to be created
- * @param nodes           a list of <address:port> strings representing the nodes
+ * @param nodes           A list of <address:port> strings representing the nodes
  *                        taking part to the shardcache 'cloud'
- * @param num_nodes       the number of nodes present in the nodes list
- * @param storage         a shardcache_storage_t structure holding pointers to the
+ * @param num_nodes       The number of nodes present in the nodes list
+ * @param storage         A shardcache_storage_t structure holding pointers to the
  *                        storage callbacks.\nIf NULL the internal (memory-only)
  *                        volatile storage will be used for all the keys (and not
  *                        only the ones being set with an expiration time)
- * @param secret          a null-terminated string containing the shared secret used to
+ * @param secret          A null-terminated string containing the shared secret used to
  *                        authenticate incoming messages
- * @param num_workers     number of worker threads taking care of serving input connections
- * @param cache_size      the maximum size of the ARC cache
+ * @param num_workers     The number of worker threads taking care of serving input connections
+ * @param num_async       The number of async i/o threads handling the inter-node communication.\n
+ *                        If greater than 0 it will indicate the actual number of async-i/o
+ *                        threads to use.\n
+ *                        If smaller than 0 (negative) the number of async threads will be calculated
+ *                        in function of the number of num_workers (in the actual implemenation 1 extra
+ *                        async thread will be created every 20 workers.\n
+ *                        If 0 the default value (SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT) will be used.
+ * @param cache_size      The maximum size of the ARC cache
  * @return a newly initialized shardcache descriptor
  * 
  * @note The returned shardcache_t structure MUST be disposed using shardcache_destroy()
@@ -69,6 +78,7 @@ shardcache_t *shardcache_create(char *me,
                         shardcache_storage_t *storage,
                         char *secret,
                         int num_workers,
+                        int num_async,
                         size_t cache_size);
 
 /*

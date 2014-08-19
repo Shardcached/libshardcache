@@ -388,7 +388,7 @@ shardcache_expire_keys(void *priv)
 void
 shardcache_queue_async_read_wrk(shardcache_t *cache, async_read_wrk_t *wrk)
 {
-    queue_push_right(cache->async_context[ATOMIC_INCREASE(cache->async_index, 1)%2].queue, wrk);
+    queue_push_right(cache->async_context[ATOMIC_INCREASE(cache->async_index, 1) % cache->async_num].queue, wrk);
 }
 
 typedef struct {
@@ -401,8 +401,8 @@ shardcache_run_async(void *priv)
 {
     shardcache_run_async_arg_t *arg = (shardcache_run_async_arg_t *)priv;
     shardcache_t *cache = arg->cache;
-    iomux_t *async_mux = arg->cache->async_context[arg->index%2].mux;
-    queue_t *async_queue = arg->cache->async_context[arg->index%2].queue;
+    iomux_t *async_mux = arg->cache->async_context[arg->index % cache->async_num].mux;
+    queue_t *async_queue = arg->cache->async_context[arg->index % cache->async_num].queue;
     shardcache_thread_init(cache);
     while (!ATOMIC_READ(cache->async_quit)) {
         int timeout = ATOMIC_READ(cache->iomux_run_timeout_low);
@@ -432,6 +432,7 @@ shardcache_create(char *me,
                   shardcache_storage_t *st,
                   char *secret,
                   int num_workers,
+                  int async_num,
                   size_t cache_size)
 {
     int i, n;
@@ -447,6 +448,12 @@ shardcache_create(char *me,
     cache->serving_look_ahead = SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT;
     cache->iomux_run_timeout_low = SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW;
     cache->iomux_run_timeout_high = SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH;
+    if (async_num > 0)
+        cache->async_num = async_num;
+    else if (async_num < 0)
+        cache->async_num = (num_workers / 10) + 1; // 1 async thread for every 10 workers
+    else
+        cache->async_num = SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT;
 
     SPIN_INIT(&cache->migration_lock);
 
@@ -574,7 +581,7 @@ shardcache_create(char *me,
 
     global_tcp_timeout(ATOMIC_READ(cache->tcp_timeout));
 
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < cache->async_num; i++) {
         cache ->async_context[i].queue = queue_create();
         queue_set_bpool_size(cache->async_context[i].queue, num_workers * 1024);
         cache->async_context[i].mux = iomux_create(1<<13, 0);
@@ -623,7 +630,7 @@ shardcache_destroy(shardcache_t *cache)
     ATOMIC_INCREMENT(cache->quit);
 
     ATOMIC_INCREMENT(cache->async_quit);
-    for (i = 0; i < 2; i ++) {
+    for (i = 0; i < cache->async_num; i ++) {
         if (cache->async_context[i].mux) {
             SHC_DEBUG2("Stopping the async i/o thread");
             pthread_join(cache->async_context[i].io_th, NULL);
@@ -637,7 +644,7 @@ shardcache_destroy(shardcache_t *cache)
 
     // NOTE : should be destroyed only after
     //        the serving subsystem has been stopped
-    for (i = 0; i < 2; i ++) {
+    for (i = 0; i < cache->async_num; i ++) {
         if (cache->async_context[i].queue) {
             async_read_wrk_t *wrk = queue_pop_left(cache->async_context[i].queue);
             while(wrk) {

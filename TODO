@@ -1,5 +1,10 @@
- * make use of a dynamic (configurable) number of threads to run the asynchronous inter-node communication.
-   (it might also be determined in function of the configured number of workers)
+ * refactor the API actually exposed to set internal shardcache flags and options
+   once an instance has been created. The way it's actually implemented is suboptimal
+   because adding a new option requires to add both a member to the shardcache_t structure
+   and a new function exposed by the shardcache library. Since options and flags are growing
+   and there will be probably more in the future, there is already the need of a proper
+   API to allow getting/setting internal flags and params and a better way of storing
+   those within the shardcache_t structure
 
  * take advantage of pipelining in the inter-node communication.
    When new asyncrhonous requests are queued, instead of requesting a new filedescriptor to forward the
@@ -60,13 +65,5 @@
    only one thread making this job and it might be not enough in case of
    a big number of delete requests for keys not owned by the
    receiving instance).
-
- * refactor the API actually exposed to set internal shardcache flags and options
-   once an instance has been created. The way it's actually implemented is suboptimal
-   because adding a new option requires to add both a member to the shardcache_t structure
-   and a new function exposed by the shardcache library. Since options and flags are growing
-   and there will be probably more in the future, there is already the need of a proper
-   API to allow getting/setting internal flags and params and a better way of storing
-   those within the shardcache_t structure
 
 
