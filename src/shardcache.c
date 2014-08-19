@@ -451,7 +451,7 @@ shardcache_create(char *me,
     if (num_async > 0)
         cache->num_async = num_async;
     else if (num_async < 0)
-        cache->num_async = (num_workers / 10) + 1; // 1 async thread for every 10 workers
+        cache->num_async = ((num_workers > 1 ? num_workers -1 : 1) / 10) + 1; // 1 async thread for every 10 workers
     else
         cache->num_async = SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT;
 
@@ -581,6 +581,8 @@ shardcache_create(char *me,
 
     global_tcp_timeout(ATOMIC_READ(cache->tcp_timeout));
 
+    cache->async_context = calloc(1, sizeof(shardcache_async_io_context_t) * cache->num_async);
+
     for (i = 0; i < cache->num_async; i++) {
         cache ->async_context[i].queue = queue_create();
         queue_set_bpool_size(cache->async_context[i].queue, num_workers * 1024);
@@ -642,23 +644,26 @@ shardcache_destroy(shardcache_t *cache)
     if (cache->serv)
         stop_serving(cache->serv);
 
-    // NOTE : should be destroyed only after
-    //        the serving subsystem has been stopped
-    for (i = 0; i < cache->num_async; i ++) {
-        if (cache->async_context[i].queue) {
-            async_read_wrk_t *wrk = queue_pop_left(cache->async_context[i].queue);
-            while(wrk) {
-                 if (wrk->fd >= 0)
-                     wrk->cbs.mux_eof(cache->async_context[i].mux, wrk->fd, wrk->cbs.priv);
-                 else
-                     async_read_context_destroy(wrk->ctx);
-                free(wrk);
-                wrk = queue_pop_left(cache->async_context[i].queue);
+    if (cache->async_context) {
+        // NOTE : should be destroyed only after
+        //        the serving subsystem has been stopped
+        for (i = 0; i < cache->num_async; i ++) {
+            if (cache->async_context[i].queue) {
+                async_read_wrk_t *wrk = queue_pop_left(cache->async_context[i].queue);
+                while(wrk) {
+                     if (wrk->fd >= 0)
+                         wrk->cbs.mux_eof(cache->async_context[i].mux, wrk->fd, wrk->cbs.priv);
+                     else
+                         async_read_context_destroy(wrk->ctx);
+                    free(wrk);
+                    wrk = queue_pop_left(cache->async_context[i].queue);
+                }
+                queue_destroy(cache->async_context[i].queue);
             }
-            queue_destroy(cache->async_context[i].queue);
+            if (cache->async_context[i].mux)
+                iomux_destroy(cache->async_context[i].mux);
         }
-        if (cache->async_context[i].mux)
-            iomux_destroy(cache->async_context[i].mux);
+        free(cache->async_context);
     }
 
     if (ATOMIC_READ(cache->evict_on_delete) && cache->evictor_jobs)

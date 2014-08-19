@@ -113,6 +113,14 @@
 
 typedef struct chash_t chash_t;
 
+typedef struct {
+    pthread_t io_th; // the thread taking care of spooling the asynchronous
+                     // i/o operations
+    iomux_t *mux;    // the iomux instance used for the asynchronous i/o;
+                     // operations
+    queue_t *queue;
+} shardcache_async_io_context_t;
+ 
 struct __shardcache_s {
     char *me;   // a copy of the label for this node
                 // it won't be changed until destruction
@@ -235,13 +243,7 @@ struct __shardcache_s {
 
     int tcp_timeout;        // the tcp timeout to use when setting up new connections
 
-    struct {
-        pthread_t io_th; // the thread taking care of spooling the asynchronous
-                         // i/o operations
-        iomux_t *mux;    // the iomux instance used for the asynchronous i/o;
-                         // operations
-        queue_t *queue;
-    } async_context[2];
+    shardcache_async_io_context_t *async_context;
 
     int num_async;
     int async_index;
