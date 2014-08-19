@@ -225,10 +225,19 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 
     MUTEX_LOCK(&cache->lock);
 
+    // If the object is being fetched, don't mess up with it
+    // whoever is fetching it will also take care of moving it
+    // to one of the lists (or dropping it)
+    // NOTE: while the object is being fetched it doesn't belong
+    //       to any list, so there is no point in going ahead
+    //       also arc_balance() should never go through this object
+    //       (since in none of the lists) so it won't be affected.
+    //       The only call which would silently fail is arc_remove()
+    //       but if the object is being fetched and need to be removed
+    //       will be determined by who is fetching the object or by the
+    //       next call to arc_balance() (which would anyway happen if
+    //       the object will be put into the cache by the fetcher)
     if (ATOMIC_READ(obj->fetching)) {
-        // the object is being fetched, don't mess up with it
-        // who is fetching it will take care of moving it to one of the lists
-        // (or dropping it)
         MUTEX_UNLOCK(&cache->lock);
         return 0;
     }
@@ -240,10 +249,17 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         // (and the object is not going to be being removed)
         // move the ^ (p) marker
         if (state) {
-            if (obj_state == &cache->mrug)
-                cache->p = MIN(cache->c, cache->p + MAX(cache->mrug.size ? (cache->mfug.size / cache->mrug.size) : cache->mfug.size/2, 1));
-            else if (obj_state == &cache->mfug)
-                cache->p = MAX(0, cache->p - MAX(cache->mfug.size ? (cache->mrug.size / cache->mfug.size) : cache->mrug.size/2, 1));
+            if (obj_state == &cache->mrug) {
+                size_t csize = cache->mrug.size
+                             ? (cache->mfug.size / cache->mrug.size)
+                             : cache->mfug.size / 2;
+                cache->p = MIN(cache->c, cache->p + MAX(csize, 1));
+            } else if (obj_state == &cache->mfug) {
+                size_t csize = cache->mfug.size
+                             ? (cache->mrug.size / cache->mfug.size)
+                             : cache->mrug.size / 2;
+                cache->p = MAX(0, cache->p - MAX(csize, 1));
+            }
         }
 
         ATOMIC_DECREASE(obj->state->size, obj->size);
@@ -258,7 +274,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         MUTEX_UNLOCK(&cache->lock);
         if (obj_state == &cache->mru || obj_state == &cache->mfu)
             ATOMIC_DECREMENT(cache->num_items);
-        return -1;
+        return 0;
     } else if (state == &cache->mrug || state == &cache->mfug) {
         /* The object is being moved to one of the ghost lists, evict
          * the object from the cache. */
@@ -271,15 +287,16 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         ATOMIC_INCREASE(obj->state->size, obj->size);
         if (obj_state == &cache->mru || obj_state == &cache->mfu)
             ATOMIC_DECREMENT(cache->num_items);
+        cache->needs_rebalance = 1;
     } else if (obj_state != &cache->mru && obj_state != &cache->mfu) {
-        /* The object is being moved from one of the ghost lists into
+        /* The object is new or being moved from one of the ghost lists into
          * the MRU or MFU list, fetch the object into the cache. */
 
         ATOMIC_SET(obj->fetching, 1);
         
         // unlock the cache while the backend is fetching the data
         // (the object has been marked as being fetched so nobody
-        //  will bother doing it again)
+        // will change its state)
         MUTEX_UNLOCK(&cache->lock);
         size_t size = 0;
         int rc = cache->ops->fetch(obj->ptr, &size, cache->ops->priv);
@@ -312,12 +329,17 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 cache->needs_rebalance = 1;
                 break;
         }
+        // since this object is going to be put back into the cache,
+        // we need to unmark it so that it won't be ignored next time
+        // it's going to be moved to another list
         ATOMIC_SET(obj->fetching, 0);
     } else {
         arc_list_prepend(&obj->head, &state->head);
         obj->state = state;
         ATOMIC_INCREASE(obj->state->size, obj->size);
-        cache->needs_rebalance = 1;
+        // If we are here the object is being moved from the MRU to the MFU
+        // or anyway no change has changed in terms of size so we don't need
+        // to set the needs_rebalance flag
     }
     MUTEX_UNLOCK(&cache->lock);
     return 0;
