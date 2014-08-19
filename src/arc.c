@@ -259,68 +259,65 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         if (obj_state == &cache->mru || obj_state == &cache->mfu)
             ATOMIC_DECREMENT(cache->num_items);
         return -1;
-    } else {
-        if (state == &cache->mrug || state == &cache->mfug)
-        {
-            /* The object is being moved to one of the ghost lists, evict
-             * the object from the cache. */
-            if (obj->ptr)
-                cache->ops->evict(obj->ptr, cache->ops->priv);
+    } else if (state == &cache->mrug || state == &cache->mfug) {
+        /* The object is being moved to one of the ghost lists, evict
+         * the object from the cache. */
+        if (obj->ptr)
+            cache->ops->evict(obj->ptr, cache->ops->priv);
 
-            obj->async = 0;
-            arc_list_prepend(&obj->head, &state->head);
-            obj->state = state;
-            ATOMIC_INCREASE(obj->state->size, obj->size);
-            if (obj_state == &cache->mru || obj_state == &cache->mfu)
-                ATOMIC_DECREMENT(cache->num_items);
-        } else if (obj_state != &cache->mru && obj_state != &cache->mfu) {
-            /* The object is being moved from one of the ghost lists into
-             * the MRU or MFU list, fetch the object into the cache. */
+        obj->async = 0;
+        arc_list_prepend(&obj->head, &state->head);
+        obj->state = state;
+        ATOMIC_INCREASE(obj->state->size, obj->size);
+        if (obj_state == &cache->mru || obj_state == &cache->mfu)
+            ATOMIC_DECREMENT(cache->num_items);
+    } else if (obj_state != &cache->mru && obj_state != &cache->mfu) {
+        /* The object is being moved from one of the ghost lists into
+         * the MRU or MFU list, fetch the object into the cache. */
 
-            ATOMIC_SET(obj->fetching, 1);
-            
-            // unlock the cache while the backend is fetching the data
-            // (the object has been marked as being fetched so nobody
-            //  will bother doing it again)
-            MUTEX_UNLOCK(&cache->lock);
-            size_t size = 0;
-            int rc = cache->ops->fetch(obj->ptr, &size, cache->ops->priv);
-            switch (rc) {
-                case 1:
-                    // don't cache the object which has been retrieved
-                    // using the fetch callback
+        ATOMIC_SET(obj->fetching, 1);
+        
+        // unlock the cache while the backend is fetching the data
+        // (the object has been marked as being fetched so nobody
+        //  will bother doing it again)
+        MUTEX_UNLOCK(&cache->lock);
+        size_t size = 0;
+        int rc = cache->ops->fetch(obj->ptr, &size, cache->ops->priv);
+        switch (rc) {
+            case 1:
+                // don't cache the object which has been retrieved
+                // using the fetch callback
+                ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
+                release_ref(cache->refcnt, obj->node);
+                return 0;
+            case -1:
+                /* The object is being removed from the cache, destroy it. */
+                ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
+                release_ref(cache->refcnt, obj->node);
+                return -1;
+            default:
+                if (size >= cache->c) {
+                    // the (single) object doesn't fit in the cache, let's return it
+                    // to the getter without (re)adding it to the cache
                     ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
                     release_ref(cache->refcnt, obj->node);
                     return 0;
-                case -1:
-                    /* The object is being removed from the cache, destroy it. */
-                    ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-                    release_ref(cache->refcnt, obj->node);
-                    return -1;
-                default:
-                    if (size >= cache->c) {
-                        // the (single) object doesn't fit in the cache, let's return it
-                        // to the getter without (re)adding it to the cache
-                        ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-                        release_ref(cache->refcnt, obj->node);
-                        return 0;
-                    }
-                    MUTEX_LOCK(&cache->lock);
-                    obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
-                    arc_list_prepend(&obj->head, &state->head);
-                    obj->state = state;
-                    ATOMIC_INCREASE(obj->state->size, obj->size);
-                    ATOMIC_INCREMENT(cache->num_items);
-                    cache->needs_rebalance = 1;
-                    break;
-            }
-            ATOMIC_SET(obj->fetching, 0);
-        } else {
-            arc_list_prepend(&obj->head, &state->head);
-            obj->state = state;
-            ATOMIC_INCREASE(obj->state->size, obj->size);
-            cache->needs_rebalance = 1;
+                }
+                MUTEX_LOCK(&cache->lock);
+                obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
+                arc_list_prepend(&obj->head, &state->head);
+                obj->state = state;
+                ATOMIC_INCREASE(obj->state->size, obj->size);
+                ATOMIC_INCREMENT(cache->num_items);
+                cache->needs_rebalance = 1;
+                break;
         }
+        ATOMIC_SET(obj->fetching, 0);
+    } else {
+        arc_list_prepend(&obj->head, &state->head);
+        obj->state = state;
+        ATOMIC_INCREASE(obj->state->size, obj->size);
+        cache->needs_rebalance = 1;
     }
     MUTEX_UNLOCK(&cache->lock);
     return 0;
