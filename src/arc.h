@@ -15,13 +15,13 @@ typedef void * arc_resource_t;
 
 typedef struct __arc_ops {
     /**
-     * @brief Create a new object.
+     * @brief Initialize a new object.
      *
-     * The size of the new object must be know at
-     * this time. Use the arc_object_init() function to initialize
-     * the arc_object structure.
+     * The size of the new object has been provided to arc_create()
+     * ptr will point to a prealloc'd memory where the cached object is stored
+     * and needs to be initialized by this callback
      */
-    void (*create) (const void *key, size_t klen, int async, arc_resource_t *res, void *ptr, void *priv);
+    void (*init) (const void *key, size_t klen, int async, arc_resource_t *res, void *ptr, void *priv);
     
     /**
      * @brief Fetch the data associated with the object.

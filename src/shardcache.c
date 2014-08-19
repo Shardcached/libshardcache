@@ -474,7 +474,7 @@ shardcache_create(char *me,
 
     cache->me = strdup(me);
 
-    cache->ops.create  = arc_ops_create;
+    cache->ops.init    = arc_ops_init;
     cache->ops.fetch   = arc_ops_fetch;
     cache->ops.evict   = arc_ops_evict;
     cache->ops.destroy = arc_ops_destroy;

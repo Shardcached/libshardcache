@@ -37,60 +37,6 @@ typedef struct __arc_list {
 #define arc_list_each_prev(pos, head) \
     for (pos = (head)->prev; pos && pos != (head); pos = pos->prev)
 
-static inline void
-arc_list_init( arc_list_t * head )
-{
-    head->next = head->prev = head;
-}
-
-static inline void
-arc_list_destroy(arc_t *cache, arc_list_t *head)
-{
-    arc_list_t *pos = (head)->next;
-    while (pos && pos != (head)) {
-        arc_list_t *tmp = pos;
-        arc_object_t *obj = arc_list_entry(pos, arc_object_t, head);
-        pos = pos->next;
-        tmp->prev = tmp->next = NULL;
-        release_ref(cache->refcnt, obj->node);
-    }
-}
-
-
-
-static inline void
-arc_list_insert(arc_list_t *list, arc_list_t *prev, arc_list_t *next)
-{
-    next->prev = list;
-    list->next = next;
-    list->prev = prev;
-    prev->next = list;
-}
-
-static inline void
-arc_list_splice(arc_list_t *prev, arc_list_t *next)
-{
-    next->prev = prev;
-    prev->next = next;
-}
-
-
-static inline void
-arc_list_remove(arc_list_t *head)
-{
-    if (head->prev && head->next) {
-        arc_list_splice(head->prev, head->next);
-    }
-    head->next = head->prev = NULL;
-}
-
-static inline void
-arc_list_prepend(arc_list_t *head, arc_list_t *list)
-{
-    arc_list_insert(head, list, list->next);
-}
-
-
 /**********************************************************************
  * The arc state represents one of the m{r,f}u{g,} lists
  */
@@ -145,6 +91,57 @@ struct __arc {
 static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state);
 
 
+
+static inline void
+arc_list_init( arc_list_t * head )
+{
+    head->next = head->prev = head;
+}
+
+static inline void
+arc_list_destroy(arc_t *cache, arc_list_t *head)
+{
+    arc_list_t *pos = (head)->next;
+    while (pos && pos != (head)) {
+        arc_list_t *tmp = pos;
+        arc_object_t *obj = arc_list_entry(pos, arc_object_t, head);
+        pos = pos->next;
+        tmp->prev = tmp->next = NULL;
+        release_ref(cache->refcnt, obj->node);
+    }
+}
+
+static inline void
+arc_list_insert(arc_list_t *list, arc_list_t *prev, arc_list_t *next)
+{
+    next->prev = list;
+    list->next = next;
+    list->prev = prev;
+    prev->next = list;
+}
+
+static inline void
+arc_list_splice(arc_list_t *prev, arc_list_t *next)
+{
+    next->prev = prev;
+    prev->next = next;
+}
+
+
+static inline void
+arc_list_remove(arc_list_t *head)
+{
+    if (head->prev && head->next) {
+        arc_list_splice(head->prev, head->next);
+    }
+    head->next = head->prev = NULL;
+}
+
+static inline void
+arc_list_prepend(arc_list_t *head, arc_list_t *list)
+{
+    arc_list_insert(head, list, list->next);
+}
 
 /* Return the LRU element from the given state. */
 static inline arc_object_t *
@@ -445,15 +442,6 @@ arc_retain_resource(arc_t *cache, arc_resource_t *res)
     retain_ref(cache->refcnt, obj->node);
 }
 
-static void *
-retain_obj_cb(void *data, size_t dlen, void *user)
-{
-    arc_object_t *obj = (arc_object_t *)data;
-    arc_t *cache = (arc_t *)user;
-    retain_ref(cache->refcnt, obj->node);
-    return obj;
-}
-
 /* Initialize a new object with this function. */
 static inline arc_object_t *
 arc_object_create(arc_t *cache, const void *key, size_t len)
@@ -477,10 +465,20 @@ arc_object_create(arc_t *cache, const void *key, size_t len)
     return obj;
 }
 
+static void *
+retain_obj_cb(void *data, size_t dlen, void *user)
+{
+    retain_ref(((arc_t *)user)->refcnt, ((arc_object_t *)data)->node);
+    return data;
+}
 
+// the returned object is retained, the caller must call arc_release_resource(obj) to release it
 arc_resource_t 
 arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
 {
+    // NOTE: this is an atomic operation ensured by the hashtable implementation,
+    //       we don't do any real copy in our callback but we just increase the refcount
+    //       of the object (if found)
     arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
     if (obj) {
         if (async && obj->async) {
@@ -505,7 +503,8 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
     if (!obj)
         return NULL;
 
-    cache->ops->create(key, len, async, (arc_resource_t *)obj, obj->ptr, cache->ops->priv);
+    // let our cache user initialize the underlying object
+    cache->ops->init(key, len, async, (arc_resource_t *)obj, obj->ptr, cache->ops->priv);
     obj->async = async;
 
     retain_ref(cache->refcnt, obj->node);
@@ -526,8 +525,6 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
             /* New objects are always moved to the MRU list. */
             if (arc_move(cache, obj, &cache->mru) == 0) {
                 *valuep = obj->ptr;
-                // the object is retained, the caller must call
-                // arc_release_resource(obj) to release it
                 arc_balance(cache, obj->size);
                 return obj;
             } else {

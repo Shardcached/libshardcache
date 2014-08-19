@@ -279,7 +279,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
 }
 
 void
-arc_ops_create(const void *key, size_t len, int async, arc_resource_t *res, void *ptr, void *priv)
+arc_ops_init(const void *key, size_t len, int async, arc_resource_t *res, void *ptr, void *priv)
 {
     // NOTE: the arc subsystem already allocates for us the memory where the
     // cached object needs to be stored. Such size was specified at creation time
@@ -493,7 +493,7 @@ arc_ops_destroy(void *item, void *priv)
     MUTEX_DESTROY(&obj->lock);
     // NOTE : we don't need to free the memory used to store the actual cached_object_t
     // structure because it's managed by the arc subsystem, which provided us a pointer
-    // to the prealloc'd memory as argument to the arc_ops_create() callback
+    // to the prealloc'd memory as argument to the arc_ops_init() callback
 }
 
 // vim: tabstop=4 shiftwidth=4 expandtab:
