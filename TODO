@@ -1,4 +1,12 @@
-========================================= REQUIRED FOR 1.0 RELEASE ========================================= 
+========================================== REQUIRED FOR 1.0 RELEASE ==========================================
+
+ * allow to reinitialize the libshardcache instance providing a new configuration and without dropping the
+   current connections/requests and continuing to serve requests during the reload.
+   NOTE: this can be achieved by refreshing the workers' list and migrating queued connections to the new 
+         workers. The old workers can simply finish serving any pending request they might be handling
+         and just exit afterwards. This operation can be lock-free because of the use of queues
+         (but still delicate because some connections need to be moved to a new iomux and we need to ensure
+          there are not pending requests being handled before moving them)
 
  * take advantage of pipelining in the inter-node communication.
    When new asyncrhonous requests are queued, instead of requesting a new filedescriptor to forward the
@@ -13,7 +21,7 @@
    also expose a fetch_async which will be called by arc_lookup() if used in async mode,
    otherwise the synchronous interface will still be used.
 
-============================================================================================================ 
+============================================================================================================== 
 
  * protocol V2 :
     - a new response header to distinguish between not-found and errors as response to
