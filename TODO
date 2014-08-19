@@ -1,23 +1,19 @@
- * refactor the API actually exposed to set internal shardcache flags and options
-   once an instance has been created. The way it's actually implemented is suboptimal
-   because adding a new option requires to add both a member to the shardcache_t structure
-   and a new function exposed by the shardcache library. Since options and flags are growing
-   and there will be probably more in the future, there is already the need of a proper
-   API to allow getting/setting internal flags and params and a better way of storing
-   those within the shardcache_t structure
+========================================= REQUIRED FOR 1.0 RELEASE ========================================= 
 
  * take advantage of pipelining in the inter-node communication.
    When new asyncrhonous requests are queued, instead of requesting a new filedescriptor to forward the
    request to a peer, if an aysnc request is already being running to that peer, just push the new request
    to the same connection.
 
- * extend the storage API to support fetch_multi and store_multi which can be (optianlly, if exposed by the module)
-   used to fulfill get_multi and set_multi requests which need to go down to the storage
+ * extend the storage API to support fetch_multi and store_multi which can be (optianlly, if exposed
+   by the module) used to fulfill get_multi and set_multi requests which need to go down to the storage
 
  * extend the storage API to allow asynchronous fetches.
    Adding a fetch_async callback to the storage structure would be the easiest. Then arc_ops will
    also expose a fetch_async which will be called by arc_lookup() if used in async mode,
    otherwise the synchronous interface will still be used.
+
+============================================================================================================ 
 
  * protocol V2 :
     - a new response header to distinguish between not-found and errors as response to
@@ -66,4 +62,11 @@
    a big number of delete requests for keys not owned by the
    receiving instance).
 
+ * refactor the API actually exposed to set internal shardcache flags and options
+   once an instance has been created. The way it's actually implemented is suboptimal
+   because adding a new option requires to add both a member to the shardcache_t structure
+   and a new function exposed by the shardcache library. Since options and flags are growing
+   and there will be probably more in the future, there is already the need of a proper
+   API to allow getting/setting internal flags and params and a better way of storing
+   those within the shardcache_t structure
 
