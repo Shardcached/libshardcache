@@ -44,6 +44,21 @@ arc_list_init( arc_list_t * head )
 }
 
 static inline void
+arc_list_destroy(arc_t *cache, arc_list_t *head)
+{
+    arc_list_t *pos = (head)->next;
+    while (pos && pos != (head)) {
+        arc_list_t *tmp = pos;
+        arc_object_t *obj = arc_list_entry(pos, arc_object_t, head);
+        pos = pos->next;
+        tmp->prev = tmp->next = NULL;
+        release_ref(cache->refcnt, obj->node);
+    }
+}
+
+
+
+static inline void
 arc_list_insert(arc_list_t *list, arc_list_t *prev, arc_list_t *next)
 {
     next->prev = list;
@@ -129,30 +144,11 @@ struct __arc {
 
 static int arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state);
 
-/* Initialize a new object with this function. */
-static arc_object_t *arc_object_create(arc_t *cache, const void *key, size_t len)
-{
-    arc_object_t *obj = calloc(1, sizeof(arc_object_t) + cache->cos);
 
-    arc_list_init(&obj->head);
-
-    obj->node = new_node(cache->refcnt, obj, cache);
-    if (len > sizeof(obj->buf))
-        obj->key = malloc(len);
-    else
-        obj->key = obj->buf;
-    memcpy(obj->key, key, len);
-    obj->klen = len;
-
-    obj->size = ARC_OBJ_BASE_SIZE(obj);
-
-    obj->ptr = (void *)((char *)obj + sizeof(arc_object_t));
-
-    return obj;
-}
 
 /* Return the LRU element from the given state. */
-static arc_object_t *arc_state_lru(arc_state_t *state)
+static inline arc_object_t *
+arc_state_lru(arc_state_t *state)
 {
     arc_list_t *head = state->head.prev;
     return arc_list_entry(head, arc_object_t, head);
@@ -160,7 +156,8 @@ static arc_object_t *arc_state_lru(arc_state_t *state)
 
 /* Balance the lists so that we can fit an object with the given size into
  * the cache. */
-static void arc_balance(arc_t *cache, size_t size)
+static inline void
+arc_balance(arc_t *cache, size_t size)
 {
     MUTEX_LOCK(&cache->lock);
 
@@ -201,7 +198,8 @@ static void arc_balance(arc_t *cache, size_t size)
 
 }
 
-void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size)
+void
+arc_update_size(arc_t *cache, void *key, size_t klen, size_t size)
 {
     arc_object_t *obj = ht_get(cache->hash, key, klen, NULL);
     if (obj) {
@@ -226,7 +224,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     MUTEX_LOCK(&cache->lock);
 
     // If the object is being fetched, don't mess up with it
-    // whoever is fetching it will also take care of moving it
+    // whoever is fetching will also take care of moving it
     // to one of the lists (or dropping it)
     // NOTE: while the object is being fetched it doesn't belong
     //       to any list, so there is no point in going ahead
@@ -345,7 +343,11 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     return 0;
 }
 
-static void free_node_ptr_callback(void *node) {
+// this is called when the refcnt garbage collector actually requests us t
+// release the memory for a node
+static void
+free_node_ptr_callback(void *node)
+{
     // we don't need locks here .... nobody references obj anymore
     arc_object_t *obj = (arc_object_t *)node;
 
@@ -355,7 +357,12 @@ static void free_node_ptr_callback(void *node) {
     free(obj);
 }
 
-static void terminate_node_callback(refcnt_node_t *node, void *priv) {
+// this is called when the refcount of the node drops to 0
+// (and the node itself is being put into the garbage collector's
+// queue by the refcnt manager)
+static void
+terminate_node_callback(refcnt_node_t *node, void *priv)
+{
     arc_object_t *obj = (arc_object_t *)get_node_ptr(node);
     arc_t *cache = (arc_t *)priv;
 
@@ -370,7 +377,8 @@ static void terminate_node_callback(refcnt_node_t *node, void *priv) {
 }
 
 /* Create a new cache. */
-arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size)
+arc_t *
+arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size)
 {
     arc_t *cache = calloc(1, sizeof(arc_t));
 
@@ -392,20 +400,10 @@ arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size)
     cache->refcnt = refcnt_create(1<<8, terminate_node_callback, free_node_ptr_callback);
     return cache;
 }
-static void arc_list_destroy(arc_t *cache, arc_list_t *head) {
-    arc_list_t *pos = (head)->next;
-    while (pos && pos != (head)) {
-        arc_list_t *tmp = pos;
-        arc_object_t *obj = arc_list_entry(pos, arc_object_t, head);
-        pos = pos->next;
-        tmp->prev = tmp->next = NULL;
-        release_ref(cache->refcnt, obj->node);
-    }
-}
-
 
 /* Destroy the given cache. Free all objects which remain in the cache. */
-void arc_destroy(arc_t *cache)
+void
+arc_destroy(arc_t *cache)
 {
     arc_list_destroy(cache, &cache->mrug.head);
     arc_list_destroy(cache, &cache->mru.head);
@@ -417,7 +415,8 @@ void arc_destroy(arc_t *cache)
     free(cache);
 }
 
-void arc_remove(arc_t *cache, const void *key, size_t len)
+void
+arc_remove(arc_t *cache, const void *key, size_t len)
 {
     arc_object_t *obj = NULL;
     void *objptr = NULL;
@@ -430,13 +429,17 @@ void arc_remove(arc_t *cache, const void *key, size_t len)
 }
 
 /* Lookup an object with the given key. */
-void arc_release_resource(arc_t *cache, arc_resource_t *res) {
+void
+arc_release_resource(arc_t *cache, arc_resource_t *res)
+{
     arc_object_t *obj = (arc_object_t *)res;
     release_ref(cache->refcnt, obj->node);
 }
 
 /* Lookup an object with the given key. */
-void arc_retain_resource(arc_t *cache, arc_resource_t *res) {
+void
+arc_retain_resource(arc_t *cache, arc_resource_t *res)
+{
     arc_object_t *obj = (arc_object_t *)res;
 
     retain_ref(cache->refcnt, obj->node);
@@ -451,7 +454,32 @@ retain_obj_cb(void *data, size_t dlen, void *user)
     return obj;
 }
 
-arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
+/* Initialize a new object with this function. */
+static inline arc_object_t *
+arc_object_create(arc_t *cache, const void *key, size_t len)
+{
+    arc_object_t *obj = calloc(1, sizeof(arc_object_t) + cache->cos);
+
+    arc_list_init(&obj->head);
+
+    obj->node = new_node(cache->refcnt, obj, cache);
+    if (len > sizeof(obj->buf))
+        obj->key = malloc(len);
+    else
+        obj->key = obj->buf;
+    memcpy(obj->key, key, len);
+    obj->klen = len;
+
+    obj->size = ARC_OBJ_BASE_SIZE(obj);
+
+    obj->ptr = (void *)((char *)obj + sizeof(arc_object_t));
+
+    return obj;
+}
+
+
+arc_resource_t 
+arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
 {
     arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
     if (obj) {
@@ -481,6 +509,7 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     obj->async = async;
 
     retain_ref(cache->refcnt, obj->node);
+    // NOTE: atomicity here is ensured by the hashtable implementation
     int rc = ht_set_if_not_exists(cache->hash, (void *)key, len, obj, sizeof(arc_object_t));
     switch(rc) {
         case -1:
@@ -515,12 +544,14 @@ arc_resource_t  arc_lookup(arc_t *cache, const void *key, size_t len, void **val
     return NULL;
 }
 
-size_t arc_size(arc_t *cache)
+size_t
+arc_size(arc_t *cache)
 {
     return ATOMIC_READ(cache->mru.size) + ATOMIC_READ(cache->mfu.size);
 }
 
-uint64_t arc_num_items(arc_t *cache)
+uint64_t
+arc_num_items(arc_t *cache)
 {
     return ATOMIC_READ(cache->num_items);
 }
