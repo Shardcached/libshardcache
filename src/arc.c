@@ -183,7 +183,6 @@ arc_balance(arc_t *cache, size_t size)
     }
 
     MUTEX_UNLOCK(&cache->lock);
-
 }
 
 void
@@ -255,6 +254,8 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     }
 
     if (state == NULL) {
+        ht_delete(cache->hash, (void *)obj->key, obj->klen, NULL, NULL);
+        release_ref(cache->refcnt, obj->node);
         MUTEX_UNLOCK(&cache->lock);
         return 0;
     } else if (state == &cache->mrug || state == &cache->mfug) {
@@ -283,6 +284,8 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         switch (rc) {
             case 1:
             case -1:
+                ht_delete(cache->hash, (void *)obj->key, obj->klen, NULL, NULL);
+                release_ref(cache->refcnt, obj->node);
                 return rc;
             default:
                 if (size >= cache->c) {
@@ -338,9 +341,6 @@ terminate_node_callback(refcnt_node_t *node, void *priv)
     arc_object_t *obj = (arc_object_t *)get_node_ptr(node);
     arc_t *cache = (arc_t *)priv;
 
-    if (obj->key) {
-        ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-    }
     if (obj->ptr && cache->ops->destroy)
         cache->ops->destroy(obj->ptr, cache->ops->priv);
 
@@ -392,7 +392,6 @@ arc_remove(arc_t *cache, const void *key, size_t len)
 {
     arc_object_t *obj = NULL;
     void *objptr = NULL;
-    ht_delete(cache->hash, (void *)key, len, &objptr, NULL);
     if (objptr) {
         obj = (arc_object_t *)objptr;
         if (obj)
@@ -456,8 +455,7 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
     //       of the object (if found)
     arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
     if (obj) {
-        if (UNLIKELY(arc_move(cache, obj, &cache->mfu) != 0)) {
-            release_ref(cache->refcnt, obj->node);
+        if (UNLIKELY(arc_move(cache, obj, &cache->mfu) == -1)) {
             fprintf(stderr, "Can't move the object into the cache\n");
             return NULL;
         }
@@ -493,15 +491,9 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
         case 0:
             /* New objects are always moved to the MRU list. */
             rc  = arc_move(cache, obj, &cache->mru);
-            if (rc == 0) {
+            if (rc >= 0) {
                 *valuep = obj->ptr;
                 return obj;
-            } else {
-                // tthe object hasn't been cached, remove it from the hashtable
-                ht_delete(cache->hash, (void *)key, len, NULL, NULL);
-                release_ref(cache->refcnt, obj->node);
-                if (rc == 1) // we still want to return the retrieved object
-                    return obj;
             }
             break;
         default:
