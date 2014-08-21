@@ -136,7 +136,7 @@ size_t arc_size(arc_t *cache);
  * @param cache : A valid pointer to an initialized arc_t structure
  * @return The total number of items in the cache
  */
-uint64_t arc_num_items(arc_t *cache);
+uint64_t arc_count(arc_t *cache);
 
 #endif /* __ARC_H__ */
 

@@ -42,8 +42,9 @@ typedef struct __arc_list {
  */
 #pragma pack(push, 1)
 typedef struct __arc_state {
-    size_t size;
     arc_list_t head;
+    size_t size; // note must be accessed only via atomic functions
+    uint64_t count; // note must be accessed only via atomic functions
 } arc_state_t;
 #pragma pack(pop)
 
@@ -61,7 +62,7 @@ typedef struct __arc_object {
     size_t klen;
     refcnt_node_t *node;
     int async;
-    int fetching;
+    int locked;
 } arc_object_t;
 #pragma pack(pop)
 
@@ -73,9 +74,6 @@ struct __arc {
     size_t c, p;
     size_t cos;
     struct __arc_state mrug, mru, mfu, mfug;
-
-    int needs_rebalance;
-    uint64_t num_items;
 
     pthread_mutex_t lock;
 
@@ -158,11 +156,6 @@ arc_balance(arc_t *cache, size_t size)
 {
     MUTEX_LOCK(&cache->lock);
 
-    if (!cache->needs_rebalance) {
-        MUTEX_UNLOCK(&cache->lock);
-        return;
-    }
-
     /* First move objects from MRU/MFU to their respective ghost lists. */
     while (cache->mru.size + cache->mfu.size + size > cache->c) {
         if (cache->mru.size > cache->p) {
@@ -189,8 +182,6 @@ arc_balance(arc_t *cache, size_t size)
         }
     }
 
-    cache->needs_rebalance = 0;
-
     MUTEX_UNLOCK(&cache->lock);
 
 }
@@ -202,11 +193,11 @@ arc_update_size(arc_t *cache, void *key, size_t klen, size_t size)
     if (obj) {
         MUTEX_LOCK(&cache->lock);
         if (LIKELY(obj->state == &cache->mru || obj->state == &cache->mfu)) {
-            obj->state->size -= obj->size;
+            ATOMIC_DECREASE(obj->state->size, obj->size);
             obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
-            obj->state->size += obj->size;
+            ATOMIC_INCREASE(obj->state->size, obj->size);
         }
-        cache->needs_rebalance = 1;
+        arc_balance(cache, 0);
         MUTEX_UNLOCK(&cache->lock);
     }
 }
@@ -220,8 +211,8 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 
     MUTEX_LOCK(&cache->lock);
 
-    // If the object is being fetched, don't mess up with it
-    // whoever is fetching will also take care of moving it
+    // If the object is being locked it means someone is fetching its value,
+    // don't mess up with it whoever is fetching will also take care of moving it
     // to one of the lists (or dropping it)
     // NOTE: while the object is being fetched it doesn't belong
     //       to any list, so there is no point in going ahead
@@ -232,7 +223,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     //       will be determined by who is fetching the object or by the
     //       next call to arc_balance() (which would anyway happen if
     //       the object will be put into the cache by the fetcher)
-    if (ATOMIC_READ(obj->fetching)) {
+    if (obj->locked) {
         MUTEX_UNLOCK(&cache->lock);
         return 0;
     }
@@ -259,16 +250,12 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 
         ATOMIC_DECREASE(obj->state->size, obj->size);
         arc_list_remove(&obj->head);
+        ATOMIC_DECREMENT(obj->state->count);
         obj->state = NULL;
     }
 
     if (state == NULL) {
-        /* The object is being removed from the cache, destroy it. */
-        release_ref(cache->refcnt, obj->node);
-
         MUTEX_UNLOCK(&cache->lock);
-        if (obj_state == &cache->mru || obj_state == &cache->mfu)
-            ATOMIC_DECREMENT(cache->num_items);
         return 0;
     } else if (state == &cache->mrug || state == &cache->mfug) {
         /* The object is being moved to one of the ghost lists, evict
@@ -278,63 +265,51 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 
         obj->async = 0;
         arc_list_prepend(&obj->head, &state->head);
+        ATOMIC_INCREMENT(state->count);
         obj->state = state;
         ATOMIC_INCREASE(obj->state->size, obj->size);
-        if (obj_state == &cache->mru || obj_state == &cache->mfu)
-            ATOMIC_DECREMENT(cache->num_items);
-        cache->needs_rebalance = 1;
     } else if (obj_state != &cache->mru && obj_state != &cache->mfu) {
         /* The object is new or being moved from one of the ghost lists into
          * the MRU or MFU list, fetch the object into the cache. */
 
-        ATOMIC_SET(obj->fetching, 1);
+        obj->locked = 1;
         
         // unlock the cache while the backend is fetching the data
-        // (the object has been marked as being fetched so nobody
+        // (the object has been locked while being fetched so nobody
         // will change its state)
         MUTEX_UNLOCK(&cache->lock);
         size_t size = 0;
         int rc = cache->ops->fetch(obj->ptr, &size, cache->ops->priv);
         switch (rc) {
             case 1:
-                // don't cache the object which has been retrieved
-                // using the fetch callback
-                ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-                release_ref(cache->refcnt, obj->node);
-                return 0;
             case -1:
-                /* The object is being removed from the cache, destroy it. */
-                ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-                release_ref(cache->refcnt, obj->node);
-                return -1;
+                return rc;
             default:
                 if (size >= cache->c) {
                     // the (single) object doesn't fit in the cache, let's return it
                     // to the getter without (re)adding it to the cache
                     ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
                     release_ref(cache->refcnt, obj->node);
-                    return 0;
+                    return 1;
                 }
                 MUTEX_LOCK(&cache->lock);
+                arc_balance(cache, ARC_OBJ_BASE_SIZE(obj) + size);
                 obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
                 arc_list_prepend(&obj->head, &state->head);
+                ATOMIC_INCREMENT(state->count);
                 obj->state = state;
                 ATOMIC_INCREASE(obj->state->size, obj->size);
-                ATOMIC_INCREMENT(cache->num_items);
-                cache->needs_rebalance = 1;
                 break;
         }
         // since this object is going to be put back into the cache,
         // we need to unmark it so that it won't be ignored next time
         // it's going to be moved to another list
-        ATOMIC_SET(obj->fetching, 0);
+        obj->locked = 0;
     } else {
         arc_list_prepend(&obj->head, &state->head);
+        ATOMIC_INCREMENT(state->count);
         obj->state = state;
         ATOMIC_INCREASE(obj->state->size, obj->size);
-        // If we are here the object is being moved from the MRU to the MFU
-        // or anyway no change has changed in terms of size so we don't need
-        // to set the needs_rebalance flag
     }
     MUTEX_UNLOCK(&cache->lock);
     return 0;
@@ -481,11 +456,6 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
     //       of the object (if found)
     arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
     if (obj) {
-        if (async && obj->async) {
-            *valuep = obj->ptr;
-            return obj;
-        }
-
         if (UNLIKELY(arc_move(cache, obj, &cache->mfu) != 0)) {
             release_ref(cache->refcnt, obj->node);
             fprintf(stderr, "Can't move the object into the cache\n");
@@ -495,7 +465,6 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
         if (valuep)
             *valuep = obj->ptr;
 
-        arc_balance(cache, obj->size);
         return obj;
     }
 
@@ -523,13 +492,16 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
             return arc_lookup(cache, key, len, valuep, async);
         case 0:
             /* New objects are always moved to the MRU list. */
-            if (arc_move(cache, obj, &cache->mru) == 0) {
+            rc  = arc_move(cache, obj, &cache->mru);
+            if (rc == 0) {
                 *valuep = obj->ptr;
-                arc_balance(cache, obj->size);
                 return obj;
             } else {
+                // tthe object hasn't been cached, remove it from the hashtable
                 ht_delete(cache->hash, (void *)key, len, NULL, NULL);
                 release_ref(cache->refcnt, obj->node);
+                if (rc == 1) // we still want to return the retrieved object
+                    return obj;
             }
             break;
         default:
@@ -548,9 +520,9 @@ arc_size(arc_t *cache)
 }
 
 uint64_t
-arc_num_items(arc_t *cache)
+arc_count(arc_t *cache)
 {
-    return ATOMIC_READ(cache->num_items);
+    return ATOMIC_READ(cache->mru.count) + ATOMIC_READ(cache->mfu.count);
 }
 
 // vim: tabstop=4 shiftwidth=4 expandtab:
