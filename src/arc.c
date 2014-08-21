@@ -161,7 +161,7 @@ arc_balance(arc_t *cache, size_t size)
         if (cache->mru.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mru);
             arc_move(cache, obj, &cache->mrug);
-        } else if (cache->mfu.size > 0) {
+        } else if (cache->mfu.size > cache->c - cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mfu);
             arc_move(cache, obj, &cache->mfug);
         } else {
@@ -174,7 +174,7 @@ arc_balance(arc_t *cache, size_t size)
         if (cache->mfug.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mfug);
             arc_remove(cache, obj->key, obj->klen);
-        } else if (cache->mrug.size > 0) {
+        } else if (cache->mrug.size > cache->c - cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mrug);
             arc_remove(cache, obj->key, obj->klen);
         } else {
