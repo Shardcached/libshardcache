@@ -68,7 +68,7 @@ arc_ops_evict_object(shardcache_t *cache, cached_object_t *obj)
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
     obj->flags = COBJ_FLAG_EVICTED; // reset all flags but leave the EVICTED bit on
     list_clear(obj->listeners);
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_num_items(cache->arc));
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
 }
 
 typedef struct
@@ -125,6 +125,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         arc_release_resource(cache->arc, obj->res);
         return -1;
     } else if (status == 1) {
+        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
         if (fd > 0)
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
@@ -211,7 +212,6 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
         arg->peer_addr = peer_addr;
         arg->fd = fd;
         async_read_wrk_t *wrk = NULL;
-        COBJ_SET_FLAG(obj, COBJ_FLAG_FETCHING);
         arc_retain_resource(cache->arc, obj->res);
         rc = fetch_from_peer_async(peer_addr,
                                    (char *)cache->auth,
@@ -243,7 +243,6 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
                     list_clear(obj->listeners);
                 }
 
-                COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
                 COBJ_SET_FLAG(obj, COBJ_FLAG_EVICTED);
             }
             close(fd);
@@ -253,7 +252,6 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
         }
     } else { 
         fbuf_t value = FBUF_STATIC_INITIALIZER;
-        COBJ_SET_FLAG(obj, COBJ_FLAG_FETCHING);
         rc = fetch_from_peer(peer_addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, obj->key, obj->klen, &value, fd);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         if (rc == 0) {
@@ -324,6 +322,16 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
 
     MUTEX_LOCK(&obj->lock);
 
+    if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_FETCHING)) {
+        MUTEX_UNLOCK(&obj->lock);
+        return 1;
+    } else if (obj->data) {
+        MUTEX_UNLOCK(&obj->lock);
+        return 0;
+    }
+
+    COBJ_SET_FLAG(obj, COBJ_FLAG_FETCHING);
+
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_CACHE_MISSES].value);
 
     // this object is not evicted anymore (if it eventually was)
@@ -357,10 +365,11 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         if (done) {
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_REMOTE].value);
             if (ret == 0) {
-                ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_num_items(cache->arc));
+                ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
                 gettimeofday(&obj->ts, NULL);
                 *size = sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : obj->dlen);
                 MUTEX_UNLOCK(&obj->lock);
+                ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
                 return COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP|COBJ_FLAG_COMPLETE) ? 1 : 0;
             }
             MUTEX_UNLOCK(&obj->lock);
@@ -395,6 +404,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                 list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
             SHC_ERROR("Fetch storage callback returned an error (%d)", rc);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_ERRORS].value);
+            COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
             MUTEX_UNLOCK(&obj->lock);
             return -1;
         }
@@ -445,7 +455,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
 
     MUTEX_UNLOCK(&obj->lock);
 
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_num_items(cache->arc));
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
 
     return 0;
 }
