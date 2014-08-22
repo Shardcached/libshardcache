@@ -304,8 +304,6 @@ shardcache_expire_key_cb(iomux_t *iomux, void *priv)
     }
     ATOMIC_INCREMENT(ctx->cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
     arc_remove(ctx->cache->arc, (const void *)ctx->item.key, ctx->item.klen);
-    free(ctx->item.key);
-    free(ctx);
 }
 
 typedef struct {
@@ -317,6 +315,13 @@ typedef struct {
     time_t expire;
     int is_volatile;
 } shardcache_expire_job_t;
+
+static void
+shardcache_expire_context_destroy(expire_key_ctx_t *ctx)
+{
+    free(ctx->item.key);
+    free(ctx);
+}
 
 void *
 shardcache_expire_keys(void *priv)
@@ -355,12 +360,21 @@ shardcache_expire_keys(void *priv)
             void *prev = NULL;
             iomux_timeout_id_t tid = 0;
             ht_delete(table, job->key, job->klen, &prev, NULL);
+
             if (prev) {
                 tid_ptr = (iomux_timeout_id_t *)prev;
-                tid = iomux_reschedule(cache->expirer_mux, *tid_ptr, &timeout, shardcache_expire_key_cb, ctx);
+                tid = iomux_reschedule(cache->expirer_mux,
+                                       *tid_ptr,
+                                       &timeout,
+                                       shardcache_expire_key_cb,
+                                       ctx,
+                                       (iomux_timeout_free_context_cb)shardcache_expire_context_destroy);
                 *tid_ptr = tid;
             } else {
-                tid = iomux_schedule(cache->expirer_mux, &timeout, shardcache_expire_key_cb, ctx);
+                tid = iomux_schedule(cache->expirer_mux,
+                                     &timeout, shardcache_expire_key_cb,
+                                     ctx,
+                                     (iomux_timeout_free_context_cb)shardcache_expire_context_destroy);
                 tid_ptr = malloc(sizeof(iomux_timeout_id_t));
                 *tid_ptr = tid;
             }
@@ -369,8 +383,7 @@ shardcache_expire_keys(void *priv)
             } else {
                 if (tid_ptr)
                     free(tid_ptr);
-                free(ctx->item.key);
-                free(ctx);
+                shardcache_expire_context_destroy(ctx);
                 // TODO - Erro message
             }
 
