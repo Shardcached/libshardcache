@@ -387,16 +387,21 @@ arc_destroy(arc_t *cache)
     free(cache);
 }
 
+static void *
+retain_obj_cb(void *data, size_t dlen, void *user)
+{
+    retain_ref(((arc_t *)user)->refcnt, ((arc_object_t *)data)->node);
+    return data;
+}
+
+
 void
 arc_remove(arc_t *cache, const void *key, size_t len)
 {
-    arc_object_t *obj = NULL;
-    void *objptr = NULL;
-    if (objptr) {
-        obj = (arc_object_t *)objptr;
-        if (obj)
-            arc_move(cache, obj, NULL);
-    }
+    arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
+    if (obj)
+        arc_move(cache, obj, NULL);
+    release_ref(cache->refcnt, obj->node);
 }
 
 /* Lookup an object with the given key. */
@@ -437,13 +442,6 @@ arc_object_create(arc_t *cache, const void *key, size_t len)
     obj->ptr = (void *)((char *)obj + sizeof(arc_object_t));
 
     return obj;
-}
-
-static void *
-retain_obj_cb(void *data, size_t dlen, void *user)
-{
-    retain_ref(((arc_t *)user)->refcnt, ((arc_object_t *)data)->node);
-    return data;
 }
 
 // the returned object is retained, the caller must call arc_release_resource(obj) to release it

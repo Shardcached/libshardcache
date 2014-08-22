@@ -161,22 +161,17 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         total_len = obj->dlen;
 
-        if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
-            arc_ops_evict_object(cache, obj);
-        else if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP))
-            drop = 1;
+        int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
+                      COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
 
-        if (total_len && !drop) {
+        if (total_len && !COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP)) {
             arc_update_size(cache->arc, key, klen,
                     sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : total_len));
-
-            int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
-                          COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
 
             if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
                 shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
 
-        } else if (status || drop) {
+        } else if (status == -1) {
             arc_remove(cache->arc, key, klen);
         }
         MUTEX_UNLOCK(&obj->lock);
