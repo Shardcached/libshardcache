@@ -94,7 +94,6 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     char *peer_addr = arg->peer_addr;
     int fd = arg->fd;
     int total_len = 0;
-    int drop = 0;
 
     MUTEX_LOCK(&obj->lock);
 
