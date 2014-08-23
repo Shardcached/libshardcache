@@ -118,7 +118,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
             arc_ops_evict_object(cache, obj);
         else
-            drop = 1;
+            COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
         MUTEX_UNLOCK(&obj->lock);
         free(arg);
         arc_release_resource(cache->arc, obj->res);
