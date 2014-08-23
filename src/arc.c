@@ -125,7 +125,6 @@ arc_list_splice(arc_list_t *prev, arc_list_t *next)
     prev->next = next;
 }
 
-
 static inline void
 arc_list_remove(arc_list_t *head)
 {
@@ -139,6 +138,18 @@ static inline void
 arc_list_prepend(arc_list_t *head, arc_list_t *list)
 {
     arc_list_insert(head, list, list->next);
+}
+
+static inline void
+arc_list_move_to_head(arc_list_t *head, arc_list_t *list)
+{
+    arc_list_t *next = head->next;
+    arc_list_t *prev = head->prev;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    arc_list_prepend(head, list);
 }
 
 /* Return the LRU element from the given state. */
@@ -222,18 +233,27 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     //       will be determined by who is fetching the object or by the
     //       next call to arc_balance() (which would anyway happen if
     //       the object will be put into the cache by the fetcher)
-    if (obj->locked) {
+    if (UNLIKELY(obj->locked)) {
         MUTEX_UNLOCK(&cache->lock);
         return 0;
     }
 
-    if (obj->state) {
+    if (LIKELY(obj->state != NULL)) {
+
+        if (LIKELY(obj->state == state)) {
+            // short path for recurring keys
+            // (those in the mfu list being hit again)
+            if (LIKELY(state->head.next != &obj->head))
+                arc_list_move_to_head(&obj->head, &state->head);
+            MUTEX_UNLOCK(&cache->lock);
+            return 0;
+        }
         obj_state = obj->state;
 
         // if the state is not NULL
         // (and the object is not going to be being removed)
         // move the ^ (p) marker
-        if (state) {
+        if (LIKELY(state != NULL)) {
             if (obj_state == &cache->mrug) {
                 size_t csize = cache->mrug.size
                              ? (cache->mfug.size / cache->mrug.size)
@@ -256,8 +276,6 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     if (state == NULL) {
         ht_delete(cache->hash, (void *)obj->key, obj->klen, NULL, NULL);
         release_ref(cache->refcnt, obj->node);
-        MUTEX_UNLOCK(&cache->lock);
-        return 0;
     } else if (state == &cache->mrug || state == &cache->mfug) {
         /* The object is being moved to one of the ghost lists, evict
          * the object from the cache. */
