@@ -417,9 +417,10 @@ void
 arc_remove(arc_t *cache, const void *key, size_t len)
 {
     arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
-    if (obj)
+    if (obj) {
         arc_move(cache, obj, NULL);
-    release_ref(cache->refcnt, obj->node);
+        release_ref(cache->refcnt, obj->node);
+    }
 }
 
 /* Lookup an object with the given key. */
