@@ -59,7 +59,7 @@ shardcache_node_create_from_string(char *str)
             free(copy);
             return NULL;
         }
-        addrlist = realloc(addrlist, sizeof(shardcache_node_t *) * (num_addresses + 1));
+        addrlist = realloc(addrlist, sizeof(char *) * (num_addresses + 1));
         addrlist[num_addresses] = strdup(addr);
         num_addresses++;
     }
