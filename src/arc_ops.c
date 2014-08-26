@@ -170,7 +170,8 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
                 shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
 
-        } else if (status == -1) {
+        } else if (!total_len || status == -1) {
+            COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
             arc_remove(cache->arc, key, klen);
         }
         MUTEX_UNLOCK(&obj->lock);
