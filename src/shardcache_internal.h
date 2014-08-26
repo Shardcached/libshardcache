@@ -215,27 +215,35 @@ struct __shardcache_s {
 
     shardcache_counters_t *counters; // the internal counters instance
 
-#define SHARDCACHE_COUNTER_GETS         0
-#define SHARDCACHE_COUNTER_SETS         1
-#define SHARDCACHE_COUNTER_DELS         2
-#define SHARDCACHE_COUNTER_HEADS        3
-#define SHARDCACHE_COUNTER_EVICTS       4
-#define SHARDCACHE_COUNTER_EXPIRES      5
-#define SHARDCACHE_COUNTER_CACHE_MISSES 6
-#define SHARDCACHE_COUNTER_FETCH_REMOTE 7
-#define SHARDCACHE_COUNTER_FETCH_LOCAL  8
-#define SHARDCACHE_COUNTER_NOT_FOUND    9
-#define SHARDCACHE_COUNTER_TABLE_SIZE   10
-#define SHARDCACHE_COUNTER_CACHE_SIZE   11
-#define SHARDCACHE_COUNTER_CACHED_ITEMS 12
-#define SHARDCACHE_COUNTER_ERRORS       13
-#define SHARDCACHE_NUM_COUNTERS 14
+#define SHARDCACHE_COUNTER_LABELS_ARRAY  \
+        { "gets", "sets", "dels", "heads", "evicts", "expires", \
+          "cache_misses", "fetch_remote", "fetch_local", "not_found", \
+          "volatile_table_size", "cache_size", "mru_size", "mfu_size", \
+          "ghost_size", "cached_items", "errors" }
+
+#define SHARDCACHE_COUNTER_GETS             0
+#define SHARDCACHE_COUNTER_SETS             1
+#define SHARDCACHE_COUNTER_DELS             2
+#define SHARDCACHE_COUNTER_HEADS            3
+#define SHARDCACHE_COUNTER_EVICTS           4
+#define SHARDCACHE_COUNTER_EXPIRES          5
+#define SHARDCACHE_COUNTER_CACHE_MISSES     6
+#define SHARDCACHE_COUNTER_FETCH_REMOTE     7
+#define SHARDCACHE_COUNTER_FETCH_LOCAL      8
+#define SHARDCACHE_COUNTER_NOT_FOUND        9
+#define SHARDCACHE_COUNTER_TABLE_SIZE       10
+#define SHARDCACHE_COUNTER_CACHE_SIZE       11
+#define SHARDCACHE_COUNTER_CACHE_MRU_SIZE   12
+#define SHARDCACHE_COUNTER_CACHE_MFU_SIZE   13
+#define SHARDCACHE_COUNTER_CACHE_GHOST_SIZE 14
+#define SHARDCACHE_COUNTER_CACHED_ITEMS     15
+#define SHARDCACHE_COUNTER_ERRORS           16
+#define SHARDCACHE_NUM_COUNTERS             17
     struct {
         const char *name; // the exported label of the counter
         uint64_t value;   // the actual value (accessed using the atomic builtins)
     } cnt[SHARDCACHE_NUM_COUNTERS]; // array holding the storage for the counters
                                     // exported as stats
-
     connections_pool_t *connections_pool; // the connections_pool instance which
                                           // holds/distribute the available
                                           // filedescriptors // when using persistent

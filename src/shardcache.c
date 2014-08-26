@@ -289,10 +289,12 @@ shardcache_expire_key_cb(iomux_t *iomux, void *priv)
         }
         free(ptr);
         ht_delete(ctx->cache->volatile_storage, ctx->item.key, ctx->item.klen, &ptr, NULL);
-        volatile_object_t *prev = (volatile_object_t *)ptr;
-        ATOMIC_DECREASE(ctx->cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
-                        prev->dlen);
-        destroy_volatile(prev);
+        if (ptr) {
+            volatile_object_t *prev = (volatile_object_t *)ptr;
+            ATOMIC_DECREASE(ctx->cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
+                            prev->dlen);
+            destroy_volatile(prev);
+        }
     } else {
         ht_delete(ctx->cache->cache_timeouts, ctx->item.key, ctx->item.klen, &ptr, NULL);
         if (!ptr) {
@@ -563,10 +565,7 @@ shardcache_create(char *me,
                   shardcache_hex_escape((char *)cache->auth, SHARDCACHE_MSG_SIG_LEN, DEBUG_DUMP_MAXSIZE, 0));
     }
 
-    const char *counters_names[SHARDCACHE_NUM_COUNTERS] =
-        { "gets", "sets", "dels", "heads", "evicts", "expires",
-          "cache_misses", "fetch_remote", "fetch_local", "not_found",
-          "volatile_table_size", "cache_size", "cached_items", "errors" };
+    const char *counters_names[SHARDCACHE_NUM_COUNTERS] = SHARDCACHE_COUNTER_LABELS_ARRAY;
 
     cache->counters = shardcache_init_counters();
 
@@ -835,6 +834,18 @@ shardcache_get_async_helper(void *key,
     return 0;
 }
 
+static inline void
+shardcache_update_size_counters(shardcache_t *cache)
+{
+    size_t mru_size = arc_mru_size(cache->arc);
+    size_t mfu_size = arc_mfu_size(cache->arc);
+    size_t ghost_size = arc_ghost_size(cache->arc);
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value, mru_size+mfu_size);
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRU_SIZE].value, mru_size);
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFU_SIZE].value, mfu_size);
+    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_GHOST_SIZE].value, ghost_size);
+}
+
 int
 shardcache_get_offset_async(shardcache_t *cache,
                             void *key,
@@ -947,8 +958,7 @@ shardcache_get_offset_async(shardcache_t *cache,
     }
 
     arc_release_resource(cache->arc, res);
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-              (uint32_t)arc_size(cache->arc));
+    shardcache_update_size_counters(cache);
     return 0;
 }
 
@@ -992,8 +1002,7 @@ size_t shardcache_get_offset(shardcache_t *cache,
         MUTEX_UNLOCK(&obj->lock);
     }
     arc_release_resource(cache->arc, res);
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-              (uint32_t)arc_size(cache->arc));
+    shardcache_update_size_counters(cache);
     return (offset < vlen + copied) ? (vlen - offset - copied) : 0;
 }
 
@@ -1093,8 +1102,7 @@ shardcache_get_async(shardcache_t *cache,
         MUTEX_UNLOCK(&obj->lock);
     }
 
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-              (uint32_t)arc_size(cache->arc));
+    shardcache_update_size_counters(cache);
 
     return 0;
 }
@@ -1885,8 +1893,7 @@ shardcache_del_internal(shardcache_t *cache,
                 shardcache_commence_eviction(cache, key, klen);
         }
 
-        ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-                   (uint32_t)arc_size(cache->arc));
+        shardcache_update_size_counters(cache);
 
         if (cb)
             cb(key, klen, rc, priv);
@@ -1983,8 +1990,7 @@ shardcache_evict(shardcache_t *cache, void *key, size_t klen)
     arc_remove(cache->arc, (const void *)key, klen);
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
 
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-               (uint32_t)arc_size(cache->arc));
+    shardcache_update_size_counters(cache);
 
     return 0;
 }

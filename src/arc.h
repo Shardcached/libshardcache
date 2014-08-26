@@ -130,6 +130,9 @@ void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size);
  * @return The actual size of the cache
  */
 size_t arc_size(arc_t *cache);
+size_t arc_mru_size(arc_t *cache);
+size_t arc_mfu_size(arc_t *cache);
+size_t arc_ghost_size(arc_t *cache);
 
 /**
  * @brief Returns the number of items actually cached

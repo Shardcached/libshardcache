@@ -528,6 +528,24 @@ arc_size(arc_t *cache)
     return ATOMIC_READ(cache->mru.size) + ATOMIC_READ(cache->mfu.size);
 }
 
+size_t
+arc_mru_size(arc_t *cache)
+{
+    return ATOMIC_READ(cache->mru.size);
+}
+
+size_t
+arc_mfu_size(arc_t *cache)
+{
+    return ATOMIC_READ(cache->mfu.size);
+}
+
+size_t
+arc_ghost_size(arc_t *cache)
+{
+    return ATOMIC_READ(cache->mrug.size) + ATOMIC_READ(cache->mfug.size);
+}
+
 uint64_t
 arc_count(arc_t *cache)
 {
