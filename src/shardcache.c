@@ -645,12 +645,14 @@ shardcache_destroy(shardcache_t *cache)
     ATOMIC_INCREMENT(cache->quit);
 
     ATOMIC_INCREMENT(cache->async_quit);
-    for (i = 0; i < cache->num_async; i ++) {
-        if (cache->async_context[i].mux) {
-            SHC_DEBUG2("Stopping the async i/o thread");
-            pthread_join(cache->async_context[i].io_th, NULL);
-            SHC_DEBUG2("Async i/o thread stopped");
-            iomux_clear(cache->async_context[i].mux);
+    if (cache->async_context) { 
+        for (i = 0; i < cache->num_async; i ++) {
+            if (cache->async_context[i].mux) {
+                SHC_DEBUG2("Stopping the async i/o thread");
+                pthread_join(cache->async_context[i].io_th, NULL);
+                SHC_DEBUG2("Async i/o thread stopped");
+                iomux_clear(cache->async_context[i].mux);
+            }
         }
     }
 
@@ -813,8 +815,11 @@ shardcache_get_async_helper(void *key,
         rc = arg->cb(key, klen, NULL, 0, total_size, timestamp, arg->priv);
     }
 
-    if (rc != 0 || (!dlen && !total_size)) { // error
+    int error = (!dlen && !total_size);
+    if (rc != 0 || error) { // error
         ATOMIC_SET(arg->stat, -1);
+        if (error)
+            arg->cb(key, klen, NULL, 0, 0, timestamp, arg->priv);
         arc_release_resource(arc, arg->res);
         free(arg);
         return -1;

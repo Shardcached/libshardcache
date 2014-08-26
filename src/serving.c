@@ -308,9 +308,10 @@ static int get_async_data_handler(void *key,
     }
 
     if (dlen == 0 && total_size == 0) {
-        if (!timestamp) {
+        if (!timestamp && (req->skipped || req->copied)) {
             // if there is no timestamp here it means there was an
             // error (and not just an empty item)
+            SHC_ERROR("Error notified to the get_async_data callback");
             ATOMIC_INCREMENT(req->error);
             return -1;
         }
@@ -342,7 +343,7 @@ static int get_async_data_handler(void *key,
         send_data(req, &output);
         fbuf_destroy(&output);
         ATOMIC_INCREMENT(req->done);
-        return 0;
+        return !timestamp ? -1 : 0;
     }
 
     uint32_t offset = 0;
@@ -498,8 +499,11 @@ get_async_data(shardcache_t *cache,
     } else {
         rc = shardcache_get_async(cache, key, klen, cb, req);
     }
-    if (rc != 0)
+    if (rc != 0) {
+        SHC_ERROR("shardcache_get_async returned error");
+        ATOMIC_INCREMENT(req->done);
         write_status(req, rc, WRITE_STATUS_MODE_SIMPLE);
+    }
 
     return rc;
 }
