@@ -274,8 +274,10 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     }
 
     if (state == NULL) {
-        ht_delete(cache->hash, (void *)obj->key, obj->klen, NULL, NULL);
-        release_ref(cache->refcnt, obj->node);
+        void *ptr = NULL;
+        ht_delete(cache->hash, (void *)obj->key, obj->klen, &ptr, NULL);
+        if (ptr)
+            release_ref(cache->refcnt, ((arc_object_t *)ptr)->node);
     } else if (state == &cache->mrug || state == &cache->mfug) {
         /* The object is being moved to one of the ghost lists, evict
          * the object from the cache. */
@@ -302,15 +304,21 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         switch (rc) {
             case 1:
             case -1:
-                ht_delete(cache->hash, (void *)obj->key, obj->klen, NULL, NULL);
-                release_ref(cache->refcnt, obj->node);
+            {
+                void *ptr = NULL;
+                ht_delete(cache->hash, (void *)obj->key, obj->klen, &ptr, NULL);
+                if (ptr)
+                    release_ref(cache->refcnt, ((arc_object_t *)ptr)->node);
                 return rc;
+            }
             default:
                 if (size >= cache->c) {
                     // the (single) object doesn't fit in the cache, let's return it
                     // to the getter without (re)adding it to the cache
-                    ht_delete(cache->hash, obj->key, obj->klen, NULL, NULL);
-                    release_ref(cache->refcnt, obj->node);
+                    void *ptr = NULL;
+                    ht_delete(cache->hash, (void *)obj->key, obj->klen, &ptr, NULL);
+                    if (ptr)
+                        release_ref(cache->refcnt, ((arc_object_t *)ptr)->node);
                     return 1;
                 }
                 MUTEX_LOCK(&cache->lock);
