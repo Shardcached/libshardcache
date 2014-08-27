@@ -113,17 +113,22 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     }
     if (status == -1) {
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         close(fd);
-        if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
-            arc_ops_evict_object(cache, obj);
-        else
-            COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
+        arc_remove(cache->arc, key, klen);
+        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
         free(arg);
         arc_release_resource(cache->arc, obj->res);
         return -1;
     } else if (status == 1) {
+
+        if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) ||
+            COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
+            !obj->dlen)
+        {
+            arc_remove(cache->arc, key, klen);
+        }
+
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
         if (fd > 0)
@@ -170,10 +175,10 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
                 shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
 
-        } else if (!total_len || status == -1) {
-            COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
-            arc_remove(cache->arc, key, klen);
         }
+        if (!total_len)
+            COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
+
         MUTEX_UNLOCK(&obj->lock);
         return 0;
     }
@@ -331,6 +336,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
 
     // this object is not evicted anymore (if it eventually was)
     COBJ_UNSET_FLAG(obj, COBJ_FLAG_EVICTED);
+    COBJ_UNSET_FLAG(obj, COBJ_FLAG_EVICT);
     char node_name[1024];
     size_t node_len = sizeof(node_name);
     memset(node_name, 0, node_len);
