@@ -68,6 +68,10 @@ string2sockaddr(const char *host, int port, struct sockaddr_in *sockaddr)
 
         int rc = -1;
 
+        // XXX - we need to serialize calls to getaddrinfo() here
+        // to workaround a bug in some older glibc versions
+        // triggered by many concurrent calls
+        // https://sourceware.org/bugzilla/show_bug.cgi?id=15946
         static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
         pthread_mutex_lock(&lock);
