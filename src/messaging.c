@@ -549,9 +549,6 @@ fetch_from_peer_helper(void *data,
     }
 
     if (idx == -3) {
-        // if the reading is finished or there was an error
-        // we need to release the helper_arg structure
-        // and eventually close the filedescriptor
         if (arg->fd >= 0)
             close(arg->fd);
         if (arg->key != arg->buf)
@@ -619,12 +616,15 @@ fetch_from_peer_async(char *peer,
             arg->priv = priv;
             rc = read_message_async(fd, auth, fetch_from_peer_helper, arg, wrk);
             if (rc != 0) {
-                if (should_close)
+                if (fd >= 0 && should_close)
                     close(fd);
                 if (arg->key != arg->buf)
                     free(arg->key);
                 free(arg);
             }
+        } else {
+            if (fd >= 0 && should_close)
+                close(fd);
         }
     }
     return rc;
