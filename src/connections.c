@@ -75,7 +75,6 @@ string2sockaddr(const char *host, int port, struct sockaddr_in *sockaddr)
         static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
         pthread_mutex_lock(&lock);
-
         if (strcmp(host2, "*") == 0) {
             ip = INADDR_ANY;
             if (p)
@@ -83,8 +82,8 @@ string2sockaddr(const char *host, int port, struct sockaddr_in *sockaddr)
         } else {
             rc = getaddrinfo(host2, p, &hints, &info);
         }
-
         pthread_mutex_unlock(&lock);
+
         if (rc == 0) {
             if (ip != INADDR_ANY)
                 ip = ((struct sockaddr_in *)info->ai_addr)->sin_addr.s_addr;
@@ -230,6 +229,10 @@ open_connection(const char *host, int port, unsigned int timeout)
     if (host == NULL || !*host || port == 0)
         return -1;
 
+
+    if (string2sockaddr(host, port, &sockaddr) == -1)
+        return -1;
+
     sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == -1)
         return -1;
@@ -240,11 +243,17 @@ open_connection(const char *host, int port, unsigned int timeout)
     if (timeout > 0) {
         if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == -1
             || setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1)
-            fprintf(stderr, "%s:%d: Failed to set timeout to %d\n", host, port, timeout);
+        {
+            fprintf(stderr, "%s:%d: Failed to set timeout to %d : %s\n", host, port, timeout, strerror(errno));
+            shutdown(sock, SHUT_RDWR);
+            close(sock);
+            return -1;
+        }
     }
 
     int flags = fcntl(sock, F_GETFL, 0);
     if (flags == -1) {
+        shutdown(sock, SHUT_RDWR);
         close(sock);
         return -1;
     }
@@ -252,24 +261,16 @@ open_connection(const char *host, int port, unsigned int timeout)
     if (timeout > 0) {
         flags |= O_NONBLOCK;
         fcntl(sock, F_SETFL, flags);
-    }
 
-    if (string2sockaddr(host, port, &sockaddr) == -1)
-    {
-        shutdown(sock, SHUT_RDWR);
-        close(sock);
-        return -1;
-    }
-
-    if (timeout > 0) {
         int rc = connect(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
-        if (rc == 0 || errno == EISCONN) {
+        if (rc) {
             flags &= ~O_NONBLOCK;
             fcntl(sock, F_SETFL, flags);
             fcntl(sock, F_SETFD, FD_CLOEXEC);
            return sock;
         } else if (rc == -1 && errno != EINPROGRESS) {
             fprintf(stderr, "Can't connect to %s:%d : %s\n", host, port, strerror(errno));
+            shutdown(sock, SHUT_RDWR);
             close(sock);
             return -1;
         }
@@ -307,8 +308,10 @@ open_connection(const char *host, int port, unsigned int timeout)
                 return sock;
             } else if (err != EINPROGRESS) {
                 free(fdset);
+                shutdown(sock, SHUT_RDWR);
                 close(sock);
                 errno = err;
+                fprintf(stderr, "Can't connect (2) to %s:%d : %s\n", host, port, strerror(errno));
                 return -1;
             }
             struct timeval now;
@@ -320,11 +323,13 @@ open_connection(const char *host, int port, unsigned int timeout)
                 break;
             }
             memcpy(&timeout, &tv, sizeof(struct timeval));
+            memset(fdset, 0, fdset_size);
+            FD_SET(sock, (fd_set *)fdset);
             rc = select(sock + 1, NULL, (fd_set *)fdset, NULL, &timeout);
         }
-        fprintf(stderr, "Can't connect to %s:%d : %s\n", host, port, strerror(errno));
 
         free(fdset);
+        shutdown(sock, SHUT_RDWR);
         close(sock);
         return -1;
     }
