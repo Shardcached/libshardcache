@@ -1301,10 +1301,12 @@ static int shardcache_async_command_helper(void *data,
     } else if (idx == -2) {
         arg->error = 1;
     } else if (idx == -3) {
-        if (arg->error)
-            close(arg->fd);
-        else
-            shardcache_release_connection_for_peer(arg->cache, arg->addr, arg->fd);
+        if (arg->fd >= 0) {
+            if (arg->error)
+                close(arg->fd);
+            else
+                shardcache_release_connection_for_peer(arg->cache, arg->addr, arg->fd);
+        }
         free(arg->key);
         free(arg);
     }
