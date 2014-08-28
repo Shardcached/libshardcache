@@ -1,3 +1,5 @@
+TARGETS := shardcachec shc_benchmark st_benchmark
+
 UNAME := $(shell uname)
 
 DEPS += ../libshardcache.a \
@@ -15,7 +17,7 @@ LDFLAGS +=
 CFLAGS += -Wno-deprecated-declarations
 endif
 
-all: shardcachec shc_benchmark
+all: $(TARGETS)
 
 dynamic: CFLAGS += -fPIC -I../src -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -g
 dynamic: shardcachec.c shc_benchmark.c
@@ -30,7 +32,11 @@ shc_benchmark: CFLAGS += -fPIC -I../src -I../deps/.incs -Isrc -Wall -Werror -Wno
 shc_benchmark: shc_benchmark.c $(DEPS)
 	$(CC) shc_benchmark.c $(CFLAGS) $(DEPS) $(LDFLAGS) -o shc_benchmark
 
+st_benchmark: CFLAGS += -fPIC -I../src -I../deps/.incs -Isrc -Wall -Werror -Wno-parentheses -Wno-pointer-sign -O3 -g
+st_benchmark: st_benchmark.c $(DEPS)
+	$(CC) st_benchmark.c $(CFLAGS) $(DEPS) $(LDFLAGS) -o st_benchmark
+
 clean:
-	rm -f shardcachec
-	rm -f shc_benchmark
+	rm -f $(TARGETS)
+	rm -fr *.o *.dSYM
 
