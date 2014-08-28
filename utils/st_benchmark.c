@@ -6,7 +6,7 @@
 
 #include <shardcache.h>
 
-static const int MAX_STORAGE_OPTIONS = 256;
+#define MAX_STORAGE_OPTIONS 256
 
 /* - */
 
