@@ -307,6 +307,7 @@ open_connection(const char *host, int port, unsigned int timeout)
                 return sock;
             } else if (err != EINPROGRESS) {
                 free(fdset);
+                close(sock);
                 errno = err;
                 return -1;
             }
