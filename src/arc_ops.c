@@ -25,8 +25,8 @@ arc_ops_fetch_from_peer_notify_listener (void *item, uint32_t idx, void *user)
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
     shardcache_fetch_from_peer_notify_arg *arg = (shardcache_fetch_from_peer_notify_arg *)user;
     cached_object_t *obj = arg->obj;
-    int rc = (listener->cb(obj->key, obj->klen, arg->data, arg->len, 0, NULL, listener->priv) == 0);
-    if (!rc) {
+    int rc = listener->cb(obj->key, obj->klen, arg->data, arg->len, 0, NULL, listener->priv);
+    if (rc != 0) {
         free(listener);
         return -1;
     }
@@ -99,12 +99,16 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
 
     if (!obj->res) {
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+        if (fd >= 0)
+            close(fd);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
         return -1;
     }
     if (!obj->listeners) {
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+        if (fd >= 0)
+            close(fd);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
         free(arg);
@@ -113,7 +117,8 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     }
     if (status == -1) {
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-        close(fd);
+        if (fd >= 0)
+            close(fd);
         arc_remove(cache->arc, key, klen);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
@@ -131,7 +136,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
 
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
-        if (fd > 0)
+        if (fd >= 0)
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
         arc_release_resource(cache->arc, obj->res);
@@ -245,7 +250,8 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
 
                 COBJ_SET_FLAG(obj, COBJ_FLAG_EVICTED);
             }
-            close(fd);
+            if (fd >= 0)
+                close(fd);
             arc_release_resource(cache->arc, obj->res);
 
             free(arg);

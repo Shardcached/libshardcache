@@ -108,12 +108,23 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res);
 void arc_retain_resource(arc_t *cache, arc_resource_t *res);
 
 /**
- * @brief Force eviction of an item
+ * @brief Force complete removal of an item from the cache
+ * @note the item will be completely removed from the cache and not moved
+ *       to a ghost list first
  * @param cache  : A valid pointer to an initialized arc_t structure
  * @param key    : The key
  * @param klen   : The length of the key
  */
 void arc_remove(arc_t *cache, const void *key, size_t klen);
+
+/**
+ * @brief Force eviction of an item which, if in the mru or mfu list,
+ *        will be moved to the related ghost list (otherwise it will be untouched)
+ * @param cache  : A valid pointer to an initialized arc_t structure
+ * @param key    : The key
+ * @param klen   : The length of the key
+ */
+void arc_evict(arc_t *cache, const void *key, size_t len);
 
 /**
  * @brief Update the size of a cached object (if any)
@@ -130,8 +141,26 @@ void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size);
  * @return The actual size of the cache
  */
 size_t arc_size(arc_t *cache);
+
+/**
+ * @brief Returns the size of the mru list
+ * @param cache  : A valid pointer to an initialized arc_t structure
+ * @return The actual size of the cache
+ */
 size_t arc_mru_size(arc_t *cache);
+
+/**
+ * @brief Returns the size of the mfu list
+ * @param cache  : A valid pointer to an initialized arc_t structure
+ * @return The actual size of the cache
+ */
 size_t arc_mfu_size(arc_t *cache);
+
+/**
+ * @brief Returns the total size of the two ghost lists (mfug and mrug)
+ * @param cache  : A valid pointer to an initialized arc_t structure
+ * @return The actual size of the cache
+ */
 size_t arc_ghost_size(arc_t *cache);
 
 /**

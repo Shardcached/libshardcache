@@ -431,6 +431,20 @@ arc_remove(arc_t *cache, const void *key, size_t len)
     }
 }
 
+void
+arc_evict(arc_t *cache, const void *key, size_t len)
+{
+    arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
+    if (obj) {
+        MUTEX_LOCK(&cache->lock);
+        if (obj->state == &cache->mru)
+            arc_move(cache, obj, &cache->mrug);
+        else if (obj->state == &cache->mfu)
+            arc_move(cache, obj, &cache->mfug);
+        MUTEX_UNLOCK(&cache->lock);
+        release_ref(cache->refcnt, obj->node);
+    }
+}
 /* Lookup an object with the given key. */
 void
 arc_release_resource(arc_t *cache, arc_resource_t *res)
