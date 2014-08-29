@@ -10,7 +10,7 @@
 
 #include <shardcache.h>
 
-#define NUM_THREADS            4
+#define DEFAULT_NUM_THREADS    4
 #define MODULE_PATH_LEN     1024
 #define OPTION_STRING_LEN   1024
 #define MAX_STORAGE_OPTIONS  256
@@ -181,6 +181,7 @@ static void parse_cmdline(int argc, char ** argv, options_t * options) {
     static struct option long_options[] = {
         { "storagemodule", 2, 0, 's' },
         { "options",       2, 0, 'o' },
+        { "num-threads",   2, 0, 'n' },
         { "help",          0, 0, 'h' },
         { 0,               0, 0,  0  }
     };
@@ -188,7 +189,9 @@ static void parse_cmdline(int argc, char ** argv, options_t * options) {
     int  option_index = 0;
     char c;
 
-    while ((c = getopt_long(argc, argv, "s:o:h", long_options, &option_index))) {
+    options->number_of_threads = DEFAULT_NUM_THREADS;
+
+    while ((c = getopt_long(argc, argv, "s:o:n:h", long_options, &option_index))) {
         if (c == -1)
             break;
 
@@ -199,6 +202,10 @@ static void parse_cmdline(int argc, char ** argv, options_t * options) {
 
             case 'o':
                 strncpy(options->storage_options_string, optarg, OPTION_STRING_LEN);
+                break;
+
+            case 'n':
+                options->number_of_threads = strtol(optarg, NULL, 10);
                 break;
 
             case 'h':
@@ -242,7 +249,6 @@ int main(int argc, char ** argv) {
 
     set_default_options(&options);
     parse_cmdline(argc, argv, &options);
-    options.number_of_threads = NUM_THREADS; // TODO: cmdline
 
     /* - */
 
