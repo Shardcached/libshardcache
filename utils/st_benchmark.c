@@ -29,6 +29,7 @@ typedef struct {
 typedef struct {
     storage_module_t           * storage;
     shardcache_storage_index_t * index;
+    int                        * counter;
 } worker_thread_args_t;
 
 typedef struct {
@@ -149,6 +150,8 @@ static void * worker_thread(void * in_args)
                                         &value,
                                         &value_len,
                                         args->storage->module.priv);
+
+            __sync_fetch_and_add(args->counter, 1);
 
             if (__sync_fetch_and_add(&quit, 0))
                 break;
@@ -274,14 +277,25 @@ int main(int argc, char ** argv) {
     shardcache_storage_index_t index = {0};
     index_get_from_storage(&storage, &index);
 
-    pthread_t threads[options.number_of_threads];
-    worker_thread_args_t thread_args = {
-        .storage = &storage,
-        .index   = &index,
-    };
+    pthread_t            threads        [options.number_of_threads];
+    worker_thread_args_t thread_args    [options.number_of_threads];
+    int32_t              counters       [options.number_of_threads];
+
+    int32_t              counters_local [options.number_of_threads];
+    int32_t              counters_prev  [options.number_of_threads];
 
     for (int i = 0; i < options.number_of_threads; i++) {
-        if (pthread_create(&threads[i], NULL, worker_thread, &thread_args) != 0) {
+        worker_thread_args_t * args = &thread_args[i];
+        args->storage = &storage,
+        args->index   = &index,
+        args->counter = &counters[i];
+
+        counters[i] = 0;
+        counters_prev[i] = 0;
+    }
+
+    for (int i = 0; i < options.number_of_threads; i++) {
+        if (pthread_create(&threads[i], NULL, worker_thread, &thread_args[i]) != 0) {
             SHC_ERROR("Cannot spawn new thread: %s\n", strerror(errno));
             return 1;
         }
@@ -289,7 +303,20 @@ int main(int argc, char ** argv) {
 
     while (!__sync_fetch_and_add(&quit, 0)) {
         sleep(1);
-        printf("\n -- MARK -- \n");
+
+        for (int i = 0; i < options.number_of_threads; i++) {
+            counters_local[i] = __sync_fetch_and_add(&counters[i], 0);
+
+            printf("Thread %d: %d - %d per sec.\n",
+                i,
+                counters_local[i],
+                counters_local[i] - counters_prev[i]
+            );
+
+            counters_prev[i] = counters_local[i];
+        }
+
+        printf("\n");
     }
 
     for (int i = 0; i < options.number_of_threads; i++) {
