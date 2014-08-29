@@ -3,20 +3,19 @@
 #include <string.h>
 #include <getopt.h>
 #include <dlfcn.h>
+#include <signal.h>
+#include <pthread.h>
+#include <errno.h>
+#include <unistd.h>
 
 #include <shardcache.h>
 
+#define NUM_THREADS            4
 #define MODULE_PATH_LEN     1024
 #define OPTION_STRING_LEN   1024
 #define MAX_STORAGE_OPTIONS  256
 
 /* - */
-
-typedef struct {
-    char storage_module[MODULE_PATH_LEN];
-    char storage_options_string[OPTION_STRING_LEN];
-    const char * storage_options[MAX_STORAGE_OPTIONS];
-} options_t;
 
 typedef int  (*module_init)    (shardcache_storage_t *st, const char **options);
 typedef void (*module_destroy) (void *);
@@ -26,6 +25,22 @@ typedef struct {
     module_init          init;
     module_destroy       destroy;
 } storage_module_t;
+
+typedef struct {
+    storage_module_t           * storage;
+    shardcache_storage_index_t * index;
+} worker_thread_args_t;
+
+typedef struct {
+    char storage_module[MODULE_PATH_LEN];
+    char storage_options_string[OPTION_STRING_LEN];
+    int  number_of_threads;
+    const char * storage_options[MAX_STORAGE_OPTIONS];
+} options_t;
+
+/* - */
+
+static int quit = 0;
 
 /* - */
 
@@ -88,27 +103,9 @@ static int storage_module_instantiate(storage_module_t * storage, const char ** 
         return 1;
     }
 
-    return 0;
-}
-
-static int storage_fetch_index(storage_module_t * storage, shardcache_storage_index_t * index)
-{
     if (storage->module.fetch == NULL) {
         SHC_ERROR("this storage module doesn't implement the FETCH command, unable to proceed");
         return -1;
-    }
-
-    for (int i = 0; i < index->size; i++) {
-        void   * value;
-        size_t   value_len;
-
-        storage->module.fetch(index->items[i].key,
-                              index->items[i].klen,
-                              &value,
-                              &value_len,
-                              storage->module.priv);
-
-        printf("%s => %s\n", (char *)index->items[i].key, (char *)value);
     }
 
     return 0;
@@ -134,6 +131,37 @@ static int index_get_from_storage(storage_module_t * storage, shardcache_storage
     storage->module.index(index->items, index->size, storage->module.priv);
 
     return 0;
+}
+
+/* - */
+
+static void * worker_thread(void * in_args)
+{
+    void   * value;
+    size_t   value_len;
+
+    worker_thread_args_t * args = (worker_thread_args_t *)in_args;
+
+    while (!__sync_fetch_and_add(&quit, 0)) {
+        for (int i = 0; i < args->index->size; i++) {
+            args->storage->module.fetch(args->index->items[i].key,
+                                        args->index->items[i].klen,
+                                        &value,
+                                        &value_len,
+                                        args->storage->module.priv);
+
+            if (__sync_fetch_and_add(&quit, 0))
+                break;
+        }
+    }
+
+    return NULL;
+}
+
+static void stop(int signal)
+{
+    printf("\nQuitting...\n");
+    (void)__sync_fetch_and_add(&quit, 1);
 }
 
 /* - */
@@ -214,6 +242,7 @@ int main(int argc, char ** argv) {
 
     set_default_options(&options);
     parse_cmdline(argc, argv, &options);
+    options.number_of_threads = NUM_THREADS; // TODO: cmdline
 
     /* - */
 
@@ -225,6 +254,7 @@ int main(int argc, char ** argv) {
     parse_options(options.storage_options_string,
                   options.storage_options,
                   MAX_STORAGE_OPTIONS);
+
     /* - */
 
     if (storage_module_load(&storage, options.storage_module) != 0)
@@ -233,10 +263,33 @@ int main(int argc, char ** argv) {
     if (storage_module_instantiate(&storage, options.storage_options) != 0)
         return 1;
 
+    signal(SIGINT, stop);
+
     shardcache_storage_index_t index = {0};
     index_get_from_storage(&storage, &index);
 
-    storage_fetch_index(&storage, &index);
+    pthread_t threads[options.number_of_threads];
+    worker_thread_args_t thread_args = {
+        .storage = &storage,
+        .index   = &index,
+    };
+
+    for (int i = 0; i < options.number_of_threads; i++) {
+        if (pthread_create(&threads[i], NULL, worker_thread, &thread_args) != 0) {
+            SHC_ERROR("Cannot spawn new thread: %s\n", strerror(errno));
+            return 1;
+        }
+    }
+
+    while (!__sync_fetch_and_add(&quit, 0)) {
+        sleep(1);
+        printf("\n -- MARK -- \n");
+    }
+
+    for (int i = 0; i < options.number_of_threads; i++) {
+        pthread_join(threads[i], NULL);
+        printf("Thread %d done\n", i);
+    }
 
     storage.destroy(storage.module.priv);
 
