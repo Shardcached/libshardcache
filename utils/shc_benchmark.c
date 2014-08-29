@@ -350,7 +350,7 @@ main (int argc, char **argv)
         { "write_rate", 2, 0, 'w' },
         { "write_mode", 2, 0, 'W' },
         { "verbose", 0, 0, 'v' },
-    };
+        { NULL, 0, 0,  0 }
     hosts_string = getenv("SHC_HOSTS");
     int option_index = 0;
     char c;
