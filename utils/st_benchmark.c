@@ -173,7 +173,10 @@ static void print_help(char * prog) {
     printf("usage: %s [OPTIONS]...\n"
            "    -s <storagemodule>    the path of the storage module plugin\n"
            "    -o <options>          comma-separated list of storage options\n",
-           prog);
+           "    -n <num_threads>      specify the number of threads to use for the test (defaults to: %d)\n",
+           "    -h                    prints this help\n",
+           prog,
+           DEFAULT_NUM_THREADS);
 }
 
 static void set_default_options(options_t * options) {
@@ -186,7 +189,7 @@ static void parse_cmdline(int argc, char ** argv, options_t * options) {
         { "options",       2, 0, 'o' },
         { "num-threads",   2, 0, 'n' },
         { "help",          0, 0, 'h' },
-        { 0,               0, 0,  0  }
+        { NULL,            0, 0,  0  }
     };
 
     int  option_index = 0;
