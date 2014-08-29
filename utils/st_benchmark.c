@@ -307,6 +307,7 @@ int main(int argc, char ** argv) {
     while (!__sync_fetch_and_add(&quit, 0)) {
         sleep(1);
 
+        printf("\033[H\033[J"); // clear the screen
         for (int i = 0; i < options.number_of_threads; i++) {
             counters_local[i] = __sync_fetch_and_add(&counters[i], 0);
 
