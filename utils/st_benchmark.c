@@ -172,8 +172,8 @@ static void stop(int signal)
 static void print_help(char * prog) {
     printf("usage: %s [OPTIONS]...\n"
            "    -s <storagemodule>    the path of the storage module plugin\n"
-           "    -o <options>          comma-separated list of storage options\n",
-           "    -n <num_threads>      specify the number of threads to use for the test (defaults to: %d)\n",
+           "    -o <options>          comma-separated list of storage options\n"
+           "    -n <num_threads>      specify the number of threads to use for the test (defaults to: %d)\n"
            "    -h                    prints this help\n",
            prog,
            DEFAULT_NUM_THREADS);
