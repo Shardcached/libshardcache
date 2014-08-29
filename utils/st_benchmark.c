@@ -6,13 +6,15 @@
 
 #include <shardcache.h>
 
-#define MAX_STORAGE_OPTIONS 256
+#define MODULE_PATH_LEN     1024
+#define OPTION_STRING_LEN   1024
+#define MAX_STORAGE_OPTIONS  256
 
 /* - */
 
 typedef struct {
-    char storage_module[1024];
-    char storage_options_string[1024];
+    char storage_module[MODULE_PATH_LEN];
+    char storage_options_string[OPTION_STRING_LEN];
     const char * storage_options[MAX_STORAGE_OPTIONS];
 } options_t;
 
@@ -119,11 +121,11 @@ static void parse_cmdline(int argc, char ** argv, options_t * options) {
 
         switch (c) {
             case 's':
-                strncpy(options->storage_module, optarg, sizeof(options->storage_module));
+                strncpy(options->storage_module, optarg, MODULE_PATH_LEN);
                 break;
 
             case 'o':
-                strncpy(options->storage_options_string, optarg, sizeof(options->storage_options_string));
+                strncpy(options->storage_options_string, optarg, OPTION_STRING_LEN);
                 break;
 
             case 'h':
