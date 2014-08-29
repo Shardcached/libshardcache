@@ -1074,8 +1074,8 @@ shardcache_get_async(shardcache_t *cache,
         if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
                      cache->expire_time > 0 && obj_expiration < time(NULL)))
         {
-            MUTEX_UNLOCK(&obj->lock);
             arc_remove(cache->arc, key, klen);
+            MUTEX_UNLOCK(&obj->lock);
             arc_release_resource(cache->arc, res);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
             return shardcache_get_async(cache, key, klen, cb, priv);
