@@ -52,7 +52,7 @@ static int storage_module_load(storage_module_t * storage, char * module_path)
     void * handle = dlopen(module_path, RTLD_NOW);
     if (!handle) {
         SHC_ERROR("cannot load the storage module: %s (%s)", module_path, dlerror());
-        exit(1);
+        exit(-1);
     }
 
     int * version = dlsym(handle, "storage_version");
@@ -62,13 +62,13 @@ static int storage_module_load(storage_module_t * storage, char * module_path)
         else
             SHC_ERROR("Can't find the symbol 'storage_version' in the loaded module");
 
-        return 1;
+        return -1;
     }
 
     if (*version != SHARDCACHE_STORAGE_API_VERSION) {
         SHC_ERROR("The storage plugin version doesn't match (%d != %d)",
                     version, SHARDCACHE_STORAGE_API_VERSION);
-        return 1;
+        return -1;
     }
 
     storage->init = dlsym(handle, "storage_init");
@@ -79,7 +79,7 @@ static int storage_module_load(storage_module_t * storage, char * module_path)
             SHC_ERROR("Can't find the symbol 'storage_init' in the loaded module");
         dlclose(handle);
 
-        return 1;
+        return -1;
     }
 
     storage->destroy = dlsym(handle, "storage_destroy");
@@ -90,7 +90,7 @@ static int storage_module_load(storage_module_t * storage, char * module_path)
             SHC_ERROR("Can't find the symbol 'storage_destroy' in the loaded module");
         dlclose(handle);
 
-        return 1;
+        return -1;
     }
 
     return 0;
@@ -101,7 +101,7 @@ static int storage_module_instantiate(storage_module_t * storage, const char ** 
     int ret = storage->init(&storage->module, options);
     if (ret != 0) {
         SHC_ERROR("storage module initialization reported failure %d", ret);
-        return 1;
+        return -1;
     }
 
     if (storage->module.fetch == NULL) {
@@ -257,7 +257,7 @@ int main(int argc, char ** argv) {
 
     if (strlen(options.storage_module) == 0) {
         SHC_ERROR("the storage module path must be specified");
-        exit(1);
+        exit(-1);
     }
 
     parse_options(options.storage_options_string,
@@ -267,10 +267,10 @@ int main(int argc, char ** argv) {
     /* - */
 
     if (storage_module_load(&storage, options.storage_module) != 0)
-        return 1;
+        exit(-1);
 
     if (storage_module_instantiate(&storage, options.storage_options) != 0)
-        return 1;
+        exit(-1);
 
     signal(SIGINT, stop);
 
@@ -297,7 +297,7 @@ int main(int argc, char ** argv) {
     for (int i = 0; i < options.number_of_threads; i++) {
         if (pthread_create(&threads[i], NULL, worker_thread, &thread_args[i]) != 0) {
             SHC_ERROR("Cannot spawn new thread: %s\n", strerror(errno));
-            return 1;
+            return -1;
         }
     }
 
