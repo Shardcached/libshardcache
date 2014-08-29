@@ -91,6 +91,51 @@ static int storage_module_instantiate(storage_module_t * storage, const char ** 
     return 0;
 }
 
+static int storage_fetch_index(storage_module_t * storage, shardcache_storage_index_t * index)
+{
+    if (storage->module.fetch == NULL) {
+        SHC_ERROR("this storage module doesn't implement the FETCH command, unable to proceed");
+        return -1;
+    }
+
+    for (int i = 0; i < index->size; i++) {
+        void   * value;
+        size_t   value_len;
+
+        storage->module.fetch(index->items[i].key,
+                              index->items[i].klen,
+                              &value,
+                              &value_len,
+                              storage->module.priv);
+
+        printf("%s => %s\n", (char *)index->items[i].key, (char *)value);
+    }
+
+    return 0;
+}
+
+/* - */
+
+static int index_get_from_storage(storage_module_t * storage, shardcache_storage_index_t * index)
+{
+    if (storage->module.index == NULL) {
+        SHC_ERROR("this storage module doesn't implement the INDEX command, unable to get the keys index");
+        return -1;
+    }
+
+    if (storage->module.count == NULL) {
+        SHC_ERROR("this storage module doesn't implement the COUNT command, unable to get the keys index");
+        return -1;
+    }
+
+    index->size  = storage->module.count(storage->module.priv);
+    index->items = calloc(index->size, sizeof(shardcache_storage_index_item_t));
+
+    storage->module.index(index->items, index->size, storage->module.priv);
+
+    return 0;
+}
+
 /* - */
 
 static void print_help(char * prog) {
@@ -187,6 +232,11 @@ int main(int argc, char ** argv) {
 
     if (storage_module_instantiate(&storage, options.storage_options) != 0)
         return 1;
+
+    shardcache_storage_index_t index = {0};
+    index_get_from_storage(&storage, &index);
+
+    storage_fetch_index(&storage, &index);
 
     storage.destroy(storage.module.priv);
 
