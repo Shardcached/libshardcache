@@ -119,27 +119,27 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         if (fd >= 0)
             close(fd);
-        arc_remove(cache->arc, key, klen);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         MUTEX_UNLOCK(&obj->lock);
+        arc_drop_resource(cache->arc, obj->res);
         free(arg);
-        arc_release_resource(cache->arc, obj->res);
         return -1;
     } else if (status == 1) {
 
-        if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) ||
-            COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
-            !obj->dlen)
-        {
-            arc_remove(cache->arc, key, klen);
-        }
-
-        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-        MUTEX_UNLOCK(&obj->lock);
         if (fd >= 0)
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
         free(arg);
-        arc_release_resource(cache->arc, obj->res);
+
+        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
+        int drop = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) || !obj->dlen);
+
+        MUTEX_UNLOCK(&obj->lock);
+
+        if (drop)
+            arc_drop_resource(cache->arc, obj->res);
+        else
+            arc_release_resource(cache->arc, obj->res);
+
         return 0;
     } else if (len) {
         size_t olen = obj->dlen;

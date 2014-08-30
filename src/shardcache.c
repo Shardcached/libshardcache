@@ -911,8 +911,7 @@ shardcache_get_offset_async(shardcache_t *cache,
             cache->expire_time > 0 && obj_expiration < time(NULL)))
         {
             MUTEX_UNLOCK(&obj->lock);
-            arc_remove(cache->arc, key, klen);
-            arc_release_resource(cache->arc, res);
+            arc_drop_resource(cache->arc, res);
             free(data);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
             return shardcache_get_offset_async(cache, key, klen, offset, length, cb, priv);
@@ -1074,9 +1073,8 @@ shardcache_get_async(shardcache_t *cache,
         if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
                      cache->expire_time > 0 && obj_expiration < time(NULL)))
         {
-            arc_remove(cache->arc, key, klen);
             MUTEX_UNLOCK(&obj->lock);
-            arc_release_resource(cache->arc, res);
+            arc_drop_resource(cache->arc, res);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
             return shardcache_get_async(cache, key, klen, cb, priv);
 
