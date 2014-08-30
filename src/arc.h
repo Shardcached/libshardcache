@@ -107,6 +107,8 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res);
  */
 void arc_retain_resource(arc_t *cache, arc_resource_t *res);
 
+void arc_drop_resource(arc_t *cache, arc_resource_t *res);
+
 /**
  * @brief Force complete removal of an item from the cache
  * @note the item will be completely removed from the cache and not moved

@@ -184,10 +184,10 @@ arc_balance(arc_t *cache, size_t size)
     while (cache->mrug.size + cache->mfug.size > cache->c) {
         if (cache->mfug.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mfug);
-            arc_remove(cache, obj->key, obj->klen);
+            arc_move(cache, obj, NULL);
         } else if (cache->mrug.size > cache->c - cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mrug);
-            arc_remove(cache, obj->key, obj->klen);
+            arc_move(cache, obj, NULL);
         } else {
             break;
         }
@@ -274,10 +274,8 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     }
 
     if (state == NULL) {
-        void *ptr = NULL;
-        ht_delete(cache->hash, (void *)obj->key, obj->klen, &ptr, NULL);
-        if (ptr)
-            release_ref(cache->refcnt, ((arc_object_t *)ptr)->node);
+        if (ht_delete_if_equals(cache->hash, (void *)obj->key, obj->klen, obj, sizeof(arc_object_t)) == 0)
+            release_ref(cache->refcnt, obj->node);
     } else if (state == &cache->mrug || state == &cache->mfug) {
         /* The object is being moved to one of the ghost lists, evict
          * the object from the cache. */
@@ -305,20 +303,17 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             case 1:
             case -1:
             {
-                void *ptr = NULL;
-                ht_delete(cache->hash, (void *)obj->key, obj->klen, &ptr, NULL);
-                if (ptr)
-                    release_ref(cache->refcnt, ((arc_object_t *)ptr)->node);
+                if (ht_delete_if_equals(cache->hash, (void *)obj->key, obj->klen, obj, sizeof(arc_object_t)) == 0)
+                    release_ref(cache->refcnt, obj->node);
                 return rc;
             }
             default:
+            {
                 if (size >= cache->c) {
                     // the (single) object doesn't fit in the cache, let's return it
                     // to the getter without (re)adding it to the cache
-                    void *ptr = NULL;
-                    ht_delete(cache->hash, (void *)obj->key, obj->klen, &ptr, NULL);
-                    if (ptr)
-                        release_ref(cache->refcnt, ((arc_object_t *)ptr)->node);
+                    if (ht_delete_if_equals(cache->hash, (void *)obj->key, obj->klen, obj, sizeof(arc_object_t)) == 0)
+                        release_ref(cache->refcnt, obj->node);
                     return 1;
                 }
                 MUTEX_LOCK(&cache->lock);
@@ -329,6 +324,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 obj->state = state;
                 ATOMIC_INCREASE(obj->state->size, obj->size);
                 break;
+            }
         }
         // since this object is going to be put back into the cache,
         // we need to unmark it so that it won't be ignored next time
@@ -420,6 +416,13 @@ retain_obj_cb(void *data, size_t dlen, void *user)
     return data;
 }
 
+void
+arc_drop_resource(arc_t *cache, arc_resource_t *res)
+{
+    arc_object_t *obj = (arc_object_t *)res;
+    if (obj)
+        arc_move(cache, obj, NULL);
+}
 
 void
 arc_remove(arc_t *cache, const void *key, size_t len)
