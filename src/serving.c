@@ -138,6 +138,7 @@ shardcache_connection_context_create(shardcache_serving_t *serv, int fd)
         fbuf_fastgrowsize(&ctx->records[i], 1024);
         fbuf_slowgrowsize(&ctx->records[i], 512);
     }
+    ATOMIC_INCREMENT(serv->num_connections);
     return ctx;
 }
 
@@ -171,6 +172,7 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
         req = TAILQ_FIRST(&ctx->requests);
     }
     async_read_context_destroy(ctx->reader_ctx);
+    ATOMIC_DECREMENT(ctx->serv->num_connections);
     free(ctx);
 }
 
@@ -885,7 +887,6 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char **out, int *len,
             // if there was an error while fetching a remote object
             if (!iomux_close(iomux, fd)) {
                 close(fd);
-                ATOMIC_DECREMENT(ctx->serv->num_connections);
                 shardcache_connection_context_destroy(ctx);
             }
             return IOMUX_OUTPUT_MODE_NONE;
@@ -963,7 +964,6 @@ shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
         (shardcache_connection_context_t *)priv;
 
     close(fd);
-    ATOMIC_DECREMENT(ctx->serv->num_connections);
 
     if (ctx) {
         if (TAILQ_FIRST(&ctx->requests) != NULL) {
@@ -993,7 +993,6 @@ shardcache_connection_handler(iomux_t *iomux, int fd, void *priv)
                 SHC_WARNING("Can't push the new job to the worker queue");
                 return;
             }
-            ATOMIC_INCREMENT(serv->num_connections);
         } else {
             close(fd);
             SHC_WARNING("Can't find any usable worker to handle the new connection");
