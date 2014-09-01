@@ -835,6 +835,10 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
     fbuf_minlen(&req->fetch_accumulator, 64);
     fbuf_fastgrowsize(&req->fetch_accumulator, 1024);
     fbuf_slowgrowsize(&req->fetch_accumulator, 512);
+
+    fbuf_minlen(&req->output, 64);
+    fbuf_fastgrowsize(&req->output, 1024);
+    fbuf_slowgrowsize(&req->output, 512);
     return req;
 }
 
