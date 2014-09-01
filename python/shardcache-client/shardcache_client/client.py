@@ -8,6 +8,7 @@ import socket
 import struct
 import random
 import sys
+import time
 from chash import CHash
 from siphash import SipHash
 
@@ -212,13 +213,23 @@ class ShardcacheClient:
                 fd = None
 
 
-        if not fd:
+        retries = 0;
+        # retry at most 10 times
+        while not fd and retries < 10:
             fd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                fd.connect((host, int(port)))
-                self.connections[host_key] = fd
-            except Exception, e:
-                print >>sys.stderr, 'Can\'t connect to %s:%d. Exception type is %s' % (host, int(port), `e`)
+            if fd:
+                try:
+                    fd.connect((host, int(port)))
+                    self.connections[host_key] = fd
+                except Exception, e:
+                    print >>sys.stderr, 'Can\'t connect to %s:%d. Exception type is %s' % (host, int(port), `e`)
+            else:
+                # start sleeping 128 microsecs
+                # and increase the sleep time by a power of two at every retry
+                # (so 256 microsecs the seceond time, 512 the third and so on)
+                sleep_time = (1<<(7+retries))/1e6
+                time.sleep(sleep_time)
+                retries += 1
 
         return fd
 
