@@ -53,24 +53,6 @@ arc_ops_fetch_from_peer_notify_listener_error(void *item, uint32_t idx, void *us
     return -1;
 }
 
-// XXX: this MUST be always called while obj->lock is retained
-static void
-arc_ops_evict_object(shardcache_t *cache, cached_object_t *obj)
-{
-    if (list_count(obj->listeners)) {
-        COBJ_SET_FLAG(obj, COBJ_FLAG_EVICT);
-        return;
-    }
-    if (obj->data != obj->dbuf)
-        free(obj->data);
-    obj->data = NULL;
-    obj->dlen = 0;
-    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
-    obj->flags = COBJ_FLAG_EVICTED; // reset all flags but leave the EVICTED bit on
-    list_clear(obj->listeners);
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
-}
-
 typedef struct
 {
     cached_object_t *obj;
@@ -412,6 +394,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             SHC_ERROR("Fetch storage callback returned an error (%d)", rc);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_ERRORS].value);
             COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
+            COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
             MUTEX_UNLOCK(&obj->lock);
             return -1;
         }
@@ -447,14 +430,12 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         };
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
-        if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
-            arc_ops_evict_object(cache, obj);
     }
 
     *size = sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : obj->dlen);
 
-    int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
-                  COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
+    int evicted = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
+                   COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED));
 
     if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration) {
         shardcache_schedule_expiration(cache, obj->key, obj->klen, cache->expire_time, 0);
@@ -464,7 +445,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
 
     ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
 
-    return 0;
+    return evicted;
 }
 
 void
@@ -472,21 +453,14 @@ arc_ops_evict(void *item, void *priv)
 {
     cached_object_t *obj = (cached_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
-    MUTEX_LOCK(&obj->lock);
-    if (!cache->lazy_expiration)
-        shardcache_unschedule_expiration(cache, obj->key, obj->klen, 0);
-    arc_ops_evict_object(cache, obj);
-    MUTEX_UNLOCK(&obj->lock);
-}
-
-void
-arc_ops_destroy(void *item, void *priv)
-{
-    cached_object_t *obj = (cached_object_t *)item;
 
     MUTEX_LOCK(&obj->lock); // XXX - this shouldn't be really necessary
                             // TODO : try removing it and see what happens
                             //        during stress tests
+
+    if (!cache->lazy_expiration)
+        shardcache_unschedule_expiration(cache, obj->key, obj->klen, 0);
+
     if (obj->listeners) {
         // safety belts, just to ensure not leaking listeners by notifying them an error
         // before relasing the object completely
@@ -498,6 +472,9 @@ arc_ops_destroy(void *item, void *priv)
         list_destroy(obj->listeners);
     }
     MUTEX_UNLOCK(&obj->lock);
+
+    if (obj->data)
+        ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
 
     // no lock is necessary here ... if we are here
     // nobody is referencing us anymore

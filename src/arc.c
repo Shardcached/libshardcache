@@ -291,19 +291,12 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         if (ht_delete_if_equals(cache->hash, (void *)obj->key, obj->klen, obj, sizeof(arc_object_t)) == 0)
             release_ref(cache->refcnt, obj->node);
     } else if (state == &cache->mrug || state == &cache->mfug) {
-        /* The object is being moved to one of the ghost lists, evict
-         * the object from the cache. */
-        if (obj->ptr)
-            cache->ops->evict(obj->ptr, cache->ops->priv);
-
         obj->async = 0;
         arc_list_prepend(&obj->head, &state->head);
         ATOMIC_INCREMENT(state->count);
         obj->state = state;
         ATOMIC_INCREASE(obj->state->size, obj->size);
-    } else if (obj_state != &cache->mru && obj_state != &cache->mfu) {
-        /* The object is new or being moved from one of the ghost lists into
-         * the MRU or MFU list, fetch the object into the cache. */
+    } else if (obj_state == NULL) {
 
         obj->locked = 1;
         
@@ -377,8 +370,8 @@ terminate_node_callback(refcnt_node_t *node, void *priv)
     arc_object_t *obj = (arc_object_t *)get_node_ptr(node);
     arc_t *cache = (arc_t *)priv;
 
-    if (obj->ptr && cache->ops->destroy)
-        cache->ops->destroy(obj->ptr, cache->ops->priv);
+    if (obj->ptr && cache->ops->evict)
+        cache->ops->evict(obj->ptr, cache->ops->priv);
 
     obj->ptr = NULL;
     obj->state = NULL;
@@ -394,8 +387,8 @@ arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size)
 
     cache->hash = ht_create(1<<16, 1<<22, NULL);
 
-    cache->c = c;
-    cache->p = c >> 1;
+    cache->c = c >> 1;
+    cache->p = cache->c >> 1;
     cache->cos = cached_object_size;
 
     arc_list_init(&cache->mrug.head);
@@ -448,20 +441,6 @@ arc_remove(arc_t *cache, const void *key, size_t len)
     }
 }
 
-void
-arc_evict(arc_t *cache, const void *key, size_t len)
-{
-    arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
-    if (obj) {
-        MUTEX_LOCK(&cache->lock);
-        if (obj->state == &cache->mru)
-            arc_move(cache, obj, &cache->mrug);
-        else if (obj->state == &cache->mfu)
-            arc_move(cache, obj, &cache->mfug);
-        MUTEX_UNLOCK(&cache->lock);
-        release_ref(cache->refcnt, obj->node);
-    }
-}
 /* Lookup an object with the given key. */
 void
 arc_release_resource(arc_t *cache, arc_resource_t *res)

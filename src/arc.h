@@ -36,20 +36,10 @@ typedef struct __arc_ops {
      * @brief This function is called when the cache is full and we need to evict
      * objects from the cache.
      *
-     * The callback CAN free all data associated with the object but MUST keep the
-     * object itself alive and DO NOT free it now. the destroy() callback will be
-     * called when the object can be fully released
+     * The callback CAN free all data associated with the object and the object itself
      */
     void (*evict) (void *obj, void *priv);
     
-    /** 
-     * @brief This function is called when the object is completely removed from
-     * the cache directory.
-     *
-     * The callback CAN free the object data and the object itself.
-     */
-    void (*destroy) (void *obj, void *priv);
-
     //! Pointer to private data which will provided to all callbacks
     void *priv;
 } arc_ops_t;

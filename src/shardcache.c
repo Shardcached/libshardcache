@@ -492,7 +492,6 @@ shardcache_create(char *me,
     cache->ops.init    = arc_ops_init;
     cache->ops.fetch   = arc_ops_fetch;
     cache->ops.evict   = arc_ops_evict;
-    cache->ops.destroy = arc_ops_destroy;
 
     cache->ops.priv = cache;
     cache->shards = malloc(sizeof(shardcache_node_t *) * nnodes);
@@ -1990,7 +1989,6 @@ shardcache_evict(shardcache_t *cache, void *key, size_t klen)
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_EVICT, key, klen, NULL, 0, 0);
 
     arc_remove(cache->arc, (const void *)key, klen);
-    ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
 
     shardcache_update_size_counters(cache);
 

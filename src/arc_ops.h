@@ -55,7 +55,6 @@ typedef struct {
 void arc_ops_init(const void *key, size_t len, int async, arc_resource_t *res, void *ptr, void *priv);
 int arc_ops_fetch(void *item, size_t *size, void * priv);
 void arc_ops_evict(void *item, void *priv);
-void arc_ops_destroy(void *item, void *priv);
 
 // vim: tabstop=4 shiftwidth=4 expandtab:
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
