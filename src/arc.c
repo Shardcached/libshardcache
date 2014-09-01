@@ -75,6 +75,7 @@ struct __arc {
     size_t cos;
     struct __arc_state mrug, mru, mfu, mfug;
 
+    int needs_balance;
     pthread_mutex_t lock;
 
     refcnt_t *refcnt;
@@ -163,12 +164,15 @@ arc_state_lru(arc_state_t *state)
 /* Balance the lists so that we can fit an object with the given size into
  * the cache. */
 static inline void
-arc_balance(arc_t *cache, size_t size)
+arc_balance(arc_t *cache)
 {
     MUTEX_LOCK(&cache->lock);
-
+    if (!cache->needs_balance) {
+        MUTEX_UNLOCK(&cache->lock);
+        return;
+    }
     /* First move objects from MRU/MFU to their respective ghost lists. */
-    while (cache->mru.size + cache->mfu.size + size > cache->c) {
+    while (cache->mru.size + cache->mfu.size > cache->c) {
         if (cache->mru.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mru);
             arc_move(cache, obj, &cache->mrug);
@@ -193,6 +197,7 @@ arc_balance(arc_t *cache, size_t size)
         }
     }
 
+    cache->needs_balance = 0;
     MUTEX_UNLOCK(&cache->lock);
 }
 
@@ -207,7 +212,7 @@ arc_update_size(arc_t *cache, void *key, size_t klen, size_t size)
             obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
             ATOMIC_INCREASE(obj->state->size, obj->size);
         }
-        arc_balance(cache, 0);
+        cache->needs_balance = 1;
         MUTEX_UNLOCK(&cache->lock);
     }
 }
@@ -317,12 +322,12 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                     return 1;
                 }
                 MUTEX_LOCK(&cache->lock);
-                arc_balance(cache, ARC_OBJ_BASE_SIZE(obj) + size);
                 obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
                 arc_list_prepend(&obj->head, &state->head);
                 ATOMIC_INCREMENT(state->count);
                 obj->state = state;
                 ATOMIC_INCREASE(obj->state->size, obj->size);
+                cache->needs_balance = 1;
                 break;
             }
         }
@@ -505,6 +510,7 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
         if (valuep)
             *valuep = obj->ptr;
 
+        arc_balance(cache);
         return obj;
     }
 
@@ -534,6 +540,7 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
             /* New objects are always moved to the MRU list. */
             rc  = arc_move(cache, obj, &cache->mru);
             if (rc >= 0) {
+                arc_balance(cache);
                 *valuep = obj->ptr;
                 return obj;
             }
