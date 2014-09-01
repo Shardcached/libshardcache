@@ -219,7 +219,7 @@ struct __shardcache_s {
         { "gets", "sets", "dels", "heads", "evicts", "expires", \
           "cache_misses", "fetch_remote", "fetch_local", "not_found", \
           "volatile_table_size", "cache_size", "mru_size", "mfu_size", \
-          "ghost_size", "cached_items", "errors" }
+          "mrug_size", "mfug_size", "cached_items", "errors" }
 
 #define SHARDCACHE_COUNTER_GETS             0
 #define SHARDCACHE_COUNTER_SETS             1
@@ -235,10 +235,11 @@ struct __shardcache_s {
 #define SHARDCACHE_COUNTER_CACHE_SIZE       11
 #define SHARDCACHE_COUNTER_CACHE_MRU_SIZE   12
 #define SHARDCACHE_COUNTER_CACHE_MFU_SIZE   13
-#define SHARDCACHE_COUNTER_CACHE_GHOST_SIZE 14
-#define SHARDCACHE_COUNTER_CACHED_ITEMS     15
-#define SHARDCACHE_COUNTER_ERRORS           16
-#define SHARDCACHE_NUM_COUNTERS             17
+#define SHARDCACHE_COUNTER_CACHE_MRUG_SIZE  14
+#define SHARDCACHE_COUNTER_CACHE_MFUG_SIZE  15
+#define SHARDCACHE_COUNTER_CACHED_ITEMS     16
+#define SHARDCACHE_COUNTER_ERRORS           17
+#define SHARDCACHE_NUM_COUNTERS             18
     struct {
         const char *name; // the exported label of the counter
         uint64_t value;   // the actual value (accessed using the atomic builtins)

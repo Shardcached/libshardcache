@@ -566,15 +566,22 @@ arc_mfu_size(arc_t *cache)
 }
 
 size_t
-arc_ghost_size(arc_t *cache)
+arc_mrug_size(arc_t *cache)
 {
-    return ATOMIC_READ(cache->mrug.size) + ATOMIC_READ(cache->mfug.size);
+    return ATOMIC_READ(cache->mrug.size);
+}
+
+size_t
+arc_mfug_size(arc_t *cache)
+{
+    return ATOMIC_READ(cache->mfug.size);
 }
 
 uint64_t
 arc_count(arc_t *cache)
 {
-    return ATOMIC_READ(cache->mru.count) + ATOMIC_READ(cache->mfu.count);
+    return ATOMIC_READ(cache->mru.count) + ATOMIC_READ(cache->mfu.count) +
+           ATOMIC_READ(cache->mrug.count) + ATOMIC_READ(cache->mfug.count);
 }
 
 // vim: tabstop=4 shiftwidth=4 expandtab:

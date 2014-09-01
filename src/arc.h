@@ -159,11 +159,18 @@ size_t arc_mru_size(arc_t *cache);
 size_t arc_mfu_size(arc_t *cache);
 
 /**
- * @brief Returns the total size of the two ghost lists (mfug and mrug)
+ * @brief Returns the size of the mrug list
  * @param cache  : A valid pointer to an initialized arc_t structure
  * @return The actual size of the cache
  */
-size_t arc_ghost_size(arc_t *cache);
+size_t arc_mrug_size(arc_t *cache);
+
+/**
+ * @brief Returns the size of the mfug list
+ * @param cache  : A valid pointer to an initialized arc_t structure
+ * @return The actual size of the cache
+ */
+size_t arc_mfug_size(arc_t *cache);
 
 /**
  * @brief Returns the number of items actually cached
