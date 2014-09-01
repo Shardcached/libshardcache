@@ -226,8 +226,9 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 
     MUTEX_LOCK(&cache->lock);
 
-    // If the object is being locked it means someone is fetching its value,
-    // don't mess up with it whoever is fetching will also take care of moving it
+    // In the first conditional we check If the object is being locked,
+    // which means someone is fetching its value and we don't what
+    // don't mess up with it. Whoever is fetching will also take care of moving it
     // to one of the lists (or dropping it)
     // NOTE: while the object is being fetched it doesn't belong
     //       to any list, so there is no point in going ahead
@@ -238,7 +239,15 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     //       will be determined by who is fetching the object or by the
     //       next call to arc_balance() (which would anyway happen if
     //       the object will be put into the cache by the fetcher)
-    if (UNLIKELY(obj->locked)) {
+    //
+    // In the second conditional instead we handle a specific corner case which
+    // happens when concurring threads access an item which has been just fetched
+    // but also dropped (so its state is NULL).
+    // If a thread entering arc_lookup() manages to get the object out of the hashtable
+    // before it's being deleted it will try putting the object to the mfu list without checking first
+    // if it was already in a list or not (new objects should be first moved to the 
+    // mru list and not the mfu one)
+    if (UNLIKELY(obj->locked || (state == &cache->mfu && obj->state == NULL))) {
         MUTEX_UNLOCK(&cache->lock);
         return 0;
     }
