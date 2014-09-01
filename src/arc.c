@@ -202,9 +202,9 @@ arc_balance(arc_t *cache)
 }
 
 void
-arc_update_size(arc_t *cache, void *key, size_t klen, size_t size)
+arc_update_resource_size(arc_t *cache, arc_resource_t *res, size_t size)
 {
-    arc_object_t *obj = ht_get(cache->hash, key, klen, NULL);
+    arc_object_t *obj = (arc_object_t *)res;
     if (obj) {
         MUTEX_LOCK(&cache->lock);
         if (LIKELY(obj->state == &cache->mru || obj->state == &cache->mfu)) {

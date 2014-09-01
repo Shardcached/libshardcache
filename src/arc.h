@@ -131,11 +131,10 @@ void arc_evict(arc_t *cache, const void *key, size_t len);
 /**
  * @brief Update the size of a cached object (if any)
  * @param cache  : A valid pointer to an initialized arc_t structure
- * @param key    : The key
- * @param klen   : The length of the key
+ * @param res    : An opaque ARC resource previously returned by arc_lookup()
  * @param size   : The new size of the cached object
  */
-void arc_update_size(arc_t *cache, void *key, size_t klen, size_t size);
+void arc_update_resource_size(arc_t *cache, arc_resource_t *res, size_t size);
 
 /**
  * @brief Returns the actual cache size (in bytes)

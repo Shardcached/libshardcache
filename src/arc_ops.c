@@ -174,7 +174,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
                       COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
 
         if (total_len && !COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP)) {
-            arc_update_size(cache->arc, key, klen,
+            arc_update_resource_size(cache->arc, obj->res,
                     sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : total_len));
 
             if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
