@@ -704,25 +704,6 @@ shardcache_destroy(shardcache_t *cache)
         SHC_DEBUG2("Expirer thread stopped");
     }
 
-    if (cache->expirer_mux)
-        iomux_destroy(cache->expirer_mux);
-
-    if (cache->expirer_queue) {
-        shardcache_expire_job_t *job = queue_pop_left(cache->expirer_queue);
-        while(job) {
-            free(job->key);
-            free(job);
-            job = queue_pop_left(cache->expirer_queue);
-        }
-        queue_destroy(cache->expirer_queue);
-    }
-
-    if (cache->cache_timeouts)
-        ht_destroy(cache->cache_timeouts);
-
-    if (cache->volatile_timeouts)
-        ht_destroy(cache->volatile_timeouts);
-
     if (cache->replica)
         shardcache_replica_destroy(cache->replica);
 
@@ -744,6 +725,25 @@ shardcache_destroy(shardcache_t *cache)
 
     if (cache->chash)
         chash_free(cache->chash);
+
+    if (cache->expirer_mux)
+        iomux_destroy(cache->expirer_mux);
+
+    if (cache->expirer_queue) {
+        shardcache_expire_job_t *job = queue_pop_left(cache->expirer_queue);
+        while(job) {
+            free(job->key);
+            free(job);
+            job = queue_pop_left(cache->expirer_queue);
+        }
+        queue_destroy(cache->expirer_queue);
+    }
+
+    if (cache->cache_timeouts)
+        ht_destroy(cache->cache_timeouts);
+
+    if (cache->volatile_timeouts)
+        ht_destroy(cache->volatile_timeouts);
 
     if (cache->me)
         free(cache->me);
