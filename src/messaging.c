@@ -120,7 +120,7 @@ async_read_context_update(async_read_ctx_t *ctx)
             return ctx->state;
         }
 
-        rbuf_read(ctx->buf, &ctx->magic[ctx->moff], sizeof(uint32_t) - ctx->moff);
+        rbuf_read(ctx->buf, (u_char *)&ctx->magic[ctx->moff], sizeof(uint32_t) - ctx->moff);
         uint32_t rmagic;
         memcpy((char *)&rmagic, ctx->magic, sizeof(uint32_t));
         if ((rmagic&0xFFFFFF00) != (htonl(SHC_MAGIC)&0xFFFFFF00)) {
@@ -243,12 +243,12 @@ async_read_context_update(async_read_ctx_t *ctx)
             ctx->rlen += ctx->clen;
             ctx->coff = 0;
             if (ctx->shash)
-                sip_hash_update(ctx->shash, (char *)&nlen, 2);
+                sip_hash_update(ctx->shash, (uint8_t *)&nlen, 2);
         }
         if (ctx->clen > ctx->coff) {
-            int rb = rbuf_read(ctx->buf, ctx->chunk + ctx->coff, ctx->clen - ctx->coff);
+            int rb = rbuf_read(ctx->buf, (u_char *)ctx->chunk + ctx->coff, ctx->clen - ctx->coff);
             if (ctx->shash)
-                sip_hash_update(ctx->shash, ctx->chunk + ctx->coff, rb);
+                sip_hash_update(ctx->shash, (u_char *)ctx->chunk + ctx->coff, rb);
             ctx->coff += rb;
             if (!rbuf_used(ctx->buf))
                 break; // TRUNCATED - we need more data
@@ -262,7 +262,7 @@ async_read_context_update(async_read_ctx_t *ctx)
             u_char bsep = 0;
             rbuf_read(ctx->buf, &bsep, 1);
             if (ctx->shash)
-                sip_hash_update(ctx->shash, (char *)&bsep, 1);
+                sip_hash_update(ctx->shash, (uint8_t *)&bsep, 1);
 
             if (bsep == SHARDCACHE_RSEP) {
                 ctx->state = SHC_STATE_READING_RECORD;
@@ -313,7 +313,7 @@ async_read_context_update(async_read_ctx_t *ctx)
             }
 
             uint64_t received_digest;
-            rbuf_read(ctx->buf, (char *)&received_digest, sizeof(digest));
+            rbuf_read(ctx->buf, (u_char *)&received_digest, sizeof(digest));
 
             int match = (memcmp(&digest, &received_digest, sizeof(digest)) == 0);
 
@@ -323,7 +323,7 @@ async_read_context_update(async_read_ctx_t *ctx)
 
                 uint8_t *remote = (uint8_t *)&received_digest;
                 SHC_DEBUG3("digest from received data: %s (%s)",
-                          shardcache_hex_escape(remote, sizeof(digest), 0, 0),
+                          shardcache_hex_escape((char *)remote, sizeof(digest), 0, 0),
                           match ? "MATCH" : "MISMATCH");
             }
 
@@ -648,10 +648,10 @@ read_and_check_siphash_signature(int fd, sip_hash *shash)
     int match = (memcmp(&digest, &received_digest, sizeof(digest)) == 0);
 
     SHC_DEBUG2("computed digest for received data: %s",
-            shardcache_hex_escape((unsigned char *)&digest, sizeof(digest), 0, 0));
+            shardcache_hex_escape((char *)&digest, sizeof(digest), 0, 0));
 
     SHC_DEBUG2("digest from received data: %s (%s)",
-              shardcache_hex_escape((unsigned char *)&received_digest, sizeof(digest), 0, 0),
+              shardcache_hex_escape((char *)&received_digest, sizeof(digest), 0, 0),
               match ? "MATCH" : "MISMATCH");
 
 
@@ -694,7 +694,7 @@ read_message(int fd,
         if (reading_message == 0) {
             uint32_t magic = 0;
             do {
-                rb = read_socket(fd, &hdr, 1, ignore_timeout);
+                rb = read_socket(fd, (char *)&hdr, 1, ignore_timeout);
             } while (rb == 1 && hdr == SHC_HDR_NOOP);
 
             ((char *)&magic)[0] = hdr;
@@ -719,7 +719,7 @@ read_message(int fd,
                 return -1;
             }
 
-            rb = read_socket(fd, &hdr, 1, ignore_timeout);
+            rb = read_socket(fd, (char *)&hdr, 1, ignore_timeout);
             if (rb != 1) {
                 if (shash)
                     sip_hash_free(shash);
@@ -731,7 +731,7 @@ read_message(int fd,
                     if (!shash) // no secred is configured but the message is signed
                         return -1;
                     csig = (hdr&0x01);
-                    rb = read_socket(fd, &hdr, 1, ignore_timeout);
+                    rb = read_socket(fd, (char *)&hdr, 1, ignore_timeout);
                 } else if (shash) {
                     // we are expecting a signature header
                     sip_hash_free(shash);
@@ -794,12 +794,12 @@ read_message(int fd,
         // XXX - bug if read only one byte at this point
         if (rb == 2) {
             if (shash)
-                sip_hash_update(shash, (char *)&clen, 2);
+                sip_hash_update(shash, (uint8_t *)&clen, 2);
             uint16_t chunk_len = ntohs(clen);
 
             if (chunk_len == 0) {
                 unsigned char rsep = 0;
-                rb = read_socket(fd, &rsep, 1, ignore_timeout);
+                rb = read_socket(fd, (char *)&rsep, 1, ignore_timeout);
                 if (rb != 1) {
                     fbuf_set_used(out, initial_len);
                     if (shash)
@@ -870,7 +870,7 @@ read_message(int fd,
                 chunk_len -= rb;
                 fbuf_add_binary(out, buf, rb);
                 if (shash)
-                    sip_hash_update(shash, buf, rb);
+                    sip_hash_update(shash, (uint8_t *)buf, rb);
                 if (fbuf_used(out) > SHARDCACHE_MSG_MAX_RECORD_LEN) {
                     // we have exceeded the maximum size for a record
                     // let's abort this request
@@ -966,7 +966,7 @@ int build_message(char *auth,
     if (auth) {
         unsigned char hdr_sig = sig_hdr ? sig_hdr : SHC_HDR_SIGNATURE_SIP;
         fbuf_add_binary(out, (char *)&hdr_sig, 1);
-        shash = sip_hash_new(auth, 2, 4);
+        shash = sip_hash_new((uint8_t *)auth, 2, 4);
 
     }
 
