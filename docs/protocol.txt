@@ -1,6 +1,6 @@
 The internal communication protocol may described by the following grammar:
 
-MESSAGE              : <NOOP> | <MSG> | <SIG_MESSAGE> | <RESPONSE_MESSAGE> | <EMPTY_RESPONSE>
+MESSAGE              : <NOOP> | <MSG> | <SIG> | <RESPONSE> | <EMPTY_RESPONSE>
 NOOP                 : <MSG_NOOP>
 MSG_NOOP             : 0x90
 MSG                  : <MAGIC><HDR><RECORD>[<RSEP><RECORD>...]<EOM>
@@ -24,6 +24,13 @@ MSG_GET_OFFSET       : 0x06
 MSG_ADD              : 0x07
 MSG_EXISTS           : 0x08
 MSG_TOUCH            : 0x09
+MSG_GET_MULTI        : 0x0A
+MSG_SET_MULTI        : 0x0B
+MSG_DELETE_MULTI     : 0x0C
+MSG_EVICT_MULTI      : 0x0D
+MSG_CAS              : 0x0E
+MSG_INCREMENT        : 0x10
+MSG_DECREMENT        : 0x11
 MSG_MIGRATION_ABORT  : 0x21
 MSG_MIGRATION_BEGIN  : 0x22
 MSG_MIGRATION_END    : 0x23
@@ -31,6 +38,9 @@ MSG_CHECK            : 0x31
 MSG_STATS            : 0x32
 MSG_GET_INDEX        : 0x41
 MSG_INDEX_RESPONSE   : 0x42
+MSG_SET_CACHE_SIZE   : 0x80
+MSG_SET_NUM_WORKERS  : 0x81
+MSG_RESET            : 0x82
 MSG_REPLICA_COMMAND  : 0xA0
 MSG_REPLICA_RESPONSE : 0xA1
 MSG_REPLICA_PING     : 0xA2
@@ -47,7 +57,7 @@ NULL_BYTE            : 0x00
 NULL_RECORD          : <EOR>
 RSEP                 : 0x80
 EOM                  : <NULL_BYTE>
-RESPONSE_MESSAGE     : <MSG_RESPONSE><1-SIZE><RESPONSE_BYTE><EOR><EOM>
+RESPONSE             : <MSG_RESPONSE><1-SIZE><RESPONSE_BYTE><EOR><EOM>
 MSG_RESPONSE         : 0x99
 <1-SIZE>             : <0x00><0x01>
 RESPONSE_BYTE        : <OK> | <ERR> | <YES> | <NO> | <EXISTS>
@@ -56,6 +66,9 @@ ERR                  : 0xff
 YES                  : 0x01
 NO                   : 0xfe
 EXISTS               : 0x02
+STATUS               : <OK> | <ERR>
+BSTATUS              : <YES> | <NO>
+CSTATUS              : <OK> | <ERR> | <EXISTS>
 EMPTY_RESPONSE       : <MSG_RESPONSE><NULL_RECORD><EOM>
 
 -------------------------------------------------------------------------------
@@ -77,6 +90,13 @@ DOUBLE_WORD_HIGH     : <DOUBLE_WORD>
 DOUBLE_WORD_LOW      : <DOUBLE_WORD>
 LENGTH               : <LONG_SIZE>
 REMAINING_BYTES      : <LONG_SIZE>
+ARRAY                : <NUM_ITEMS><ITEM_SIZE><ITEM_DATA>[<ITEM_SIZE><ITEM_DATA>]<EOR>
+NUM_ITEMS            : <LENGTH>
+ITEM_SIZE            : <LONG_SIZE>
+ITEM_DATA            : <DATA>
+KEYS_ARRAY           : <ARRAY[DATA]>
+VALUES_ARRAY         : <ARRAY[DATA]>
+STATUS_ARRAY         : <ARRAY[STATUS]>
 NODES_LIST           : <NODES_STRING>
 NODES_STRING         : <LABEL><:><ADDRESS><:><PORT>[<,><LABEL><:><ADDRESS><:><PORT>...]
 LABEL                : <STRING>
@@ -86,54 +106,76 @@ PORT                 : <STRING>
 :                    : 0x3A
 STRING               : <DATA>
 
+
 The implemented messages in libshardcache are the following:
 (REPLICA messages are not included, refer to docs/replica_protocol.txt
  for details about their format)
 
 
-GET_MESSAGE       : <MSG_GET><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><RECORD><EOM>
+GET               : <MSG_GET><KEY><EOM>
+                    RESPONSE: <MSG_RESPONSE><RECORD><STATUS><EOM>
 
 GET_ASYNC         : <MSG_GET_ASYNC><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><RECORD><EOM>
+                    RESPONSE: <MSG_RESPONSE><RECORD><STATUS><EOM>
 
 GET_OFFSET        : <MSG_GET_OFFSET><KEY><OFFSET><LENGTH><EOM>
                     RESPONSE: <MSG_RESPONSE><RECORD><REMAINING_BYTES><EOM>
 
-EXISTS_MESSAGE    : <MSG_EXISTS><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE>(<YES> | <NO>)<EOM>
+EXISTS            : <MSG_EXISTS><KEY><EOM>
+                    RESPONSE: <MSG_RESPONSE><BSTATUS><EOM>
 
-TOUCH_MESSAGE     : <MSG_TOUCH><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
+TOUCH             : <MSG_TOUCH><KEY><EOM>
+                    RESPONSE: <MSG_RESPONSE><STATUS<<EOM>
 
-SET_MESSAGE       : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
-                    RESPONSE: <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
+SET               : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
+                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
 
-ADD_MESSAGE       : <MSG_ADD><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
-                    RESPONSE: <MSG_RESPONSE>(<OK> | <ERR> | <EXISTS>)<EOM>
+ADD               : <MSG_ADD><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
+                    RESPONSE: <MSG_RESPONSE><CSTATUS><EOM>
 
-DEL_MESSAGE       : <MSG_DELETE><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
+DELETE            : <MSG_DELETE><KEY><EOM>
+                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
 
-EVI_MESSAGE       : <MSG_EVICT><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
+EVICT             : <MSG_EVICT><KEY><EOM>
+                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
 
-MGB_MESSAGE       : <MSG_MIGRATION_BEGIN><NODES_LIST><EOM>
-RESPONSE          : <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
+GET_MULTI         : <MSG_GET_MULTI><KEYS_ARRAY><EOM>
+                    RESPONSE: <MSG_RESPONSE><DATA_ARRAY><STATUS_ARRAY><EOM>
 
-MGA_MESSAGE       : <MSG_MIGRATION_ABORT><NULL_RECORD><EOM>
-RESPONSE          : <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
+SET_MULTI         : <MSG_SET_MULTI><KEYS_ARRAY><VALUES_ARRAY><EOM>
+                    RESPONSE: <MSG_RESPONSE><STATUS_ARRAY><EOM>
 
-MGE_MESSAGE       : <MSG_MIGRATION_END><NULL_RECORD><EOM>
-RESPONSE          : <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
+DELETE_MULTI      : <MSG_DELETE_MULTI><KEYS_ARRAY><EOM>
+                    RESPONSE: <MSG_RESPONSE><STATUS_ARRAY><EOM>
 
-STS_MESSAGE       : <MSG_STATS><NULL_RECORD><EOM>
+EVICT_MULTI       : <MSG_EVICT_MULTI><KEYS_ARRAY><EOM>
+                    RESPONSE: <MSG_RESPONSE><STATUS_ARRAY><EOM>
+
+CAS               : <MSG_CAS><KEY><VALUE><VALUE><EOM>
+                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
+
+INCREMENT         : <MSG_INCREMENT><KEY><EOM>
+                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
+
+DECREMENT         : <MSG_DECREMENT><KEY><EOM>
+                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
+
+MGB               : <MSG_MIGRATION_BEGIN><NODES_LIST><EOM>
+RESPONSE          : <MSG_RESPONSE><STATUS><EOM>
+
+MGA               : <MSG_MIGRATION_ABORT><NULL_RECORD><EOM>
+RESPONSE          : <MSG_RESPONSE><STATUS><EOM>
+
+MGE               : <MSG_MIGRATION_END><NULL_RECORD><EOM>
+RESPONSE          : <MSG_RESPONSE><STATUS><EOM>
+
+STS               : <MSG_STATS><NULL_RECORD><EOM>
 RESPONSE          : <MSG_RESPONSE><RECORD><EOM>
 
-CHK_MESSAGE       : <MSG_CHECK><NULL_RECORD><EOM>
-RESPONSE          : <MSG_RESPONSE>(<OK> | <ERR>)<EOM>
+CHK               : <MSG_CHECK><NULL_RECORD><EOM>
+RESPONSE          : <MSG_RESPONSE><STATUS><EOM>
 
-IDG_MESSAGE       : <MSG_GET_INDEX><NULL_RECORD><EOM>
+IDG               : <MSG_GET_INDEX><NULL_RECORD><EOM>
 RESPONSE          : <MSG_INDEX_RESPONSE><INDEX><EOM>
 
 NOTE: The index record contained in the MSG_INDEX_RESPONSE is encoded using
@@ -144,11 +186,13 @@ KSIZE             : <LONG_SIZE>
 KDATA             : <DATA>
 VSIZE             : <LONG_SIZE>
 
+
+
 -------------------------------------------------------------------------------
 
 Protocol extensions for signature/crc:
 
-SIG_MESSAGE      : <SIG_MSG> | <CSIG_MSG>
+SIG              : <SIG_MSG> | <CSIG_MSG>
 SIG_MSG          : <MAGIC><SIG_HDR><MESSAGE><SIG>
 CSIG_MSG         : <MAGIC><CSIG_HDR><HDR><CSIG><CSIG_RECORD>[<RSEP><CSIG><CSIG_RECORD>...]<EOM><CSIG>
 SIG_HDR          : <HDR_SIG_SIPHASH>
