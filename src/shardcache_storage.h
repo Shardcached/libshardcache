@@ -225,8 +225,8 @@ struct __shardcache_storage_s {
     //! The fecth callback
     shardcache_fetch_item_callback_t       fetch;
 
-    //! The fetch multiple items callback
-    shardcache_fetch_items_callback_t       fetch_multi;
+    //! The fetch multiple items callback (XXX - still unused)
+    shardcache_fetch_items_callback_t      fetch_multi;
 
     //! The store callback (optional if the storage is indended to be read-only)
     shardcache_store_item_callback_t       store;
@@ -283,6 +283,9 @@ struct __shardcache_storage_s {
      */
     void                                   *priv;
 
+    // the members of this structure are used internally by libshardcache to store the symbols
+    // extrated from the loadable storage plugins.
+    // The storage itself should never try accessing/modifying them
     struct {
         void *handle; // If not null, it points to the handle returned by dlopen
         shardcache_storage_init_t init;
