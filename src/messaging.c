@@ -660,20 +660,33 @@ read_and_check_siphash_signature(int fd, sip_hash *shash)
 
 // synchronous (blocking)  message reading
 int
-read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr, int ignore_timeout)
+read_message(int fd,
+             char *auth,
+             fbuf_t **records,
+             int expected_records,
+             shardcache_hdr_t *ohdr,
+             int ignore_timeout)
 {
     uint16_t clen;
-    int initial_len = fbuf_used(out);;
     int reading_message = 0;
     unsigned char hdr;
     int csig = 0;
     sip_hash *shash = NULL;
     char version = 0;
 
+    // there is no point in reading the message
+    // if we are not interested in any record
+    if (expected_records < 1)
+        return -1;
+
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) & ~O_NONBLOCK);
 
     if (auth)
-        shash = sip_hash_new(auth, 2, 4);
+        shash = sip_hash_new((uint8_t *)auth, 2, 4);
+
+    int record_index = 0;
+    fbuf_t *out = records[record_index];
+    int initial_len = fbuf_used(out);
 
     for(;;) {
         int rb;
@@ -799,7 +812,6 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr, int ignore
 
                 if (rsep == SHARDCACHE_RSEP) {
                     // go ahead fetching the next record
-                    // XXX - should we separate the records in the output buffer?
                     if (shash && csig) {
                         if (!read_and_check_siphash_signature(fd, shash)) {
                             sip_hash_free(shash);
@@ -808,7 +820,13 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr, int ignore
                             return -1;
                         }
                     }
-                    continue;
+                    record_index++;
+                    if (record_index == expected_records) {
+                        if (shash)
+                            sip_hash_free(shash);
+                        return record_index + 1;
+                    }
+                    out = records[record_index];
                 } else if (rsep == 0) {
                     if (shash) {
                         if (!read_and_check_siphash_signature(fd, shash)) {
@@ -819,7 +837,7 @@ read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *ohdr, int ignore
                         }
                         sip_hash_free(shash);
                     }
-                    return 0;
+                    return record_index + 1;
                 } else {
                     // BOGUS RESPONSE
                     fbuf_set_used(out, initial_len);
@@ -1084,8 +1102,9 @@ _delete_from_peer_internal(char *peer,
         if (rc == 0 && expect_response) {
             shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
-            rc = read_message(fd, auth, &resp, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+            fbuf_t *respp = &resp;
+            int num_records = read_message(fd, auth, &respp, 1, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
                 SHC_DEBUG2("Got (del) response from peer %s: %02x\n",
                           peer, *((char *)fbuf_data(&resp)));
                 if (should_close)
@@ -1185,9 +1204,10 @@ _send_to_peer_internal(char *peer,
         if (rc == 0 && expect_response) {
             shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            fbuf_t *respp = &resp;
             errno = 0;
-            rc = read_message(fd, auth, &resp, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+            int num_records = read_message(fd, auth, &respp, 1, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
                 SHC_DEBUG2("Got (set) response from peer %s : %s\n",
                           peer, fbuf_data(&resp));
                 if (should_close)
@@ -1282,8 +1302,8 @@ fetch_from_peer(char *peer,
                 SHC_HDR_GET, &record, 1);
         if (rc == 0) {
             shardcache_hdr_t hdr = 0;
-            rc = read_message(fd, auth, out, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+            int num_records = read_message(fd, auth, &out, 1, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
                 if (fbuf_used(out)) {
                     char keystr[1024];
                     memcpy(keystr, key, len < 1024 ? len : 1024);
@@ -1343,8 +1363,8 @@ offset_from_peer(char *peer,
 
         if (rc == 0) {
             shardcache_hdr_t hdr = 0;
-            rc = read_message(fd, auth, out, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+            int num_records = read_message(fd, auth, &out, 1, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
                 if (fbuf_used(out)) {
                     char keystr[1024];
                     memcpy(keystr, key, len < 1024 ? len : 1024);
@@ -1398,8 +1418,9 @@ exists_on_peer(char *peer,
         if (rc == 0 && expect_response) {
             shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
-            rc = read_message(fd, auth, &resp, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+            fbuf_t *respp = &resp;
+            int num_records = read_message(fd, auth, &respp, 1, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
                 SHC_DEBUG2("Got (exists) response from peer %s : %s\n",
                           peer, fbuf_data(&resp));
                 if (should_close)
@@ -1462,8 +1483,9 @@ touch_on_peer(char *peer,
         if (rc == 0) {
             shardcache_hdr_t hdr = 0;
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
-            rc = read_message(fd, auth, &resp, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+            fbuf_t *respp = &resp;
+            int num_records = read_message(fd, auth, &respp, 1, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
                 SHC_DEBUG2("Got (touch) response from peer %s : %s\n",
                           peer, fbuf_data(&resp));
                 if (should_close)
@@ -1508,9 +1530,10 @@ stats_from_peer(char *peer,
                 SHC_HDR_STATS, NULL, 0);
         if (rc == 0) {
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            fbuf_t *respp = &resp;
             shardcache_hdr_t hdr = 0;
-            rc = read_message(fd, auth, &resp, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+            int num_records = read_message(fd, auth, &respp, 1, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
                 size_t l = fbuf_used(&resp)+1;
                 if (len)
                     *len = l;
@@ -1547,9 +1570,10 @@ check_peer(char *peer,
         int rc = write_message(fd, auth, sig_hdr, SHC_HDR_CHECK, NULL, 0);
         if (rc == 0) {
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            fbuf_t *respp = &resp;
             shardcache_hdr_t hdr = 0;
-            rc = read_message(fd, auth, &resp, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+            int num_records = read_message(fd, auth, &respp, 1, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
                 rc = -1;
                 char *res = fbuf_data(&resp);
                 if (res && *res == SHC_RES_OK)
@@ -1584,9 +1608,10 @@ index_from_peer(char *peer,
         int rc = write_message(fd, auth, sig_hdr, SHC_HDR_GET_INDEX, NULL, 0);
         if (rc == 0) {
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            fbuf_t *respp = &resp;
             shardcache_hdr_t hdr = 0;
-            rc = read_message(fd, auth, &resp, &hdr, 1);
-            if (hdr == SHC_HDR_INDEX_RESPONSE && rc == 0) {
+            int num_records = read_message(fd, auth, &respp, 1, &hdr, 1);
+            if (hdr == SHC_HDR_INDEX_RESPONSE && num_records == 1) {
                 char *data = fbuf_data(&resp);
                 int len = fbuf_used(&resp);
                 int ofx = 0;
@@ -1652,8 +1677,9 @@ migrate_peer(char *peer,
 
         shardcache_hdr_t hdr = 0;
         fbuf_t resp = FBUF_STATIC_INITIALIZER;
-        rc = read_message(fd, auth, &resp, &hdr, 0);
-        if (hdr == SHC_HDR_RESPONSE && rc == 0) {
+        fbuf_t *respp = &resp;
+        int num_records = read_message(fd, auth, &respp, 1, &hdr, 0);
+        if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
             SHC_DEBUG2("Got (del) response from peer %s : %s",
                     peer, fbuf_data(&resp));
             if (should_close)
@@ -1686,10 +1712,10 @@ abort_migrate_peer(char *peer,
         int rc = write_message(fd, auth, sig_hdr, SHC_HDR_MIGRATION_ABORT, NULL, 0);
         if (rc == 0) {
             fbuf_t resp = FBUF_STATIC_INITIALIZER;
+            fbuf_t *respp = &resp;
             shardcache_hdr_t hdr = 0;
-            rc = read_message(fd, auth, &resp, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && rc == 0) {
-
+            int num_records = read_message(fd, auth, &respp, 1, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
                 rc = -1;
                 char *res = fbuf_data(&resp);
                 if (res && *res == SHC_RES_OK)

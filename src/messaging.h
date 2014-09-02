@@ -81,7 +81,12 @@ typedef struct __shardcache_record_s {
 int global_tcp_timeout(int tcp_timeout);
 
 // synchronously read a message (blocking)
-int read_message(int fd, char *auth, fbuf_t *out, shardcache_hdr_t *hdr, int ignore_timeout);
+int read_message(int fd,
+                 char *auth,
+                 fbuf_t **out,
+                 int expected_records,
+                 shardcache_hdr_t *hdr,
+                 int ignore_timeout);
 
 // synchronously write a message (blocking)
 int write_message(int fd,
