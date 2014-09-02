@@ -158,6 +158,7 @@ struct __shardcache_s {
 
     int use_persistent_storage;    // boolean flag indicating if a persistent storage should be used  
 
+
     shardcache_storage_t storage;  // the structure holding the callbacks for the persistent storage 
 
     hashtable_t *volatile_storage; // an hashtable used as volatile storage

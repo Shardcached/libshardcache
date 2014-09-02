@@ -204,7 +204,13 @@ typedef void (*shardcache_thread_start_callback_t)(void *priv);
  */
 typedef void (*shardcache_thread_exit_callback_t)(void *priv);
 
+
 #define SHARDCACHE_STORAGE_API_VERSION 0x01
+
+typedef struct __shardcache_storage_s shardcache_storage_t;
+typedef int (*shardcache_storage_init_t)(shardcache_storage_t *, char **);
+typedef void (*shardcache_storage_destroy_t)(void *);
+typedef int (*shardcache_storage_reset_t)(void *);
 
 /**
  * @struct shardcache_storage_t
@@ -212,10 +218,10 @@ typedef void (*shardcache_thread_exit_callback_t)(void *priv);
  * @brief      Structure holding all the callback pointers required
  *             by shardcache to interact with underlying storage
  */
-typedef struct __shardcache_storage_s {
+struct __shardcache_storage_s {
 
     uint32_t version; // The version of the storage structure
-
+ 
     //! The fecth callback
     shardcache_fetch_item_callback_t       fetch;
 
@@ -277,7 +283,14 @@ typedef struct __shardcache_storage_s {
      */
     void                                   *priv;
 
-} shardcache_storage_t;
+    struct {
+        void *handle; // If not null, it points to the handle returned by dlopen
+        shardcache_storage_init_t init;
+        shardcache_storage_destroy_t destroy;
+        shardcache_storage_reset_t reset;
+    } internal;
+
+};
 
 /**
  * @brief Callback used to create a new instance of a storage module

@@ -42,6 +42,28 @@ extern const char *LIBSHARDCACHE_VERSION;
  *******************************************************************************
  */
 
+/*
+ * @brief Create a shardcache storage from a loadable module
+ * @param filename the full-path to the loadable module
+ * @param options NULL-terminated array of storage options
+ * @return a fully initialized shardcache_storage_t structure which MUST
+ *         be released using shardcache_storage_dispose() once not needed anymore
+ */
+shardcache_storage_t *shardcache_storage_load(char *filename, char **options);
+
+/*
+ * @brief Release a shardcache storage previously initialized using shardcache_storage_load()
+ * @param st A valid shardcache_storage_t structure obtained using shardcache_storage_load()
+ */
+void shardcache_storage_dispose(shardcache_storage_t *st);
+
+/*
+ * @brief Reset an existing storage
+ * @param st A valid shardcache_storage_t structure
+ * @return 0 on success, -1 otherwise
+ */
+int shardcache_storage_reset(shardcache_storage_t *st);
+
 /**
  * @brief Create a new shardcache instance
  * @param me              A valid <address:port> null-terminated string

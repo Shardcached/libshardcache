@@ -12,6 +12,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <dlfcn.h>
 
 #include "shardcache.h"
 #include "shardcache_internal.h"
@@ -2528,6 +2529,95 @@ void shardcache_thread_end(shardcache_t *cache)
 {
     if (cache->storage.thread_exit)
         cache->storage.thread_exit(cache->storage.priv);
+}
+
+shardcache_storage_t *
+shardcache_storage_load(char *filename, char **options)
+{
+    shardcache_storage_t *st = calloc(1, sizeof(shardcache_storage_t));
+
+    // initialize the storage layer 
+    int initialized = -1;
+    st->internal.handle = dlopen(filename, RTLD_NOW);
+    if (!st->internal.handle) {
+        SHC_ERROR("Can't open the storage module: %s (%s)\n", filename, dlerror());
+        free(st);
+        return NULL;
+    }
+    char *error = NULL;
+
+    int *version = dlsym(st->internal.handle, "storage_version");
+    if (!version || ((error = dlerror()) != NULL)) {
+        if (error)
+            SHC_ERROR("%s", error);
+        else
+            SHC_ERROR("Can't find the symbol 'storage_version' in the loaded module");
+
+        dlclose(st->internal.handle);
+        free(st);
+        return NULL;
+    }
+
+    if (*version != SHARDCACHE_STORAGE_API_VERSION) {
+        SHC_ERROR("The storage plugin version doesn't match (%d != %d)",
+                    version, SHARDCACHE_STORAGE_API_VERSION);
+        dlclose(st->internal.handle);
+        free(st);
+        return NULL;
+    }
+    st->version = *version;
+
+    st->internal.init = dlsym(st->internal.handle, "storage_init");
+    if (!st->internal.init || ((error = dlerror()) != NULL))  {
+        if (error)
+            SHC_ERROR("%s", error);
+        else
+            SHC_ERROR("Can't find the symbol 'storage_init' in the loaded module");
+        dlclose(st->internal.handle);
+        free(st);
+        return NULL;
+    }
+
+    st->internal.destroy = dlsym(st->internal.handle, "storage_destroy");
+    if (!st->internal.destroy || ((error = dlerror()) != NULL))  {
+        if (error)
+            SHC_ERROR("%s", error);
+        else
+            SHC_ERROR("Can't find the symbol 'storage_destroy' in the loaded module");
+        dlclose(st->internal.handle);
+        free(st);
+        return NULL;
+    }
+
+    st->internal.reset = dlsym(st->internal.handle, "storage_reset");
+    
+    initialized = st->internal.init(st, options);
+    if (initialized != 0) {
+        SHC_ERROR("Can't init the storage module: %s\n", filename);
+        free(st);
+        return NULL;
+    }
+    return st;
+}
+
+void
+shardcache_storage_dispose(shardcache_storage_t *st)
+{
+    if (st->internal.destroy)
+       st->internal.destroy(st->priv); 
+
+    if (st->internal.handle)
+        dlclose(st->internal.handle);
+
+    free(st);
+}
+
+int
+shardcache_storage_reset(shardcache_storage_t *st)
+{
+    if (st->internal.reset)
+        return st->internal.reset(st->priv);
+    return -1;
 }
 
 // vim: tabstop=4 shiftwidth=4 expandtab:
