@@ -410,6 +410,13 @@ shardcache_get_offset_async(shardcache_t *cache,
                             shardcache_get_async_callback_t cb,
                             void *priv);
 
+int shardcache_get_multi(shardcache_t *cache,
+                         void **keys,
+                         size_t *lens,
+                         int num_keys,
+                         shardcache_get_async_callback_t cb,
+                         void *priv);
+
 /**
  * @brief Callback expected by all the _async() routines returning an integer result
  *        (basically all apart shardcache_get_async() shardcache_offset_async())

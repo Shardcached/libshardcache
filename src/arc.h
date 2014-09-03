@@ -33,6 +33,8 @@ typedef struct _arc_ops {
      */
     int (*fetch) (void *obj, size_t *size, void *priv);
 
+    int (*fetch_multi) (void **objs, size_t **sizes, int num_objects, void *priv);
+
     void (*store) (void *obj, void *data, size_t size, void *priv);
     
     /**
@@ -81,6 +83,14 @@ void arc_destroy(arc_t *cache);
  *       the caller releases it using the arc_release_resource() function
  */
 arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t klen, void **valuep, int async);
+
+arc_resource_t arc_lookup_nofetch(arc_t *cache, const void *key, size_t len, void **valuep);
+
+int arc_lookup_multi(arc_t *cache,
+                     void **keys,
+                     size_t *klens,
+                     arc_resource_t *resources,
+                     int num_keys);
 
 int arc_load(arc_t *cache, const void *key, size_t klen, void *valuep, size_t vlen);
 

@@ -492,8 +492,8 @@ arc_object_create(arc_t *cache, const void *key, size_t len)
 }
 
 // the returned object is retained, the caller must call arc_release_resource(obj) to release it
-arc_resource_t 
-arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
+static inline arc_resource_t 
+arc_lookup_internal(arc_t *cache, const void *key, size_t len, void **valuep, int async, int nofetch)
 {
     // NOTE: this is an atomic operation ensured by the hashtable implementation,
     //       we don't do any real copy in our callback but we just increase the refcount
@@ -514,8 +514,11 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
         return obj;
     }
 
+    if (nofetch)
+        return NULL;
+
     obj = arc_object_create(cache, key, len);
-    if (!obj)
+    if (UNLIKELY(!obj))
         return NULL;
 
     // let our cache user initialize the underlying object
@@ -552,6 +555,92 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
     } 
     release_ref(cache->refcnt, obj->node);
     return NULL;
+}
+
+// the returned object is retained, the caller must call arc_release_resource(obj) to release it
+arc_resource_t 
+arc_lookup_nofetch(arc_t *cache, const void *key, size_t len, void **valuep)
+{
+    return arc_lookup_internal(cache, key, len, valuep, 0, 1);
+}
+
+
+// the returned object is retained, the caller must call arc_release_resource(obj) to release it
+arc_resource_t 
+arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
+{
+    return arc_lookup_internal(cache, key, len, valuep, async, 0);
+}
+
+int arc_lookup_multi(arc_t *cache,
+                     void **keys,
+                     size_t *klens,
+                     arc_resource_t *resources,
+                     int num_keys)
+{
+    int i;
+    int *missing = NULL;
+    int missing_count = 0;
+
+    if (cache->ops->fetch_multi) {
+        for (i = 0; i < num_keys; i++) {
+            resources[i] = arc_lookup_nofetch(cache, keys[i], klens[i], NULL);
+            if (!resources[i]) {
+                missing = realloc(missing, sizeof(int) * (missing_count + 1));
+                missing[missing_count++] = i;
+            }
+        }
+
+        if (missing_count) {
+            void **missing_objects = malloc(sizeof(void *) * missing_count);
+            int to_fetch = 0;
+            for (i = 0; i < missing_count; i++) {
+                void *key = keys[missing[i]];
+                size_t klen = klens[missing[i]];
+                arc_object_t *obj = arc_object_create(cache, key, klen);
+                if (UNLIKELY(!obj)) {
+                    //TODO - handle error and release resources
+                    return -1;
+                }
+
+                // let our cache user initialize the underlying object
+                cache->ops->init(key, klen, 1, (arc_resource_t)obj, obj->ptr, cache->ops->priv);
+                obj->async = 1;
+
+                retain_ref(cache->refcnt, obj->node);
+                // NOTE: atomicity here is ensured by the hashtable implementation
+                int rc = ht_set_if_not_exists(cache->hash, (void *)key, klen, obj, sizeof(arc_object_t));
+                switch(rc) {
+                    case -1:
+                        fprintf(stderr, "Can't set the new value in the internal hashtable\n");
+                        release_ref(cache->refcnt, obj->node);
+                        break;
+                    case 1:
+                        // the object has been created in the meanwhile
+                        release_ref(cache->refcnt, obj->node);
+                        // XXX - yes, we have to release it twice
+                        release_ref(cache->refcnt, obj->node);
+                        resources[missing[i]] = arc_lookup(cache, key, klen, NULL, 1);
+                        break;
+                    case 0:
+                        missing_objects[to_fetch] = obj;
+                        to_fetch++;
+                        resources[missing[i]] = arc_get_resource_ptr(obj);
+                        break;
+                    default:
+                        fprintf(stderr, "Unknown return code from ht_set_if_not_exists() : %d\n", rc);
+                        release_ref(cache->refcnt, obj->node);
+                        break;
+                }
+            }
+            cache->ops->fetch_multi(missing_objects, NULL, to_fetch, cache->ops->priv);
+        }
+    } else {
+        for (i = 0; i < num_keys; i++) {
+            resources[i] = arc_lookup(cache, keys[i], klens[i], NULL, 1);
+        }
+    }
+    return 0;
 }
 
 static void *

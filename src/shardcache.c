@@ -917,9 +917,7 @@ shardcache_get_offset_async(shardcache_t *cache,
             memcpy(data, obj->data + offset, dlen);
         }
 
-        time_t obj_expiration = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
-                              ? 0
-                              : obj->ts.tv_sec + cache->expire_time;
+        time_t obj_expiration = obj->ts.tv_sec + cache->expire_time;
 
         if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
             cache->expire_time > 0 && obj_expiration < time(NULL)))
@@ -1078,9 +1076,7 @@ shardcache_get_async(shardcache_t *cache,
     }
 
     if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_COMPLETE)) {
-        time_t obj_expiration = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT))
-                              ? 0
-                              : obj->ts.tv_sec + cache->expire_time;
+        time_t obj_expiration = obj->ts.tv_sec + cache->expire_time;
         if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
                      cache->expire_time > 0 && obj_expiration < time(NULL)))
         {
@@ -1248,6 +1244,70 @@ shardcache_head(shardcache_t *cache,
     size_t rlen = hlen;
     size_t remainder =  shardcache_get_offset(cache, key, len, head, &rlen, 0, timestamp);
     return remainder + rlen;
+}
+
+int shardcache_get_multi(shardcache_t *cache,
+                         void **keys,
+                         size_t *lens,
+                         int num_keys,
+                         shardcache_get_async_callback_t cb,
+                         void *priv)
+{
+
+    arc_resource_t *resources = malloc(sizeof(arc_resource_t) * num_keys);
+    int rc = arc_lookup_multi(cache->arc, keys, lens, resources, num_keys);
+        
+    if (rc != 0) {
+        free(resources);
+        return -1;
+    }
+
+    int i;
+    for (i = 0; i < num_keys; i++) {
+        arc_resource_t res = resources[i];
+        if (res) {
+            cached_object_t *obj = (cached_object_t *)arc_get_resource_ptr(res);
+            MUTEX_LOCK(&obj->lock);
+
+            int complete = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_COMPLETE);
+            if (complete) {
+                time_t obj_expiration = obj->ts.tv_sec + cache->expire_time;
+                if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
+                             cache->expire_time > 0 && obj_expiration < time(NULL)))
+                {
+                    MUTEX_UNLOCK(&obj->lock);
+                    arc_drop_resource(cache->arc, res);
+                    cb(keys[i], lens[i], NULL, 0, 0, NULL, priv);
+                    continue;
+                }
+                cb(obj->key, obj->klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
+                arc_release_resource(cache->arc, res);
+            } else {
+                // send what we have so far
+                cb(obj->key, obj->klen, obj->data, obj->dlen, 0, NULL, priv);
+
+                // and then register the listener
+                shardcache_get_async_helper_arg_t *arg = calloc(1, sizeof(shardcache_get_async_helper_arg_t));
+                arg->cb = cb;
+                arg->priv = priv;
+                arg->cache = cache;
+                arg->res = res;
+
+                shardcache_get_listener_t *listener = malloc(sizeof(shardcache_get_listener_t));
+                listener->cb = shardcache_get_async_helper;
+                listener->priv = arg;
+                list_push_value(obj->listeners, listener);
+            }
+
+            MUTEX_UNLOCK(&obj->lock);
+        } else {
+            cb(keys[i], lens[i], NULL, 0, 0, NULL, priv);
+        }
+    }
+
+    free(resources);
+
+    return 0;
 }
 
 typedef struct {
