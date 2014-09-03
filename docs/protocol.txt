@@ -24,11 +24,11 @@ MSG_GET_OFFSET       : 0x06
 MSG_ADD              : 0x07
 MSG_EXISTS           : 0x08
 MSG_TOUCH            : 0x09
-MSG_GET_MULTI        : 0x0A
-MSG_SET_MULTI        : 0x0B
-MSG_DELETE_MULTI     : 0x0C
-MSG_EVICT_MULTI      : 0x0D
-MSG_CAS              : 0x0E
+MSG_CAS              : 0x0A
+MSG_GET_MULTI        : 0x0B
+MSG_SET_MULTI        : 0x0C
+MSG_DELETE_MULTI     : 0x0D
+MSG_EVICT_MULTI      : 0x0E
 MSG_INCREMENT        : 0x10
 MSG_DECREMENT        : 0x11
 MSG_MIGRATION_ABORT  : 0x21
