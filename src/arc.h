@@ -21,7 +21,7 @@ typedef struct __arc_ops {
      * ptr will point to a prealloc'd memory where the cached object is stored
      * and needs to be initialized by this callback
      */
-    void (*init) (const void *key, size_t klen, int async, arc_resource_t *res, void *ptr, void *priv);
+    void (*init) (const void *key, size_t klen, int async, arc_resource_t res, void *ptr, void *priv);
     
     /**
      * @brief Fetch the data associated with the object.
@@ -85,7 +85,7 @@ arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t klen, void **val
  * @param cache  : A valid pointer to an initialized arc_t structure
  * @param res    : An opaque ARC resource previously returned by arc_lookup()
  */
-void arc_release_resource(arc_t *cache, arc_resource_t *res);
+void arc_release_resource(arc_t *cache, arc_resource_t res);
 
 /**
  * @brief Retain an ARC resource preventing it from being released
@@ -95,9 +95,11 @@ void arc_release_resource(arc_t *cache, arc_resource_t *res);
  * @note Retained resources MUST be released calling arc_release_resource()
  *       once it is not going to be referenced anymore
  */
-void arc_retain_resource(arc_t *cache, arc_resource_t *res);
+void arc_retain_resource(arc_t *cache, arc_resource_t res);
 
-void arc_drop_resource(arc_t *cache, arc_resource_t *res);
+void arc_drop_resource(arc_t *cache, arc_resource_t res);
+
+void *arc_get_resource_ptr(arc_resource_t res);
 
 /**
  * @brief Force complete removal of an item from the cache
@@ -124,7 +126,7 @@ void arc_evict(arc_t *cache, const void *key, size_t len);
  * @param res    : An opaque ARC resource previously returned by arc_lookup()
  * @param size   : The new size of the cached object
  */
-void arc_update_resource_size(arc_t *cache, arc_resource_t *res, size_t size);
+void arc_update_resource_size(arc_t *cache, arc_resource_t res, size_t size);
 
 /**
  * @brief Returns the actual cache size (in bytes)

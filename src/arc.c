@@ -202,7 +202,7 @@ arc_balance(arc_t *cache)
 }
 
 void
-arc_update_resource_size(arc_t *cache, arc_resource_t *res, size_t size)
+arc_update_resource_size(arc_t *cache, arc_resource_t res, size_t size)
 {
     arc_object_t *obj = (arc_object_t *)res;
     if (obj) {
@@ -424,7 +424,7 @@ retain_obj_cb(void *data, size_t dlen, void *user)
 }
 
 void
-arc_drop_resource(arc_t *cache, arc_resource_t *res)
+arc_drop_resource(arc_t *cache, arc_resource_t res)
 {
     arc_object_t *obj = (arc_object_t *)res;
     if (obj)
@@ -443,7 +443,7 @@ arc_remove(arc_t *cache, const void *key, size_t len)
 
 /* Lookup an object with the given key. */
 void
-arc_release_resource(arc_t *cache, arc_resource_t *res)
+arc_release_resource(arc_t *cache, arc_resource_t res)
 {
     arc_object_t *obj = (arc_object_t *)res;
     release_ref(cache->refcnt, obj->node);
@@ -451,7 +451,7 @@ arc_release_resource(arc_t *cache, arc_resource_t *res)
 
 /* Lookup an object with the given key. */
 void
-arc_retain_resource(arc_t *cache, arc_resource_t *res)
+arc_retain_resource(arc_t *cache, arc_resource_t res)
 {
     arc_object_t *obj = (arc_object_t *)res;
 
@@ -507,7 +507,7 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
         return NULL;
 
     // let our cache user initialize the underlying object
-    cache->ops->init(key, len, async, (arc_resource_t *)obj, obj->ptr, cache->ops->priv);
+    cache->ops->init(key, len, async, (arc_resource_t)obj, obj->ptr, cache->ops->priv);
     obj->async = async;
 
     retain_ref(cache->refcnt, obj->node);
@@ -577,6 +577,12 @@ arc_count(arc_t *cache)
 {
     return ATOMIC_READ(cache->mru.count) + ATOMIC_READ(cache->mfu.count) +
            ATOMIC_READ(cache->mrug.count) + ATOMIC_READ(cache->mfug.count);
+}
+
+void *
+arc_get_resource_ptr(arc_resource_t res)
+{
+    return ((arc_object_t *)res)->ptr;
 }
 
 // vim: tabstop=4 shiftwidth=4 expandtab:

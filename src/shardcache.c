@@ -769,7 +769,7 @@ typedef struct {
     size_t len;
     size_t sent;
     shardcache_t *cache;
-    arc_resource_t *res;
+    arc_resource_t res;
     shardcache_get_async_callback_t cb;
     void *priv;
 } shardcache_get_async_helper_arg_t;
