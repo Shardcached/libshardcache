@@ -263,11 +263,11 @@ open_connection(const char *host, int port, unsigned int timeout)
         fcntl(sock, F_SETFL, flags);
 
         int rc = connect(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
-        if (rc) {
+        if (rc == 0 || errno == EISCONN) {
             flags &= ~O_NONBLOCK;
             fcntl(sock, F_SETFL, flags);
             fcntl(sock, F_SETFD, FD_CLOEXEC);
-           return sock;
+            return sock;
         } else if (rc == -1 && errno != EINPROGRESS) {
             fprintf(stderr, "Can't connect to %s:%d : %s\n", host, port, strerror(errno));
             shutdown(sock, SHUT_RDWR);
@@ -339,6 +339,7 @@ open_connection(const char *host, int port, unsigned int timeout)
         close(sock);
         return -1;
     }
+
     fcntl(sock, F_SETFD, FD_CLOEXEC);
     return sock;
 }
