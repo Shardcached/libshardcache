@@ -30,6 +30,17 @@ typedef enum {
     SHC_HDR_ADD              = 0x07,
     SHC_HDR_EXISTS           = 0x08,
     SHC_HDR_TOUCH            = 0x09,
+    SHC_HDR_CAS              = 0x0A,
+
+    // multi commands
+    SHC_HDR_GET_MULTI        = 0x0B,
+    SHC_HDR_SET_MULTI        = 0x0C,
+    SHC_HDR_DELETE_MULTI     = 0x0D,
+    SHC_HDR_EVICT_MULTI      = 0x0E,
+
+    // atomic commands (assuming that the value is a 64bit integer)
+    SHC_HDR_INCREMENT        = 0x10,
+    SHC_HDR_DECREMENT        = 0x11,
 
     // migration commands
     SHC_HDR_MIGRATION_ABORT  = 0x21,
