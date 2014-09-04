@@ -47,7 +47,7 @@ static int index_get_from_storage(shardcache_storage_t * storage, shardcache_sto
         return -1;
     }
 
-    index->size  = storage->count(storage);
+    index->size  = storage->count(storage->priv);
     index->items = calloc(index->size, sizeof(shardcache_storage_index_item_t));
 
     storage->index(index->items, index->size, storage->priv);
