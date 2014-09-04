@@ -96,7 +96,7 @@ static void stop(int signal)
 
 /* - */
 
-static void print_help(char * prog) {
+static void usage(char * prog, int rc) {
     printf("usage: %s [OPTIONS]...\n"
            "    -s <storagemodule>    the path of the storage module plugin\n"
            "    -o <options>          comma-separated list of storage options\n"
@@ -104,6 +104,7 @@ static void print_help(char * prog) {
            "    -h                    prints this help\n",
            prog,
            DEFAULT_NUM_THREADS);
+    exit(rc);
 }
 
 static void set_default_options(options_t * options) {
@@ -142,8 +143,7 @@ static void parse_cmdline(int argc, char ** argv, options_t * options) {
                 break;
 
             case 'h':
-                print_help(argv[0]);
-                exit(0);
+                usage(argv[0], 0);
                 break;
         }
     }
@@ -186,7 +186,7 @@ int main(int argc, char ** argv) {
 
     if (strlen(options.storage_module) == 0) {
         SHC_ERROR("the storage module path must be specified");
-        exit(-1);
+        usage(argv[0], -1);
     }
 
     parse_options(options.storage_options_string,
