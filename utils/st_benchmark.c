@@ -64,6 +64,9 @@ static void * worker_thread(void * in_args)
 
     worker_thread_args_t * args = (worker_thread_args_t *)in_args;
 
+    if (args->storage->thread_start)
+        args->storage->thread_start(args->storage->priv);
+
     while (!__sync_fetch_and_add(&quit, 0)) {
         for (int i = 0; i < args->index->size; i++) {
             args->storage->fetch(args->index->items[i].key,
@@ -78,6 +81,9 @@ static void * worker_thread(void * in_args)
                 break;
         }
     }
+
+    if (args->storage->thread_exit)
+        args->storage->thread_exit(args->storage->priv);
 
     return NULL;
 }
