@@ -314,17 +314,19 @@ kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t
 
     int nitems = 0;
     kepaxos_log_item_t *itms = NULL;
-    struct dirent *item = readdir(ballots_dir);
-    while (item) {
-        if (item->d_name[0] != '.' && item->d_type == DT_LNK) {
-            uint64_t b = strtoll(item->d_name, NULL, 10);
+    struct dirent item, *result;
+    while (readdir_r(ballots_dir, &item, &result) == 0) {
+        if (!result)
+            break;
+        if (item.d_name[0] != '.' && item.d_type == DT_LNK) {
+            uint64_t b = strtoll(item.d_name, NULL, 10);
             if (b && b > ballot) {
                 struct stat st;
 
                 // compute the path to this key in the replica log
-                size_t kpath_len = ballots_path_len + 1 + strlen(item->d_name) + 1;
+                size_t kpath_len = ballots_path_len + 1 + strlen(item.d_name) + 1;
                 char kpath[kpath_len];
-                snprintf(kpath, sizeof(kpath), "%s/%s", ballots_path, item->d_name);
+                snprintf(kpath, sizeof(kpath), "%s/%s", ballots_path, item.d_name);
 
                 // get the key
                 size_t kfile_path_len = kpath_len + 5;
@@ -332,13 +334,11 @@ kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t
                 snprintf(kfile_path, sizeof(kfile_path), "%s/key", kpath);
                 if (stat(kfile_path, &st) != 0 || !S_ISREG(st.st_mode)) {
                     SHC_ERROR("Can't stat the key file %s: %s", kfile_path, strerror(errno));
-                    item = readdir(ballots_dir);
                     continue;
                 }
                 FILE *kfile = fopen(kfile_path, "r");
                 if (!kfile) {
                     SHC_ERROR("Can't open the key file %s: %s", kfile_path, strerror(errno));
-                    item = readdir(ballots_dir);
                     continue;
                 }
 
@@ -348,7 +348,6 @@ kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t
                     SHC_ERROR("Can't read the key file %s: %s", kfile_path, strerror(errno));
                     free(key);
                     fclose(kfile);
-                    item = readdir(ballots_dir);
                     continue;
 
                 }
@@ -363,7 +362,6 @@ kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t
                     SHC_ERROR("Can't read the key file %s: %s", kfile_path, strerror(errno));
                     free(key);
                     fclose(kfile);
-                    item = readdir(ballots_dir);
                     continue;
                 }
                 uint64_t seq = 0;
@@ -372,22 +370,19 @@ kepaxos_diff_from_ballot(kepaxos_log_t *log, uint64_t ballot, kepaxos_log_item_t
                     free(key);
                     fclose(kfile);
                     fclose(sfile);
-                    item = readdir(ballots_dir);
                     continue;
                 }
                 fclose(sfile);
 
                 // now that we have everything we can fill in the item to return
                 itms = realloc(itms, sizeof(kepaxos_log_item_t) * (nitems + 1));
-                kepaxos_log_item_t *item = &itms[nitems++];
-                item->ballot = b;
-                item->seq = seq;
-                item->klen = st.st_size;
-                item->key = key;
+                kepaxos_log_item_t *kitem = &itms[nitems++];
+                kitem->ballot = b;
+                kitem->seq = seq;
+                kitem->klen = st.st_size;
+                kitem->key = key;
             }
         }
-            
-        item = readdir(ballots_dir);
     }
     closedir(ballots_dir);
     *items = itms;
