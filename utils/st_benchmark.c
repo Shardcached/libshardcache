@@ -21,13 +21,7 @@ typedef int  (*module_init)    (shardcache_storage_t *st, const char **options);
 typedef void (*module_destroy) (void *);
 
 typedef struct {
-    shardcache_storage_t module;
-    module_init          init;
-    module_destroy       destroy;
-} storage_module_t;
-
-typedef struct {
-    storage_module_t           * storage;
+    shardcache_storage_t       * storage;
     shardcache_storage_index_t * index;
     int                        * counter;
 } worker_thread_args_t;
@@ -36,100 +30,27 @@ typedef struct {
     char storage_module[MODULE_PATH_LEN];
     char storage_options_string[OPTION_STRING_LEN];
     int  number_of_threads;
-    const char * storage_options[MAX_STORAGE_OPTIONS];
+    char * storage_options[MAX_STORAGE_OPTIONS];
 } options_t;
-
-/* - */
 
 static int quit = 0;
 
-/* - */
-
-static int storage_module_load(storage_module_t * storage, char * module_path)
+static int index_get_from_storage(shardcache_storage_t * storage, shardcache_storage_index_t * index)
 {
-    char * error = NULL;
-
-    void * handle = dlopen(module_path, RTLD_NOW);
-    if (!handle) {
-        SHC_ERROR("cannot load the storage module: %s (%s)", module_path, dlerror());
-        exit(-1);
-    }
-
-    int * version = dlsym(handle, "storage_version");
-    if (!version || ((error = dlerror()) != NULL)) {
-        if (error)
-            SHC_ERROR("%s", error);
-        else
-            SHC_ERROR("Can't find the symbol 'storage_version' in the loaded module");
-
-        return -1;
-    }
-
-    if (*version != SHARDCACHE_STORAGE_API_VERSION) {
-        SHC_ERROR("The storage plugin version doesn't match (%d != %d)",
-                    version, SHARDCACHE_STORAGE_API_VERSION);
-        return -1;
-    }
-
-    storage->init = dlsym(handle, "storage_init");
-    if (!storage->init || ((error = dlerror()) != NULL))  {
-        if (error)
-            SHC_ERROR("%s", error);
-        else
-            SHC_ERROR("Can't find the symbol 'storage_init' in the loaded module");
-        dlclose(handle);
-
-        return -1;
-    }
-
-    storage->destroy = dlsym(handle, "storage_destroy");
-    if (!storage->destroy || ((error = dlerror()) != NULL))  {
-        if (error)
-            SHC_ERROR("%s", error);
-        else
-            SHC_ERROR("Can't find the symbol 'storage_destroy' in the loaded module");
-        dlclose(handle);
-
-        return -1;
-    }
-
-    return 0;
-}
-
-static int storage_module_instantiate(storage_module_t * storage, const char ** options)
-{
-    int ret = storage->init(&storage->module, options);
-    if (ret != 0) {
-        SHC_ERROR("storage module initialization reported failure %d", ret);
-        return -1;
-    }
-
-    if (storage->module.fetch == NULL) {
-        SHC_ERROR("this storage module doesn't implement the FETCH command, unable to proceed");
-        return -1;
-    }
-
-    return 0;
-}
-
-/* - */
-
-static int index_get_from_storage(storage_module_t * storage, shardcache_storage_index_t * index)
-{
-    if (storage->module.index == NULL) {
+    if (storage->index == NULL) {
         SHC_ERROR("this storage module doesn't implement the INDEX command, unable to get the keys index");
         return -1;
     }
 
-    if (storage->module.count == NULL) {
+    if (storage->count == NULL) {
         SHC_ERROR("this storage module doesn't implement the COUNT command, unable to get the keys index");
         return -1;
     }
 
-    index->size  = storage->module.count(storage->module.priv);
+    index->size  = storage->count(storage);
     index->items = calloc(index->size, sizeof(shardcache_storage_index_item_t));
 
-    storage->module.index(index->items, index->size, storage->module.priv);
+    storage->index(index->items, index->size, storage->priv);
 
     return 0;
 }
@@ -145,11 +66,11 @@ static void * worker_thread(void * in_args)
 
     while (!__sync_fetch_and_add(&quit, 0)) {
         for (int i = 0; i < args->index->size; i++) {
-            args->storage->module.fetch(args->index->items[i].key,
+            args->storage->fetch(args->index->items[i].key,
                                         args->index->items[i].klen,
                                         &value,
                                         &value_len,
-                                        args->storage->module.priv);
+                                        args->storage->priv);
 
             __sync_fetch_and_add(args->counter, 1);
 
@@ -223,7 +144,7 @@ static void parse_cmdline(int argc, char ** argv, options_t * options) {
 }
 
 static int parse_options(char        * options_string,
-                         const char ** module_options,
+                         char ** module_options,
                          size_t        max_storage_options)
 {
     int    optidx = 0;
@@ -249,7 +170,6 @@ static int parse_options(char        * options_string,
 
 int main(int argc, char ** argv) {
     options_t        options;
-    storage_module_t storage;
 
     shardcache_log_init("st_benchmark", LOG_WARNING);
 
@@ -269,16 +189,14 @@ int main(int argc, char ** argv) {
 
     /* - */
 
-    if (storage_module_load(&storage, options.storage_module) != 0)
-        exit(-1);
-
-    if (storage_module_instantiate(&storage, options.storage_options) != 0)
+    shardcache_storage_t *storage = shardcache_storage_load(options.storage_module, options.storage_options);
+    if (!storage)
         exit(-1);
 
     signal(SIGINT, stop);
 
     shardcache_storage_index_t index = {0};
-    index_get_from_storage(&storage, &index);
+    index_get_from_storage(storage, &index);
 
     pthread_t            threads        [options.number_of_threads];
     worker_thread_args_t thread_args    [options.number_of_threads];
@@ -289,7 +207,7 @@ int main(int argc, char ** argv) {
 
     for (int i = 0; i < options.number_of_threads; i++) {
         worker_thread_args_t * args = &thread_args[i];
-        args->storage = &storage,
+        args->storage = storage,
         args->index   = &index,
         args->counter = &counters[i];
 
@@ -328,7 +246,7 @@ int main(int argc, char ** argv) {
         printf("Thread %d done\n", i);
     }
 
-    storage.destroy(storage.module.priv);
+    shardcache_storage_dispose(storage);
 
     return 0;
 }
