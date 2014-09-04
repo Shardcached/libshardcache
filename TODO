@@ -7,9 +7,6 @@
    request to a peer, if an aysnc request is already being running to that peer, just push the new request
    to the same connection.
 
- * extend the storage API to support fetch_multi and store_multi which can be (optianlly, if exposed
-   by the module) used to fulfill get_multi and set_multi requests which need to go down to the storage
-
 ============================================================================================================== 
 
  * create a new abstraction layer by introducing a shardcache_resource_t opaque structure and an API to access it.
@@ -17,6 +14,9 @@
    If it's a get, the object returned by the arc subsystem will be retained, avoiding any copy.
    If the object is being fetched from a peer, the filedescriptor of the async operation will be available
    so that the operation itself can be safely cenceled
+
+ * extend the storage API to support fetch_multi and store_multi which can be (optianlly, if exposed
+   by the module) used to fulfill get_multi and set_multi requests which need to go down to the storage
 
  * protocol V2 :
     - a new response header to distinguish between not-found and errors as response to
