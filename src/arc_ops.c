@@ -67,7 +67,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
                                  size_t klen,
                                  void *data,
                                  size_t len,
-                                 int status, // 0 OK, -1 ERR, 1 CLOSE
+                                 int status, // 0 OK, -1 ERR, 1 DONE
                                  void *priv)
 {
     shc_fetch_async_arg_t *arg = (shc_fetch_async_arg_t *)priv;
@@ -88,7 +88,6 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         return -1;
     }
     if (!obj->listeners) {
-        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         if (fd >= 0)
             close(fd);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
