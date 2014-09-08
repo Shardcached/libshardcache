@@ -427,8 +427,10 @@ void
 arc_drop_resource(arc_t *cache, arc_resource_t res)
 {
     arc_object_t *obj = (arc_object_t *)res;
-    if (obj)
+    if (obj) {
         arc_move(cache, obj, NULL);
+        release_ref(cache->refcnt, obj->node);
+    }
 }
 
 void
