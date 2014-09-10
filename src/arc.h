@@ -164,6 +164,20 @@ size_t arc_mrug_size(arc_t *cache);
 size_t arc_mfug_size(arc_t *cache);
 
 /**
+ * @brief Get the size for all the lists at once
+ * @param cache  : A valid pointer to an initialized arc_t structure
+ * @param mru_size
+ * @param mfu_size
+ * @param mrug_size
+ * @param mfug_size
+ */
+void arc_get_size(arc_t *cache,
+                  size_t *mru_size,
+                  size_t *mfu_size,
+                  size_t *mrug_size,
+                  size_t *mfug_size);
+
+/**
  * @brief Returns the number of items actually cached
  * @param cache : A valid pointer to an initialized arc_t structure
  * @return The total number of items in the cache

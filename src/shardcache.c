@@ -836,15 +836,23 @@ shardcache_get_async_helper(void *key,
 static inline void
 shardcache_update_size_counters(shardcache_t *cache)
 {
-    size_t mru_size = arc_mru_size(cache->arc);
-    size_t mfu_size = arc_mfu_size(cache->arc);
-    size_t mrug_size = arc_mrug_size(cache->arc);
-    size_t mfug_size = arc_mfug_size(cache->arc);
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value, mru_size + mfu_size + mrug_size + mfug_size);
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRU_SIZE].value, mru_size);
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFU_SIZE].value, mfu_size);
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRUG_SIZE].value, mrug_size);
-    ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFUG_SIZE].value, mfug_size);
+    size_t mru_size, mfu_size, mrug_size, mfug_size;
+    arc_get_size(cache->arc, &mru_size, &mfu_size, &mrug_size, &mfug_size);
+    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value),
+               mru_size + mfu_size + mrug_size + mfug_size);
+    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRU_SIZE].value,
+               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRU_SIZE].value),
+               mru_size);
+    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFU_SIZE].value,
+               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFU_SIZE].value),
+               mfu_size);
+    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRUG_SIZE].value,
+               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRUG_SIZE].value),
+               mrug_size);
+    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFUG_SIZE].value,
+               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFUG_SIZE].value),
+               mfug_size);
 }
 
 int

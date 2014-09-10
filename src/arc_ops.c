@@ -356,9 +356,10 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                 ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
                 gettimeofday(&obj->ts, NULL);
                 *size = sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : obj->dlen);
+                int drop = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP|COBJ_FLAG_COMPLETE);
                 MUTEX_UNLOCK(&obj->lock);
                 ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
-                return COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP|COBJ_FLAG_COMPLETE) ? 1 : 0;
+                return drop ? 1 : 0;
             }
             MUTEX_UNLOCK(&obj->lock);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_ERRORS].value);
