@@ -869,8 +869,13 @@ shardcache_client_multi(shardcache_client_t *c,
         linked_list_t *items = (linked_list_t *)tval->value;
         shc_multi_ctx_t *ctx = shc_multi_context_create(c, cmd, tval->tag, (char *)c->auth, items, &total_count);
         if (!ctx) {
+            while ((ctx = list_shift_value(contexts))) {
+                iomux_remove(iomux, ctx->fd);
+                shc_multi_context_destroy(ctx);
+            }
             iomux_destroy(iomux);
             list_destroy(pools);
+            list_destroy(contexts);
             return -1;
         }
 
@@ -892,9 +897,9 @@ shardcache_client_multi(shardcache_client_t *c,
                 iomux_remove(iomux, ctx->fd);
                 shc_multi_context_destroy(ctx);
             }
-
             iomux_destroy(iomux);
             list_destroy(pools);
+            list_destroy(contexts);
             return -1;
         }
 
@@ -945,8 +950,8 @@ shardcache_client_multi(shardcache_client_t *c,
         iomux_remove(iomux, ctx->fd);
         shc_multi_context_destroy(ctx);
     }
-    list_destroy(contexts);
     iomux_destroy(iomux);
+    list_destroy(contexts);
     list_destroy(pools);
     return rc;
 }
