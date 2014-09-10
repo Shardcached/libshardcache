@@ -394,8 +394,7 @@ shardcache_expire_keys(void *priv)
             job = queue_pop_left(cache->expirer_queue);
         }
 
-        int timeout = ATOMIC_READ(cache->iomux_run_timeout_high);
-        struct timeval tv = { timeout/1e6, timeout%(int)1e6 };
+        struct timeval tv = { 1, 0 };
         iomux_run(cache->expirer_mux, &tv);
     }
     return NULL;
