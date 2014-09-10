@@ -845,7 +845,7 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
     if (ctx->response_index == ctx->num_requests)
         iomux_close(iomux, fd);
 
-    return len;
+    return processed;
 }
 
 static inline int
