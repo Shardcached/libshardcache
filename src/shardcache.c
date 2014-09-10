@@ -283,11 +283,9 @@ shardcache_expire_key_cb(iomux_t *iomux, void *priv)
     void *ptr = NULL;
     if (ctx->is_volatile) {
         ht_delete(ctx->cache->volatile_timeouts, ctx->item.key, ctx->item.klen, &ptr, NULL);
-        if (!ptr) {
-            free(ctx->item.key);
-            free(ctx);
+        if (!ptr)
             return;
-        }
+
         free(ptr);
         ht_delete(ctx->cache->volatile_storage, ctx->item.key, ctx->item.klen, &ptr, NULL);
         if (ptr) {
@@ -298,11 +296,8 @@ shardcache_expire_key_cb(iomux_t *iomux, void *priv)
         }
     } else {
         ht_delete(ctx->cache->cache_timeouts, ctx->item.key, ctx->item.klen, &ptr, NULL);
-        if (!ptr) {
-            free(ctx->item.key);
-            free(ctx);
+        if (!ptr)
             return;
-        }
         free(ptr);
     }
     ATOMIC_INCREMENT(ctx->cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
