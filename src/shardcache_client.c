@@ -723,6 +723,11 @@ static int
 shc_multi_collect_data(void *data, size_t len, int idx, void *priv)
 {
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
+    if (ctx->response_index >= ctx->num_requests) {
+        fprintf(stderr, "response_index overflow");
+        return -1;
+    }
+
     shc_multi_item_t *item = ctx->items[ctx->response_index];
     if (idx == 0 && len) {
         if (ctx->cmd == SHC_HDR_GET) {
@@ -767,7 +772,7 @@ shc_multi_context_create(shardcache_client_t *c,
     ctx->client = c;
     ctx->commands = fbuf_create(0);
     ctx->num_requests = list_count(items);
-    ctx->items = calloc(1, sizeof(shc_multi_item_t *) * ctx->num_requests);
+    ctx->items = calloc(1, sizeof(shc_multi_item_t *) * (ctx->num_requests+1));
     ctx->reader = async_read_context_create(secret, shc_multi_collect_data, ctx);
     ctx->cmd = cmd;
     ctx->peer = peer;
@@ -872,6 +877,7 @@ shardcache_client_multi(shardcache_client_t *c,
         iomux_callbacks_t cbs = {
             .mux_output = NULL,
             .mux_timeout = NULL,
+            .mux_eof = NULL,
             .mux_input = shc_multi_fetch_response,
             .priv = ctx
         };
