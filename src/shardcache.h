@@ -72,7 +72,7 @@ int shardcache_storage_reset(shardcache_storage_t *st);
  *                        taking part to the shardcache 'cloud'
  * @param num_nodes       The number of nodes present in the nodes list
  * @param storage         A shardcache_storage_t structure holding pointers to the
- *                        storage callbacks.\nIf NULL the internal (memory-only)
+ *                        storage callbacks.\n If NULL the internal (memory-only)
  *                        volatile storage will be used for all the keys (and not
  *                        only the ones being set with an expiration time)
  * @param secret          A null-terminated string containing the shared secret used to

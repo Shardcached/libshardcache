@@ -69,10 +69,10 @@ int shardcache_client_multi_command_max_wait(shardcache_client_t *c, int new_val
  * @brief Get and/or set the random_node mode on a shardcache client instance.
  *        When on a single (random) node will be used for all the commands instead
  *        of using the chash algorithm to determine the owner.
- * @param c       A valid pointer to a shardcache_client_t structure
+ * @param c         A valid pointer to a shardcache_client_t structure
  * @param new_value If false, the chash algorithm will be used against the list
  *        of known node to determine the owner of a key and commands will be sent
- *        only to owners.\nIf true a single random node will be used instead
+ *        only to owners.\n If true a single random node will be used instead
  *
  */
 int shardcache_client_use_random_node(shardcache_client_t *c, int new_value);
@@ -348,7 +348,6 @@ typedef struct {
 /**
  * @brief Helper to create item-descriptors provided as parameter
  *        to shardcache_client_get_multi() and shardcache_client_set_multi()
- * @param c      A valid pointer to a shardcache_client_t structure to release
  * @param key    A valid pointer to the key
  * @param klen   The length of the key
  * @param data   A valid pointer to the value

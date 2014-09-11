@@ -33,6 +33,7 @@ void shardcache_log_message(int prio, int dbglevel, const char *fmt, ...);
  * @param buf The buffer
  * @param len The size of the input buffer
  * @param limit Don't output more than 'limit' bytes
+ * @param use_prefix instruct if using the 0x prefix or not
  */
 char *shardcache_hex_escape(char *buf, int len, int limit, int use_prefix);
 
