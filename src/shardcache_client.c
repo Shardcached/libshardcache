@@ -841,9 +841,9 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
     if (state == SHC_STATE_READING_ERR) {
         fprintf(stderr, "Async context returned error\n");
         iomux_close(iomux, fd);
-    }
-    if (ctx->response_index == ctx->num_requests)
+    } else if (ctx->response_index == ctx->num_requests) {
         iomux_close(iomux, fd);
+    }
 
     return processed;
 }
@@ -953,6 +953,10 @@ shardcache_client_multi(shardcache_client_t *c,
     iomux_destroy(iomux);
     list_destroy(contexts);
     list_destroy(pools);
+
+    if (rc == 0 && total_count != num_items)
+        rc = 2;
+
     return rc;
 }
 
