@@ -552,7 +552,7 @@ None by default.
 
 =item * https://github.com/xant/libshardcache
 
-=item * http://xant.github.io/libshardcache/
+=item * http://xant.github.io/libshardcache/shardcache__client_8h.html
 
 =back
 
