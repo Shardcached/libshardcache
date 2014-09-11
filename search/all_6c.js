@@ -1,4 +1,6 @@
 var searchData=
 [
-  ['label',['label',['../shardcache_8h.html#a613c13a9fc77064d7d391c100a808966',1,'shardcache_node_t']]]
+  ['lazy_5fexpiration',['lazy_expiration',['../shardcache__internal_8h.html#a7bfeb293b4207389278b2247d7774ce6',1,'__shardcache_s']]],
+  ['libshardcache_5fversion',['LIBSHARDCACHE_VERSION',['../shardcache_8h.html#a212ce745de022f9dab442d5232cc1809',1,'shardcache.h']]],
+  ['likely',['LIKELY',['../shardcache__internal_8h.html#a870d9c125bbb79cce828e0166fda59ca',1,'shardcache_internal.h']]]
 ];

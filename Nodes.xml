@@ -6,6 +6,10 @@
       <Path>index.html</Path>
       <Subnodes>
        <Node>
+        <Name>Todo List</Name>
+        <Path>todo.html</Path>
+       </Node>
+       <Node>
         <Name>Data Structures</Name>
         <Path></Path>
         <Subnodes>
@@ -14,122 +18,502 @@
           <Path>annotated.html</Path>
           <Subnodes>
            <Node>
-            <Name>shardcache_counter_t</Name>
-            <Path>shardcache_8h.html</Path>
-            <Anchor>structshardcache__counter__t</Anchor>
+            <Name>__shardcache_s.cnt</Name>
+            <Path>shardcache__internal_8h.html</Path>
+            <Anchor>struct____shardcache__s_8cnt</Anchor>
             <Subnodes>
              <Node>
               <Name>name</Name>
-              <Path>shardcache_8h.html</Path>
-              <Anchor>a16fc0f87ad25489df80d6968315516d6</Anchor>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ab068931cc450442b63f5b3d276ea4297</Anchor>
              </Node>
              <Node>
               <Name>value</Name>
-              <Path>shardcache_8h.html</Path>
-              <Anchor>a7903a9e5ca031ee8aa95abbc30504f16</Anchor>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a2063c1608d6e0baf80249c42e2be5804</Anchor>
              </Node>
             </Subnodes>
            </Node>
            <Node>
-            <Name>shardcache_node_t</Name>
-            <Path>shardcache_8h.html</Path>
-            <Anchor>structshardcache__node__t</Anchor>
+            <Name>__shardcache_storage_s.internal</Name>
+            <Path>shardcache__storage_8h.html</Path>
+            <Anchor>struct____shardcache__storage__s_8internal</Anchor>
             <Subnodes>
              <Node>
-              <Name>label</Name>
-              <Path>shardcache_8h.html</Path>
-              <Anchor>a613c13a9fc77064d7d391c100a808966</Anchor>
+              <Name>handle</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>ae1260894f59eeae98c8440899de4df8d</Anchor>
              </Node>
              <Node>
-              <Name>address</Name>
-              <Path>shardcache_8h.html</Path>
-              <Anchor>adb1954a5c17289b748995ef0bc13ddef</Anchor>
+              <Name>init</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>ae37f0136aa3ffaf149b351f6a4c948e9</Anchor>
+             </Node>
+             <Node>
+              <Name>destroy</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>afb14982288108e1fbd6207ef55f05027</Anchor>
+             </Node>
+             <Node>
+              <Name>reset</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>a86266ee937d97f812a8e57d22b62ee29</Anchor>
+             </Node>
+            </Subnodes>
+           </Node>
+           <Node>
+            <Name>shardcache_async_io_context_t</Name>
+            <Path>shardcache__internal_8h.html</Path>
+            <Anchor>structshardcache__async__io__context__t</Anchor>
+            <Subnodes>
+             <Node>
+              <Name>io_th</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a7794dd594611275fd820c475dd1e79a9</Anchor>
+             </Node>
+             <Node>
+              <Name>mux</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ac3e0e1db35321c604aa7429650c908fe</Anchor>
+             </Node>
+             <Node>
+              <Name>queue</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a55d4de53e43a4db3a5e1ea2e41f829e7</Anchor>
+             </Node>
+            </Subnodes>
+           </Node>
+           <Node>
+            <Name>shardcache_counter_t</Name>
+            <Path>shardcache__storage_8h.html</Path>
+            <Anchor>structshardcache__counter__t</Anchor>
+            <Subnodes>
+             <Node>
+              <Name>name</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>a16fc0f87ad25489df80d6968315516d6</Anchor>
+             </Node>
+             <Node>
+              <Name>value</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>af64b565402f2865da1c40bf890df96a8</Anchor>
              </Node>
             </Subnodes>
            </Node>
            <Node>
             <Name>shardcache_storage_index_item_t</Name>
-            <Path>shardcache_8h.html</Path>
+            <Path>shardcache__storage_8h.html</Path>
             <Anchor>structshardcache__storage__index__item__t</Anchor>
             <Subnodes>
              <Node>
               <Name>key</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>a670ba9cfd8b46b173e8e5da4e82a3b8b</Anchor>
              </Node>
              <Node>
               <Name>klen</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>aec24ca2e658b94af72eee3c685467072</Anchor>
              </Node>
              <Node>
               <Name>vlen</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>a95c9eeb86ef6dc93bdfcc4f4b79ef5b9</Anchor>
              </Node>
             </Subnodes>
            </Node>
            <Node>
             <Name>shardcache_storage_index_t</Name>
-            <Path>shardcache_8h.html</Path>
+            <Path>shardcache__storage_8h.html</Path>
             <Anchor>structshardcache__storage__index__t</Anchor>
             <Subnodes>
              <Node>
               <Name>items</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>ad8fd15098581e807a536a2b087911304</Anchor>
              </Node>
              <Node>
               <Name>size</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>aa721e02948c35a4e004623da64ba00db</Anchor>
              </Node>
             </Subnodes>
            </Node>
            <Node>
             <Name>shardcache_storage_t</Name>
-            <Path>shardcache_8h.html</Path>
-            <Anchor>structshardcache__storage__t</Anchor>
+            <Path>shardcache__storage_8h.html</Path>
+            <Anchor>struct____shardcache__storage__s</Anchor>
             <Subnodes>
              <Node>
+              <Name>version</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>adfe6bbc8dbd37f24bb25a7aea5f0228b</Anchor>
+             </Node>
+             <Node>
               <Name>fetch</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>aaa00ffadd93d02ef58548c9923ee097e</Anchor>
              </Node>
              <Node>
+              <Name>fetch_multi</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>aaa1e644d6bc5bf96f28255f7406042cc</Anchor>
+             </Node>
+             <Node>
               <Name>store</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>adac8862fb938810e5774ba08a804b2c6</Anchor>
              </Node>
              <Node>
               <Name>remove</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>a6363463cd20b522ec922f8bc931d9c7f</Anchor>
              </Node>
              <Node>
               <Name>exist</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>a977ddd05f7f5a1e30aa0b4a3d9baba6d</Anchor>
              </Node>
              <Node>
               <Name>index</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>a2f958de4182b95ef054e9dff32c3c8f4</Anchor>
              </Node>
              <Node>
               <Name>count</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>ae45d5d91431a9b09213c43192851ab91</Anchor>
              </Node>
              <Node>
+              <Name>thread_start</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>a812eee52bcfc625300abc402441a0e53</Anchor>
+             </Node>
+             <Node>
+              <Name>thread_exit</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>a6877bb9385aa83489fe0410e370e8d26</Anchor>
+             </Node>
+             <Node>
+              <Name>global</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>a61de0baeb4ac9201c7c0a566b0033ce3</Anchor>
+             </Node>
+             <Node>
               <Name>shared</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>a20d841b529cf3ade6c1bf0ed4f54c6b4</Anchor>
              </Node>
              <Node>
               <Name>priv</Name>
-              <Path>shardcache_8h.html</Path>
+              <Path>shardcache__storage_8h.html</Path>
               <Anchor>ac259b5598fd3c643774d9fae93f81f1e</Anchor>
+             </Node>
+             <Node>
+              <Name>internal</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Anchor>a75d98c178ac9f6b6d65acee75b576b0c</Anchor>
+             </Node>
+            </Subnodes>
+           </Node>
+           <Node>
+            <Name>shardcache_storage_t</Name>
+            <Path>namespace_3global_scope_4.html</Path>
+            <Anchor>structshardcache__storage__t</Anchor>
+           </Node>
+           <Node>
+            <Name>shardcache_t</Name>
+            <Path>shardcache__internal_8h.html</Path>
+            <Anchor>struct____shardcache__s</Anchor>
+            <Subnodes>
+             <Node>
+              <Name>me</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a1dff5098c77be01d616284e4bc3e2cbc</Anchor>
+             </Node>
+             <Node>
+              <Name>addr</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a6137e5fb6a50f81e2951ec0f149a6f8b</Anchor>
+             </Node>
+             <Node>
+              <Name>replica</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a5639bd87a69e4f874f85fdf22e70a9b3</Anchor>
+             </Node>
+             <Node>
+              <Name>shards</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a82be2012c148b410659d78d7b24f069a</Anchor>
+             </Node>
+             <Node>
+              <Name>num_shards</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ae4ca1216f1a12941ab7d27abc43ddfa3</Anchor>
+             </Node>
+             <Node>
+              <Name>arc</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a28e647b7f9299af50ebf904972403ce9</Anchor>
+             </Node>
+             <Node>
+              <Name>ops</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>aa572d3c19f5bae287285a0f3ae0d010d</Anchor>
+             </Node>
+             <Node>
+              <Name>arc_size</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>af21efb606d6545f5db74d00db51974f4</Anchor>
+             </Node>
+             <Node>
+              <Name>migration_lock</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a3bc34d7a676a6a11bfd8904139a7243d</Anchor>
+             </Node>
+             <Node>
+              <Name>chash</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ab202c79546259553ee39e5e4586447ff</Anchor>
+             </Node>
+             <Node>
+              <Name>migration</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>aeeb1b4054adb33ca1f538f1b76ae7e86</Anchor>
+             </Node>
+             <Node>
+              <Name>migration_shards</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a7eddb075a32bf800cbdc0af30a843231</Anchor>
+             </Node>
+             <Node>
+              <Name>num_migration_shards</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a8aace22a587fc224aa5575fcd0868ef0</Anchor>
+             </Node>
+             <Node>
+              <Name>migration_done</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>af916c5134a049d26dd7eab2d4bb69ba6</Anchor>
+             </Node>
+             <Node>
+              <Name>use_persistent_storage</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ab67aaad90e3dde0af702c05027aec6dd</Anchor>
+             </Node>
+             <Node>
+              <Name>storage</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a21c11f21bfb7a96babd08f59b3ea6655</Anchor>
+             </Node>
+             <Node>
+              <Name>volatile_storage</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>aa0e943e064626e2a207bdff21c1d76c9</Anchor>
+             </Node>
+             <Node>
+              <Name>cache_timeouts</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ac6bca2e97e51ab860fea810070940c0c</Anchor>
+             </Node>
+             <Node>
+              <Name>volatile_timeouts</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ab6fcf74cdbaf71a4564c6bd9a1eb6772</Anchor>
+             </Node>
+             <Node>
+              <Name>expirer_mux</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ae2c8134ee80504d6d22e26580acfa8c2</Anchor>
+             </Node>
+             <Node>
+              <Name>expirer_th</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>acd59b2ea5ef2ba3a88d7cab985d4dd76</Anchor>
+             </Node>
+             <Node>
+              <Name>expirer_queue</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>afcad9bd8e57839fc076af0660f7f497e</Anchor>
+             </Node>
+             <Node>
+              <Name>evict_on_delete</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a9167bb3db44cedd4708fb81bcc8dec80</Anchor>
+             </Node>
+             <Node>
+              <Name>use_persistent_connections</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a02bca29e695bd7f878b8719fe3639018</Anchor>
+             </Node>
+             <Node>
+              <Name>lazy_expiration</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a7bfeb293b4207389278b2247d7774ce6</Anchor>
+             </Node>
+             <Node>
+              <Name>force_caching</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ac1eddc35fb2d207e0266563df78229c2</Anchor>
+             </Node>
+             <Node>
+              <Name>expire_time</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a9c68fd57df3ba8f80b8255a3edc696b6</Anchor>
+             </Node>
+             <Node>
+              <Name>iomux_run_timeout_low</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>acaf72b0f9841557a1f42cdca0763d860</Anchor>
+             </Node>
+             <Node>
+              <Name>iomux_run_timeout_high</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>af4bc5af0e68b0173eb8ecc188a798be4</Anchor>
+             </Node>
+             <Node>
+              <Name>serving_look_ahead</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>afd836b22cc0d6f2609bb321f43903d33</Anchor>
+             </Node>
+             <Node>
+              <Name>serv</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>aebbf83e5aa0586c2c89e1be146395618</Anchor>
+             </Node>
+             <Node>
+              <Name>auth</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a5efbe789d0966def37f983b67cb33676</Anchor>
+             </Node>
+             <Node>
+              <Name>migrate_th</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a6da5d64ec9a4b9e22c3096fef6d85ed1</Anchor>
+             </Node>
+             <Node>
+              <Name>evictor_th</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>aa8174324a359ea17bdd0ecbcbd1e47fd</Anchor>
+             </Node>
+             <Node>
+              <Name>evictor_cond</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a35e1c9317b662707f2697a43e0057276</Anchor>
+             </Node>
+             <Node>
+              <Name>evictor_lock</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ae545adb649320bb6b3f268cf7acd1ce7</Anchor>
+             </Node>
+             <Node>
+              <Name>evictor_jobs</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>adee9ad3660418ac59658334e4a3c006b</Anchor>
+             </Node>
+             <Node>
+              <Name>counters</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a76f7bb01dea0e1c1ead25fdd0fc15a5e</Anchor>
+             </Node>
+             <Node>
+              <Name>cnt</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a4152b0cd544557629503b41f56a40b8d</Anchor>
+             </Node>
+             <Node>
+              <Name>connections_pool</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ac372e79bd22530038c26d248ad1118a5</Anchor>
+             </Node>
+             <Node>
+              <Name>tcp_timeout</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a6a6234d95b8f668d538d5343455d7460</Anchor>
+             </Node>
+             <Node>
+              <Name>async_context</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a5a09df1adc72e59db88d246307c6fe71</Anchor>
+             </Node>
+             <Node>
+              <Name>num_async</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>aa8ea314dd3eeef69df21e08cf60ab86d</Anchor>
+             </Node>
+             <Node>
+              <Name>async_index</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a5e5dd8dd504772cea5bca891d5b541cd</Anchor>
+             </Node>
+             <Node>
+              <Name>async_quit</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a60d75abaea5b53b4ece543de98f7caae</Anchor>
+             </Node>
+             <Node>
+              <Name>quit</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a71c551750f30a10bf073a82db2e2785b</Anchor>
+             </Node>
+            </Subnodes>
+           </Node>
+           <Node>
+            <Name>shc_multi_item_t</Name>
+            <Path>shardcache__client_8h.html</Path>
+            <Anchor>structshc__multi__item__t</Anchor>
+            <Subnodes>
+             <Node>
+              <Name>key</Name>
+              <Path>shardcache__client_8h.html</Path>
+              <Anchor>a8fa0b5ddd936b3bd58c03810f467063f</Anchor>
+             </Node>
+             <Node>
+              <Name>klen</Name>
+              <Path>shardcache__client_8h.html</Path>
+              <Anchor>a1367467513d8f84d448b83ccdbbbb341</Anchor>
+             </Node>
+             <Node>
+              <Name>data</Name>
+              <Path>shardcache__client_8h.html</Path>
+              <Anchor>a8bb17eadbc7ce8a3f0a729cba73f6391</Anchor>
+             </Node>
+             <Node>
+              <Name>dlen</Name>
+              <Path>shardcache__client_8h.html</Path>
+              <Anchor>aab7de0277350fd097988d78a50436ffa</Anchor>
+             </Node>
+             <Node>
+              <Name>status</Name>
+              <Path>shardcache__client_8h.html</Path>
+              <Anchor>ab5e45edefd32b88319d85539c4a5a23d</Anchor>
+             </Node>
+             <Node>
+              <Name>expire</Name>
+              <Path>shardcache__client_8h.html</Path>
+              <Anchor>a206e40341f2560b6818c59e475503366</Anchor>
+             </Node>
+            </Subnodes>
+           </Node>
+           <Node>
+            <Name>volatile_object_t</Name>
+            <Path>shardcache__internal_8h.html</Path>
+            <Anchor>structvolatile__object__t</Anchor>
+            <Subnodes>
+             <Node>
+              <Name>data</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>adf6eefbbdf3264b5dbfe21ad07acd89f</Anchor>
+             </Node>
+             <Node>
+              <Name>dlen</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>ab2d1b1b6e4f16b652cca3f29a2d4a240</Anchor>
+             </Node>
+             <Node>
+              <Name>expire</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a624d97242c1c9bcbb31ad54e686e533f</Anchor>
              </Node>
             </Subnodes>
            </Node>
@@ -172,126 +556,6 @@
               <Path>shardcache_8h.html</Path>
               <Subnodes>
                <Node>
-                <Name>shardcache_storage_index_item_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>structshardcache__storage__index__item__t</Anchor>
-                <Subnodes>
-                 <Node>
-                  <Name>key</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>a670ba9cfd8b46b173e8e5da4e82a3b8b</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>klen</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>aec24ca2e658b94af72eee3c685467072</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>vlen</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>a95c9eeb86ef6dc93bdfcc4f4b79ef5b9</Anchor>
-                 </Node>
-                </Subnodes>
-               </Node>
-               <Node>
-                <Name>shardcache_storage_index_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>structshardcache__storage__index__t</Anchor>
-                <Subnodes>
-                 <Node>
-                  <Name>items</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>ad8fd15098581e807a536a2b087911304</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>size</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>aa721e02948c35a4e004623da64ba00db</Anchor>
-                 </Node>
-                </Subnodes>
-               </Node>
-               <Node>
-                <Name>shardcache_storage_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>structshardcache__storage__t</Anchor>
-                <Subnodes>
-                 <Node>
-                  <Name>fetch</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>aaa00ffadd93d02ef58548c9923ee097e</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>store</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>adac8862fb938810e5774ba08a804b2c6</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>remove</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>a6363463cd20b522ec922f8bc931d9c7f</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>exist</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>a977ddd05f7f5a1e30aa0b4a3d9baba6d</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>index</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>a2f958de4182b95ef054e9dff32c3c8f4</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>count</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>ae45d5d91431a9b09213c43192851ab91</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>shared</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>a20d841b529cf3ade6c1bf0ed4f54c6b4</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>priv</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>ac259b5598fd3c643774d9fae93f81f1e</Anchor>
-                 </Node>
-                </Subnodes>
-               </Node>
-               <Node>
-                <Name>shardcache_counter_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>structshardcache__counter__t</Anchor>
-                <Subnodes>
-                 <Node>
-                  <Name>name</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>a16fc0f87ad25489df80d6968315516d6</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>value</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>a7903a9e5ca031ee8aa95abbc30504f16</Anchor>
-                 </Node>
-                </Subnodes>
-               </Node>
-               <Node>
-                <Name>shardcache_node_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>structshardcache__node__t</Anchor>
-                <Subnodes>
-                 <Node>
-                  <Name>label</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>a613c13a9fc77064d7d391c100a808966</Anchor>
-                 </Node>
-                 <Node>
-                  <Name>address</Name>
-                  <Path>shardcache_8h.html</Path>
-                  <Anchor>adb1954a5c17289b748995ef0bc13ddef</Anchor>
-                 </Node>
-                </Subnodes>
-               </Node>
-               <Node>
                 <Name>SHARDCACHE_PORT_DEFAULT</Name>
                 <Path>shardcache_8h.html</Path>
                 <Anchor>a2acb8d72a99ea98491e67ec0031c7046</Anchor>
@@ -302,124 +566,34 @@
                 <Anchor>a9d5fe7f7e7f330d07a614c15d8259bd8</Anchor>
                </Node>
                <Node>
-                <Name>SHARDCACHE_NODE_LABEL_MAXLEN</Name>
+                <Name>SHARDCACHE_EXPIRE_TIME_DEFAULT</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a1216dc1e3ecd0c48c8de285179cf4b24</Anchor>
+                <Anchor>a0691be19b2b42d7c57ab709ffb6a179e</Anchor>
                </Node>
                <Node>
-                <Name>SHARDCACHE_NODE_ADDRESS_MAXLEN</Name>
+                <Name>SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a638701bd253025fa203bf5c659d72366</Anchor>
+                <Anchor>a22a3e8858304cad081b2f68a1b226ab0</Anchor>
                </Node>
                <Node>
-                <Name>SHC_ERROR</Name>
+                <Name>SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a47343854a30632e853005c55aa412b2f</Anchor>
+                <Anchor>a0f18275ed9bdb13b5b7fd7aefaa1e29d</Anchor>
                </Node>
                <Node>
-                <Name>SHC_WARNING</Name>
+                <Name>SHARDCACHE_CONNECTION_EXPIRE_DEFAULT</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a3ec9a169d886ff06f76774931f0edd71</Anchor>
+                <Anchor>a43188213899813e2abb0a7c3710f374b</Anchor>
                </Node>
                <Node>
-                <Name>SHC_WARN</Name>
+                <Name>SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a509a7a4fedbf44c473fc94e0d1ff31d5</Anchor>
+                <Anchor>ae8cbc81ee9446683bb0c6b13da7a4fb5</Anchor>
                </Node>
                <Node>
-                <Name>SHC_NOTICE</Name>
+                <Name>SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>ad8424a700bcebe2ed362e72da046a4a3</Anchor>
-               </Node>
-               <Node>
-                <Name>SHC_INFO</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a44321dbcac3b0196fefee592e13603e5</Anchor>
-               </Node>
-               <Node>
-                <Name>SHC_DIE</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>ab59995d60636a51455084945f01fc37d</Anchor>
-               </Node>
-               <Node>
-                <Name>__SHC_DEBUG</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a19e9491c391d06acd031e5c49b30c836</Anchor>
-               </Node>
-               <Node>
-                <Name>SHC_DEBUG</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>aa2c1a05b61586536a8e4e860b32cba48</Anchor>
-               </Node>
-               <Node>
-                <Name>SHC_DEBUG1</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a7e9caca0c2676677794b14d83e0eba76</Anchor>
-               </Node>
-               <Node>
-                <Name>SHC_DEBUG2</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a5cbc48c6b87385f39cae15201b64a749</Anchor>
-               </Node>
-               <Node>
-                <Name>SHC_DEBUG3</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a97bde0d6c209a9137868e777ec0a1a71</Anchor>
-               </Node>
-               <Node>
-                <Name>SHC_DEBUG4</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a9c156d27815c618dc5f1c2fd5eda7164</Anchor>
-               </Node>
-               <Node>
-                <Name>SHC_DEBUG5</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>abd926cd2de1dda73067b6fdc03852b5d</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_fetch_item_callback_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a53d82222192794e3b6c0bf56cb873bd3</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_store_item_callback_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>ae8af181c4715d81e26360ddf8ed54a8c</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_remove_item_callback_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>affdba97437b5cee4324163c52f79fb69</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_exist_item_callback_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>aa44062df197ddbe2edf1b7863262e9ac</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_count_items_callback_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a217a191654966ca5097eac275cfac2bb</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_get_index_callback_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a4e19cc72e3ba05cce02b21d548127c1d</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_storage_constructor</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a242de502e390a032a605c1c12ce1ffc2</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_storage_destructor</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>acde1d2b29dcdc76637b64d76fb22a9e3</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_t</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a32947f5c645e606fe2284a1c28f7fcf9</Anchor>
+                <Anchor>aa40f71288aa826fe0f8394061023bce1</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_get_async_callback_t</Name>
@@ -427,19 +601,29 @@
                 <Anchor>a3acf120b7116e8d820fc897eebc08db2</Anchor>
                </Node>
                <Node>
-                <Name>shardcache_get_counters</Name>
+                <Name>shardcache_async_response_callback_t</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a075b1863d2be9c8ab1a863ea860112e2</Anchor>
+                <Anchor>a6c1c0f4fc9fde145696010fefaaee4c1</Anchor>
                </Node>
                <Node>
-                <Name>shardcache_clear_counters</Name>
+                <Name>shardcache_storage_load</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>aa56ead41f7f61d7b88417fc9dc6937f8</Anchor>
+                <Anchor>aff07062e3204d6cf55d96a68ceed3898</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_storage_dispose</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>a006cbd2785de669bc2182938932c42e2</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_storage_reset</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>a6a094cb6df8cdae92d15b4ff3944fcc4</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_create</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>ae394c69ff91f95bd15b93c01264125b0</Anchor>
+                <Anchor>a74346747eb9ad9da22cd1c6b06849d3e</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_use_persistent_connections</Name>
@@ -452,9 +636,44 @@
                 <Anchor>af443e10682cbc1755ed4514d8a5708ba</Anchor>
                </Node>
                <Node>
+                <Name>shardcache_force_caching</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>a450f19437f06b05ff8db556017d38394</Anchor>
+               </Node>
+               <Node>
                 <Name>shardcache_tcp_timeout</Name>
                 <Path>shardcache_8h.html</Path>
                 <Anchor>a4dfc8da5ca7b0d2ea2947db9b731a1fb</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_conn_expire_time</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>ab37e1067d136856d61a75ba3b32d6516</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_iomux_run_timeout_low</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>ac73a0c6f12b5b5f0c035967cdcf82727</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_iomux_run_timeout_high</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>a32e1cc626c927a974cd574d98a3a9124</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_expire_time</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>ad47c6ef316980ae82605b303c87e3c4d</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_serving_look_ahead</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>aad3a553d54123b731207f95791f0022e</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_lazy_expiration</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>a58997a3ef53dd994a9c495ff70a4e270</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_destroy</Name>
@@ -482,9 +701,14 @@
                 <Anchor>ae87bbf3da1b1a4b80f8c6213abc320ac</Anchor>
                </Node>
                <Node>
-                <Name>shardcache_exists</Name>
+                <Name>shardcache_get_offset_async</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a9f4b6d4f7c21fe5e030fcc2cbf6c3bd4</Anchor>
+                <Anchor>a41dee186c3b877f32386da245bcc6a7e</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_exists_async</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>a9eb52ab9f65460bdc4958eaefb0b2954</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_touch</Name>
@@ -495,6 +719,11 @@
                 <Name>shardcache_set</Name>
                 <Path>shardcache_8h.html</Path>
                 <Anchor>a671f35e550582e8e33f4d66ca03adc57</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_set_async</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>a7b16b6d50d4e163e92c44025f38ce581</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_add</Name>
@@ -517,14 +746,14 @@
                 <Anchor>af859541766d97b6afb992ef1c843711a</Anchor>
                </Node>
                <Node>
+                <Name>shardcache_del_async</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>a49754acc649df6ffb5a997ddb924968d</Anchor>
+               </Node>
+               <Node>
                 <Name>shardcache_evict</Name>
                 <Path>shardcache_8h.html</Path>
                 <Anchor>af3630c66ba810d5dad9bfbc2492f6cce</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_get_nodes</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>ae01e634aa1b7d2b152505b82c7212fe0</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_test_ownership</Name>
@@ -544,7 +773,7 @@
                <Node>
                 <Name>shardcache_migration_begin</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a7da4e669a16da6d150d2f1d906960ab2</Anchor>
+                <Anchor>ab9e3022be060e7b5e67af43c682632ac</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_migration_abort</Name>
@@ -557,29 +786,19 @@
                 <Anchor>a767a80d75a850f38c60c298cffe180fd</Anchor>
                </Node>
                <Node>
-                <Name>shardcache_log_init</Name>
+                <Name>shardcache_thread_init</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a83daa5cadcd1c2217f3d65bc8fbb8e77</Anchor>
+                <Anchor>a36c2f67d3e4dd28ba7d932b022e39985</Anchor>
                </Node>
                <Node>
-                <Name>shardcache_log_level</Name>
+                <Name>shardcache_thread_end</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a578341075b54f9426cc8e8c595f58b03</Anchor>
+                <Anchor>abf5bf17736aec39c86103020721c12cc</Anchor>
                </Node>
                <Node>
-                <Name>shardcache_log_message</Name>
+                <Name>LIBSHARDCACHE_VERSION</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a7a1581a607007a0b51d1d53e018d20a9</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_hex_escape</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>a122b97f97ff3d2aea13b1eefbabc6ac3</Anchor>
-               </Node>
-               <Node>
-                <Name>shardcache_byte_escape</Name>
-                <Path>shardcache_8h.html</Path>
-                <Anchor>aea1443844e55163940ecc71e2138b25d</Anchor>
+                <Anchor>a212ce745de022f9dab442d5232cc1809</Anchor>
                </Node>
               </Subnodes>
              </Node>
@@ -587,6 +806,43 @@
               <Name>shardcache_client.h</Name>
               <Path>shardcache__client_8h.html</Path>
               <Subnodes>
+               <Node>
+                <Name>shc_multi_item_t</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>structshc__multi__item__t</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>key</Name>
+                  <Path>shardcache__client_8h.html</Path>
+                  <Anchor>a8fa0b5ddd936b3bd58c03810f467063f</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>klen</Name>
+                  <Path>shardcache__client_8h.html</Path>
+                  <Anchor>a1367467513d8f84d448b83ccdbbbb341</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>data</Name>
+                  <Path>shardcache__client_8h.html</Path>
+                  <Anchor>a8bb17eadbc7ce8a3f0a729cba73f6391</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>dlen</Name>
+                  <Path>shardcache__client_8h.html</Path>
+                  <Anchor>aab7de0277350fd097988d78a50436ffa</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>status</Name>
+                  <Path>shardcache__client_8h.html</Path>
+                  <Anchor>ab5e45edefd32b88319d85539c4a5a23d</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>expire</Name>
+                  <Path>shardcache__client_8h.html</Path>
+                  <Anchor>a206e40341f2560b6818c59e475503366</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
                <Node>
                 <Name>SHARDCACHE_CLIENT_OK</Name>
                 <Path>shardcache__client_8h.html</Path>
@@ -615,12 +871,37 @@
                <Node>
                 <Name>shardcache_client_get_aync_data_cb</Name>
                 <Path>shardcache__client_8h.html</Path>
-                <Anchor>a01dd180fd921bd30aa89313bfe4e9ae6</Anchor>
+                <Anchor>ad8da911ec4f76fe333c18f05d09ab921</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_client_create</Name>
                 <Path>shardcache__client_8h.html</Path>
-                <Anchor>ae0f7c08ea8eae9123c511c992c0dc09c</Anchor>
+                <Anchor>a483867140a804fdf07314be9491054e1</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_client_tcp_timeout</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>abb6dc70a7a72c83abdf5c9e477de0415</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_client_check_connection_timeout</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>a0de3a5622bab2ac5f81d83f402054148</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_client_multi_command_max_wait</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>a5378c5b36ff3f9a2242bc56035e450e3</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_client_use_random_node</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>a6d2534e62f74772c05973eae950c5923</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_client_pipeline_max</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>a1da6fcc4f68b20579326008aaa1455e4</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_client_get</Name>
@@ -680,7 +961,7 @@
                <Node>
                 <Name>shardcache_client_migration_begin</Name>
                 <Path>shardcache__client_8h.html</Path>
-                <Anchor>a25b7479bb2d53c2f2ccf84f1d38914fb</Anchor>
+                <Anchor>a7520db6467ddf5ccc7adc126333c3110</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_client_migration_abort</Name>
@@ -707,6 +988,1096 @@
                 <Path>shardcache__client_8h.html</Path>
                 <Anchor>a1e1d79558d46f7fbe4abd4287641c0ae</Anchor>
                </Node>
+               <Node>
+                <Name>shc_multi_item_create</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>a45555d6a4e777b7bc08dd6abc1c33a90</Anchor>
+               </Node>
+               <Node>
+                <Name>shc_multi_item_destroy</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>aa2ce54dd57a9a3c8b51880207fdd1730</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_client_get_multi</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>ade1a0a0eb900b3a9a71bedc43d5c7473</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_client_set_multi</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>ad6920148b74ab68c472b9b73614fd2a0</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_client_current_node</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>a9780342da47b282fe8ada4bf5962df62</Anchor>
+               </Node>
+              </Subnodes>
+             </Node>
+             <Node>
+              <Name>shardcache_internal.h</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Subnodes>
+               <Node>
+                <Name>shardcache_async_io_context_t</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>structshardcache__async__io__context__t</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>io_th</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a7794dd594611275fd820c475dd1e79a9</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>mux</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ac3e0e1db35321c604aa7429650c908fe</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>queue</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a55d4de53e43a4db3a5e1ea2e41f829e7</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
+                <Name>shardcache_t</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>struct____shardcache__s</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>me</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a1dff5098c77be01d616284e4bc3e2cbc</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>addr</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a6137e5fb6a50f81e2951ec0f149a6f8b</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>replica</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a5639bd87a69e4f874f85fdf22e70a9b3</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>shards</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a82be2012c148b410659d78d7b24f069a</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>num_shards</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ae4ca1216f1a12941ab7d27abc43ddfa3</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>arc</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a28e647b7f9299af50ebf904972403ce9</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>ops</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>aa572d3c19f5bae287285a0f3ae0d010d</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>arc_size</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>af21efb606d6545f5db74d00db51974f4</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>migration_lock</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a3bc34d7a676a6a11bfd8904139a7243d</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>chash</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ab202c79546259553ee39e5e4586447ff</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>migration</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>aeeb1b4054adb33ca1f538f1b76ae7e86</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>migration_shards</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a7eddb075a32bf800cbdc0af30a843231</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>num_migration_shards</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a8aace22a587fc224aa5575fcd0868ef0</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>migration_done</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>af916c5134a049d26dd7eab2d4bb69ba6</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>use_persistent_storage</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ab67aaad90e3dde0af702c05027aec6dd</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>storage</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a21c11f21bfb7a96babd08f59b3ea6655</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>volatile_storage</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>aa0e943e064626e2a207bdff21c1d76c9</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>cache_timeouts</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ac6bca2e97e51ab860fea810070940c0c</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>volatile_timeouts</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ab6fcf74cdbaf71a4564c6bd9a1eb6772</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>expirer_mux</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ae2c8134ee80504d6d22e26580acfa8c2</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>expirer_th</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>acd59b2ea5ef2ba3a88d7cab985d4dd76</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>expirer_queue</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>afcad9bd8e57839fc076af0660f7f497e</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>evict_on_delete</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a9167bb3db44cedd4708fb81bcc8dec80</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>use_persistent_connections</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a02bca29e695bd7f878b8719fe3639018</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>lazy_expiration</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a7bfeb293b4207389278b2247d7774ce6</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>force_caching</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ac1eddc35fb2d207e0266563df78229c2</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>expire_time</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a9c68fd57df3ba8f80b8255a3edc696b6</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>iomux_run_timeout_low</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>acaf72b0f9841557a1f42cdca0763d860</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>iomux_run_timeout_high</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>af4bc5af0e68b0173eb8ecc188a798be4</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>serving_look_ahead</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>afd836b22cc0d6f2609bb321f43903d33</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>serv</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>aebbf83e5aa0586c2c89e1be146395618</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>auth</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a5efbe789d0966def37f983b67cb33676</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>migrate_th</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a6da5d64ec9a4b9e22c3096fef6d85ed1</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>evictor_th</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>aa8174324a359ea17bdd0ecbcbd1e47fd</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>evictor_cond</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a35e1c9317b662707f2697a43e0057276</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>evictor_lock</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ae545adb649320bb6b3f268cf7acd1ce7</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>evictor_jobs</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>adee9ad3660418ac59658334e4a3c006b</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>counters</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a76f7bb01dea0e1c1ead25fdd0fc15a5e</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>cnt</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a4152b0cd544557629503b41f56a40b8d</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>connections_pool</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ac372e79bd22530038c26d248ad1118a5</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>tcp_timeout</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a6a6234d95b8f668d538d5343455d7460</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>async_context</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a5a09df1adc72e59db88d246307c6fe71</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>num_async</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>aa8ea314dd3eeef69df21e08cf60ab86d</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>async_index</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a5e5dd8dd504772cea5bca891d5b541cd</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>async_quit</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a60d75abaea5b53b4ece543de98f7caae</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>quit</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a71c551750f30a10bf073a82db2e2785b</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
+                <Name>volatile_object_t</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>structvolatile__object__t</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>data</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>adf6eefbbdf3264b5dbfe21ad07acd89f</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>dlen</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ab2d1b1b6e4f16b652cca3f29a2d4a240</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>expire</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a624d97242c1c9bcbb31ad54e686e533f</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
+                <Name>__shardcache_s.cnt</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>struct____shardcache__s_8cnt</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>name</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>ab068931cc450442b63f5b3d276ea4297</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>value</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a2063c1608d6e0baf80249c42e2be5804</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
+                <Name>DEBUG_DUMP_MAXSIZE</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a6c1f52221687a5b01bfc801ca78c278b</Anchor>
+               </Node>
+               <Node>
+                <Name>KEY2STR</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>ac2372d0a94548bbbff266711e500ae7b</Anchor>
+               </Node>
+               <Node>
+                <Name>LIKELY</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a870d9c125bbb79cce828e0166fda59ca</Anchor>
+               </Node>
+               <Node>
+                <Name>UNLIKELY</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>ada39f5f9f8d649b58887b9b606f3e24f</Anchor>
+               </Node>
+               <Node>
+                <Name>__USE_UNIX98</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a1afa73d7fa95d01675c545859245071b</Anchor>
+               </Node>
+               <Node>
+                <Name>SPIN_INIT</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>ad315826e51fb42517a97097f4a92d6b4</Anchor>
+               </Node>
+               <Node>
+                <Name>SPIN_DESTROY</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a4763defb118d5c91d723a357d30ec184</Anchor>
+               </Node>
+               <Node>
+                <Name>SPIN_LOCK</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a3aef7ee0cf036c94c02e01654320263f</Anchor>
+               </Node>
+               <Node>
+                <Name>SPIN_UNLOCK</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a2a493e98d9890a85f2e3cdcf09be048e</Anchor>
+               </Node>
+               <Node>
+                <Name>MUTEX_INIT</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>ac435607d85a2e920eb953e858250aa17</Anchor>
+               </Node>
+               <Node>
+                <Name>MUTEX_INIT_RECURSIVE</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a07b1563cfd3224cb7c4df84789ecb57a</Anchor>
+               </Node>
+               <Node>
+                <Name>MUTEX_DESTROY</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a104b89087d5b4ba43ad5fc34c4e50f81</Anchor>
+               </Node>
+               <Node>
+                <Name>MUTEX_LOCK</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a3454fe9d25a169574a46feecafb065f5</Anchor>
+               </Node>
+               <Node>
+                <Name>MUTEX_UNLOCK</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a887d0b79c7ffe61a13434175b6e50bff</Anchor>
+               </Node>
+               <Node>
+                <Name>CONDITION_INIT</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>aea260431bedde3538989958d015ccf35</Anchor>
+               </Node>
+               <Node>
+                <Name>CONDITION_DESTROY</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a07cd05b6bc3e365223683a8e6d3df8b5</Anchor>
+               </Node>
+               <Node>
+                <Name>CONDITION_WAIT</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>ab35bfaf16cde26abffeca68ca45ba1e6</Anchor>
+               </Node>
+               <Node>
+                <Name>CONDITION_TIMEDWAIT</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a3380376bfd3b641293dbb2c1d1ca1b11</Anchor>
+               </Node>
+               <Node>
+                <Name>CONDITION_WAIT_IF</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a742ebde3e6e3d7b6d268a790aec0c3be</Anchor>
+               </Node>
+               <Node>
+                <Name>CONDITION_SIGNAL</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>ac1c412c8284b6ed0e3aac587f5f568d0</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_LABELS_ARRAY</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>aab1f45b85fdbea922929baf8f887c86d</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_GETS</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a2a0f31a61ff7e0b9bcdabcaa3fb5bec3</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_SETS</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a052f93177f0ecd9cf6a89c4e9904a032</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_DELS</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>af15220a50d484237c3d6eed2822f84de</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_HEADS</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a063db5c81295e9f921b049b7399e391d</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_EVICTS</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a923e499d598ce80db6683640b933a801</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_EXPIRES</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a38b2533c70b8e88c640db8e0cf702be0</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_CACHE_MISSES</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a7d5443bbb90a46de25bc05f503c96503</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_FETCH_REMOTE</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a4490fdc8e127f766630bfc4939bade0f</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_FETCH_LOCAL</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>acef80670eac4fec61b07932079dcd764</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_NOT_FOUND</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a124c667083dd6f755a19822dd5201bc6</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_TABLE_SIZE</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a5ab3f27e2773122a8abdfa67e01c7ad4</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_CACHE_SIZE</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>afc7a59a012161ebaad59ee9a61bf550a</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_CACHE_MRU_SIZE</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a4e01e05177ebab4e5550c4f4908efe22</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_CACHE_MFU_SIZE</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>af829e44d505fca8b7bc9318fa4a61a2e</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_CACHE_MRUG_SIZE</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>ad2eaeabd4eddfe66a5bf4c6684e091f6</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_CACHE_MFUG_SIZE</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>ad51a3e29eefee5f9979d31e670f3f13f</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_CACHED_ITEMS</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a5bfd4658f8f0b5b56830ffc08deef30e</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_COUNTER_ERRORS</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a1a757bcecf13fe39261665293432e3c1</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_NUM_COUNTERS</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a22579e7cc233092c3a5e14ba65b7a848</Anchor>
+               </Node>
+               <Node>
+                <Name>chash_t</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a1ce0d303d201c97f16732e53ea98877a</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_test_migration_ownership</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>ae7d744182607918e47297cd81ebc1f13</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_get_connection_for_peer</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a42d47e424888c7d5026e76d40f11aa89</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_release_connection_for_peer</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a018aa1e15f0d9968131f4e1e277fc96a</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_set_internal</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a503a1aa45f6c4103069a1802b6a10035</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_del_internal</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>ae2a368d8366f6e381abc5c71c25bff64</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_set_migration_continuum</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a0ae3a3d31ed19ffe18a400caf186953c</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_schedule_expiration</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a80fd070a91fc3ee8a66e555c75ac0ea9</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_unschedule_expiration</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>a78e3871e2e93573755a6d9c6b00474b5</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_queue_async_read_wrk</Name>
+                <Path>shardcache__internal_8h.html</Path>
+                <Anchor>affd35c128257831a64d6d99027ba48c8</Anchor>
+               </Node>
+              </Subnodes>
+             </Node>
+             <Node>
+              <Name>shardcache_log.h</Name>
+              <Path>shardcache__log_8h.html</Path>
+              <Subnodes>
+               <Node>
+                <Name>SHC_ERROR</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a47343854a30632e853005c55aa412b2f</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_WARNING</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a3ec9a169d886ff06f76774931f0edd71</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_WARN</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a509a7a4fedbf44c473fc94e0d1ff31d5</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_NOTICE</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>ad8424a700bcebe2ed362e72da046a4a3</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_INFO</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a44321dbcac3b0196fefee592e13603e5</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_DIE</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>ab59995d60636a51455084945f01fc37d</Anchor>
+               </Node>
+               <Node>
+                <Name>__SHC_DEBUG</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a19e9491c391d06acd031e5c49b30c836</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_DEBUG</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>aa2c1a05b61586536a8e4e860b32cba48</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_DEBUG1</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a7e9caca0c2676677794b14d83e0eba76</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_DEBUG2</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a5cbc48c6b87385f39cae15201b64a749</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_DEBUG3</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a97bde0d6c209a9137868e777ec0a1a71</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_DEBUG4</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a9c156d27815c618dc5f1c2fd5eda7164</Anchor>
+               </Node>
+               <Node>
+                <Name>SHC_DEBUG5</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>abd926cd2de1dda73067b6fdc03852b5d</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_log_init</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a83daa5cadcd1c2217f3d65bc8fbb8e77</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_log_level</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a578341075b54f9426cc8e8c595f58b03</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_log_message</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>a7a1581a607007a0b51d1d53e018d20a9</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_hex_escape</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>aaf94c169ad4df64a0927555b5811a9fa</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_byte_escape</Name>
+                <Path>shardcache__log_8h.html</Path>
+                <Anchor>aea1443844e55163940ecc71e2138b25d</Anchor>
+               </Node>
+              </Subnodes>
+             </Node>
+             <Node>
+              <Name>shardcache_node.h</Name>
+              <Path>shardcache__node_8h.html</Path>
+              <Subnodes>
+               <Node>
+                <Name>shardcache_node_t</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a860894af5414a0540d590e28afe950c7</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_create</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a2badea72b53f16926b5b1149a41abf2c</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_create_from_string</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a17d43616aea15b1f2bab1c27d1d3193a</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_copy</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a8fd1dab4ef239e3ee7d6f481d2e34634</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_destroy</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>adfe43d081702ba86967e950a460a4540</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_get_label</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a394b31103821ffa12117d3d30d746229</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_get_string</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a68ee36b423681d7e544b244ebbeda0b0</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_get_address</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a84a7fdea9acbf7a93023fc0335e9a9d7</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_num_addresses</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a148c09f6438efaaabc99f4af18464126</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_get_all_addresses</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a3a6c2d58ea00be742db98646ac09da44</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_get_address_at_index</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>aeade88e9dd7e780fae0fee834079bb81</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_node_select</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a2957f331a54d0db05fdeebb30c5b92bb</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_get_nodes</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>af95f9099d20c9d59f61823059f895674</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_free_nodes</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>a44a8e1154d11daf9799f77573f8d6115</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_get_node_labels</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>aabba71be9c0664ea0dc7b5ce5b8a0342</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_free_labels</Name>
+                <Path>shardcache__node_8h.html</Path>
+                <Anchor>aaeb94d38a51d419acb3f4de87b81da0f</Anchor>
+               </Node>
+              </Subnodes>
+             </Node>
+             <Node>
+              <Name>shardcache_replica.h</Name>
+              <Path>shardcache__replica_8h.html</Path>
+              <Subnodes>
+               <Node>
+                <Name>shardcache_replica_t</Name>
+                <Path>shardcache__replica_8h.html</Path>
+                <Anchor>a8fe55adf7727793fc0a9e8840d665747</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_replica_command_t</Name>
+                <Path>shardcache__replica_8h.html</Path>
+                <Anchor>a74252a46f0b2dfba0fc6c87a71983f0e</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_replica_operation_t</Name>
+                <Path>shardcache__replica_8h.html</Path>
+                <Anchor>abd8aa3a9a9b7937be4293a8641e025db</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>SHARDCACHE_REPLICA_OP_SET</Name>
+                  <Path>shardcache__replica_8h.html</Path>
+                  <Anchor>abd8aa3a9a9b7937be4293a8641e025dbab09dee17b34f6387c9c2ce6a7215c75d</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>SHARDCACHE_REPLICA_OP_ADD</Name>
+                  <Path>shardcache__replica_8h.html</Path>
+                  <Anchor>abd8aa3a9a9b7937be4293a8641e025dbaf90feb602d58bee3d5d1647fa59103a8</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>SHARDCACHE_REPLICA_OP_DELETE</Name>
+                  <Path>shardcache__replica_8h.html</Path>
+                  <Anchor>abd8aa3a9a9b7937be4293a8641e025dbae21a21d8f52ac746ffc4f597acb464e8</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>SHARDCACHE_REPLICA_OP_EVICT</Name>
+                  <Path>shardcache__replica_8h.html</Path>
+                  <Anchor>abd8aa3a9a9b7937be4293a8641e025dba9402d865a6ec4b9c676d987d9e9045a3</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>SHARDCACHE_REPLICA_OP_MIGRATION_BEGIN</Name>
+                  <Path>shardcache__replica_8h.html</Path>
+                  <Anchor>abd8aa3a9a9b7937be4293a8641e025dbaae60cb120abcebd7d7b788fce9f6198c</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>SHARDCACHE_REPLICA_OP_MIGRATION_ABORT</Name>
+                  <Path>shardcache__replica_8h.html</Path>
+                  <Anchor>abd8aa3a9a9b7937be4293a8641e025dba48fbe2804cde20510d285e929dd92469</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>SHARDCACHE_REPLICA_OP_MIGRATION_END</Name>
+                  <Path>shardcache__replica_8h.html</Path>
+                  <Anchor>abd8aa3a9a9b7937be4293a8641e025dba7ae30c518e0fbad22a1714182c922b5c</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
+                <Name>shardcache_replica_create</Name>
+                <Path>shardcache__replica_8h.html</Path>
+                <Anchor>abf38a03c00f7284d75efee125f5ff147</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_replica_destroy</Name>
+                <Path>shardcache__replica_8h.html</Path>
+                <Anchor>ab64a36b212ac83a2da23a1471885a91b</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_replica_dispatch</Name>
+                <Path>shardcache__replica_8h.html</Path>
+                <Anchor>ad3bf4d3f2f06c942debf23d47c46c0c6</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_replica_received_command</Name>
+                <Path>shardcache__replica_8h.html</Path>
+                <Anchor>acce91805eeeb3d158ae585097b4ba5d3</Anchor>
+               </Node>
+              </Subnodes>
+             </Node>
+             <Node>
+              <Name>shardcache_storage.h</Name>
+              <Path>shardcache__storage_8h.html</Path>
+              <Subnodes>
+               <Node>
+                <Name>shardcache_storage_index_item_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>structshardcache__storage__index__item__t</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>key</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a670ba9cfd8b46b173e8e5da4e82a3b8b</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>klen</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>aec24ca2e658b94af72eee3c685467072</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>vlen</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a95c9eeb86ef6dc93bdfcc4f4b79ef5b9</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
+                <Name>shardcache_storage_index_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>structshardcache__storage__index__t</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>items</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>ad8fd15098581e807a536a2b087911304</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>size</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>aa721e02948c35a4e004623da64ba00db</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
+                <Name>shardcache_storage_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>struct____shardcache__storage__s</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>version</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>adfe6bbc8dbd37f24bb25a7aea5f0228b</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>fetch</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>aaa00ffadd93d02ef58548c9923ee097e</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>fetch_multi</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>aaa1e644d6bc5bf96f28255f7406042cc</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>store</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>adac8862fb938810e5774ba08a804b2c6</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>remove</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a6363463cd20b522ec922f8bc931d9c7f</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>exist</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a977ddd05f7f5a1e30aa0b4a3d9baba6d</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>index</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a2f958de4182b95ef054e9dff32c3c8f4</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>count</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>ae45d5d91431a9b09213c43192851ab91</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>thread_start</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a812eee52bcfc625300abc402441a0e53</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>thread_exit</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a6877bb9385aa83489fe0410e370e8d26</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>global</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a61de0baeb4ac9201c7c0a566b0033ce3</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>shared</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a20d841b529cf3ade6c1bf0ed4f54c6b4</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>priv</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>ac259b5598fd3c643774d9fae93f81f1e</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>internal</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a75d98c178ac9f6b6d65acee75b576b0c</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
+                <Name>shardcache_counter_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>structshardcache__counter__t</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>name</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a16fc0f87ad25489df80d6968315516d6</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>value</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>af64b565402f2865da1c40bf890df96a8</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
+                <Name>__shardcache_storage_s.internal</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>struct____shardcache__storage__s_8internal</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>handle</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>ae1260894f59eeae98c8440899de4df8d</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>init</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>ae37f0136aa3ffaf149b351f6a4c948e9</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>destroy</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>afb14982288108e1fbd6207ef55f05027</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>reset</Name>
+                  <Path>shardcache__storage_8h.html</Path>
+                  <Anchor>a86266ee937d97f812a8e57d22b62ee29</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_STORAGE_API_VERSION</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a133019dc2f53df8463b3c0f3d5527f2b</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_fetch_item_callback_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a48b235496cb8b8cd4d057c9d09548372</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_fetch_items_callback_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a148bc006e02d3baffd2e8e632b632634</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_store_item_callback_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>ae8af181c4715d81e26360ddf8ed54a8c</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_remove_item_callback_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>affdba97437b5cee4324163c52f79fb69</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_exist_item_callback_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>aa44062df197ddbe2edf1b7863262e9ac</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_count_items_callback_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a217a191654966ca5097eac275cfac2bb</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_get_index_callback_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a4e19cc72e3ba05cce02b21d548127c1d</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_thread_start_callback_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a2e3be21b148c191b3676d57992576570</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_thread_exit_callback_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a6046fe1c1c1eab5c53435b17b9dc0b77</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_storage_init_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a8a0967a133e1420a4d295105cac0391d</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_storage_destroy_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a24e33f52eafb99933790b7f0496e8428</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_storage_reset_t</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a1c73e23ccc90b7b35ba1019e21c023c9</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_storage_constructor</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a242de502e390a032a605c1c12ce1ffc2</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_storage_destructor</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>acde1d2b29dcdc76637b64d76fb22a9e3</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_get_counters</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>a075b1863d2be9c8ab1a863ea860112e2</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_clear_counters</Name>
+                <Path>shardcache__storage_8h.html</Path>
+                <Anchor>aa56ead41f7f61d7b88417fc9dc6937f8</Anchor>
+               </Node>
               </Subnodes>
              </Node>
             </Subnodes>
@@ -726,8 +2097,20 @@
             <Path>globals_func.html</Path>
            </Node>
            <Node>
+            <Name>Variables</Name>
+            <Path>globals_vars.html</Path>
+           </Node>
+           <Node>
             <Name>Typedefs</Name>
             <Path>globals_type.html</Path>
+           </Node>
+           <Node>
+            <Name>Enumerations</Name>
+            <Path>globals_enum.html</Path>
+           </Node>
+           <Node>
+            <Name>Enumerator</Name>
+            <Path>globals_eval.html</Path>
            </Node>
            <Node>
             <Name>Macros</Name>

@@ -44,6 +44,7 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
   <div id="navrow1" class="tabs">
     <ul class="tablist">
       <li><a href="index.html"><span>Main&#160;Page</span></a></li>
+      <li><a href="pages.html"><span>Related&#160;Pages</span></a></li>
       <li><a href="annotated.html"><span>Data&#160;Structures</span></a></li>
       <li class="current"><a href="files.html"><span>Files</span></a></li>
       <li>
@@ -90,7 +91,7 @@ $(document).ready(function(){initNavTree('shardcache_8h_source.html','');});
      onmouseover="return searchBox.OnSearchSelectShow()"
      onmouseout="return searchBox.OnSearchSelectHide()"
      onkeydown="return searchBox.OnSearchSelectKey(event)">
-<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Macros</a></div>
+<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Enumerations</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(7)"><span class="SelectionMark">&#160;</span>Enumerator</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(8)"><span class="SelectionMark">&#160;</span>Macros</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(9)"><span class="SelectionMark">&#160;</span>Pages</a></div>
 
 <!-- iframe showing the search results (closed by default) -->
 <div id="MSearchResultsWindow">
@@ -116,268 +117,334 @@ $(document).ready(function(){initNavTree('shardcache_8h_source.html','');});
 <div class="line"><a name="l00015"></a><span class="lineno">   15</span>&#160;<span class="preprocessor">#include &lt;sys/time.h&gt;</span></div>
 <div class="line"><a name="l00016"></a><span class="lineno">   16</span>&#160;<span class="preprocessor">#include &lt;syslog.h&gt;</span></div>
 <div class="line"><a name="l00017"></a><span class="lineno">   17</span>&#160;</div>
-<div class="line"><a name="l00018"></a><span class="lineno">   18</span>&#160;</div>
-<div class="line"><a name="l00019"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a2acb8d72a99ea98491e67ec0031c7046">   19</a></span>&#160;<span class="preprocessor">#define SHARDCACHE_PORT_DEFAULT 9874</span></div>
-<div class="line"><a name="l00020"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a9d5fe7f7e7f330d07a614c15d8259bd8">   20</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHARDCACHE_TCP_TIMEOUT_DEFAULT 30</span></div>
-<div class="line"><a name="l00021"></a><span class="lineno">   21</span>&#160;<span class="preprocessor"></span></div>
+<div class="line"><a name="l00021"></a><span class="lineno">   21</span>&#160;<span class="keyword">typedef</span> <span class="keyword">struct </span><a class="code" href="shardcache__internal_8h.html#struct____shardcache__s" title="Opaque structure representing the actual shardcache instance.">__shardcache_s</a> shardcache_t;</div>
 <div class="line"><a name="l00022"></a><span class="lineno">   22</span>&#160;</div>
-<div class="line"><a name="l00023"></a><span class="lineno">   23</span>&#160;<span class="comment">/*</span></div>
-<div class="line"><a name="l00024"></a><span class="lineno">   24</span>&#160;<span class="comment"> *******************************************************************************</span></div>
-<div class="line"><a name="l00025"></a><span class="lineno">   25</span>&#160;<span class="comment"> * Storage API </span></div>
-<div class="line"><a name="l00026"></a><span class="lineno">   26</span>&#160;<span class="comment"> *******************************************************************************</span></div>
-<div class="line"><a name="l00027"></a><span class="lineno">   27</span>&#160;<span class="comment"> */</span></div>
-<div class="line"><a name="l00028"></a><span class="lineno">   28</span>&#160;</div>
-<div class="line"><a name="l00046"></a><span class="lineno">   46</span>&#160;<span class="keyword">typedef</span> <span class="keywordtype">void</span> *(*shardcache_fetch_item_callback_t)</div>
-<div class="line"><a name="l00047"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a53d82222192794e3b6c0bf56cb873bd3">   47</a></span>&#160;    (<span class="keywordtype">void</span> *key, <span class="keywordtype">size_t</span> klen, <span class="keywordtype">size_t</span> *vlen, <span class="keywordtype">void</span> *priv);</div>
-<div class="line"><a name="l00048"></a><span class="lineno">   48</span>&#160;</div>
-<div class="line"><a name="l00063"></a><span class="lineno">   63</span>&#160;<span class="keyword">typedef</span> int (*<a class="code" href="shardcache_8h.html#ae8af181c4715d81e26360ddf8ed54a8c" title="Callback to store a new value for a given key.">shardcache_store_item_callback_t</a>)</div>
-<div class="line"><a name="l00064"></a><span class="lineno"><a class="code" href="shardcache_8h.html#ae8af181c4715d81e26360ddf8ed54a8c">   64</a></span>&#160;    (<span class="keywordtype">void</span> *key, <span class="keywordtype">size_t</span> klen, <span class="keywordtype">void</span> *value, <span class="keywordtype">size_t</span> vlen, <span class="keywordtype">void</span> *priv);</div>
-<div class="line"><a name="l00065"></a><span class="lineno">   65</span>&#160;</div>
-<div class="line"><a name="l00079"></a><span class="lineno">   79</span>&#160;<span class="keyword">typedef</span> int</div>
-<div class="line"><a name="l00080"></a><span class="lineno"><a class="code" href="shardcache_8h.html#affdba97437b5cee4324163c52f79fb69">   80</a></span>&#160;(*<a class="code" href="shardcache_8h.html#affdba97437b5cee4324163c52f79fb69" title="Callback to remove an existing value for a given key.">shardcache_remove_item_callback_t</a>)(<span class="keywordtype">void</span> *key, <span class="keywordtype">size_t</span> klen, <span class="keywordtype">void</span> *priv);</div>
-<div class="line"><a name="l00081"></a><span class="lineno">   81</span>&#160;</div>
-<div class="line"><a name="l00090"></a><span class="lineno">   90</span>&#160;<span class="keyword">typedef</span> int</div>
-<div class="line"><a name="l00091"></a><span class="lineno"><a class="code" href="shardcache_8h.html#aa44062df197ddbe2edf1b7863262e9ac">   91</a></span>&#160;(*<a class="code" href="shardcache_8h.html#aa44062df197ddbe2edf1b7863262e9ac" title="Callback to check if a specific key exists on the storage.">shardcache_exist_item_callback_t</a>)(<span class="keywordtype">void</span> *key, <span class="keywordtype">size_t</span> klen, <span class="keywordtype">void</span> *priv);</div>
-<div class="line"><a name="l00092"></a><span class="lineno">   92</span>&#160;</div>
-<div class="line"><a name="l00099"></a><span class="lineno"><a class="code" href="shardcache_8h.html">   99</a></span>&#160;<span class="keyword">typedef</span> <span class="keyword">struct </span>__shardcache_storage_index_item_s {</div>
-<div class="line"><a name="l00100"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a670ba9cfd8b46b173e8e5da4e82a3b8b">  100</a></span>&#160;    <span class="keywordtype">void</span> *<a class="code" href="shardcache_8h.html#a670ba9cfd8b46b173e8e5da4e82a3b8b" title="A valid pointer to the key.">key</a>;   </div>
-<div class="line"><a name="l00101"></a><span class="lineno"><a class="code" href="shardcache_8h.html#aec24ca2e658b94af72eee3c685467072">  101</a></span>&#160;    <span class="keywordtype">size_t</span> <a class="code" href="shardcache_8h.html#aec24ca2e658b94af72eee3c685467072" title="The length of the key.">klen</a>; </div>
-<div class="line"><a name="l00102"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a95c9eeb86ef6dc93bdfcc4f4b79ef5b9">  102</a></span>&#160;    <span class="keywordtype">size_t</span> <a class="code" href="shardcache_8h.html#a95c9eeb86ef6dc93bdfcc4f4b79ef5b9" title="The length of the value.">vlen</a>; </div>
-<div class="line"><a name="l00103"></a><span class="lineno">  103</span>&#160;} <a class="code" href="shardcache_8h.html#structshardcache__storage__index__item__t" title="structure representing an item in the storage index">shardcache_storage_index_item_t</a>;</div>
-<div class="line"><a name="l00104"></a><span class="lineno">  104</span>&#160;</div>
-<div class="line"><a name="l00113"></a><span class="lineno"><a class="code" href="shardcache_8h.html">  113</a></span>&#160;<span class="keyword">typedef</span> <span class="keyword">struct </span>__shardcache_storage_index_s {</div>
-<div class="line"><a name="l00115"></a><span class="lineno"><a class="code" href="shardcache_8h.html#ad8fd15098581e807a536a2b087911304">  115</a></span>&#160;    <a class="code" href="shardcache_8h.html#structshardcache__storage__index__item__t" title="structure representing an item in the storage index">shardcache_storage_index_item_t</a> *<a class="code" href="shardcache_8h.html#ad8fd15098581e807a536a2b087911304" title="Array of shardcache_storage_index_item_t structures.">items</a>;</div>
-<div class="line"><a name="l00117"></a><span class="lineno"><a class="code" href="shardcache_8h.html#aa721e02948c35a4e004623da64ba00db">  117</a></span>&#160;    <span class="keywordtype">size_t</span> <a class="code" href="shardcache_8h.html#aa721e02948c35a4e004623da64ba00db" title="The number of elements in the &#39;items&#39; array.">size</a>;</div>
-<div class="line"><a name="l00118"></a><span class="lineno">  118</span>&#160;} <a class="code" href="shardcache_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a>;</div>
-<div class="line"><a name="l00119"></a><span class="lineno">  119</span>&#160;</div>
-<div class="line"><a name="l00130"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a217a191654966ca5097eac275cfac2bb">  130</a></span>&#160;<span class="keyword">typedef</span> size_t (*<a class="code" href="shardcache_8h.html#a217a191654966ca5097eac275cfac2bb" title="Callback returning the number of items in the index.">shardcache_count_items_callback_t</a>)(<span class="keywordtype">void</span> *priv);</div>
-<div class="line"><a name="l00131"></a><span class="lineno">  131</span>&#160;</div>
-<div class="line"><a name="l00164"></a><span class="lineno">  164</span>&#160;<span class="keyword">typedef</span> size_t (*<a class="code" href="shardcache_8h.html#a4e19cc72e3ba05cce02b21d548127c1d" title="Callback to fetch the index of stored keys.">shardcache_get_index_callback_t</a>)</div>
-<div class="line"><a name="l00165"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a4e19cc72e3ba05cce02b21d548127c1d">  165</a></span>&#160;    (<a class="code" href="shardcache_8h.html#structshardcache__storage__index__item__t" title="structure representing an item in the storage index">shardcache_storage_index_item_t</a> *index, <span class="keywordtype">size_t</span> isize, <span class="keywordtype">void</span> *priv);</div>
-<div class="line"><a name="l00166"></a><span class="lineno">  166</span>&#160;</div>
-<div class="line"><a name="l00173"></a><span class="lineno"><a class="code" href="shardcache_8h.html">  173</a></span>&#160;<span class="keyword">typedef</span> <span class="keyword">struct </span>__shardcache_storage_s {</div>
-<div class="line"><a name="l00175"></a><span class="lineno"><a class="code" href="shardcache_8h.html#aaa00ffadd93d02ef58548c9923ee097e">  175</a></span>&#160;    <a class="code" href="shardcache_8h.html#a53d82222192794e3b6c0bf56cb873bd3" title="Callback to provide the value for a given key.">shardcache_fetch_item_callback_t</a>       <a class="code" href="shardcache_8h.html#aaa00ffadd93d02ef58548c9923ee097e" title="The fecth callback.">fetch</a>;</div>
-<div class="line"><a name="l00177"></a><span class="lineno"><a class="code" href="shardcache_8h.html#adac8862fb938810e5774ba08a804b2c6">  177</a></span>&#160;    <a class="code" href="shardcache_8h.html#ae8af181c4715d81e26360ddf8ed54a8c" title="Callback to store a new value for a given key.">shardcache_store_item_callback_t</a>       <a class="code" href="shardcache_8h.html#adac8862fb938810e5774ba08a804b2c6" title="The store callback (optional if the storage is indended to be read-only)">store</a>;</div>
-<div class="line"><a name="l00179"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a6363463cd20b522ec922f8bc931d9c7f">  179</a></span>&#160;    <a class="code" href="shardcache_8h.html#affdba97437b5cee4324163c52f79fb69" title="Callback to remove an existing value for a given key.">shardcache_remove_item_callback_t</a>      <span class="keyword">remove</span>;</div>
-<div class="line"><a name="l00184"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a977ddd05f7f5a1e30aa0b4a3d9baba6d">  184</a></span>&#160;    <a class="code" href="shardcache_8h.html#aa44062df197ddbe2edf1b7863262e9ac" title="Callback to check if a specific key exists on the storage.">shardcache_exist_item_callback_t</a>       <a class="code" href="shardcache_8h.html#a977ddd05f7f5a1e30aa0b4a3d9baba6d" title="Optional callback which can be used to &#39;quickly&#39; check if a key exists in the storage.">exist</a>;</div>
-<div class="line"><a name="l00189"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a2f958de4182b95ef054e9dff32c3c8f4">  189</a></span>&#160;    <a class="code" href="shardcache_8h.html#a4e19cc72e3ba05cce02b21d548127c1d" title="Callback to fetch the index of stored keys.">shardcache_get_index_callback_t</a>        <a class="code" href="shardcache_8h.html#a2f958de4182b95ef054e9dff32c3c8f4" title="Optional callback which returns the index of keys accessible through the storage.">index</a>;</div>
-<div class="line"><a name="l00196"></a><span class="lineno"><a class="code" href="shardcache_8h.html#ae45d5d91431a9b09213c43192851ab91">  196</a></span>&#160;    <a class="code" href="shardcache_8h.html#a217a191654966ca5097eac275cfac2bb" title="Callback returning the number of items in the index.">shardcache_count_items_callback_t</a>      <a class="code" href="shardcache_8h.html#ae45d5d91431a9b09213c43192851ab91" title="If the index callback is set, this callback will be used to determine how many items are going to be ...">count</a>;</div>
-<div class="line"><a name="l00202"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a20d841b529cf3ade6c1bf0ed4f54c6b4">  202</a></span>&#160;    <span class="keywordtype">int</span>                                    <a class="code" href="shardcache_8h.html#a20d841b529cf3ade6c1bf0ed4f54c6b4" title="If set to a non zero value, shardcache will assume that all the peers can access the same keys on the...">shared</a>;</div>
-<div class="line"><a name="l00207"></a><span class="lineno"><a class="code" href="shardcache_8h.html#ac259b5598fd3c643774d9fae93f81f1e">  207</a></span>&#160;    <span class="keywordtype">void</span>                                   *<a class="code" href="shardcache_8h.html#ac259b5598fd3c643774d9fae93f81f1e" title="Pointer to private data which will passed to all the callbacks.">priv</a>;</div>
-<div class="line"><a name="l00208"></a><span class="lineno">  208</span>&#160;} <a class="code" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a>;</div>
-<div class="line"><a name="l00209"></a><span class="lineno">  209</span>&#160;</div>
-<div class="line"><a name="l00224"></a><span class="lineno">  224</span>&#160;<span class="keyword">typedef</span> <a class="code" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> *</div>
-<div class="line"><a name="l00225"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a242de502e390a032a605c1c12ce1ffc2">  225</a></span>&#160;        (*shardcache_storage_constructor)(<span class="keyword">const</span> <span class="keywordtype">char</span> **options);</div>
-<div class="line"><a name="l00226"></a><span class="lineno">  226</span>&#160;</div>
-<div class="line"><a name="l00234"></a><span class="lineno"><a class="code" href="shardcache_8h.html#acde1d2b29dcdc76637b64d76fb22a9e3">  234</a></span>&#160;<span class="keyword">typedef</span> void (*<a class="code" href="shardcache_8h.html#acde1d2b29dcdc76637b64d76fb22a9e3" title="Callback used to dispose all resources associated to a previously initialized storage module...">shardcache_storage_destructor</a>)(<a class="code" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> *storage);</div>
-<div class="line"><a name="l00235"></a><span class="lineno">  235</span>&#160;</div>
-<div class="line"><a name="l00236"></a><span class="lineno">  236</span>&#160;<span class="comment">/*</span></div>
-<div class="line"><a name="l00237"></a><span class="lineno">  237</span>&#160;<span class="comment"> *******************************************************************************</span></div>
-<div class="line"><a name="l00238"></a><span class="lineno">  238</span>&#160;<span class="comment"> * Counters API </span></div>
-<div class="line"><a name="l00239"></a><span class="lineno">  239</span>&#160;<span class="comment"> *******************************************************************************</span></div>
-<div class="line"><a name="l00240"></a><span class="lineno">  240</span>&#160;<span class="comment"> */</span></div>
-<div class="line"><a name="l00241"></a><span class="lineno">  241</span>&#160;</div>
-<div class="line"><a name="l00255"></a><span class="lineno"><a class="code" href="shardcache_8h.html">  255</a></span>&#160;<span class="keyword">typedef</span> <span class="keyword">struct </span>{</div>
-<div class="line"><a name="l00256"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a16fc0f87ad25489df80d6968315516d6">  256</a></span>&#160;    <span class="keywordtype">char</span> name[256];</div>
-<div class="line"><a name="l00257"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a7903a9e5ca031ee8aa95abbc30504f16">  257</a></span>&#160;    uint32_t <a class="code" href="shardcache_8h.html#a7903a9e5ca031ee8aa95abbc30504f16">value</a>;</div>
-<div class="line"><a name="l00258"></a><span class="lineno">  258</span>&#160;} <a class="code" href="shardcache_8h.html#structshardcache__counter__t" title="Structure representing an exposed counter.">shardcache_counter_t</a>;</div>
-<div class="line"><a name="l00259"></a><span class="lineno">  259</span>&#160;</div>
-<div class="line"><a name="l00263"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">  263</a></span>&#160;<span class="keyword">typedef</span> <span class="keyword">struct </span>__shardcache_s <a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a>;</div>
-<div class="line"><a name="l00264"></a><span class="lineno">  264</span>&#160;</div>
-<div class="line"><a name="l00274"></a><span class="lineno">  274</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a075b1863d2be9c8ab1a863ea860112e2" title="Returns the list of registered counters with their actual value.">shardcache_get_counters</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00275"></a><span class="lineno">  275</span>&#160;                            <a class="code" href="shardcache_8h.html#structshardcache__counter__t" title="Structure representing an exposed counter.">shardcache_counter_t</a> **counters);</div>
-<div class="line"><a name="l00276"></a><span class="lineno">  276</span>&#160;</div>
-<div class="line"><a name="l00281"></a><span class="lineno">  281</span>&#160;<span class="keywordtype">void</span> <a class="code" href="shardcache_8h.html#aa56ead41f7f61d7b88417fc9dc6937f8" title="Resets all the counters to 0.">shardcache_clear_counters</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache);</div>
-<div class="line"><a name="l00282"></a><span class="lineno">  282</span>&#160;</div>
+<div class="line"><a name="l00023"></a><span class="lineno">   23</span>&#160;<span class="preprocessor">#include &lt;<a class="code" href="shardcache__log_8h.html">shardcache_log.h</a>&gt;</span></div>
+<div class="line"><a name="l00024"></a><span class="lineno">   24</span>&#160;<span class="preprocessor">#include &lt;<a class="code" href="shardcache__storage_8h.html">shardcache_storage.h</a>&gt;</span></div>
+<div class="line"><a name="l00025"></a><span class="lineno">   25</span>&#160;<span class="preprocessor">#include &lt;<a class="code" href="shardcache__node_8h.html">shardcache_node.h</a>&gt;</span></div>
+<div class="line"><a name="l00026"></a><span class="lineno">   26</span>&#160;</div>
+<div class="line"><a name="l00027"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a2acb8d72a99ea98491e67ec0031c7046">   27</a></span>&#160;<span class="preprocessor">#define SHARDCACHE_PORT_DEFAULT               4444</span></div>
+<div class="line"><a name="l00028"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a9d5fe7f7e7f330d07a614c15d8259bd8">   28</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHARDCACHE_TCP_TIMEOUT_DEFAULT        5000   // (in millisecs) == 5 secs</span></div>
+<div class="line"><a name="l00029"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a0691be19b2b42d7c57ab709ffb6a179e">   29</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHARDCACHE_EXPIRE_TIME_DEFAULT        0      // don&#39;t expire keys by default</span></div>
+<div class="line"><a name="l00030"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a22a3e8858304cad081b2f68a1b226ab0">   30</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW      100000 // (in microsecs)</span></div>
+<div class="line"><a name="l00031"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a0f18275ed9bdb13b5b7fd7aefaa1e29d">   31</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH     500000 // (in microsecs)</span></div>
+<div class="line"><a name="l00032"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a43188213899813e2abb0a7c3710f374b">   32</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHARDCACHE_CONNECTION_EXPIRE_DEFAULT  5000   // (in millisecs)</span></div>
+<div class="line"><a name="l00033"></a><span class="lineno"><a class="code" href="shardcache_8h.html#ae8cbc81ee9446683bb0c6b13da7a4fb5">   33</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT 16     // number of queued/pipelined</span></div>
+<div class="line"><a name="l00034"></a><span class="lineno">   34</span>&#160;<span class="preprocessor"></span>                                                     <span class="comment">// requests to handle ahead</span></div>
+<div class="line"><a name="l00035"></a><span class="lineno"><a class="code" href="shardcache_8h.html#aa40f71288aa826fe0f8394061023bce1">   35</a></span>&#160;<span class="preprocessor">#define SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT  1      // number of async i/o threads used</span></div>
+<div class="line"><a name="l00036"></a><span class="lineno">   36</span>&#160;<span class="preprocessor"></span>                                                     <span class="comment">// for inter-node communication</span></div>
+<div class="line"><a name="l00037"></a><span class="lineno">   37</span>&#160;<span class="keyword">extern</span> <span class="keyword">const</span> <span class="keywordtype">char</span> *<a class="code" href="shardcache_8h.html#a212ce745de022f9dab442d5232cc1809">LIBSHARDCACHE_VERSION</a>;</div>
+<div class="line"><a name="l00038"></a><span class="lineno">   38</span>&#160;</div>
+<div class="line"><a name="l00039"></a><span class="lineno">   39</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00040"></a><span class="lineno">   40</span>&#160;<span class="comment"> *******************************************************************************</span></div>
+<div class="line"><a name="l00041"></a><span class="lineno">   41</span>&#160;<span class="comment"> * Shardcache API </span></div>
+<div class="line"><a name="l00042"></a><span class="lineno">   42</span>&#160;<span class="comment"> *******************************************************************************</span></div>
+<div class="line"><a name="l00043"></a><span class="lineno">   43</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00044"></a><span class="lineno">   44</span>&#160;</div>
+<div class="line"><a name="l00045"></a><span class="lineno">   45</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00046"></a><span class="lineno">   46</span>&#160;<span class="comment"> * @brief Create a shardcache storage from a loadable module</span></div>
+<div class="line"><a name="l00047"></a><span class="lineno">   47</span>&#160;<span class="comment"> * @param filename the full-path to the loadable module</span></div>
+<div class="line"><a name="l00048"></a><span class="lineno">   48</span>&#160;<span class="comment"> * @param options NULL-terminated array of storage options</span></div>
+<div class="line"><a name="l00049"></a><span class="lineno">   49</span>&#160;<span class="comment"> * @return a fully initialized shardcache_storage_t structure which MUST</span></div>
+<div class="line"><a name="l00050"></a><span class="lineno">   50</span>&#160;<span class="comment"> *         be released using shardcache_storage_dispose() once not needed anymore</span></div>
+<div class="line"><a name="l00051"></a><span class="lineno">   51</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00052"></a><span class="lineno">   52</span>&#160;<a class="code" href="namespace_3global_scope_4.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> *<a class="code" href="shardcache_8h.html#aff07062e3204d6cf55d96a68ceed3898">shardcache_storage_load</a>(<span class="keywordtype">char</span> *filename, <span class="keywordtype">char</span> **options);</div>
+<div class="line"><a name="l00053"></a><span class="lineno">   53</span>&#160;</div>
+<div class="line"><a name="l00054"></a><span class="lineno">   54</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00055"></a><span class="lineno">   55</span>&#160;<span class="comment"> * @brief Release a shardcache storage previously initialized using shardcache_storage_load()</span></div>
+<div class="line"><a name="l00056"></a><span class="lineno">   56</span>&#160;<span class="comment"> * @param st A valid shardcache_storage_t structure obtained using shardcache_storage_load()</span></div>
+<div class="line"><a name="l00057"></a><span class="lineno">   57</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00058"></a><span class="lineno">   58</span>&#160;<span class="keywordtype">void</span> <a class="code" href="shardcache_8h.html#a006cbd2785de669bc2182938932c42e2">shardcache_storage_dispose</a>(<a class="code" href="namespace_3global_scope_4.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> *st);</div>
+<div class="line"><a name="l00059"></a><span class="lineno">   59</span>&#160;</div>
+<div class="line"><a name="l00060"></a><span class="lineno">   60</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00061"></a><span class="lineno">   61</span>&#160;<span class="comment"> * @brief Reset an existing storage</span></div>
+<div class="line"><a name="l00062"></a><span class="lineno">   62</span>&#160;<span class="comment"> * @param st A valid shardcache_storage_t structure</span></div>
+<div class="line"><a name="l00063"></a><span class="lineno">   63</span>&#160;<span class="comment"> * @return 0 on success, -1 otherwise</span></div>
+<div class="line"><a name="l00064"></a><span class="lineno">   64</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00065"></a><span class="lineno">   65</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a6a094cb6df8cdae92d15b4ff3944fcc4">shardcache_storage_reset</a>(<a class="code" href="namespace_3global_scope_4.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> *st);</div>
+<div class="line"><a name="l00066"></a><span class="lineno">   66</span>&#160;</div>
+<div class="line"><a name="l00097"></a><span class="lineno">   97</span>&#160;shardcache_t *<a class="code" href="shardcache_8h.html#a74346747eb9ad9da22cd1c6b06849d3e" title="Create a new shardcache instance.">shardcache_create</a>(<span class="keywordtype">char</span> *<a class="code" href="shardcache__internal_8h.html#a1dff5098c77be01d616284e4bc3e2cbc">me</a>, </div>
+<div class="line"><a name="l00098"></a><span class="lineno">   98</span>&#160;                        <a class="code" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7" title="Structure representing a node taking part in the shard cache.">shardcache_node_t</a> **nodes,</div>
+<div class="line"><a name="l00099"></a><span class="lineno">   99</span>&#160;                        <span class="keywordtype">int</span> num_nodes,</div>
+<div class="line"><a name="l00100"></a><span class="lineno">  100</span>&#160;                        <a class="code" href="namespace_3global_scope_4.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> *<a class="code" href="shardcache__internal_8h.html#a21c11f21bfb7a96babd08f59b3ea6655">storage</a>,</div>
+<div class="line"><a name="l00101"></a><span class="lineno">  101</span>&#160;                        <span class="keywordtype">char</span> *secret,</div>
+<div class="line"><a name="l00102"></a><span class="lineno">  102</span>&#160;                        <span class="keywordtype">int</span> num_workers,</div>
+<div class="line"><a name="l00103"></a><span class="lineno">  103</span>&#160;                        <span class="keywordtype">int</span> <a class="code" href="shardcache__internal_8h.html#aa8ea314dd3eeef69df21e08cf60ab86d">num_async</a>,</div>
+<div class="line"><a name="l00104"></a><span class="lineno">  104</span>&#160;                        <span class="keywordtype">size_t</span> cache_size);</div>
+<div class="line"><a name="l00105"></a><span class="lineno">  105</span>&#160;</div>
+<div class="line"><a name="l00106"></a><span class="lineno">  106</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00107"></a><span class="lineno">  107</span>&#160;<span class="comment"> * @brief Allows to switch between using persistent connections, or making a new connection for</span></div>
+<div class="line"><a name="l00108"></a><span class="lineno">  108</span>&#160;<span class="comment"> *        each message sent to a peer</span></div>
+<div class="line"><a name="l00109"></a><span class="lineno">  109</span>&#160;<span class="comment"> * @param cache       A valid pointer to a shardcache_t structure</span></div>
+<div class="line"><a name="l00110"></a><span class="lineno">  110</span>&#160;<span class="comment"> * @param new_value   1 if persistent connections should be used, 0 otherwise.</span></div>
+<div class="line"><a name="l00111"></a><span class="lineno">  111</span>&#160;<span class="comment"> *                    If -1 is provided as new_value, no change will be applied</span></div>
+<div class="line"><a name="l00112"></a><span class="lineno">  112</span>&#160;<span class="comment"> *                    but the actual value will still be returned</span></div>
+<div class="line"><a name="l00113"></a><span class="lineno">  113</span>&#160;<span class="comment"> *                    (effectively querying the actual status).</span></div>
+<div class="line"><a name="l00114"></a><span class="lineno">  114</span>&#160;<span class="comment"> * @return the previous value for the use_persistent_connections setting</span></div>
+<div class="line"><a name="l00115"></a><span class="lineno">  115</span>&#160;<span class="comment"> * @note if evict-on-delete is true, an evict command is sent to all other nodes</span></div>
+<div class="line"><a name="l00116"></a><span class="lineno">  116</span>&#160;<span class="comment"> *       when an item is removed from the storage</span></div>
+<div class="line"><a name="l00117"></a><span class="lineno">  117</span>&#160;<span class="comment"> * @note defaults to 1</span></div>
+<div class="line"><a name="l00118"></a><span class="lineno">  118</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00119"></a><span class="lineno">  119</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a0c6344be0358998e1ba9809ba4f3fd4e">shardcache_use_persistent_connections</a>(shardcache_t *cache, <span class="keywordtype">int</span> new_value);</div>
+<div class="line"><a name="l00120"></a><span class="lineno">  120</span>&#160;</div>
+<div class="line"><a name="l00121"></a><span class="lineno">  121</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00122"></a><span class="lineno">  122</span>&#160;<span class="comment"> * @brief Allows to change the evict_on_delete behaviour at runtime</span></div>
+<div class="line"><a name="l00123"></a><span class="lineno">  123</span>&#160;<span class="comment"> * @param cache       A valid pointer to a shardcache_t structure</span></div>
+<div class="line"><a name="l00124"></a><span class="lineno">  124</span>&#160;<span class="comment"> * @param new_value   1 if evict_on_delete is desired, 0 otherwise.\n</span></div>
+<div class="line"><a name="l00125"></a><span class="lineno">  125</span>&#160;<span class="comment"> *                    If -1 is provided as new_value, no change will be applied</span></div>
+<div class="line"><a name="l00126"></a><span class="lineno">  126</span>&#160;<span class="comment"> *                    but the actual value will still be returned</span></div>
+<div class="line"><a name="l00127"></a><span class="lineno">  127</span>&#160;<span class="comment"> *                    (effectively querying the actual status).</span></div>
+<div class="line"><a name="l00128"></a><span class="lineno">  128</span>&#160;<span class="comment"> * @return the previous value for the evict_on_delete setting</span></div>
+<div class="line"><a name="l00129"></a><span class="lineno">  129</span>&#160;<span class="comment"> * @note defaults to 1</span></div>
+<div class="line"><a name="l00130"></a><span class="lineno">  130</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00131"></a><span class="lineno">  131</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#af443e10682cbc1755ed4514d8a5708ba">shardcache_evict_on_delete</a>(shardcache_t *cache, <span class="keywordtype">int</span> new_value);</div>
+<div class="line"><a name="l00132"></a><span class="lineno">  132</span>&#160;</div>
+<div class="line"><a name="l00133"></a><span class="lineno">  133</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00134"></a><span class="lineno">  134</span>&#160;<span class="comment"> * @brief Allows to force caching of remote items</span></div>
+<div class="line"><a name="l00135"></a><span class="lineno">  135</span>&#160;<span class="comment"> *        (as opposed to the default behaviour  of caching only hot items)</span></div>
+<div class="line"><a name="l00136"></a><span class="lineno">  136</span>&#160;<span class="comment"> * @param cache       A valid pointer to a shardcache_t structure</span></div>
+<div class="line"><a name="l00137"></a><span class="lineno">  137</span>&#160;<span class="comment"> * @param new_value   1 if force_caching is desired, 0 otherwise.\n</span></div>
+<div class="line"><a name="l00138"></a><span class="lineno">  138</span>&#160;<span class="comment"> *                    If -1 is provided as new_value, no change will be applied</span></div>
+<div class="line"><a name="l00139"></a><span class="lineno">  139</span>&#160;<span class="comment"> *                    but the actual value will still be returned</span></div>
+<div class="line"><a name="l00140"></a><span class="lineno">  140</span>&#160;<span class="comment"> *                    (effectively querying the actual status).</span></div>
+<div class="line"><a name="l00141"></a><span class="lineno">  141</span>&#160;<span class="comment"> * @return the previous value for the force_caching setting</span></div>
+<div class="line"><a name="l00142"></a><span class="lineno">  142</span>&#160;<span class="comment"> * @note defaults to 1</span></div>
+<div class="line"><a name="l00143"></a><span class="lineno">  143</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00144"></a><span class="lineno">  144</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a450f19437f06b05ff8db556017d38394">shardcache_force_caching</a>(shardcache_t *cache, <span class="keywordtype">int</span> new_value);</div>
+<div class="line"><a name="l00145"></a><span class="lineno">  145</span>&#160;</div>
+<div class="line"><a name="l00146"></a><span class="lineno">  146</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00147"></a><span class="lineno">  147</span>&#160;<span class="comment"> * @brief Allows to change the timeout used when creating tcp connections</span></div>
+<div class="line"><a name="l00148"></a><span class="lineno">  148</span>&#160;<span class="comment"> * @param cache       A valid pointer to a shardcache_t structure</span></div>
+<div class="line"><a name="l00149"></a><span class="lineno">  149</span>&#160;<span class="comment"> * @param new_value   The amount of seconds to use as timeout.</span></div>
+<div class="line"><a name="l00150"></a><span class="lineno">  150</span>&#160;<span class="comment"> *                    If -1 is provided as new_value, no change will be applied</span></div>
+<div class="line"><a name="l00151"></a><span class="lineno">  151</span>&#160;<span class="comment"> *                    but the actual value will still be returned</span></div>
+<div class="line"><a name="l00152"></a><span class="lineno">  152</span>&#160;<span class="comment"> *                    (effectively querying the actual status).</span></div>
+<div class="line"><a name="l00153"></a><span class="lineno">  153</span>&#160;<span class="comment"> * @return the previous value for the tcp_timeout setting</span></div>
+<div class="line"><a name="l00154"></a><span class="lineno">  154</span>&#160;<span class="comment"> * @note defaults to SHARDCACHE_TCP_TIMEOUT_DEFAULT</span></div>
+<div class="line"><a name="l00155"></a><span class="lineno">  155</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00156"></a><span class="lineno">  156</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a4dfc8da5ca7b0d2ea2947db9b731a1fb">shardcache_tcp_timeout</a>(shardcache_t *cache, <span class="keywordtype">int</span> new_value);</div>
+<div class="line"><a name="l00157"></a><span class="lineno">  157</span>&#160;</div>
+<div class="line"><a name="l00158"></a><span class="lineno">  158</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00159"></a><span class="lineno">  159</span>&#160;<span class="comment"> * @brief Allows to change the connection pool connection timeout when reusing tcp connections</span></div>
+<div class="line"><a name="l00160"></a><span class="lineno">  160</span>&#160;<span class="comment"> * @param cache       A valid pointer to a shardcache_t structure</span></div>
+<div class="line"><a name="l00161"></a><span class="lineno">  161</span>&#160;<span class="comment"> * @param new_value   The amount of milliseconds to use as timeout.</span></div>
+<div class="line"><a name="l00162"></a><span class="lineno">  162</span>&#160;<span class="comment"> *                    If -1 is provided as new_value, no change will be applied</span></div>
+<div class="line"><a name="l00163"></a><span class="lineno">  163</span>&#160;<span class="comment"> *                    but the actual value will still be returned</span></div>
+<div class="line"><a name="l00164"></a><span class="lineno">  164</span>&#160;<span class="comment"> *                    (effectively querying the actual status).</span></div>
+<div class="line"><a name="l00165"></a><span class="lineno">  165</span>&#160;<span class="comment"> * @return the previous value for the tcp_timeout setting</span></div>
+<div class="line"><a name="l00166"></a><span class="lineno">  166</span>&#160;<span class="comment"> * @note defaults to SHARDCACHE_CONNECTION_EXPIRE_DEFAULT</span></div>
+<div class="line"><a name="l00167"></a><span class="lineno">  167</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00168"></a><span class="lineno">  168</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#ab37e1067d136856d61a75ba3b32d6516">shardcache_conn_expire_time</a>(shardcache_t *cache, <span class="keywordtype">int</span> new_value);</div>
+<div class="line"><a name="l00169"></a><span class="lineno">  169</span>&#160;</div>
+<div class="line"><a name="l00170"></a><span class="lineno">  170</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00171"></a><span class="lineno">  171</span>&#160;<span class="comment"> * @brief Allows to change the timeout passed to iomux_run()</span></div>
+<div class="line"><a name="l00172"></a><span class="lineno">  172</span>&#160;<span class="comment"> *               by the serving workers and the async reader</span></div>
+<div class="line"><a name="l00173"></a><span class="lineno">  173</span>&#160;<span class="comment"> * @note  Both the workers and the async reader use a low timeout</span></div>
+<div class="line"><a name="l00174"></a><span class="lineno">  174</span>&#160;<span class="comment"> *        to allow newly added filedescriptors to be included in the</span></div>
+<div class="line"><a name="l00175"></a><span class="lineno">  175</span>&#160;<span class="comment"> *        iomux as soon as possible</span></div>
+<div class="line"><a name="l00176"></a><span class="lineno">  176</span>&#160;<span class="comment"> * @param cache A valid pointer to a shardcache_t structure</span></div>
+<div class="line"><a name="l00177"></a><span class="lineno">  177</span>&#160;<span class="comment"> * @param new_value The amount of microseconds to use as timeout.</span></div>
+<div class="line"><a name="l00178"></a><span class="lineno">  178</span>&#160;<span class="comment"> *                  If -1 is provided as new_value, no change will be applied</span></div>
+<div class="line"><a name="l00179"></a><span class="lineno">  179</span>&#160;<span class="comment"> *                  but the actual value will still be returned</span></div>
+<div class="line"><a name="l00180"></a><span class="lineno">  180</span>&#160;<span class="comment"> *                  (effectively querying the actual status).</span></div>
+<div class="line"><a name="l00181"></a><span class="lineno">  181</span>&#160;<span class="comment"> * @return the previous value for the iomux_run_timeout_low setting</span></div>
+<div class="line"><a name="l00182"></a><span class="lineno">  182</span>&#160;<span class="comment"> * @note defaults to SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW</span></div>
+<div class="line"><a name="l00183"></a><span class="lineno">  183</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00184"></a><span class="lineno">  184</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#ac73a0c6f12b5b5f0c035967cdcf82727">shardcache_iomux_run_timeout_low</a>(shardcache_t *cache, <span class="keywordtype">int</span> new_value);</div>
+<div class="line"><a name="l00185"></a><span class="lineno">  185</span>&#160;</div>
+<div class="line"><a name="l00186"></a><span class="lineno">  186</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00187"></a><span class="lineno">  187</span>&#160;<span class="comment"> * @brief Allows to change the timeout passed to iomux_run()</span></div>
+<div class="line"><a name="l00188"></a><span class="lineno">  188</span>&#160;<span class="comment"> *               by the listener and expirer</span></div>
+<div class="line"><a name="l00189"></a><span class="lineno">  189</span>&#160;<span class="comment"> * @param cache A valid pointer to a shardcache_t structure</span></div>
+<div class="line"><a name="l00190"></a><span class="lineno">  190</span>&#160;<span class="comment"> * @param new_value The amount of microseconds to use as timeout.</span></div>
+<div class="line"><a name="l00191"></a><span class="lineno">  191</span>&#160;<span class="comment"> *                  If -1 is provided as new_value, no change will be applied</span></div>
+<div class="line"><a name="l00192"></a><span class="lineno">  192</span>&#160;<span class="comment"> *                  but the actual value will still be returned</span></div>
+<div class="line"><a name="l00193"></a><span class="lineno">  193</span>&#160;<span class="comment"> *                  (effectively querying the actual status).</span></div>
+<div class="line"><a name="l00194"></a><span class="lineno">  194</span>&#160;<span class="comment"> * @return the previous value for the iomux_run_timeout_high setting</span></div>
+<div class="line"><a name="l00195"></a><span class="lineno">  195</span>&#160;<span class="comment"> * @note defaults to SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH</span></div>
+<div class="line"><a name="l00196"></a><span class="lineno">  196</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00197"></a><span class="lineno">  197</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a32e1cc626c927a974cd574d98a3a9124">shardcache_iomux_run_timeout_high</a>(shardcache_t *cache, <span class="keywordtype">int</span> new_value);</div>
+<div class="line"><a name="l00198"></a><span class="lineno">  198</span>&#160;</div>
+<div class="line"><a name="l00199"></a><span class="lineno">  199</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00200"></a><span class="lineno">  200</span>&#160;<span class="comment"> * @brief Allows to change the expiration time for cached items</span></div>
+<div class="line"><a name="l00201"></a><span class="lineno">  201</span>&#160;<span class="comment"> * @param cache A valid pointer to a shardcache_t structure</span></div>
+<div class="line"><a name="l00202"></a><span class="lineno">  202</span>&#160;<span class="comment"> * @param new_value The amount of seconds to use as expire time.\n</span></div>
+<div class="line"><a name="l00203"></a><span class="lineno">  203</span>&#160;<span class="comment"> *                  If 0 no expiration will be scheduled for cached items;\n</span></div>
+<div class="line"><a name="l00204"></a><span class="lineno">  204</span>&#160;<span class="comment"> *                  If -1 is provided as new_value, no change will be applied</span></div>
+<div class="line"><a name="l00205"></a><span class="lineno">  205</span>&#160;<span class="comment"> *                  but the actual value will still be returned</span></div>
+<div class="line"><a name="l00206"></a><span class="lineno">  206</span>&#160;<span class="comment"> *                  (effectively querying the actual status).</span></div>
+<div class="line"><a name="l00207"></a><span class="lineno">  207</span>&#160;<span class="comment"> * @return the previous value for the expire_time setting</span></div>
+<div class="line"><a name="l00208"></a><span class="lineno">  208</span>&#160;<span class="comment"> * @note defaults to SHARDCACHE_IOMUX_EXPIRE_TIME</span></div>
+<div class="line"><a name="l00209"></a><span class="lineno">  209</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00210"></a><span class="lineno">  210</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#ad47c6ef316980ae82605b303c87e3c4d">shardcache_expire_time</a>(shardcache_t *cache, <span class="keywordtype">int</span> new_value);</div>
+<div class="line"><a name="l00211"></a><span class="lineno">  211</span>&#160;</div>
+<div class="line"><a name="l00212"></a><span class="lineno">  212</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00213"></a><span class="lineno">  213</span>&#160;<span class="comment"> * @brief Allows to change the number of queued/pipelined requests to handle ahead</span></div>
+<div class="line"><a name="l00214"></a><span class="lineno">  214</span>&#160;<span class="comment"> *        while still serving the response to the first request</span></div>
+<div class="line"><a name="l00215"></a><span class="lineno">  215</span>&#160;<span class="comment"> * @param cache A valid pointer to a shardcache_t structure</span></div>
+<div class="line"><a name="l00216"></a><span class="lineno">  216</span>&#160;<span class="comment"> * @param new_value The amount of requests to look ahead</span></div>
+<div class="line"><a name="l00217"></a><span class="lineno">  217</span>&#160;<span class="comment"> * @return the previous value for the look_ahead setting</span></div>
+<div class="line"><a name="l00218"></a><span class="lineno">  218</span>&#160;<span class="comment"> * @note defaults to SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT</span></div>
+<div class="line"><a name="l00219"></a><span class="lineno">  219</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00220"></a><span class="lineno">  220</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#aad3a553d54123b731207f95791f0022e">shardcache_serving_look_ahead</a>(shardcache_t *cache, <span class="keywordtype">int</span> new_value);</div>
+<div class="line"><a name="l00221"></a><span class="lineno">  221</span>&#160;</div>
+<div class="line"><a name="l00222"></a><span class="lineno">  222</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00223"></a><span class="lineno">  223</span>&#160;<span class="comment"> * @brief Allows to enable/disable the &#39;lazy_expiration&#39; mode</span></div>
+<div class="line"><a name="l00224"></a><span class="lineno">  224</span>&#160;<span class="comment"> * @param cache       A valid pointer to a shardcache_t structure</span></div>
+<div class="line"><a name="l00225"></a><span class="lineno">  225</span>&#160;<span class="comment"> * @param new_value   1 if lazy_expiration is desired, 0 otherwise.\n</span></div>
+<div class="line"><a name="l00226"></a><span class="lineno">  226</span>&#160;<span class="comment"> *                    If -1 is provided as new_value, no change will be applied</span></div>
+<div class="line"><a name="l00227"></a><span class="lineno">  227</span>&#160;<span class="comment"> *                    but the actual value will still be returned</span></div>
+<div class="line"><a name="l00228"></a><span class="lineno">  228</span>&#160;<span class="comment"> *                    (effectively querying the actual status).</span></div>
+<div class="line"><a name="l00229"></a><span class="lineno">  229</span>&#160;<span class="comment"> * @return the previous value for the lazy_expiration setting</span></div>
+<div class="line"><a name="l00230"></a><span class="lineno">  230</span>&#160;<span class="comment"> * @note When lazy expiration is enabled, cached items will be expired</span></div>
+<div class="line"><a name="l00231"></a><span class="lineno">  231</span>&#160;<span class="comment"> *       only when fetched, otherwise the expirer thread will take care</span></div>
+<div class="line"><a name="l00232"></a><span class="lineno">  232</span>&#160;<span class="comment"> *       of expiring the cached items as well as volatile items</span></div>
+<div class="line"><a name="l00233"></a><span class="lineno">  233</span>&#160;<span class="comment"> * @note defaults to 0</span></div>
+<div class="line"><a name="l00234"></a><span class="lineno">  234</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00235"></a><span class="lineno">  235</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a58997a3ef53dd994a9c495ff70a4e270">shardcache_lazy_expiration</a>(shardcache_t *cache, <span class="keywordtype">int</span> new_value);</div>
+<div class="line"><a name="l00236"></a><span class="lineno">  236</span>&#160;</div>
+<div class="line"><a name="l00241"></a><span class="lineno">  241</span>&#160;<span class="keywordtype">void</span> <a class="code" href="shardcache_8h.html#a25fc04bda4021be45e33cbcf4590e849" title="Release all the resources used by the shardcache instance.">shardcache_destroy</a>(shardcache_t *cache);</div>
+<div class="line"><a name="l00242"></a><span class="lineno">  242</span>&#160;</div>
+<div class="line"><a name="l00257"></a><span class="lineno">  257</span>&#160;<span class="keywordtype">void</span> *<a class="code" href="shardcache_8h.html#add7d8054738f5061aeb051b827596519" title="Get the value for a key.">shardcache_get</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00258"></a><span class="lineno">  258</span>&#160;                     <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00259"></a><span class="lineno">  259</span>&#160;                     <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00260"></a><span class="lineno">  260</span>&#160;                     <span class="keywordtype">size_t</span> *vlen,</div>
+<div class="line"><a name="l00261"></a><span class="lineno">  261</span>&#160;                     <span class="keyword">struct</span> timeval *timestamp);</div>
+<div class="line"><a name="l00262"></a><span class="lineno">  262</span>&#160;</div>
+<div class="line"><a name="l00277"></a><span class="lineno">  277</span>&#160;<span class="keywordtype">size_t</span> <a class="code" href="shardcache_8h.html#a871f29a62beca074def85a144d359ec2" title="Get partial value data value for a key.">shardcache_head</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00278"></a><span class="lineno">  278</span>&#160;                       <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00279"></a><span class="lineno">  279</span>&#160;                       <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00280"></a><span class="lineno">  280</span>&#160;                       <span class="keywordtype">void</span> *head,</div>
+<div class="line"><a name="l00281"></a><span class="lineno">  281</span>&#160;                       <span class="keywordtype">size_t</span> hlen,</div>
+<div class="line"><a name="l00282"></a><span class="lineno">  282</span>&#160;                       <span class="keyword">struct</span> timeval *timestamp);</div>
 <div class="line"><a name="l00283"></a><span class="lineno">  283</span>&#160;</div>
-<div class="line"><a name="l00284"></a><span class="lineno">  284</span>&#160;<span class="comment">/*</span></div>
-<div class="line"><a name="l00285"></a><span class="lineno">  285</span>&#160;<span class="comment"> *******************************************************************************</span></div>
-<div class="line"><a name="l00286"></a><span class="lineno">  286</span>&#160;<span class="comment"> * Shardcache API </span></div>
-<div class="line"><a name="l00287"></a><span class="lineno">  287</span>&#160;<span class="comment"> *******************************************************************************</span></div>
-<div class="line"><a name="l00288"></a><span class="lineno">  288</span>&#160;<span class="comment"> */</span></div>
-<div class="line"><a name="l00289"></a><span class="lineno">  289</span>&#160;</div>
-<div class="line"><a name="l00290"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a1216dc1e3ecd0c48c8de285179cf4b24">  290</a></span>&#160;<span class="preprocessor">#define SHARDCACHE_NODE_LABEL_MAXLEN 256</span></div>
-<div class="line"><a name="l00291"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a638701bd253025fa203bf5c659d72366">  291</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHARDCACHE_NODE_ADDRESS_MAXLEN 256</span></div>
-<div class="line"><a name="l00292"></a><span class="lineno">  292</span>&#160;<span class="preprocessor"></span></div>
-<div class="line"><a name="l00298"></a><span class="lineno"><a class="code" href="shardcache_8h.html">  298</a></span>&#160;<span class="keyword">typedef</span> <span class="keyword">struct </span>shardcache_node_s {</div>
-<div class="line"><a name="l00299"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a613c13a9fc77064d7d391c100a808966">  299</a></span>&#160;    <span class="keywordtype">char</span> label[<a class="code" href="shardcache_8h.html#a1216dc1e3ecd0c48c8de285179cf4b24">SHARDCACHE_NODE_LABEL_MAXLEN</a>];</div>
-<div class="line"><a name="l00300"></a><span class="lineno"><a class="code" href="shardcache_8h.html#adb1954a5c17289b748995ef0bc13ddef">  300</a></span>&#160;    <span class="keywordtype">char</span> address[<a class="code" href="shardcache_8h.html#a638701bd253025fa203bf5c659d72366">SHARDCACHE_NODE_ADDRESS_MAXLEN</a>];</div>
-<div class="line"><a name="l00301"></a><span class="lineno">  301</span>&#160;} <a class="code" href="shardcache_8h.html#structshardcache__node__t" title="Structure representing a node taking part in the shard cache.">shardcache_node_t</a>;</div>
-<div class="line"><a name="l00302"></a><span class="lineno">  302</span>&#160;</div>
-<div class="line"><a name="l00324"></a><span class="lineno">  324</span>&#160;<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *<a class="code" href="shardcache_8h.html#ae394c69ff91f95bd15b93c01264125b0" title="Create a new shardcache instance.">shardcache_create</a>(<span class="keywordtype">char</span> *me, </div>
-<div class="line"><a name="l00325"></a><span class="lineno">  325</span>&#160;                        <a class="code" href="shardcache_8h.html#structshardcache__node__t" title="Structure representing a node taking part in the shard cache.">shardcache_node_t</a> *nodes,</div>
-<div class="line"><a name="l00326"></a><span class="lineno">  326</span>&#160;                        <span class="keywordtype">int</span> num_nodes,</div>
-<div class="line"><a name="l00327"></a><span class="lineno">  327</span>&#160;                        <a class="code" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> *storage,</div>
-<div class="line"><a name="l00328"></a><span class="lineno">  328</span>&#160;                        <span class="keywordtype">char</span> *secret,</div>
-<div class="line"><a name="l00329"></a><span class="lineno">  329</span>&#160;                        <span class="keywordtype">int</span> num_workers,</div>
-<div class="line"><a name="l00330"></a><span class="lineno">  330</span>&#160;                        <span class="keywordtype">size_t</span> cache_size);</div>
-<div class="line"><a name="l00331"></a><span class="lineno">  331</span>&#160;</div>
-<div class="line"><a name="l00332"></a><span class="lineno">  332</span>&#160;<span class="comment">/*</span></div>
-<div class="line"><a name="l00333"></a><span class="lineno">  333</span>&#160;<span class="comment"> * @brief Allows to switch between using persistent connections, or making a new connection for</span></div>
-<div class="line"><a name="l00334"></a><span class="lineno">  334</span>&#160;<span class="comment"> *        each message sent to a peer</span></div>
-<div class="line"><a name="l00335"></a><span class="lineno">  335</span>&#160;<span class="comment"> * @param cache       A valid pointer to a shardcache_t structure</span></div>
-<div class="line"><a name="l00336"></a><span class="lineno">  336</span>&#160;<span class="comment"> * @param new_value   1 if persistent connections should be used, 0 otherwise</span></div>
-<div class="line"><a name="l00337"></a><span class="lineno">  337</span>&#160;<span class="comment"> * @return the previous value for the use_persistent_connections setting</span></div>
-<div class="line"><a name="l00338"></a><span class="lineno">  338</span>&#160;<span class="comment"> * @note when evict-on-delete is true, an evict command is sent to all nodes if an item</span></div>
-<div class="line"><a name="l00339"></a><span class="lineno">  339</span>&#160;<span class="comment"> *       is removed from the storage</span></div>
-<div class="line"><a name="l00340"></a><span class="lineno">  340</span>&#160;<span class="comment"> * @note defaults to 1</span></div>
-<div class="line"><a name="l00341"></a><span class="lineno">  341</span>&#160;<span class="comment"> */</span></div>
-<div class="line"><a name="l00342"></a><span class="lineno">  342</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a0c6344be0358998e1ba9809ba4f3fd4e">shardcache_use_persistent_connections</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache, <span class="keywordtype">int</span> new_value);</div>
-<div class="line"><a name="l00343"></a><span class="lineno">  343</span>&#160;</div>
-<div class="line"><a name="l00344"></a><span class="lineno">  344</span>&#160;<span class="comment">/*</span></div>
-<div class="line"><a name="l00345"></a><span class="lineno">  345</span>&#160;<span class="comment"> * @brief Allows to change the evict_on_delete behaviour at runtime</span></div>
-<div class="line"><a name="l00346"></a><span class="lineno">  346</span>&#160;<span class="comment"> * @param cache       A valid pointer to a shardcache_t structure</span></div>
-<div class="line"><a name="l00347"></a><span class="lineno">  347</span>&#160;<span class="comment"> * @param new_value   1 if evict_on_delete is desired, 0 otherwise</span></div>
-<div class="line"><a name="l00348"></a><span class="lineno">  348</span>&#160;<span class="comment"> * @return the previous value for the evict_on_delete setting</span></div>
-<div class="line"><a name="l00349"></a><span class="lineno">  349</span>&#160;<span class="comment"> * @note defaults to 1</span></div>
-<div class="line"><a name="l00350"></a><span class="lineno">  350</span>&#160;<span class="comment"> */</span></div>
-<div class="line"><a name="l00351"></a><span class="lineno">  351</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#af443e10682cbc1755ed4514d8a5708ba">shardcache_evict_on_delete</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache, <span class="keywordtype">int</span> new_value);</div>
-<div class="line"><a name="l00352"></a><span class="lineno">  352</span>&#160;</div>
-<div class="line"><a name="l00353"></a><span class="lineno">  353</span>&#160;<span class="comment">/*</span></div>
-<div class="line"><a name="l00354"></a><span class="lineno">  354</span>&#160;<span class="comment"> * @brief Allows to change the timeout used when creating tcp connections</span></div>
-<div class="line"><a name="l00355"></a><span class="lineno">  355</span>&#160;<span class="comment"> * @param cache       A valid pointer to a shardcache_t structure</span></div>
-<div class="line"><a name="l00356"></a><span class="lineno">  356</span>&#160;<span class="comment"> * @param new_value   the amount of seconds to use as timeout</span></div>
-<div class="line"><a name="l00357"></a><span class="lineno">  357</span>&#160;<span class="comment"> * @return the previous value for the tcp_timeout setting</span></div>
-<div class="line"><a name="l00358"></a><span class="lineno">  358</span>&#160;<span class="comment"> * @note defaults to SHARDCACHE_TCP_TIMEOUT_DEFAULT</span></div>
-<div class="line"><a name="l00359"></a><span class="lineno">  359</span>&#160;<span class="comment"> */</span></div>
-<div class="line"><a name="l00360"></a><span class="lineno">  360</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a4dfc8da5ca7b0d2ea2947db9b731a1fb">shardcache_tcp_timeout</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache, <span class="keywordtype">int</span> new_value);</div>
-<div class="line"><a name="l00361"></a><span class="lineno">  361</span>&#160;</div>
-<div class="line"><a name="l00366"></a><span class="lineno">  366</span>&#160;<span class="keywordtype">void</span> <a class="code" href="shardcache_8h.html#a25fc04bda4021be45e33cbcf4590e849" title="Release all the resources used by the shardcache instance.">shardcache_destroy</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache);</div>
-<div class="line"><a name="l00367"></a><span class="lineno">  367</span>&#160;</div>
-<div class="line"><a name="l00382"></a><span class="lineno">  382</span>&#160;<span class="keywordtype">void</span> *<a class="code" href="shardcache_8h.html#add7d8054738f5061aeb051b827596519" title="Get the value for a key.">shardcache_get</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00383"></a><span class="lineno">  383</span>&#160;                     <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00384"></a><span class="lineno">  384</span>&#160;                     <span class="keywordtype">size_t</span> klen,</div>
-<div class="line"><a name="l00385"></a><span class="lineno">  385</span>&#160;                     <span class="keywordtype">size_t</span> *vlen,</div>
-<div class="line"><a name="l00386"></a><span class="lineno">  386</span>&#160;                     <span class="keyword">struct</span> timeval *timestamp);</div>
-<div class="line"><a name="l00387"></a><span class="lineno">  387</span>&#160;</div>
-<div class="line"><a name="l00402"></a><span class="lineno">  402</span>&#160;<span class="keywordtype">size_t</span> <a class="code" href="shardcache_8h.html#a871f29a62beca074def85a144d359ec2" title="Get partial value data value for a key.">shardcache_head</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00403"></a><span class="lineno">  403</span>&#160;                       <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00404"></a><span class="lineno">  404</span>&#160;                       <span class="keywordtype">size_t</span> klen,</div>
-<div class="line"><a name="l00405"></a><span class="lineno">  405</span>&#160;                       <span class="keywordtype">void</span> *head,</div>
-<div class="line"><a name="l00406"></a><span class="lineno">  406</span>&#160;                       <span class="keywordtype">size_t</span> hlen,</div>
-<div class="line"><a name="l00407"></a><span class="lineno">  407</span>&#160;                       <span class="keyword">struct</span> timeval *timestamp);</div>
-<div class="line"><a name="l00408"></a><span class="lineno">  408</span>&#160;</div>
-<div class="line"><a name="l00424"></a><span class="lineno">  424</span>&#160;<span class="keywordtype">size_t</span> <a class="code" href="shardcache_8h.html#aca9675ed9f8be9512d7e6151783168ed" title="Get partial value data value for a key.">shardcache_get_offset</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00425"></a><span class="lineno">  425</span>&#160;                             <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00426"></a><span class="lineno">  426</span>&#160;                             <span class="keywordtype">size_t</span> klen,</div>
-<div class="line"><a name="l00427"></a><span class="lineno">  427</span>&#160;                             <span class="keywordtype">void</span> *out,</div>
-<div class="line"><a name="l00428"></a><span class="lineno">  428</span>&#160;                             <span class="keywordtype">size_t</span> *olen,</div>
-<div class="line"><a name="l00429"></a><span class="lineno">  429</span>&#160;                             <span class="keywordtype">size_t</span> offset,</div>
-<div class="line"><a name="l00430"></a><span class="lineno">  430</span>&#160;                             <span class="keyword">struct</span> timeval *timestamp);</div>
-<div class="line"><a name="l00431"></a><span class="lineno">  431</span>&#160;</div>
-<div class="line"><a name="l00432"></a><span class="lineno">  432</span>&#160;</div>
-<div class="line"><a name="l00456"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2">  456</a></span>&#160;<span class="keyword">typedef</span> int (*<a class="code" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2" title="Callback passed to shardcache_get_async() to receive the data asynchronously.">shardcache_get_async_callback_t</a>)(<span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00457"></a><span class="lineno">  457</span>&#160;                                               <span class="keywordtype">size_t</span> klen,</div>
-<div class="line"><a name="l00458"></a><span class="lineno">  458</span>&#160;                                               <span class="keywordtype">void</span> *data,</div>
-<div class="line"><a name="l00459"></a><span class="lineno">  459</span>&#160;                                               <span class="keywordtype">size_t</span> dlen,</div>
-<div class="line"><a name="l00460"></a><span class="lineno">  460</span>&#160;                                               <span class="keywordtype">size_t</span> total_size,</div>
-<div class="line"><a name="l00461"></a><span class="lineno">  461</span>&#160;                                               <span class="keyword">struct </span>timeval *timestamp,</div>
-<div class="line"><a name="l00462"></a><span class="lineno">  462</span>&#160;                                               <span class="keywordtype">void</span> *priv);</div>
-<div class="line"><a name="l00463"></a><span class="lineno">  463</span>&#160;</div>
-<div class="line"><a name="l00486"></a><span class="lineno">  486</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#ae87bbf3da1b1a4b80f8c6213abc320ac" title="Get the value for a key asynchronously.">shardcache_get_async</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00487"></a><span class="lineno">  487</span>&#160;                         <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00488"></a><span class="lineno">  488</span>&#160;                         <span class="keywordtype">size_t</span> klen,</div>
-<div class="line"><a name="l00489"></a><span class="lineno">  489</span>&#160;                         <a class="code" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2" title="Callback passed to shardcache_get_async() to receive the data asynchronously.">shardcache_get_async_callback_t</a> cb,</div>
-<div class="line"><a name="l00490"></a><span class="lineno">  490</span>&#160;                         <span class="keywordtype">void</span> *priv);</div>
-<div class="line"><a name="l00491"></a><span class="lineno">  491</span>&#160;</div>
-<div class="line"><a name="l00499"></a><span class="lineno">  499</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a9f4b6d4f7c21fe5e030fcc2cbf6c3bd4" title="Check if a specific key exists on the node responsible for it.">shardcache_exists</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00500"></a><span class="lineno">  500</span>&#160;                      <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00501"></a><span class="lineno">  501</span>&#160;                      <span class="keywordtype">size_t</span> klen);</div>
-<div class="line"><a name="l00502"></a><span class="lineno">  502</span>&#160;</div>
-<div class="line"><a name="l00512"></a><span class="lineno">  512</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a55b425016e88f20934e14e338f795397" title="Load a key into the cache if not present already, otherwise update the loaded-timestamp.">shardcache_touch</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00513"></a><span class="lineno">  513</span>&#160;                     <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00514"></a><span class="lineno">  514</span>&#160;                     <span class="keywordtype">size_t</span> klen);</div>
-<div class="line"><a name="l00515"></a><span class="lineno">  515</span>&#160;</div>
-<div class="line"><a name="l00526"></a><span class="lineno">  526</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a671f35e550582e8e33f4d66ca03adc57" title="Set the value for a key.">shardcache_set</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00527"></a><span class="lineno">  527</span>&#160;                   <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00528"></a><span class="lineno">  528</span>&#160;                   <span class="keywordtype">size_t</span> klen,</div>
-<div class="line"><a name="l00529"></a><span class="lineno">  529</span>&#160;                   <span class="keywordtype">void</span> *value,</div>
-<div class="line"><a name="l00530"></a><span class="lineno">  530</span>&#160;                   <span class="keywordtype">size_t</span> vlen);</div>
-<div class="line"><a name="l00531"></a><span class="lineno">  531</span>&#160;</div>
-<div class="line"><a name="l00542"></a><span class="lineno">  542</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a95760527edef026e88565106effe88b0" title="Set the value for a key if it doesn&#39;t already exist.">shardcache_add</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00543"></a><span class="lineno">  543</span>&#160;                   <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00544"></a><span class="lineno">  544</span>&#160;                   <span class="keywordtype">size_t</span> klen,</div>
-<div class="line"><a name="l00545"></a><span class="lineno">  545</span>&#160;                   <span class="keywordtype">void</span> *value,</div>
-<div class="line"><a name="l00546"></a><span class="lineno">  546</span>&#160;                   <span class="keywordtype">size_t</span> vlen);</div>
+<div class="line"><a name="l00299"></a><span class="lineno">  299</span>&#160;<span class="keywordtype">size_t</span> <a class="code" href="shardcache_8h.html#aca9675ed9f8be9512d7e6151783168ed" title="Get partial value data value for a key.">shardcache_get_offset</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00300"></a><span class="lineno">  300</span>&#160;                             <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00301"></a><span class="lineno">  301</span>&#160;                             <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00302"></a><span class="lineno">  302</span>&#160;                             <span class="keywordtype">void</span> *out,</div>
+<div class="line"><a name="l00303"></a><span class="lineno">  303</span>&#160;                             <span class="keywordtype">size_t</span> *olen,</div>
+<div class="line"><a name="l00304"></a><span class="lineno">  304</span>&#160;                             <span class="keywordtype">size_t</span> offset,</div>
+<div class="line"><a name="l00305"></a><span class="lineno">  305</span>&#160;                             <span class="keyword">struct</span> timeval *timestamp);</div>
+<div class="line"><a name="l00306"></a><span class="lineno">  306</span>&#160;</div>
+<div class="line"><a name="l00330"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2">  330</a></span>&#160;<span class="keyword">typedef</span> int (*<a class="code" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2" title="Callback passed to shardcache_get_async() to receive the data asynchronously.">shardcache_get_async_callback_t</a>)(<span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00331"></a><span class="lineno">  331</span>&#160;                                               <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00332"></a><span class="lineno">  332</span>&#160;                                               <span class="keywordtype">void</span> *data,</div>
+<div class="line"><a name="l00333"></a><span class="lineno">  333</span>&#160;                                               <span class="keywordtype">size_t</span> dlen,</div>
+<div class="line"><a name="l00334"></a><span class="lineno">  334</span>&#160;                                               <span class="keywordtype">size_t</span> total_size,</div>
+<div class="line"><a name="l00335"></a><span class="lineno">  335</span>&#160;                                               <span class="keyword">struct </span>timeval *timestamp,</div>
+<div class="line"><a name="l00336"></a><span class="lineno">  336</span>&#160;                                               <span class="keywordtype">void</span> *priv);</div>
+<div class="line"><a name="l00337"></a><span class="lineno">  337</span>&#160;</div>
+<div class="line"><a name="l00360"></a><span class="lineno">  360</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#ae87bbf3da1b1a4b80f8c6213abc320ac" title="Get the value for a key asynchronously.">shardcache_get_async</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00361"></a><span class="lineno">  361</span>&#160;                         <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00362"></a><span class="lineno">  362</span>&#160;                         <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00363"></a><span class="lineno">  363</span>&#160;                         <a class="code" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2" title="Callback passed to shardcache_get_async() to receive the data asynchronously.">shardcache_get_async_callback_t</a> cb,</div>
+<div class="line"><a name="l00364"></a><span class="lineno">  364</span>&#160;                         <span class="keywordtype">void</span> *priv);</div>
+<div class="line"><a name="l00365"></a><span class="lineno">  365</span>&#160;</div>
+<div class="line"><a name="l00366"></a><span class="lineno">  366</span>&#160;</div>
+<div class="line"><a name="l00392"></a><span class="lineno">  392</span>&#160;<span class="keywordtype">int</span></div>
+<div class="line"><a name="l00393"></a><span class="lineno">  393</span>&#160;<a class="code" href="shardcache_8h.html#a41dee186c3b877f32386da245bcc6a7e" title="Get partial value data value for a key asynchronously.">shardcache_get_offset_async</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00394"></a><span class="lineno">  394</span>&#160;                            <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00395"></a><span class="lineno">  395</span>&#160;                            <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00396"></a><span class="lineno">  396</span>&#160;                            <span class="keywordtype">size_t</span> offset,</div>
+<div class="line"><a name="l00397"></a><span class="lineno">  397</span>&#160;                            <span class="keywordtype">size_t</span> length,</div>
+<div class="line"><a name="l00398"></a><span class="lineno">  398</span>&#160;                            <a class="code" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2" title="Callback passed to shardcache_get_async() to receive the data asynchronously.">shardcache_get_async_callback_t</a> cb,</div>
+<div class="line"><a name="l00399"></a><span class="lineno">  399</span>&#160;                            <span class="keywordtype">void</span> *priv);</div>
+<div class="line"><a name="l00400"></a><span class="lineno">  400</span>&#160;</div>
+<div class="line"><a name="l00410"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1">  410</a></span>&#160;<span class="keyword">typedef</span> void (*<a class="code" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1" title="Callback expected by all the _async() routines returning an integer result (basically all apart shard...">shardcache_async_response_callback_t</a>)(<span class="keywordtype">void</span> *key, <span class="keywordtype">size_t</span> klen, <span class="keywordtype">int</span> res, <span class="keywordtype">void</span> *priv);</div>
+<div class="line"><a name="l00411"></a><span class="lineno">  411</span>&#160;</div>
+<div class="line"><a name="l00423"></a><span class="lineno">  423</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a9eb52ab9f65460bdc4958eaefb0b2954" title="Check if a specific key exists on the node responsible for it.">shardcache_exists_async</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00424"></a><span class="lineno">  424</span>&#160;                            <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00425"></a><span class="lineno">  425</span>&#160;                            <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00426"></a><span class="lineno">  426</span>&#160;                            <a class="code" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1" title="Callback expected by all the _async() routines returning an integer result (basically all apart shard...">shardcache_async_response_callback_t</a> cb,</div>
+<div class="line"><a name="l00427"></a><span class="lineno">  427</span>&#160;                            <span class="keywordtype">void</span> *priv);</div>
+<div class="line"><a name="l00428"></a><span class="lineno">  428</span>&#160;</div>
+<div class="line"><a name="l00438"></a><span class="lineno">  438</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a55b425016e88f20934e14e338f795397" title="Load a key into the cache if not present already, otherwise update the loaded-timestamp.">shardcache_touch</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00439"></a><span class="lineno">  439</span>&#160;                     <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00440"></a><span class="lineno">  440</span>&#160;                     <span class="keywordtype">size_t</span> klen);</div>
+<div class="line"><a name="l00441"></a><span class="lineno">  441</span>&#160;</div>
+<div class="line"><a name="l00452"></a><span class="lineno">  452</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a671f35e550582e8e33f4d66ca03adc57" title="Set the value for a key.">shardcache_set</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00453"></a><span class="lineno">  453</span>&#160;                   <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00454"></a><span class="lineno">  454</span>&#160;                   <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00455"></a><span class="lineno">  455</span>&#160;                   <span class="keywordtype">void</span> *value,</div>
+<div class="line"><a name="l00456"></a><span class="lineno">  456</span>&#160;                   <span class="keywordtype">size_t</span> vlen);</div>
+<div class="line"><a name="l00457"></a><span class="lineno">  457</span>&#160;</div>
+<div class="line"><a name="l00458"></a><span class="lineno">  458</span>&#160;</div>
+<div class="line"><a name="l00479"></a><span class="lineno">  479</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a7b16b6d50d4e163e92c44025f38ce581" title="Set the value for a key fetching the response asyncrhonously.">shardcache_set_async</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00480"></a><span class="lineno">  480</span>&#160;                         <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00481"></a><span class="lineno">  481</span>&#160;                         <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00482"></a><span class="lineno">  482</span>&#160;                         <span class="keywordtype">void</span> *value,</div>
+<div class="line"><a name="l00483"></a><span class="lineno">  483</span>&#160;                         <span class="keywordtype">size_t</span> vlen,</div>
+<div class="line"><a name="l00484"></a><span class="lineno">  484</span>&#160;                         time_t expire,</div>
+<div class="line"><a name="l00485"></a><span class="lineno">  485</span>&#160;                         <span class="keywordtype">int</span>    if_not_exists,</div>
+<div class="line"><a name="l00486"></a><span class="lineno">  486</span>&#160;                         <a class="code" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1" title="Callback expected by all the _async() routines returning an integer result (basically all apart shard...">shardcache_async_response_callback_t</a> cb,</div>
+<div class="line"><a name="l00487"></a><span class="lineno">  487</span>&#160;                         <span class="keywordtype">void</span> *priv);</div>
+<div class="line"><a name="l00488"></a><span class="lineno">  488</span>&#160;</div>
+<div class="line"><a name="l00489"></a><span class="lineno">  489</span>&#160;</div>
+<div class="line"><a name="l00500"></a><span class="lineno">  500</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a95760527edef026e88565106effe88b0" title="Set the value for a key if it doesn&#39;t already exist.">shardcache_add</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00501"></a><span class="lineno">  501</span>&#160;                   <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00502"></a><span class="lineno">  502</span>&#160;                   <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00503"></a><span class="lineno">  503</span>&#160;                   <span class="keywordtype">void</span> *value,</div>
+<div class="line"><a name="l00504"></a><span class="lineno">  504</span>&#160;                   <span class="keywordtype">size_t</span> vlen);</div>
+<div class="line"><a name="l00505"></a><span class="lineno">  505</span>&#160;</div>
+<div class="line"><a name="l00520"></a><span class="lineno">  520</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a2aa7a564fbe7884299d77eca29432319" title="Set a volatile value for a key.">shardcache_set_volatile</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00521"></a><span class="lineno">  521</span>&#160;                            <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00522"></a><span class="lineno">  522</span>&#160;                            <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00523"></a><span class="lineno">  523</span>&#160;                            <span class="keywordtype">void</span> *value,</div>
+<div class="line"><a name="l00524"></a><span class="lineno">  524</span>&#160;                            <span class="keywordtype">size_t</span> vlen,</div>
+<div class="line"><a name="l00525"></a><span class="lineno">  525</span>&#160;                            time_t expire);</div>
+<div class="line"><a name="l00526"></a><span class="lineno">  526</span>&#160;</div>
+<div class="line"><a name="l00541"></a><span class="lineno">  541</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#aa7c9051ef937c4b4ae02b0017d513274" title="Set the volatile value for a key if it doesn&#39;t already exist.">shardcache_add_volatile</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00542"></a><span class="lineno">  542</span>&#160;                            <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00543"></a><span class="lineno">  543</span>&#160;                            <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00544"></a><span class="lineno">  544</span>&#160;                            <span class="keywordtype">void</span> *value,</div>
+<div class="line"><a name="l00545"></a><span class="lineno">  545</span>&#160;                            <span class="keywordtype">size_t</span> vlen,</div>
+<div class="line"><a name="l00546"></a><span class="lineno">  546</span>&#160;                            time_t expire);</div>
 <div class="line"><a name="l00547"></a><span class="lineno">  547</span>&#160;</div>
-<div class="line"><a name="l00562"></a><span class="lineno">  562</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a2aa7a564fbe7884299d77eca29432319" title="Set a volatile value for a key.">shardcache_set_volatile</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00563"></a><span class="lineno">  563</span>&#160;                            <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00564"></a><span class="lineno">  564</span>&#160;                            <span class="keywordtype">size_t</span> klen,</div>
-<div class="line"><a name="l00565"></a><span class="lineno">  565</span>&#160;                            <span class="keywordtype">void</span> *value,</div>
-<div class="line"><a name="l00566"></a><span class="lineno">  566</span>&#160;                            <span class="keywordtype">size_t</span> vlen,</div>
-<div class="line"><a name="l00567"></a><span class="lineno">  567</span>&#160;                            time_t expire);</div>
-<div class="line"><a name="l00568"></a><span class="lineno">  568</span>&#160;</div>
-<div class="line"><a name="l00583"></a><span class="lineno">  583</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#aa7c9051ef937c4b4ae02b0017d513274" title="Set the volatile value for a key if it doesn&#39;t already exist.">shardcache_add_volatile</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00584"></a><span class="lineno">  584</span>&#160;                            <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00585"></a><span class="lineno">  585</span>&#160;                            <span class="keywordtype">size_t</span> klen,</div>
-<div class="line"><a name="l00586"></a><span class="lineno">  586</span>&#160;                            <span class="keywordtype">void</span> *value,</div>
-<div class="line"><a name="l00587"></a><span class="lineno">  587</span>&#160;                            <span class="keywordtype">size_t</span> vlen,</div>
-<div class="line"><a name="l00588"></a><span class="lineno">  588</span>&#160;                            time_t expire);</div>
-<div class="line"><a name="l00589"></a><span class="lineno">  589</span>&#160;</div>
-<div class="line"><a name="l00597"></a><span class="lineno">  597</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#af859541766d97b6afb992ef1c843711a" title="Remove the value for a key.">shardcache_del</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache, <span class="keywordtype">void</span> *key, <span class="keywordtype">size_t</span> klen);</div>
-<div class="line"><a name="l00598"></a><span class="lineno">  598</span>&#160;</div>
-<div class="line"><a name="l00607"></a><span class="lineno">  607</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#af3630c66ba810d5dad9bfbc2492f6cce" title="Remove the value from the cache for a key.">shardcache_evict</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache, <span class="keywordtype">void</span> *key, <span class="keywordtype">size_t</span> klen);</div>
-<div class="line"><a name="l00608"></a><span class="lineno">  608</span>&#160;</div>
-<div class="line"><a name="l00618"></a><span class="lineno">  618</span>&#160;<a class="code" href="shardcache_8h.html#structshardcache__node__t" title="Structure representing a node taking part in the shard cache.">shardcache_node_t</a> *</div>
-<div class="line"><a name="l00619"></a><span class="lineno">  619</span>&#160;<a class="code" href="shardcache_8h.html#ae01e634aa1b7d2b152505b82c7212fe0" title="Get the list of all nodes (including this node itself) taking part to the shardcache &#39;cloud&#39;...">shardcache_get_nodes</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache, <span class="keywordtype">int</span> *num_nodes);</div>
+<div class="line"><a name="l00556"></a><span class="lineno">  556</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#af859541766d97b6afb992ef1c843711a" title="Remove the value for a key.">shardcache_del</a>(shardcache_t *cache, <span class="keywordtype">void</span> *key, <span class="keywordtype">size_t</span> klen);</div>
+<div class="line"><a name="l00557"></a><span class="lineno">  557</span>&#160;</div>
+<div class="line"><a name="l00570"></a><span class="lineno">  570</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a49754acc649df6ffb5a997ddb924968d" title="Remove the value for a key asynchronously.">shardcache_del_async</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00571"></a><span class="lineno">  571</span>&#160;                         <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00572"></a><span class="lineno">  572</span>&#160;                         <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00573"></a><span class="lineno">  573</span>&#160;                         <a class="code" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1" title="Callback expected by all the _async() routines returning an integer result (basically all apart shard...">shardcache_async_response_callback_t</a> cb,</div>
+<div class="line"><a name="l00574"></a><span class="lineno">  574</span>&#160;                         <span class="keywordtype">void</span> *priv);</div>
+<div class="line"><a name="l00575"></a><span class="lineno">  575</span>&#160;</div>
+<div class="line"><a name="l00584"></a><span class="lineno">  584</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#af3630c66ba810d5dad9bfbc2492f6cce" title="Remove the value from the cache for a key.">shardcache_evict</a>(shardcache_t *cache, <span class="keywordtype">void</span> *key, <span class="keywordtype">size_t</span> klen);</div>
+<div class="line"><a name="l00585"></a><span class="lineno">  585</span>&#160;</div>
+<div class="line"><a name="l00598"></a><span class="lineno">  598</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a7cac3c97e156092f9d560f54d37df98d" title="Get the node owning a specific key.">shardcache_test_ownership</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00599"></a><span class="lineno">  599</span>&#160;                              <span class="keywordtype">void</span> *key,</div>
+<div class="line"><a name="l00600"></a><span class="lineno">  600</span>&#160;                              <span class="keywordtype">size_t</span> klen,</div>
+<div class="line"><a name="l00601"></a><span class="lineno">  601</span>&#160;                              <span class="keywordtype">char</span> *owner,</div>
+<div class="line"><a name="l00602"></a><span class="lineno">  602</span>&#160;                              <span class="keywordtype">size_t</span> *len);</div>
+<div class="line"><a name="l00603"></a><span class="lineno">  603</span>&#160;</div>
+<div class="line"><a name="l00612"></a><span class="lineno">  612</span>&#160;<a class="code" href="shardcache__storage_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a> *<a class="code" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0" title="Get the index of keys managed by the specific shardcache instance by querying the storage module...">shardcache_get_index</a>(shardcache_t *cache);</div>
+<div class="line"><a name="l00613"></a><span class="lineno">  613</span>&#160;</div>
+<div class="line"><a name="l00619"></a><span class="lineno">  619</span>&#160;<span class="keywordtype">void</span> <a class="code" href="shardcache_8h.html#a7f3e042fe58a3dd7537c81de115bba25" title="Release all resources used by the index provided as argument.">shardcache_free_index</a>(<a class="code" href="shardcache__storage_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a> *index);</div>
 <div class="line"><a name="l00620"></a><span class="lineno">  620</span>&#160;</div>
-<div class="line"><a name="l00633"></a><span class="lineno">  633</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a7cac3c97e156092f9d560f54d37df98d" title="Get the node owning a specific key.">shardcache_test_ownership</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00634"></a><span class="lineno">  634</span>&#160;                              <span class="keywordtype">void</span> *key,</div>
-<div class="line"><a name="l00635"></a><span class="lineno">  635</span>&#160;                              <span class="keywordtype">size_t</span> klen,</div>
-<div class="line"><a name="l00636"></a><span class="lineno">  636</span>&#160;                              <span class="keywordtype">char</span> *owner,</div>
-<div class="line"><a name="l00637"></a><span class="lineno">  637</span>&#160;                              <span class="keywordtype">size_t</span> *len);</div>
-<div class="line"><a name="l00638"></a><span class="lineno">  638</span>&#160;</div>
-<div class="line"><a name="l00647"></a><span class="lineno">  647</span>&#160;<a class="code" href="shardcache_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a> *<a class="code" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0" title="Get the index of keys managed by the specific shardcache instance by querying the storage module...">shardcache_get_index</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache);</div>
-<div class="line"><a name="l00648"></a><span class="lineno">  648</span>&#160;</div>
-<div class="line"><a name="l00654"></a><span class="lineno">  654</span>&#160;<span class="keywordtype">void</span> <a class="code" href="shardcache_8h.html#a7f3e042fe58a3dd7537c81de115bba25" title="Release all resources used by the index provided as argument.">shardcache_free_index</a>(<a class="code" href="shardcache_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a> *index);</div>
-<div class="line"><a name="l00655"></a><span class="lineno">  655</span>&#160;</div>
-<div class="line"><a name="l00665"></a><span class="lineno">  665</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a7da4e669a16da6d150d2f1d906960ab2" title="Start a migration process.">shardcache_migration_begin</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache,</div>
-<div class="line"><a name="l00666"></a><span class="lineno">  666</span>&#160;                               <a class="code" href="shardcache_8h.html#structshardcache__node__t" title="Structure representing a node taking part in the shard cache.">shardcache_node_t</a> *nodes,</div>
-<div class="line"><a name="l00667"></a><span class="lineno">  667</span>&#160;                               <span class="keywordtype">int</span> num_nodes,</div>
-<div class="line"><a name="l00668"></a><span class="lineno">  668</span>&#160;                               <span class="keywordtype">int</span> forward);</div>
-<div class="line"><a name="l00669"></a><span class="lineno">  669</span>&#160;</div>
-<div class="line"><a name="l00677"></a><span class="lineno">  677</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a719c3343ec7ac158d71d6f286da5fec9" title="Abort the current migration process.">shardcache_migration_abort</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache);</div>
-<div class="line"><a name="l00678"></a><span class="lineno">  678</span>&#160;</div>
-<div class="line"><a name="l00687"></a><span class="lineno">  687</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a767a80d75a850f38c60c298cffe180fd" title="End the current migration process by swapping the two continua and releasing resources for the old on...">shardcache_migration_end</a>(<a class="code" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9" title="Opaque structure representing the actual shardcache instance.">shardcache_t</a> *cache);</div>
-<div class="line"><a name="l00688"></a><span class="lineno">  688</span>&#160;</div>
-<div class="line"><a name="l00689"></a><span class="lineno">  689</span>&#160;</div>
-<div class="line"><a name="l00690"></a><span class="lineno">  690</span>&#160;<span class="comment">/*</span></div>
-<div class="line"><a name="l00691"></a><span class="lineno">  691</span>&#160;<span class="comment"> *******************************************************************************</span></div>
-<div class="line"><a name="l00692"></a><span class="lineno">  692</span>&#160;<span class="comment"> * LOG API </span></div>
-<div class="line"><a name="l00693"></a><span class="lineno">  693</span>&#160;<span class="comment"> *******************************************************************************</span></div>
-<div class="line"><a name="l00694"></a><span class="lineno">  694</span>&#160;<span class="comment"> */</span></div>
-<div class="line"><a name="l00695"></a><span class="lineno">  695</span>&#160;</div>
-<div class="line"><a name="l00696"></a><span class="lineno">  696</span>&#160;<span class="keywordtype">void</span> <a class="code" href="shardcache_8h.html#a83daa5cadcd1c2217f3d65bc8fbb8e77">shardcache_log_init</a>(<span class="keywordtype">char</span> *ident, <span class="keywordtype">int</span> loglevel);</div>
-<div class="line"><a name="l00697"></a><span class="lineno">  697</span>&#160;<span class="keywordtype">unsigned</span> <span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a578341075b54f9426cc8e8c595f58b03">shardcache_log_level</a>();</div>
-<div class="line"><a name="l00698"></a><span class="lineno">  698</span>&#160;<span class="keywordtype">void</span> <a class="code" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log_message</a>(<span class="keywordtype">int</span> prio, <span class="keywordtype">int</span> dbglevel, <span class="keyword">const</span> <span class="keywordtype">char</span> *fmt, ...);</div>
-<div class="line"><a name="l00699"></a><span class="lineno">  699</span>&#160;<span class="keywordtype">char</span> *<a class="code" href="shardcache_8h.html#a122b97f97ff3d2aea13b1eefbabc6ac3">shardcache_hex_escape</a>(<span class="keyword">const</span> <span class="keywordtype">char</span> *buf, <span class="keywordtype">int</span> len, <span class="keywordtype">int</span> limit);</div>
-<div class="line"><a name="l00700"></a><span class="lineno">  700</span>&#160;<span class="keywordtype">unsigned</span> <span class="keywordtype">long</span> <a class="code" href="shardcache_8h.html#aea1443844e55163940ecc71e2138b25d">shardcache_byte_escape</a>(<span class="keywordtype">char</span> ch, <span class="keywordtype">char</span> esc, <span class="keywordtype">char</span> *buffer, <span class="keywordtype">unsigned</span> <span class="keywordtype">long</span> len, <span class="keywordtype">char</span> **dest, <span class="keywordtype">unsigned</span> <span class="keywordtype">long</span> *newlen);</div>
-<div class="line"><a name="l00701"></a><span class="lineno">  701</span>&#160;</div>
-<div class="line"><a name="l00702"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a47343854a30632e853005c55aa412b2f">  702</a></span>&#160;<span class="preprocessor">#define SHC_ERROR(__fmt, __args...)      do { shardcache_log_message(LOG_ERR,     0, __fmt, ## __args); } while (0)</span></div>
-<div class="line"><a name="l00703"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a3ec9a169d886ff06f76774931f0edd71">  703</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHC_WARNING(__fmt, __args...)    do { shardcache_log_message(LOG_WARNING, 0, __fmt, ## __args); } while (0)</span></div>
-<div class="line"><a name="l00704"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a509a7a4fedbf44c473fc94e0d1ff31d5">  704</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHC_WARN(__fmt, __args...) WARNING(__fmt, ## __args)</span></div>
-<div class="line"><a name="l00705"></a><span class="lineno"><a class="code" href="shardcache_8h.html#ad8424a700bcebe2ed362e72da046a4a3">  705</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHC_NOTICE(__fmt, __args...)     do { shardcache_log_message(LOG_NOTICE,  0, __fmt, ## __args); } while (0)</span></div>
-<div class="line"><a name="l00706"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a44321dbcac3b0196fefee592e13603e5">  706</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHC_INFO(__fmt, __args...)       do { shardcache_log_message(LOG_INFO,    0, __fmt, ## __args); } while (0)</span></div>
-<div class="line"><a name="l00707"></a><span class="lineno"><a class="code" href="shardcache_8h.html#ab59995d60636a51455084945f01fc37d">  707</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHC_DIE(__fmt, __args...)        do { SHC_ERROR(__fmt, ## __args); exit(-1); } while (0)</span></div>
-<div class="line"><a name="l00708"></a><span class="lineno">  708</span>&#160;<span class="preprocessor"></span></div>
-<div class="line"><a name="l00709"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">  709</a></span>&#160;<span class="preprocessor">#define __SHC_DEBUG(__n, __fmt, __args...)  do { if (shardcache_log_level() &gt;= LOG_DEBUG + __n) \</span></div>
-<div class="line"><a name="l00710"></a><span class="lineno">  710</span>&#160;<span class="preprocessor">    shardcache_log_message(LOG_DEBUG,   __n + 1, __fmt, ## __args); } while (0)</span></div>
-<div class="line"><a name="l00711"></a><span class="lineno">  711</span>&#160;<span class="preprocessor"></span></div>
-<div class="line"><a name="l00712"></a><span class="lineno"><a class="code" href="shardcache_8h.html#aa2c1a05b61586536a8e4e860b32cba48">  712</a></span>&#160;<span class="preprocessor">#define SHC_DEBUG(__fmt, __args...)  __SHC_DEBUG(0, __fmt, ## __args)</span></div>
-<div class="line"><a name="l00713"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a7e9caca0c2676677794b14d83e0eba76">  713</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHC_DEBUG1(__fmt, __args...) SHC_DEBUG(__fmt, ## __args)</span></div>
-<div class="line"><a name="l00714"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a5cbc48c6b87385f39cae15201b64a749">  714</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHC_DEBUG2(__fmt, __args...) __SHC_DEBUG(1, __fmt, ## __args)</span></div>
-<div class="line"><a name="l00715"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a97bde0d6c209a9137868e777ec0a1a71">  715</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHC_DEBUG3(__fmt, __args...) __SHC_DEBUG(2, __fmt, ## __args)</span></div>
-<div class="line"><a name="l00716"></a><span class="lineno"><a class="code" href="shardcache_8h.html#a9c156d27815c618dc5f1c2fd5eda7164">  716</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHC_DEBUG4(__fmt, __args...) __SHC_DEBUG(3, __fmt, ## __args)</span></div>
-<div class="line"><a name="l00717"></a><span class="lineno"><a class="code" href="shardcache_8h.html#abd926cd2de1dda73067b6fdc03852b5d">  717</a></span>&#160;<span class="preprocessor"></span><span class="preprocessor">#define SHC_DEBUG5(__fmt, __args...) __SHC_DEBUG(4, __fmt, ## __args)</span></div>
-<div class="line"><a name="l00718"></a><span class="lineno">  718</span>&#160;<span class="preprocessor"></span></div>
-<div class="line"><a name="l00719"></a><span class="lineno">  719</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00630"></a><span class="lineno">  630</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#ab9e3022be060e7b5e67af43c682632ac" title="Start a migration process.">shardcache_migration_begin</a>(shardcache_t *cache,</div>
+<div class="line"><a name="l00631"></a><span class="lineno">  631</span>&#160;                               <a class="code" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7" title="Structure representing a node taking part in the shard cache.">shardcache_node_t</a> **nodes,</div>
+<div class="line"><a name="l00632"></a><span class="lineno">  632</span>&#160;                               <span class="keywordtype">int</span> num_nodes,</div>
+<div class="line"><a name="l00633"></a><span class="lineno">  633</span>&#160;                               <span class="keywordtype">int</span> forward);</div>
+<div class="line"><a name="l00634"></a><span class="lineno">  634</span>&#160;</div>
+<div class="line"><a name="l00642"></a><span class="lineno">  642</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a719c3343ec7ac158d71d6f286da5fec9" title="Abort the current migration process.">shardcache_migration_abort</a>(shardcache_t *cache);</div>
+<div class="line"><a name="l00643"></a><span class="lineno">  643</span>&#160;</div>
+<div class="line"><a name="l00652"></a><span class="lineno">  652</span>&#160;<span class="keywordtype">int</span> <a class="code" href="shardcache_8h.html#a767a80d75a850f38c60c298cffe180fd" title="End the current migration process by swapping the two continua and releasing resources for the old on...">shardcache_migration_end</a>(shardcache_t *cache);</div>
+<div class="line"><a name="l00653"></a><span class="lineno">  653</span>&#160;</div>
+<div class="line"><a name="l00654"></a><span class="lineno">  654</span>&#160;</div>
+<div class="line"><a name="l00664"></a><span class="lineno">  664</span>&#160;<span class="keywordtype">void</span> <a class="code" href="shardcache_8h.html#a36c2f67d3e4dd28ba7d932b022e39985" title="Notify the internal shardcache core about a new woerker thread which might access the API...">shardcache_thread_init</a>(shardcache_t *cache);</div>
+<div class="line"><a name="l00665"></a><span class="lineno">  665</span>&#160;</div>
+<div class="line"><a name="l00674"></a><span class="lineno">  674</span>&#160;<span class="keywordtype">void</span> <a class="code" href="shardcache_8h.html#abf5bf17736aec39c86103020721c12cc" title="Release the resources allocated by shardcache_thread_init() This function needs to be called before c...">shardcache_thread_end</a>(shardcache_t *cache);</div>
+<div class="line"><a name="l00675"></a><span class="lineno">  675</span>&#160;</div>
+<div class="line"><a name="l00676"></a><span class="lineno">  676</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00677"></a><span class="lineno">  677</span>&#160;<span class="preprocessor"></span></div>
+<div class="line"><a name="l00678"></a><span class="lineno">  678</span>&#160;<span class="comment">// vim: tabstop=4 shiftwidth=4 expandtab:</span></div>
+<div class="line"><a name="l00679"></a><span class="lineno">  679</span>&#160;<span class="comment">/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */</span></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->
 <!-- start footer part -->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
     <li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li><li class="navelem"><a class="el" href="shardcache_8h.html">shardcache.h</a></li>
-    <li class="footer">Generated on Thu Jan 16 2014 16:09:26 for libshardcache by
+    <li class="footer">Generated on Thu Sep 11 2014 16:37:01 for libshardcache by
     <a href="http://www.doxygen.org/index.html">
     <img class="footer" src="doxygen.png" alt="doxygen"/></a> 1.8.3.1 </li>
   </ul>

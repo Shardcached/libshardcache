@@ -44,6 +44,7 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
   <div id="navrow1" class="tabs">
     <ul class="tablist">
       <li><a href="index.html"><span>Main&#160;Page</span></a></li>
+      <li><a href="pages.html"><span>Related&#160;Pages</span></a></li>
       <li><a href="annotated.html"><span>Data&#160;Structures</span></a></li>
       <li class="current"><a href="files.html"><span>Files</span></a></li>
       <li>
@@ -90,7 +91,7 @@ $(document).ready(function(){initNavTree('shardcache__client_8h.html','');});
      onmouseover="return searchBox.OnSearchSelectShow()"
      onmouseout="return searchBox.OnSearchSelectHide()"
      onkeydown="return searchBox.OnSearchSelectKey(event)">
-<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Macros</a></div>
+<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Enumerations</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(7)"><span class="SelectionMark">&#160;</span>Enumerator</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(8)"><span class="SelectionMark">&#160;</span>Macros</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(9)"><span class="SelectionMark">&#160;</span>Pages</a></div>
 
 <!-- iframe showing the search results (closed by default) -->
 <div id="MSearchResultsWindow">
@@ -101,6 +102,7 @@ $(document).ready(function(){initNavTree('shardcache__client_8h.html','');});
 
 <div class="header">
   <div class="summary">
+<a href="#nested-classes">Data Structures</a> &#124;
 <a href="#define-members">Macros</a> &#124;
 <a href="#typedef-members">Typedefs</a> &#124;
 <a href="#func-members">Functions</a>  </div>
@@ -112,6 +114,11 @@ $(document).ready(function(){initNavTree('shardcache__client_8h.html','');});
 </div>
 <p><a href="shardcache__client_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="nested-classes"></a>
+Data Structures</h2></td></tr>
+<tr class="memitem:structshc__multi__item__t"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a></td></tr>
+<tr class="separator:structshc__multi__item__t"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="define-members"></a>
 Macros</h2></td></tr>
 <tr class="memitem:abf2b82c9da13faf809b7bad02626a2ae"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#abf2b82c9da13faf809b7bad02626a2ae">SHARDCACHE_CLIENT_OK</a>&#160;&#160;&#160;0</td></tr>
@@ -128,22 +135,37 @@ Typedefs</h2></td></tr>
 <tr class="memitem:a8a2a09a207bf5c4bb3270a144422c6bc"><td class="memItemLeft" align="right" valign="top">typedef struct shardcache_client_s&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a></td></tr>
 <tr class="memdesc:a8a2a09a207bf5c4bb3270a144422c6bc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Opaque structure representing the shardcache client.  <a href="#a8a2a09a207bf5c4bb3270a144422c6bc">More...</a><br/></td></tr>
 <tr class="separator:a8a2a09a207bf5c4bb3270a144422c6bc"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a01dd180fd921bd30aa89313bfe4e9ae6"><td class="memItemLeft" align="right" valign="top">typedef int(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a01dd180fd921bd30aa89313bfe4e9ae6">shardcache_client_get_aync_data_cb</a> )(char *node, void *key, size_t klen, void *data, size_t dlen, void *priv)</td></tr>
-<tr class="memdesc:a01dd180fd921bd30aa89313bfe4e9ae6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback passed to <a class="el" href="shardcache__client_8h.html#af6017e6ed41d61157413aa94e72a4ddf" title="Get the value for a key asynchronously.">shardcache_client_get_async()</a> to retrieve the data asynchronously.  <a href="#a01dd180fd921bd30aa89313bfe4e9ae6">More...</a><br/></td></tr>
-<tr class="separator:a01dd180fd921bd30aa89313bfe4e9ae6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad8da911ec4f76fe333c18f05d09ab921"><td class="memItemLeft" align="right" valign="top">typedef int(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#ad8da911ec4f76fe333c18f05d09ab921">shardcache_client_get_aync_data_cb</a> )(char *node, void *key, size_t klen, void *data, size_t dlen, int error, void *priv)</td></tr>
+<tr class="memdesc:ad8da911ec4f76fe333c18f05d09ab921"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback passed to <a class="el" href="shardcache__client_8h.html#af6017e6ed41d61157413aa94e72a4ddf" title="Get the value for a key asynchronously.">shardcache_client_get_async()</a> to retrieve the data asynchronously.  <a href="#ad8da911ec4f76fe333c18f05d09ab921">More...</a><br/></td></tr>
+<tr class="separator:ad8da911ec4f76fe333c18f05d09ab921"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:ae0f7c08ea8eae9123c511c992c0dc09c"><td class="memItemLeft" align="right" valign="top"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#ae0f7c08ea8eae9123c511c992c0dc09c">shardcache_client_create</a> (<a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a> *nodes, int num_nodes, char *auth)</td></tr>
-<tr class="memdesc:ae0f7c08ea8eae9123c511c992c0dc09c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new shardcache client.  <a href="#ae0f7c08ea8eae9123c511c992c0dc09c">More...</a><br/></td></tr>
-<tr class="separator:ae0f7c08ea8eae9123c511c992c0dc09c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a483867140a804fdf07314be9491054e1"><td class="memItemLeft" align="right" valign="top"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a483867140a804fdf07314be9491054e1">shardcache_client_create</a> (<a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node_t</a> **nodes, int num_nodes, char *auth)</td></tr>
+<tr class="memdesc:a483867140a804fdf07314be9491054e1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new shardcache client.  <a href="#a483867140a804fdf07314be9491054e1">More...</a><br/></td></tr>
+<tr class="separator:a483867140a804fdf07314be9491054e1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abb6dc70a7a72c83abdf5c9e477de0415"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#abb6dc70a7a72c83abdf5c9e477de0415">shardcache_client_tcp_timeout</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, int new_value)</td></tr>
+<tr class="memdesc:abb6dc70a7a72c83abdf5c9e477de0415"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get and/or set the timeout used when establishing new tcp connections or reading/writing from/to existing ones.  <a href="#abb6dc70a7a72c83abdf5c9e477de0415">More...</a><br/></td></tr>
+<tr class="separator:abb6dc70a7a72c83abdf5c9e477de0415"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0de3a5622bab2ac5f81d83f402054148"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a0de3a5622bab2ac5f81d83f402054148">shardcache_client_check_connection_timeout</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, int new_value)</td></tr>
+<tr class="memdesc:a0de3a5622bab2ac5f81d83f402054148"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get and/or set the timeout used when determining if a spare connection needs to be checked before being returned to the caller for further usage.  <a href="#a0de3a5622bab2ac5f81d83f402054148">More...</a><br/></td></tr>
+<tr class="separator:a0de3a5622bab2ac5f81d83f402054148"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5378c5b36ff3f9a2242bc56035e450e3"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a5378c5b36ff3f9a2242bc56035e450e3">shardcache_client_multi_command_max_wait</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, int new_value)</td></tr>
+<tr class="memdesc:a5378c5b36ff3f9a2242bc56035e450e3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get and/or set the maximum time (in seconds) to wait on multi commands (get_multi/set_multi) when no data is arriving.  <a href="#a5378c5b36ff3f9a2242bc56035e450e3">More...</a><br/></td></tr>
+<tr class="separator:a5378c5b36ff3f9a2242bc56035e450e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6d2534e62f74772c05973eae950c5923"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a6d2534e62f74772c05973eae950c5923">shardcache_client_use_random_node</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, int new_value)</td></tr>
+<tr class="memdesc:a6d2534e62f74772c05973eae950c5923"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get and/or set the random_node mode on a shardcache client instance. When on a single (random) node will be used for all the commands instead of using the chash algorithm to determine the owner.  <a href="#a6d2534e62f74772c05973eae950c5923">More...</a><br/></td></tr>
+<tr class="separator:a6d2534e62f74772c05973eae950c5923"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1da6fcc4f68b20579326008aaa1455e4"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a1da6fcc4f68b20579326008aaa1455e4">shardcache_client_pipeline_max</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, int new_value)</td></tr>
+<tr class="memdesc:a1da6fcc4f68b20579326008aaa1455e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get and/or set the maximum number of requests that can be pipelined on a single connection.  <a href="#a1da6fcc4f68b20579326008aaa1455e4">More...</a><br/></td></tr>
+<tr class="separator:a1da6fcc4f68b20579326008aaa1455e4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab2726441e78cf6acc0a7a02c8588c65d"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#ab2726441e78cf6acc0a7a02c8588c65d">shardcache_client_get</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, void *key, size_t klen, void **data)</td></tr>
 <tr class="memdesc:ab2726441e78cf6acc0a7a02c8588c65d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the value for a key.  <a href="#ab2726441e78cf6acc0a7a02c8588c65d">More...</a><br/></td></tr>
 <tr class="separator:ab2726441e78cf6acc0a7a02c8588c65d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ace8520f114acd08eba2408dfa1b6b9aa"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#ace8520f114acd08eba2408dfa1b6b9aa">shardcache_client_offset</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, void *key, size_t klen, uint32_t offset, void *data, uint32_t dlen)</td></tr>
 <tr class="memdesc:ace8520f114acd08eba2408dfa1b6b9aa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get part of the value for a key.  <a href="#ace8520f114acd08eba2408dfa1b6b9aa">More...</a><br/></td></tr>
 <tr class="separator:ace8520f114acd08eba2408dfa1b6b9aa"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af6017e6ed41d61157413aa94e72a4ddf"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#af6017e6ed41d61157413aa94e72a4ddf">shardcache_client_get_async</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, void *key, size_t klen, <a class="el" href="shardcache__client_8h.html#a01dd180fd921bd30aa89313bfe4e9ae6">shardcache_client_get_aync_data_cb</a> cb, void *priv)</td></tr>
+<tr class="memitem:af6017e6ed41d61157413aa94e72a4ddf"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#af6017e6ed41d61157413aa94e72a4ddf">shardcache_client_get_async</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, void *key, size_t klen, <a class="el" href="shardcache__client_8h.html#ad8da911ec4f76fe333c18f05d09ab921">shardcache_client_get_aync_data_cb</a> cb, void *priv)</td></tr>
 <tr class="memdesc:af6017e6ed41d61157413aa94e72a4ddf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the value for a key asynchronously.  <a href="#af6017e6ed41d61157413aa94e72a4ddf">More...</a><br/></td></tr>
 <tr class="separator:af6017e6ed41d61157413aa94e72a4ddf"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af990f59d4d3ba864042b5552a16348e0"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#af990f59d4d3ba864042b5552a16348e0">shardcache_client_exists</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, void *key, size_t klen)</td></tr>
@@ -170,13 +192,13 @@ Functions</h2></td></tr>
 <tr class="memitem:adc7bc694f1f9504c88655abda10973e1"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#adc7bc694f1f9504c88655abda10973e1">shardcache_client_check</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, char *node_name)</td></tr>
 <tr class="memdesc:adc7bc694f1f9504c88655abda10973e1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check the status of a shardcache node.  <a href="#adc7bc694f1f9504c88655abda10973e1">More...</a><br/></td></tr>
 <tr class="separator:adc7bc694f1f9504c88655abda10973e1"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a25b7479bb2d53c2f2ccf84f1d38914fb"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a25b7479bb2d53c2f2ccf84f1d38914fb">shardcache_client_migration_begin</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, <a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a> *nodes, int num_nodes)</td></tr>
-<tr class="memdesc:a25b7479bb2d53c2f2ccf84f1d38914fb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Start a migration.  <a href="#a25b7479bb2d53c2f2ccf84f1d38914fb">More...</a><br/></td></tr>
-<tr class="separator:a25b7479bb2d53c2f2ccf84f1d38914fb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7520db6467ddf5ccc7adc126333c3110"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a7520db6467ddf5ccc7adc126333c3110">shardcache_client_migration_begin</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, <a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node_t</a> **nodes, int num_nodes)</td></tr>
+<tr class="memdesc:a7520db6467ddf5ccc7adc126333c3110"><td class="mdescLeft">&#160;</td><td class="mdescRight">Start a migration.  <a href="#a7520db6467ddf5ccc7adc126333c3110">More...</a><br/></td></tr>
+<tr class="separator:a7520db6467ddf5ccc7adc126333c3110"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a165b44c42b84aece07c5f28193f35424"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a165b44c42b84aece07c5f28193f35424">shardcache_client_migration_abort</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c)</td></tr>
 <tr class="memdesc:a165b44c42b84aece07c5f28193f35424"><td class="mdescLeft">&#160;</td><td class="mdescRight">Abort the current migration (if any)  <a href="#a165b44c42b84aece07c5f28193f35424">More...</a><br/></td></tr>
 <tr class="separator:a165b44c42b84aece07c5f28193f35424"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5bbe3ff7a05cdf73d25eff5d2ad90737"><td class="memItemLeft" align="right" valign="top"><a class="el" href="shardcache_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a5bbe3ff7a05cdf73d25eff5d2ad90737">shardcache_client_index</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, char *node_name)</td></tr>
+<tr class="memitem:a5bbe3ff7a05cdf73d25eff5d2ad90737"><td class="memItemLeft" align="right" valign="top"><a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a5bbe3ff7a05cdf73d25eff5d2ad90737">shardcache_client_index</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, char *node_name)</td></tr>
 <tr class="memdesc:a5bbe3ff7a05cdf73d25eff5d2ad90737"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the index from a shardcache node.  <a href="#a5bbe3ff7a05cdf73d25eff5d2ad90737">More...</a><br/></td></tr>
 <tr class="separator:a5bbe3ff7a05cdf73d25eff5d2ad90737"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a9017579f462e76f482f93b61dd80afc5"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a9017579f462e76f482f93b61dd80afc5">shardcache_client_errno</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c)</td></tr>
@@ -188,7 +210,74 @@ Functions</h2></td></tr>
 <tr class="memitem:a1e1d79558d46f7fbe4abd4287641c0ae"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a1e1d79558d46f7fbe4abd4287641c0ae">shardcache_client_destroy</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c)</td></tr>
 <tr class="memdesc:a1e1d79558d46f7fbe4abd4287641c0ae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release all the resources used by the shardcache client instance.  <a href="#a1e1d79558d46f7fbe4abd4287641c0ae">More...</a><br/></td></tr>
 <tr class="separator:a1e1d79558d46f7fbe4abd4287641c0ae"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a45555d6a4e777b7bc08dd6abc1c33a90"><td class="memItemLeft" align="right" valign="top"><a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a45555d6a4e777b7bc08dd6abc1c33a90">shc_multi_item_create</a> (void *key, size_t klen, void *data, size_t dlen)</td></tr>
+<tr class="memdesc:a45555d6a4e777b7bc08dd6abc1c33a90"><td class="mdescLeft">&#160;</td><td class="mdescRight">Helper to create item-descriptors provided as parameter to <a class="el" href="shardcache__client_8h.html#ade1a0a0eb900b3a9a71bedc43d5c7473" title="get multiple keys at once">shardcache_client_get_multi()</a> and <a class="el" href="shardcache__client_8h.html#ad6920148b74ab68c472b9b73614fd2a0" title="get multiple keys at once">shardcache_client_set_multi()</a>  <a href="#a45555d6a4e777b7bc08dd6abc1c33a90">More...</a><br/></td></tr>
+<tr class="separator:a45555d6a4e777b7bc08dd6abc1c33a90"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa2ce54dd57a9a3c8b51880207fdd1730"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#aa2ce54dd57a9a3c8b51880207fdd1730">shc_multi_item_destroy</a> (<a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> *item)</td></tr>
+<tr class="memdesc:aa2ce54dd57a9a3c8b51880207fdd1730"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release all the resources allocad for the <a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> structure.  <a href="#aa2ce54dd57a9a3c8b51880207fdd1730">More...</a><br/></td></tr>
+<tr class="separator:aa2ce54dd57a9a3c8b51880207fdd1730"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ade1a0a0eb900b3a9a71bedc43d5c7473"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#ade1a0a0eb900b3a9a71bedc43d5c7473">shardcache_client_get_multi</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, <a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> **items)</td></tr>
+<tr class="memdesc:ade1a0a0eb900b3a9a71bedc43d5c7473"><td class="mdescLeft">&#160;</td><td class="mdescRight">get multiple keys at once  <a href="#ade1a0a0eb900b3a9a71bedc43d5c7473">More...</a><br/></td></tr>
+<tr class="separator:ade1a0a0eb900b3a9a71bedc43d5c7473"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad6920148b74ab68c472b9b73614fd2a0"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#ad6920148b74ab68c472b9b73614fd2a0">shardcache_client_set_multi</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c, <a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> **items)</td></tr>
+<tr class="memdesc:ad6920148b74ab68c472b9b73614fd2a0"><td class="mdescLeft">&#160;</td><td class="mdescRight">get multiple keys at once  <a href="#ad6920148b74ab68c472b9b73614fd2a0">More...</a><br/></td></tr>
+<tr class="separator:ad6920148b74ab68c472b9b73614fd2a0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9780342da47b282fe8ada4bf5962df62"><td class="memItemLeft" align="right" valign="top"><a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache__client_8h.html#a9780342da47b282fe8ada4bf5962df62">shardcache_client_current_node</a> (<a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *c)</td></tr>
+<tr class="memdesc:a9780342da47b282fe8ada4bf5962df62"><td class="mdescLeft">&#160;</td><td class="mdescRight">get the node used to fulfil last request  <a href="#a9780342da47b282fe8ada4bf5962df62">More...</a><br/></td></tr>
+<tr class="separator:a9780342da47b282fe8ada4bf5962df62"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
+<hr/><h2 class="groupheader">Data Structure Documentation</h2>
+<a name="structshc__multi__item__t" id="structshc__multi__item__t"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">struct shc_multi_item_t</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<div class="textblock"></div><table class="fieldtable">
+<tr><th colspan="3">Data Fields</th></tr>
+<tr><td class="fieldtype">
+<a class="anchor" id="a8fa0b5ddd936b3bd58c03810f467063f"></a>void *</td>
+<td class="fieldname">
+key</td>
+<td class="fielddoc">
+</td></tr>
+<tr><td class="fieldtype">
+<a class="anchor" id="a1367467513d8f84d448b83ccdbbbb341"></a>size_t</td>
+<td class="fieldname">
+klen</td>
+<td class="fielddoc">
+</td></tr>
+<tr><td class="fieldtype">
+<a class="anchor" id="a8bb17eadbc7ce8a3f0a729cba73f6391"></a>void *</td>
+<td class="fieldname">
+data</td>
+<td class="fielddoc">
+</td></tr>
+<tr><td class="fieldtype">
+<a class="anchor" id="aab7de0277350fd097988d78a50436ffa"></a>size_t</td>
+<td class="fieldname">
+dlen</td>
+<td class="fielddoc">
+</td></tr>
+<tr><td class="fieldtype">
+<a class="anchor" id="ab5e45edefd32b88319d85539c4a5a23d"></a>int</td>
+<td class="fieldname">
+status</td>
+<td class="fielddoc">
+</td></tr>
+<tr><td class="fieldtype">
+<a class="anchor" id="a206e40341f2560b6818c59e475503366"></a>uint32_t</td>
+<td class="fieldname">
+expire</td>
+<td class="fielddoc">
+</td></tr>
+</table>
+
+</div>
+</div>
 <h2 class="groupheader">Macro Definition Documentation</h2>
 <a class="anchor" id="abf2b82c9da13faf809b7bad02626a2ae"></a>
 <div class="memitem">
@@ -253,12 +342,12 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a class="anchor" id="a01dd180fd921bd30aa89313bfe4e9ae6"></a>
+<a class="anchor" id="ad8da911ec4f76fe333c18f05d09ab921"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">typedef int(* shardcache_client_get_aync_data_cb)(char *node, void *key, size_t klen, void *data, size_t dlen, void *priv)</td>
+          <td class="memname">typedef int(* shardcache_client_get_aync_data_cb)(char *node, void *key, size_t klen, void *data, size_t dlen, int error, void *priv)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -271,22 +360,24 @@ Functions</h2></td></tr>
     <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
     <tr><td class="paramname">data</td><td>The pointer to the chunk of data </td></tr>
     <tr><td class="paramname">dlen</td><td>The length of the current chunk of data </td></tr>
-    <tr><td class="paramname">priv</td><td>The priv pointer passed to <a class="el" href="shardcache__client_8h.html#af6017e6ed41d61157413aa94e72a4ddf" title="Get the value for a key asynchronously.">shardcache_client_get_async()</a> </td></tr>
+    <tr><td class="paramname">error</td><td>True (1) if there was an error. data will point to NULL and dlen will be 0 as well </td></tr>
+    <tr><td class="paramname">priv</td><td>The priv pointer passed to <a class="el" href="shardcache__client_8h.html#af6017e6ed41d61157413aa94e72a4ddf" title="Get the value for a key asynchronously.">shardcache_client_get_async()</a></td></tr>
   </table>
   </dd>
 </dl>
+<dl class="section note"><dt>Note</dt><dd>data == NULL and dlen == 0 indicates that the opartion finished error will be set to 1 if the operation failed, 0 otherwise </dd></dl>
 
 </div>
 </div>
 <h2 class="groupheader">Function Documentation</h2>
-<a class="anchor" id="ae0f7c08ea8eae9123c511c992c0dc09c"></a>
+<a class="anchor" id="a483867140a804fdf07314be9491054e1"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
           <td class="memname"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a>* shardcache_client_create </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a> *&#160;</td>
+          <td class="paramtype"><a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node_t</a> **&#160;</td>
           <td class="paramname"><em>nodes</em>, </td>
         </tr>
         <tr>
@@ -320,6 +411,188 @@ Functions</h2></td></tr>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>A newly initialized shardcache client descriptor </dd></dl>
 <dl class="section note"><dt>Note</dt><dd>The returned shardcache_client_t structure MUST be disposed using <a class="el" href="shardcache__client_8h.html#a1e1d79558d46f7fbe4abd4287641c0ae" title="Release all the resources used by the shardcache client instance.">shardcache_client_destroy()</a> </dd></dl>
+
+</div>
+</div>
+<a class="anchor" id="abb6dc70a7a72c83abdf5c9e477de0415"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_client_tcp_timeout </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td>
+          <td class="paramname"><em>c</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Get and/or set the timeout used when establishing new tcp connections or reading/writing from/to existing ones. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">c</td><td>A valid pointer to a shardcache_client_t structure </td></tr>
+    <tr><td class="paramname">new_value</td><td>If greater or equal to 0 the new value will be set. Otherwise the old value will be queried but no new value will be set </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>The previously configured tcp timeout (still valid if no new value has been provided) </dd></dl>
+
+</div>
+</div>
+<a class="anchor" id="a0de3a5622bab2ac5f81d83f402054148"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_client_check_connection_timeout </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td>
+          <td class="paramname"><em>c</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Get and/or set the timeout used when determining if a spare connection needs to be checked before being returned to the caller for further usage. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">c</td><td>A valid pointer to a shardcache_client_t structure </td></tr>
+    <tr><td class="paramname">new_value</td><td>If greater or equal to 0 the new value will be set. Otherwise the old value will be queried but no new value will be set </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>The previously configured check_connection timeout (still valid if no new value has been provided) </dd></dl>
+
+</div>
+</div>
+<a class="anchor" id="a5378c5b36ff3f9a2242bc56035e450e3"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_client_multi_command_max_wait </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td>
+          <td class="paramname"><em>c</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Get and/or set the maximum time (in seconds) to wait on multi commands (get_multi/set_multi) when no data is arriving. </p>
+<dl class="section note"><dt>Note</dt><dd>This setting represents a timeout which is reset each time some data is received and it prevents the get_multi()/set_multi() commands from hanging indefinitely waiting for data. A value of 0 indicates no timeout </dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">c</td><td>A valid pointer to a shardcache_client_t structure </td></tr>
+    <tr><td class="paramname">new_value</td><td>If greater or equal to 0 the new value will be set. Otherwise the old value will be queried but no new value will be set. A value of 0 indicates no timeout. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>The previously configured max_wait timeout (still valid if no new value has been provided) </dd></dl>
+
+</div>
+</div>
+<a class="anchor" id="a6d2534e62f74772c05973eae950c5923"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_client_use_random_node </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td>
+          <td class="paramname"><em>c</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Get and/or set the random_node mode on a shardcache client instance. When on a single (random) node will be used for all the commands instead of using the chash algorithm to determine the owner. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">c</td><td>A valid pointer to a shardcache_client_t structure </td></tr>
+    <tr><td class="paramname">new_value</td><td>If false, the chash algorithm will be used against the list of known node to determine the owner of a key and commands will be sent only to owners.<br/>
+ If true a single random node will be used instead </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a class="anchor" id="a1da6fcc4f68b20579326008aaa1455e4"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_client_pipeline_max </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td>
+          <td class="paramname"><em>c</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Get and/or set the maximum number of requests that can be pipelined on a single connection. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">c</td><td>A valid pointer to a shardcache_client_t structure </td></tr>
+    <tr><td class="paramname">new_value</td><td>If greater or equal to 0 the new value will be set. Otherwise the old value will be queried but no new value will be set </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section note"><dt>Note</dt><dd>this setting affects only the _multi commands, which will pipeline at most pipeline_max requests on a single connections and creating how many connections are necessary to fulfill all the requests </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>The previously configured value for the pipeline_max option (still valid if no new value has been provided) </dd></dl>
 
 </div>
 </div>
@@ -474,7 +747,7 @@ On success the internal errno will be set to SHARDCACHE_CLIENT_OK</dd></dl>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#a01dd180fd921bd30aa89313bfe4e9ae6">shardcache_client_get_aync_data_cb</a>&#160;</td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#ad8da911ec4f76fe333c18f05d09ab921">shardcache_client_get_aync_data_cb</a>&#160;</td>
           <td class="paramname"><em>cb</em>, </td>
         </tr>
         <tr>
@@ -717,7 +990,7 @@ On success the internal errno will be set to SHARDCACHE_CLIENT_OK</dd></dl>
     <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
     <tr><td class="paramname">data</td><td>A valid pointer to the value </td></tr>
     <tr><td class="paramname">dlen</td><td>The length of the value </td></tr>
-    <tr><td class="paramname">expire</td><td>The number of seconds after which the value should expire </td></tr>
+    <tr><td class="paramname">expire</td><td>The number of seconds after which the value should expire, 0 If the value is persistent and shouldn't expire. </td></tr>
   </table>
   </dd>
 </dl>
@@ -919,7 +1192,7 @@ On success the internal errno will be set to SHARDCACHE_CLIENT_OK </dd></dl>
 
 </div>
 </div>
-<a class="anchor" id="a25b7479bb2d53c2f2ccf84f1d38914fb"></a>
+<a class="anchor" id="a7520db6467ddf5ccc7adc126333c3110"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
@@ -932,7 +1205,7 @@ On success the internal errno will be set to SHARDCACHE_CLIENT_OK </dd></dl>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a> *&#160;</td>
+          <td class="paramtype"><a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node_t</a> **&#160;</td>
           <td class="paramname"><em>nodes</em>, </td>
         </tr>
         <tr>
@@ -1000,7 +1273,7 @@ On success the internal errno will be set to SHARDCACHE_CLIENT_OK </dd></dl>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="shardcache_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a>* shardcache_client_index </td>
+          <td class="memname"><a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a>* shardcache_client_index </td>
           <td>(</td>
           <td class="paramtype"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td>
           <td class="paramname"><em>c</em>, </td>
@@ -1028,7 +1301,7 @@ On success the internal errno will be set to SHARDCACHE_CLIENT_OK </dd></dl>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>0 success, -1 otherwise </dd></dl>
-<dl class="section note"><dt>Note</dt><dd>The caller must use <a class="el" href="shardcache_8h.html#a7f3e042fe58a3dd7537c81de115bba25" title="Release all resources used by the index provided as argument.">shardcache_free_index()</a> to release memory used by the returned <a class="el" href="shardcache_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a> pointer </dd>
+<dl class="section note"><dt>Note</dt><dd>The caller must use <a class="el" href="shardcache_8h.html#a7f3e042fe58a3dd7537c81de115bba25" title="Release all resources used by the index provided as argument.">shardcache_free_index()</a> to release memory used by the returned <a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a> pointer </dd>
 <dd>
 On success the internal errno will be set to SHARDCACHE_CLIENT_OK </dd></dl>
 <dl class="section see"><dt>See Also</dt><dd><a class="el" href="shardcache__client_8h.html#a9017579f462e76f482f93b61dd80afc5" title="Return the error code for the last operation performed by the shardcache client.">shardcache_client_errno()</a> </dd>
@@ -1113,13 +1386,184 @@ On success the internal errno will be set to SHARDCACHE_CLIENT_OK </dd></dl>
 
 </div>
 </div>
+<a class="anchor" id="a45555d6a4e777b7bc08dd6abc1c33a90"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a>* shc_multi_item_create </td>
+          <td>(</td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>klen</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>data</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>dlen</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Helper to create item-descriptors provided as parameter to <a class="el" href="shardcache__client_8h.html#ade1a0a0eb900b3a9a71bedc43d5c7473" title="get multiple keys at once">shardcache_client_get_multi()</a> and <a class="el" href="shardcache__client_8h.html#ad6920148b74ab68c472b9b73614fd2a0" title="get multiple keys at once">shardcache_client_set_multi()</a> </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">key</td><td>A valid pointer to the key </td></tr>
+    <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
+    <tr><td class="paramname">data</td><td>A valid pointer to the value </td></tr>
+    <tr><td class="paramname">dlen</td><td>The length of the value </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>A pointer to newly initialized <a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> structure which can be included in the array provided as parameter to <a class="el" href="shardcache__client_8h.html#ade1a0a0eb900b3a9a71bedc43d5c7473" title="get multiple keys at once">shardcache_client_get_multi()</a> or <a class="el" href="shardcache__client_8h.html#ade1a0a0eb900b3a9a71bedc43d5c7473" title="get multiple keys at once">shardcache_client_get_multi()</a> </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>the caller MUST release the resources allocated for the item descriptor by using <a class="el" href="shardcache__client_8h.html#aa2ce54dd57a9a3c8b51880207fdd1730" title="Release all the resources allocad for the shc_multi_item_t structure.">shc_multi_item_destroy()</a> when done with it </dd></dl>
+
+</div>
+</div>
+<a class="anchor" id="aa2ce54dd57a9a3c8b51880207fdd1730"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void shc_multi_item_destroy </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> *&#160;</td>
+          <td class="paramname"><em>item</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Release all the resources allocad for the <a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> structure. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">item</td><td>A valid pointer to an initialized <a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> structure </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a class="anchor" id="ade1a0a0eb900b3a9a71bedc43d5c7473"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_client_get_multi </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td>
+          <td class="paramname"><em>c</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> **&#160;</td>
+          <td class="paramname"><em>items</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>get multiple keys at once </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">c</td><td>A valid pointer to a shardcache_client_t structure to release </td></tr>
+    <tr><td class="paramname">items</td><td>A NULL-terminated array of <a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> structures</td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section note"><dt>Note</dt><dd>the operation will per parallelized among multiple nodes if possible </dd></dl>
+
+</div>
+</div>
+<a class="anchor" id="ad6920148b74ab68c472b9b73614fd2a0"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_client_set_multi </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td>
+          <td class="paramname"><em>c</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> **&#160;</td>
+          <td class="paramname"><em>items</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>get multiple keys at once </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">c</td><td>A valid pointer to a shardcache_client_t structure to release </td></tr>
+    <tr><td class="paramname">items</td><td>A NULL-terminated array of <a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a> structures</td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section note"><dt>Note</dt><dd>the operation will per parallelized among multiple nodes if possible </dd></dl>
+
+</div>
+</div>
+<a class="anchor" id="a9780342da47b282fe8ada4bf5962df62"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node_t</a>* shardcache_client_current_node </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client_t</a> *&#160;</td>
+          <td class="paramname"><em>c</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>get the node used to fulfil last request </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">c</td><td>A valid pointer to a shardcache_Client_t structure </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
 </div><!-- contents -->
 </div><!-- doc-content -->
 <!-- start footer part -->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
     <li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li><li class="navelem"><a class="el" href="shardcache__client_8h.html">shardcache_client.h</a></li>
-    <li class="footer">Generated on Thu Jan 16 2014 16:09:26 for libshardcache by
+    <li class="footer">Generated on Thu Sep 11 2014 16:37:01 for libshardcache by
     <a href="http://www.doxygen.org/index.html">
     <img class="footer" src="doxygen.png" alt="doxygen"/></a> 1.8.3.1 </li>
   </ul>

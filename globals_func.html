@@ -44,6 +44,7 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
   <div id="navrow1" class="tabs">
     <ul class="tablist">
       <li><a href="index.html"><span>Main&#160;Page</span></a></li>
+      <li><a href="pages.html"><span>Related&#160;Pages</span></a></li>
       <li><a href="annotated.html"><span>Data&#160;Structures</span></a></li>
       <li class="current"><a href="files.html"><span>Files</span></a></li>
       <li>
@@ -74,7 +75,10 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
     <ul class="tablist">
       <li><a href="globals.html"><span>All</span></a></li>
       <li class="current"><a href="globals_func.html"><span>Functions</span></a></li>
+      <li><a href="globals_vars.html"><span>Variables</span></a></li>
       <li><a href="globals_type.html"><span>Typedefs</span></a></li>
+      <li><a href="globals_enum.html"><span>Enumerations</span></a></li>
+      <li><a href="globals_eval.html"><span>Enumerator</span></a></li>
       <li><a href="globals_defs.html"><span>Macros</span></a></li>
     </ul>
   </div>
@@ -103,7 +107,7 @@ $(document).ready(function(){initNavTree('globals_func.html','');});
      onmouseover="return searchBox.OnSearchSelectShow()"
      onmouseout="return searchBox.OnSearchSelectHide()"
      onkeydown="return searchBox.OnSearchSelectKey(event)">
-<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Macros</a></div>
+<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Enumerations</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(7)"><span class="SelectionMark">&#160;</span>Enumerator</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(8)"><span class="SelectionMark">&#160;</span>Macros</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(9)"><span class="SelectionMark">&#160;</span>Pages</a></div>
 
 <!-- iframe showing the search results (closed by default) -->
 <div id="MSearchResultsWindow">
@@ -123,10 +127,10 @@ $(document).ready(function(){initNavTree('globals_func.html','');});
 : <a class="el" href="shardcache_8h.html#aa7c9051ef937c4b4ae02b0017d513274">shardcache.h</a>
 </li>
 <li>shardcache_byte_escape()
-: <a class="el" href="shardcache_8h.html#aea1443844e55163940ecc71e2138b25d">shardcache.h</a>
+: <a class="el" href="shardcache__log_8h.html#aea1443844e55163940ecc71e2138b25d">shardcache_log.h</a>
 </li>
 <li>shardcache_clear_counters()
-: <a class="el" href="shardcache_8h.html#aa56ead41f7f61d7b88417fc9dc6937f8">shardcache.h</a>
+: <a class="el" href="shardcache__storage_8h.html#aa56ead41f7f61d7b88417fc9dc6937f8">shardcache_storage.h</a>
 </li>
 <li>shardcache_client_add()
 : <a class="el" href="shardcache__client_8h.html#ae7fa3b07937e4886394db885b0d120f8">shardcache_client.h</a>
@@ -134,8 +138,14 @@ $(document).ready(function(){initNavTree('globals_func.html','');});
 <li>shardcache_client_check()
 : <a class="el" href="shardcache__client_8h.html#adc7bc694f1f9504c88655abda10973e1">shardcache_client.h</a>
 </li>
+<li>shardcache_client_check_connection_timeout()
+: <a class="el" href="shardcache__client_8h.html#a0de3a5622bab2ac5f81d83f402054148">shardcache_client.h</a>
+</li>
 <li>shardcache_client_create()
-: <a class="el" href="shardcache__client_8h.html#ae0f7c08ea8eae9123c511c992c0dc09c">shardcache_client.h</a>
+: <a class="el" href="shardcache__client_8h.html#a483867140a804fdf07314be9491054e1">shardcache_client.h</a>
+</li>
+<li>shardcache_client_current_node()
+: <a class="el" href="shardcache__client_8h.html#a9780342da47b282fe8ada4bf5962df62">shardcache_client.h</a>
 </li>
 <li>shardcache_client_del()
 : <a class="el" href="shardcache__client_8h.html#ae7af65679cd37cdb5d821f60a4c07378">shardcache_client.h</a>
@@ -161,6 +171,9 @@ $(document).ready(function(){initNavTree('globals_func.html','');});
 <li>shardcache_client_get_async()
 : <a class="el" href="shardcache__client_8h.html#af6017e6ed41d61157413aa94e72a4ddf">shardcache_client.h</a>
 </li>
+<li>shardcache_client_get_multi()
+: <a class="el" href="shardcache__client_8h.html#ade1a0a0eb900b3a9a71bedc43d5c7473">shardcache_client.h</a>
+</li>
 <li>shardcache_client_index()
 : <a class="el" href="shardcache__client_8h.html#a5bbe3ff7a05cdf73d25eff5d2ad90737">shardcache_client.h</a>
 </li>
@@ -168,25 +181,49 @@ $(document).ready(function(){initNavTree('globals_func.html','');});
 : <a class="el" href="shardcache__client_8h.html#a165b44c42b84aece07c5f28193f35424">shardcache_client.h</a>
 </li>
 <li>shardcache_client_migration_begin()
-: <a class="el" href="shardcache__client_8h.html#a25b7479bb2d53c2f2ccf84f1d38914fb">shardcache_client.h</a>
+: <a class="el" href="shardcache__client_8h.html#a7520db6467ddf5ccc7adc126333c3110">shardcache_client.h</a>
+</li>
+<li>shardcache_client_multi_command_max_wait()
+: <a class="el" href="shardcache__client_8h.html#a5378c5b36ff3f9a2242bc56035e450e3">shardcache_client.h</a>
 </li>
 <li>shardcache_client_offset()
 : <a class="el" href="shardcache__client_8h.html#ace8520f114acd08eba2408dfa1b6b9aa">shardcache_client.h</a>
 </li>
+<li>shardcache_client_pipeline_max()
+: <a class="el" href="shardcache__client_8h.html#a1da6fcc4f68b20579326008aaa1455e4">shardcache_client.h</a>
+</li>
 <li>shardcache_client_set()
 : <a class="el" href="shardcache__client_8h.html#a2c983186e3265e6aacc1c387ef68faa4">shardcache_client.h</a>
+</li>
+<li>shardcache_client_set_multi()
+: <a class="el" href="shardcache__client_8h.html#ad6920148b74ab68c472b9b73614fd2a0">shardcache_client.h</a>
 </li>
 <li>shardcache_client_stats()
 : <a class="el" href="shardcache__client_8h.html#a28b99e0ba482cbeb29ca18be7e91485b">shardcache_client.h</a>
 </li>
+<li>shardcache_client_tcp_timeout()
+: <a class="el" href="shardcache__client_8h.html#abb6dc70a7a72c83abdf5c9e477de0415">shardcache_client.h</a>
+</li>
 <li>shardcache_client_touch()
 : <a class="el" href="shardcache__client_8h.html#a8b1eb394e45a0c3458c46be5b52f7719">shardcache_client.h</a>
 </li>
+<li>shardcache_client_use_random_node()
+: <a class="el" href="shardcache__client_8h.html#a6d2534e62f74772c05973eae950c5923">shardcache_client.h</a>
+</li>
+<li>shardcache_conn_expire_time()
+: <a class="el" href="shardcache_8h.html#ab37e1067d136856d61a75ba3b32d6516">shardcache.h</a>
+</li>
 <li>shardcache_create()
-: <a class="el" href="shardcache_8h.html#ae394c69ff91f95bd15b93c01264125b0">shardcache.h</a>
+: <a class="el" href="shardcache_8h.html#a74346747eb9ad9da22cd1c6b06849d3e">shardcache.h</a>
 </li>
 <li>shardcache_del()
 : <a class="el" href="shardcache_8h.html#af859541766d97b6afb992ef1c843711a">shardcache.h</a>
+</li>
+<li>shardcache_del_async()
+: <a class="el" href="shardcache_8h.html#a49754acc649df6ffb5a997ddb924968d">shardcache.h</a>
+</li>
+<li>shardcache_del_internal()
+: <a class="el" href="shardcache__internal_8h.html#ae2a368d8366f6e381abc5c71c25bff64">shardcache_internal.h</a>
 </li>
 <li>shardcache_destroy()
 : <a class="el" href="shardcache_8h.html#a25fc04bda4021be45e33cbcf4590e849">shardcache.h</a>
@@ -197,11 +234,23 @@ $(document).ready(function(){initNavTree('globals_func.html','');});
 <li>shardcache_evict_on_delete()
 : <a class="el" href="shardcache_8h.html#af443e10682cbc1755ed4514d8a5708ba">shardcache.h</a>
 </li>
-<li>shardcache_exists()
-: <a class="el" href="shardcache_8h.html#a9f4b6d4f7c21fe5e030fcc2cbf6c3bd4">shardcache.h</a>
+<li>shardcache_exists_async()
+: <a class="el" href="shardcache_8h.html#a9eb52ab9f65460bdc4958eaefb0b2954">shardcache.h</a>
+</li>
+<li>shardcache_expire_time()
+: <a class="el" href="shardcache_8h.html#ad47c6ef316980ae82605b303c87e3c4d">shardcache.h</a>
+</li>
+<li>shardcache_force_caching()
+: <a class="el" href="shardcache_8h.html#a450f19437f06b05ff8db556017d38394">shardcache.h</a>
 </li>
 <li>shardcache_free_index()
 : <a class="el" href="shardcache_8h.html#a7f3e042fe58a3dd7537c81de115bba25">shardcache.h</a>
+</li>
+<li>shardcache_free_labels()
+: <a class="el" href="shardcache__node_8h.html#aaeb94d38a51d419acb3f4de87b81da0f">shardcache_node.h</a>
+</li>
+<li>shardcache_free_nodes()
+: <a class="el" href="shardcache__node_8h.html#a44a8e1154d11daf9799f77573f8d6115">shardcache_node.h</a>
 </li>
 <li>shardcache_get()
 : <a class="el" href="shardcache_8h.html#add7d8054738f5061aeb051b827596519">shardcache.h</a>
@@ -209,59 +258,170 @@ $(document).ready(function(){initNavTree('globals_func.html','');});
 <li>shardcache_get_async()
 : <a class="el" href="shardcache_8h.html#ae87bbf3da1b1a4b80f8c6213abc320ac">shardcache.h</a>
 </li>
+<li>shardcache_get_connection_for_peer()
+: <a class="el" href="shardcache__internal_8h.html#a42d47e424888c7d5026e76d40f11aa89">shardcache_internal.h</a>
+</li>
 <li>shardcache_get_counters()
-: <a class="el" href="shardcache_8h.html#a075b1863d2be9c8ab1a863ea860112e2">shardcache.h</a>
+: <a class="el" href="shardcache__storage_8h.html#a075b1863d2be9c8ab1a863ea860112e2">shardcache_storage.h</a>
 </li>
 <li>shardcache_get_index()
 : <a class="el" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0">shardcache.h</a>
 </li>
+<li>shardcache_get_node_labels()
+: <a class="el" href="shardcache__node_8h.html#aabba71be9c0664ea0dc7b5ce5b8a0342">shardcache_node.h</a>
+</li>
 <li>shardcache_get_nodes()
-: <a class="el" href="shardcache_8h.html#ae01e634aa1b7d2b152505b82c7212fe0">shardcache.h</a>
+: <a class="el" href="shardcache__node_8h.html#af95f9099d20c9d59f61823059f895674">shardcache_node.h</a>
 </li>
 <li>shardcache_get_offset()
 : <a class="el" href="shardcache_8h.html#aca9675ed9f8be9512d7e6151783168ed">shardcache.h</a>
+</li>
+<li>shardcache_get_offset_async()
+: <a class="el" href="shardcache_8h.html#a41dee186c3b877f32386da245bcc6a7e">shardcache.h</a>
 </li>
 <li>shardcache_head()
 : <a class="el" href="shardcache_8h.html#a871f29a62beca074def85a144d359ec2">shardcache.h</a>
 </li>
 <li>shardcache_hex_escape()
-: <a class="el" href="shardcache_8h.html#a122b97f97ff3d2aea13b1eefbabc6ac3">shardcache.h</a>
+: <a class="el" href="shardcache__log_8h.html#aaf94c169ad4df64a0927555b5811a9fa">shardcache_log.h</a>
+</li>
+<li>shardcache_iomux_run_timeout_high()
+: <a class="el" href="shardcache_8h.html#a32e1cc626c927a974cd574d98a3a9124">shardcache.h</a>
+</li>
+<li>shardcache_iomux_run_timeout_low()
+: <a class="el" href="shardcache_8h.html#ac73a0c6f12b5b5f0c035967cdcf82727">shardcache.h</a>
+</li>
+<li>shardcache_lazy_expiration()
+: <a class="el" href="shardcache_8h.html#a58997a3ef53dd994a9c495ff70a4e270">shardcache.h</a>
 </li>
 <li>shardcache_log_init()
-: <a class="el" href="shardcache_8h.html#a83daa5cadcd1c2217f3d65bc8fbb8e77">shardcache.h</a>
+: <a class="el" href="shardcache__log_8h.html#a83daa5cadcd1c2217f3d65bc8fbb8e77">shardcache_log.h</a>
 </li>
 <li>shardcache_log_level()
-: <a class="el" href="shardcache_8h.html#a578341075b54f9426cc8e8c595f58b03">shardcache.h</a>
+: <a class="el" href="shardcache__log_8h.html#a578341075b54f9426cc8e8c595f58b03">shardcache_log.h</a>
 </li>
 <li>shardcache_log_message()
-: <a class="el" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache.h</a>
+: <a class="el" href="shardcache__log_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log.h</a>
 </li>
 <li>shardcache_migration_abort()
 : <a class="el" href="shardcache_8h.html#a719c3343ec7ac158d71d6f286da5fec9">shardcache.h</a>
 </li>
 <li>shardcache_migration_begin()
-: <a class="el" href="shardcache_8h.html#a7da4e669a16da6d150d2f1d906960ab2">shardcache.h</a>
+: <a class="el" href="shardcache_8h.html#ab9e3022be060e7b5e67af43c682632ac">shardcache.h</a>
 </li>
 <li>shardcache_migration_end()
 : <a class="el" href="shardcache_8h.html#a767a80d75a850f38c60c298cffe180fd">shardcache.h</a>
 </li>
+<li>shardcache_node_copy()
+: <a class="el" href="shardcache__node_8h.html#a8fd1dab4ef239e3ee7d6f481d2e34634">shardcache_node.h</a>
+</li>
+<li>shardcache_node_create()
+: <a class="el" href="shardcache__node_8h.html#a2badea72b53f16926b5b1149a41abf2c">shardcache_node.h</a>
+</li>
+<li>shardcache_node_create_from_string()
+: <a class="el" href="shardcache__node_8h.html#a17d43616aea15b1f2bab1c27d1d3193a">shardcache_node.h</a>
+</li>
+<li>shardcache_node_destroy()
+: <a class="el" href="shardcache__node_8h.html#adfe43d081702ba86967e950a460a4540">shardcache_node.h</a>
+</li>
+<li>shardcache_node_get_address()
+: <a class="el" href="shardcache__node_8h.html#a84a7fdea9acbf7a93023fc0335e9a9d7">shardcache_node.h</a>
+</li>
+<li>shardcache_node_get_address_at_index()
+: <a class="el" href="shardcache__node_8h.html#aeade88e9dd7e780fae0fee834079bb81">shardcache_node.h</a>
+</li>
+<li>shardcache_node_get_all_addresses()
+: <a class="el" href="shardcache__node_8h.html#a3a6c2d58ea00be742db98646ac09da44">shardcache_node.h</a>
+</li>
+<li>shardcache_node_get_label()
+: <a class="el" href="shardcache__node_8h.html#a394b31103821ffa12117d3d30d746229">shardcache_node.h</a>
+</li>
+<li>shardcache_node_get_string()
+: <a class="el" href="shardcache__node_8h.html#a68ee36b423681d7e544b244ebbeda0b0">shardcache_node.h</a>
+</li>
+<li>shardcache_node_num_addresses()
+: <a class="el" href="shardcache__node_8h.html#a148c09f6438efaaabc99f4af18464126">shardcache_node.h</a>
+</li>
+<li>shardcache_node_select()
+: <a class="el" href="shardcache__node_8h.html#a2957f331a54d0db05fdeebb30c5b92bb">shardcache_node.h</a>
+</li>
+<li>shardcache_queue_async_read_wrk()
+: <a class="el" href="shardcache__internal_8h.html#affd35c128257831a64d6d99027ba48c8">shardcache_internal.h</a>
+</li>
+<li>shardcache_release_connection_for_peer()
+: <a class="el" href="shardcache__internal_8h.html#a018aa1e15f0d9968131f4e1e277fc96a">shardcache_internal.h</a>
+</li>
+<li>shardcache_replica_create()
+: <a class="el" href="shardcache__replica_8h.html#abf38a03c00f7284d75efee125f5ff147">shardcache_replica.h</a>
+</li>
+<li>shardcache_replica_destroy()
+: <a class="el" href="shardcache__replica_8h.html#ab64a36b212ac83a2da23a1471885a91b">shardcache_replica.h</a>
+</li>
+<li>shardcache_replica_dispatch()
+: <a class="el" href="shardcache__replica_8h.html#ad3bf4d3f2f06c942debf23d47c46c0c6">shardcache_replica.h</a>
+</li>
+<li>shardcache_replica_received_command()
+: <a class="el" href="shardcache__replica_8h.html#acce91805eeeb3d158ae585097b4ba5d3">shardcache_replica.h</a>
+</li>
+<li>shardcache_schedule_expiration()
+: <a class="el" href="shardcache__internal_8h.html#a80fd070a91fc3ee8a66e555c75ac0ea9">shardcache_internal.h</a>
+</li>
+<li>shardcache_serving_look_ahead()
+: <a class="el" href="shardcache_8h.html#aad3a553d54123b731207f95791f0022e">shardcache.h</a>
+</li>
 <li>shardcache_set()
 : <a class="el" href="shardcache_8h.html#a671f35e550582e8e33f4d66ca03adc57">shardcache.h</a>
+</li>
+<li>shardcache_set_async()
+: <a class="el" href="shardcache_8h.html#a7b16b6d50d4e163e92c44025f38ce581">shardcache.h</a>
+</li>
+<li>shardcache_set_internal()
+: <a class="el" href="shardcache__internal_8h.html#a503a1aa45f6c4103069a1802b6a10035">shardcache_internal.h</a>
+</li>
+<li>shardcache_set_migration_continuum()
+: <a class="el" href="shardcache__internal_8h.html#a0ae3a3d31ed19ffe18a400caf186953c">shardcache_internal.h</a>
 </li>
 <li>shardcache_set_volatile()
 : <a class="el" href="shardcache_8h.html#a2aa7a564fbe7884299d77eca29432319">shardcache.h</a>
 </li>
+<li>shardcache_storage_dispose()
+: <a class="el" href="shardcache_8h.html#a006cbd2785de669bc2182938932c42e2">shardcache.h</a>
+</li>
+<li>shardcache_storage_load()
+: <a class="el" href="shardcache_8h.html#aff07062e3204d6cf55d96a68ceed3898">shardcache.h</a>
+</li>
+<li>shardcache_storage_reset()
+: <a class="el" href="shardcache_8h.html#a6a094cb6df8cdae92d15b4ff3944fcc4">shardcache.h</a>
+</li>
 <li>shardcache_tcp_timeout()
 : <a class="el" href="shardcache_8h.html#a4dfc8da5ca7b0d2ea2947db9b731a1fb">shardcache.h</a>
+</li>
+<li>shardcache_test_migration_ownership()
+: <a class="el" href="shardcache__internal_8h.html#ae7d744182607918e47297cd81ebc1f13">shardcache_internal.h</a>
 </li>
 <li>shardcache_test_ownership()
 : <a class="el" href="shardcache_8h.html#a7cac3c97e156092f9d560f54d37df98d">shardcache.h</a>
 </li>
+<li>shardcache_thread_end()
+: <a class="el" href="shardcache_8h.html#abf5bf17736aec39c86103020721c12cc">shardcache.h</a>
+</li>
+<li>shardcache_thread_init()
+: <a class="el" href="shardcache_8h.html#a36c2f67d3e4dd28ba7d932b022e39985">shardcache.h</a>
+</li>
 <li>shardcache_touch()
 : <a class="el" href="shardcache_8h.html#a55b425016e88f20934e14e338f795397">shardcache.h</a>
 </li>
+<li>shardcache_unschedule_expiration()
+: <a class="el" href="shardcache__internal_8h.html#a78e3871e2e93573755a6d9c6b00474b5">shardcache_internal.h</a>
+</li>
 <li>shardcache_use_persistent_connections()
 : <a class="el" href="shardcache_8h.html#a0c6344be0358998e1ba9809ba4f3fd4e">shardcache.h</a>
+</li>
+<li>shc_multi_item_create()
+: <a class="el" href="shardcache__client_8h.html#a45555d6a4e777b7bc08dd6abc1c33a90">shardcache_client.h</a>
+</li>
+<li>shc_multi_item_destroy()
+: <a class="el" href="shardcache__client_8h.html#aa2ce54dd57a9a3c8b51880207fdd1730">shardcache_client.h</a>
 </li>
 </ul>
 </div><!-- contents -->
@@ -269,7 +429,7 @@ $(document).ready(function(){initNavTree('globals_func.html','');});
 <!-- start footer part -->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
-    <li class="footer">Generated on Thu Jan 16 2014 16:09:26 for libshardcache by
+    <li class="footer">Generated on Thu Sep 11 2014 16:37:01 for libshardcache by
     <a href="http://www.doxygen.org/index.html">
     <img class="footer" src="doxygen.png" alt="doxygen"/></a> 1.8.3.1 </li>
   </ul>

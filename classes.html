@@ -44,6 +44,7 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
   <div id="navrow1" class="tabs">
     <ul class="tablist">
       <li><a href="index.html"><span>Main&#160;Page</span></a></li>
+      <li><a href="pages.html"><span>Related&#160;Pages</span></a></li>
       <li class="current"><a href="annotated.html"><span>Data&#160;Structures</span></a></li>
       <li><a href="files.html"><span>Files</span></a></li>
       <li>
@@ -91,7 +92,7 @@ $(document).ready(function(){initNavTree('classes.html','');});
      onmouseover="return searchBox.OnSearchSelectShow()"
      onmouseout="return searchBox.OnSearchSelectHide()"
      onkeydown="return searchBox.OnSearchSelectKey(event)">
-<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Macros</a></div>
+<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Enumerations</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(7)"><span class="SelectionMark">&#160;</span>Enumerator</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(8)"><span class="SelectionMark">&#160;</span>Macros</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(9)"><span class="SelectionMark">&#160;</span>Pages</a></div>
 
 <!-- iframe showing the search results (closed by default) -->
 <div id="MSearchResultsWindow">
@@ -105,21 +106,25 @@ $(document).ready(function(){initNavTree('classes.html','');});
 <div class="title">Data Structure Index</div>  </div>
 </div><!--header-->
 <div class="contents">
-<div class="qindex"><a class="qindex" href="#letter_S">S</a></div>
+<div class="qindex"><a class="qindex" href="#letter_S">S</a>&#160;|&#160;<a class="qindex" href="#letter_V">V</a>&#160;|&#160;<a class="qindex" href="#letter__">_</a></div>
 <table style="margin: 10px; white-space: nowrap;" align="center" width="95%" border="0" cellspacing="0" cellpadding="0">
 <tr><td rowspan="2" valign="bottom"><a name="letter_S"></a><table border="0" cellspacing="0" cellpadding="0"><tr><td><div class="ah">&#160;&#160;S&#160;&#160;</div></td></tr></table>
-</td><td valign="top"><a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a>&#160;&#160;&#160;</td><td valign="top"><a class="el" href="shardcache_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a>&#160;&#160;&#160;</td><td></td></tr>
-<tr><td valign="top"><a class="el" href="shardcache_8h.html#structshardcache__storage__index__item__t">shardcache_storage_index_item_t</a>&#160;&#160;&#160;</td><td valign="top"><a class="el" href="shardcache_8h.html#structshardcache__storage__t">shardcache_storage_t</a>&#160;&#160;&#160;</td><td></td></tr>
-<tr><td valign="top"><a class="el" href="shardcache_8h.html#structshardcache__counter__t">shardcache_counter_t</a>&#160;&#160;&#160;</td><td></td><td></td><td></td></tr>
-<tr><td></td><td></td><td></td><td></td></tr>
+</td><td valign="top"><a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__item__t">shardcache_storage_index_item_t</a>&#160;&#160;&#160;</td><td valign="top"><a class="el" href="shardcache__internal_8h.html#struct____shardcache__s">__shardcache_s</a>&#160;&#160;&#160;</td><td rowspan="2" valign="bottom"><a name="letter__"></a><table border="0" cellspacing="0" cellpadding="0"><tr><td><div class="ah">&#160;&#160;_&#160;&#160;</div></td></tr></table>
+</td><td></td></tr>
+<tr><td valign="top"><a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a>&#160;&#160;&#160;</td><td valign="top"><a class="el" href="shardcache__client_8h.html#structshc__multi__item__t">shc_multi_item_t</a>&#160;&#160;&#160;</td><td></td></tr>
+<tr><td valign="top"><a class="el" href="shardcache__internal_8h.html#structshardcache__async__io__context__t">shardcache_async_io_context_t</a>&#160;&#160;&#160;</td><td valign="top"><a class="el" href="namespace_3global_scope_4.html#structshardcache__storage__t">shardcache_storage_t</a>&#160;&#160;&#160;</td><td rowspan="2" valign="bottom"><a name="letter_V"></a><table border="0" cellspacing="0" cellpadding="0"><tr><td><div class="ah">&#160;&#160;V&#160;&#160;</div></td></tr></table>
+</td><td valign="top"><a class="el" href="shardcache__internal_8h.html#struct____shardcache__s_8cnt">__shardcache_s.cnt</a>&#160;&#160;&#160;</td><td></td></tr>
+<tr><td valign="top"><a class="el" href="shardcache__storage_8h.html#structshardcache__counter__t">shardcache_counter_t</a>&#160;&#160;&#160;</td><td valign="top"><a class="el" href="shardcache__storage_8h.html#struct____shardcache__storage__s">__shardcache_storage_s</a>&#160;&#160;&#160;</td><td valign="top"><a class="el" href="shardcache__storage_8h.html#struct____shardcache__storage__s_8internal">__shardcache_storage_s.internal</a>&#160;&#160;&#160;</td><td></td></tr>
+<tr><td></td><td></td><td valign="top"><a class="el" href="shardcache__internal_8h.html#structvolatile__object__t">volatile_object_t</a>&#160;&#160;&#160;</td><td></td><td></td></tr>
+<tr><td></td><td></td><td></td><td></td><td></td></tr>
 </table>
-<div class="qindex"><a class="qindex" href="#letter_S">S</a></div>
+<div class="qindex"><a class="qindex" href="#letter_S">S</a>&#160;|&#160;<a class="qindex" href="#letter_V">V</a>&#160;|&#160;<a class="qindex" href="#letter__">_</a></div>
 </div><!-- contents -->
 </div><!-- doc-content -->
 <!-- start footer part -->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
-    <li class="footer">Generated on Thu Jan 16 2014 16:09:26 for libshardcache by
+    <li class="footer">Generated on Thu Sep 11 2014 16:37:01 for libshardcache by
     <a href="http://www.doxygen.org/index.html">
     <img class="footer" src="doxygen.png" alt="doxygen"/></a> 1.8.3.1 </li>
   </ul>

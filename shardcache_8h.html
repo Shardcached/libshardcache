@@ -44,6 +44,7 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
   <div id="navrow1" class="tabs">
     <ul class="tablist">
       <li><a href="index.html"><span>Main&#160;Page</span></a></li>
+      <li><a href="pages.html"><span>Related&#160;Pages</span></a></li>
       <li><a href="annotated.html"><span>Data&#160;Structures</span></a></li>
       <li class="current"><a href="files.html"><span>Files</span></a></li>
       <li>
@@ -90,7 +91,7 @@ $(document).ready(function(){initNavTree('shardcache_8h.html','');});
      onmouseover="return searchBox.OnSearchSelectShow()"
      onmouseout="return searchBox.OnSearchSelectHide()"
      onkeydown="return searchBox.OnSearchSelectKey(event)">
-<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Macros</a></div>
+<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Enumerations</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(7)"><span class="SelectionMark">&#160;</span>Enumerator</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(8)"><span class="SelectionMark">&#160;</span>Macros</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(9)"><span class="SelectionMark">&#160;</span>Pages</a></div>
 
 <!-- iframe showing the search results (closed by default) -->
 <div id="MSearchResultsWindow">
@@ -101,10 +102,10 @@ $(document).ready(function(){initNavTree('shardcache_8h.html','');});
 
 <div class="header">
   <div class="summary">
-<a href="#nested-classes">Data Structures</a> &#124;
 <a href="#define-members">Macros</a> &#124;
 <a href="#typedef-members">Typedefs</a> &#124;
-<a href="#func-members">Functions</a>  </div>
+<a href="#func-members">Functions</a> &#124;
+<a href="#var-members">Variables</a>  </div>
   <div class="headertitle">
 <div class="title">shardcache.h File Reference</div>  </div>
 </div><!--header-->
@@ -120,396 +121,159 @@ $(document).ready(function(){initNavTree('shardcache_8h.html','');});
 <code>#include &lt;sys/types.h&gt;</code><br/>
 <code>#include &lt;sys/time.h&gt;</code><br/>
 <code>#include &lt;syslog.h&gt;</code><br/>
+<code>#include &lt;<a class="el" href="shardcache__log_8h_source.html">shardcache_log.h</a>&gt;</code><br/>
+<code>#include &lt;<a class="el" href="shardcache__storage_8h_source.html">shardcache_storage.h</a>&gt;</code><br/>
+<code>#include &lt;<a class="el" href="shardcache__node_8h_source.html">shardcache_node.h</a>&gt;</code><br/>
 </div>
 <p><a href="shardcache_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="nested-classes"></a>
-Data Structures</h2></td></tr>
-<tr class="memitem:structshardcache__storage__index__item__t"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#structshardcache__storage__index__item__t">shardcache_storage_index_item_t</a></td></tr>
-<tr class="memdesc:structshardcache__storage__index__item__t"><td class="mdescLeft">&#160;</td><td class="mdescRight">structure representing an item in the storage index  <a href="shardcache_8h.html#structshardcache__storage__index__item__t">More...</a><br/></td></tr>
-<tr class="separator:structshardcache__storage__index__item__t"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:structshardcache__storage__index__t"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a></td></tr>
-<tr class="memdesc:structshardcache__storage__index__t"><td class="mdescLeft">&#160;</td><td class="mdescRight">structure representing the storage index, holding an array of <a class="el" href="shardcache_8h.html#structshardcache__storage__index__item__t" title="structure representing an item in the storage index">shardcache_storage_index_item_t</a> structures.  <a href="shardcache_8h.html#structshardcache__storage__index__t">More...</a><br/></td></tr>
-<tr class="separator:structshardcache__storage__index__t"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:structshardcache__storage__t"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#structshardcache__storage__t">shardcache_storage_t</a></td></tr>
-<tr class="memdesc:structshardcache__storage__t"><td class="mdescLeft">&#160;</td><td class="mdescRight">Structure holding all the callback pointers required by shardcache to interact with underlying storage.  <a href="shardcache_8h.html#structshardcache__storage__t">More...</a><br/></td></tr>
-<tr class="separator:structshardcache__storage__t"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:structshardcache__counter__t"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#structshardcache__counter__t">shardcache_counter_t</a></td></tr>
-<tr class="memdesc:structshardcache__counter__t"><td class="mdescLeft">&#160;</td><td class="mdescRight">Structure representing an exposed counter.  <a href="shardcache_8h.html#structshardcache__counter__t">More...</a><br/></td></tr>
-<tr class="separator:structshardcache__counter__t"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:structshardcache__node__t"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a></td></tr>
-<tr class="memdesc:structshardcache__node__t"><td class="mdescLeft">&#160;</td><td class="mdescRight">Structure representing a node taking part in the shard cache.  <a href="shardcache_8h.html#structshardcache__node__t">More...</a><br/></td></tr>
-<tr class="separator:structshardcache__node__t"><td class="memSeparator" colspan="2">&#160;</td></tr>
-</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="define-members"></a>
 Macros</h2></td></tr>
-<tr class="memitem:a2acb8d72a99ea98491e67ec0031c7046"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a2acb8d72a99ea98491e67ec0031c7046">SHARDCACHE_PORT_DEFAULT</a>&#160;&#160;&#160;9874</td></tr>
+<tr class="memitem:a2acb8d72a99ea98491e67ec0031c7046"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a2acb8d72a99ea98491e67ec0031c7046">SHARDCACHE_PORT_DEFAULT</a>&#160;&#160;&#160;4444</td></tr>
 <tr class="separator:a2acb8d72a99ea98491e67ec0031c7046"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9d5fe7f7e7f330d07a614c15d8259bd8"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a9d5fe7f7e7f330d07a614c15d8259bd8">SHARDCACHE_TCP_TIMEOUT_DEFAULT</a>&#160;&#160;&#160;30</td></tr>
+<tr class="memitem:a9d5fe7f7e7f330d07a614c15d8259bd8"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a9d5fe7f7e7f330d07a614c15d8259bd8">SHARDCACHE_TCP_TIMEOUT_DEFAULT</a>&#160;&#160;&#160;5000</td></tr>
 <tr class="separator:a9d5fe7f7e7f330d07a614c15d8259bd8"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1216dc1e3ecd0c48c8de285179cf4b24"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a1216dc1e3ecd0c48c8de285179cf4b24">SHARDCACHE_NODE_LABEL_MAXLEN</a>&#160;&#160;&#160;256</td></tr>
-<tr class="separator:a1216dc1e3ecd0c48c8de285179cf4b24"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a638701bd253025fa203bf5c659d72366"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a638701bd253025fa203bf5c659d72366">SHARDCACHE_NODE_ADDRESS_MAXLEN</a>&#160;&#160;&#160;256</td></tr>
-<tr class="separator:a638701bd253025fa203bf5c659d72366"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a47343854a30632e853005c55aa412b2f"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a47343854a30632e853005c55aa412b2f">SHC_ERROR</a>(__fmt, __args...)&#160;&#160;&#160;do { <a class="el" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log_message</a>(LOG_ERR,     0, __fmt, ## __args); } while (0)</td></tr>
-<tr class="separator:a47343854a30632e853005c55aa412b2f"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3ec9a169d886ff06f76774931f0edd71"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a3ec9a169d886ff06f76774931f0edd71">SHC_WARNING</a>(__fmt, __args...)&#160;&#160;&#160;do { <a class="el" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log_message</a>(LOG_WARNING, 0, __fmt, ## __args); } while (0)</td></tr>
-<tr class="separator:a3ec9a169d886ff06f76774931f0edd71"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a509a7a4fedbf44c473fc94e0d1ff31d5"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a509a7a4fedbf44c473fc94e0d1ff31d5">SHC_WARN</a>(__fmt, __args...)&#160;&#160;&#160;WARNING(__fmt, ## __args)</td></tr>
-<tr class="separator:a509a7a4fedbf44c473fc94e0d1ff31d5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad8424a700bcebe2ed362e72da046a4a3"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ad8424a700bcebe2ed362e72da046a4a3">SHC_NOTICE</a>(__fmt, __args...)&#160;&#160;&#160;do { <a class="el" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log_message</a>(LOG_NOTICE,  0, __fmt, ## __args); } while (0)</td></tr>
-<tr class="separator:ad8424a700bcebe2ed362e72da046a4a3"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a44321dbcac3b0196fefee592e13603e5"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a44321dbcac3b0196fefee592e13603e5">SHC_INFO</a>(__fmt, __args...)&#160;&#160;&#160;do { <a class="el" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log_message</a>(LOG_INFO,    0, __fmt, ## __args); } while (0)</td></tr>
-<tr class="separator:a44321dbcac3b0196fefee592e13603e5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab59995d60636a51455084945f01fc37d"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ab59995d60636a51455084945f01fc37d">SHC_DIE</a>(__fmt, __args...)&#160;&#160;&#160;do { <a class="el" href="shardcache_8h.html#a47343854a30632e853005c55aa412b2f">SHC_ERROR</a>(__fmt, ## __args); exit(-1); } while (0)</td></tr>
-<tr class="separator:ab59995d60636a51455084945f01fc37d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a19e9491c391d06acd031e5c49b30c836"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(__n, __fmt, __args...)</td></tr>
-<tr class="separator:a19e9491c391d06acd031e5c49b30c836"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aa2c1a05b61586536a8e4e860b32cba48"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aa2c1a05b61586536a8e4e860b32cba48">SHC_DEBUG</a>(__fmt, __args...)&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(0, __fmt, ## __args)</td></tr>
-<tr class="separator:aa2c1a05b61586536a8e4e860b32cba48"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7e9caca0c2676677794b14d83e0eba76"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a7e9caca0c2676677794b14d83e0eba76">SHC_DEBUG1</a>(__fmt, __args...)&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#aa2c1a05b61586536a8e4e860b32cba48">SHC_DEBUG</a>(__fmt, ## __args)</td></tr>
-<tr class="separator:a7e9caca0c2676677794b14d83e0eba76"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5cbc48c6b87385f39cae15201b64a749"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a5cbc48c6b87385f39cae15201b64a749">SHC_DEBUG2</a>(__fmt, __args...)&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(1, __fmt, ## __args)</td></tr>
-<tr class="separator:a5cbc48c6b87385f39cae15201b64a749"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a97bde0d6c209a9137868e777ec0a1a71"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a97bde0d6c209a9137868e777ec0a1a71">SHC_DEBUG3</a>(__fmt, __args...)&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(2, __fmt, ## __args)</td></tr>
-<tr class="separator:a97bde0d6c209a9137868e777ec0a1a71"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9c156d27815c618dc5f1c2fd5eda7164"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a9c156d27815c618dc5f1c2fd5eda7164">SHC_DEBUG4</a>(__fmt, __args...)&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(3, __fmt, ## __args)</td></tr>
-<tr class="separator:a9c156d27815c618dc5f1c2fd5eda7164"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:abd926cd2de1dda73067b6fdc03852b5d"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#abd926cd2de1dda73067b6fdc03852b5d">SHC_DEBUG5</a>(__fmt, __args...)&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(4, __fmt, ## __args)</td></tr>
-<tr class="separator:abd926cd2de1dda73067b6fdc03852b5d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0691be19b2b42d7c57ab709ffb6a179e"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a0691be19b2b42d7c57ab709ffb6a179e">SHARDCACHE_EXPIRE_TIME_DEFAULT</a>&#160;&#160;&#160;0</td></tr>
+<tr class="separator:a0691be19b2b42d7c57ab709ffb6a179e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a22a3e8858304cad081b2f68a1b226ab0"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a22a3e8858304cad081b2f68a1b226ab0">SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW</a>&#160;&#160;&#160;100000</td></tr>
+<tr class="separator:a22a3e8858304cad081b2f68a1b226ab0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0f18275ed9bdb13b5b7fd7aefaa1e29d"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a0f18275ed9bdb13b5b7fd7aefaa1e29d">SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH</a>&#160;&#160;&#160;500000</td></tr>
+<tr class="separator:a0f18275ed9bdb13b5b7fd7aefaa1e29d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a43188213899813e2abb0a7c3710f374b"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a43188213899813e2abb0a7c3710f374b">SHARDCACHE_CONNECTION_EXPIRE_DEFAULT</a>&#160;&#160;&#160;5000</td></tr>
+<tr class="separator:a43188213899813e2abb0a7c3710f374b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae8cbc81ee9446683bb0c6b13da7a4fb5"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ae8cbc81ee9446683bb0c6b13da7a4fb5">SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT</a>&#160;&#160;&#160;16</td></tr>
+<tr class="separator:ae8cbc81ee9446683bb0c6b13da7a4fb5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa40f71288aa826fe0f8394061023bce1"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aa40f71288aa826fe0f8394061023bce1">SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT</a>&#160;&#160;&#160;1</td></tr>
+<tr class="separator:aa40f71288aa826fe0f8394061023bce1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="typedef-members"></a>
 Typedefs</h2></td></tr>
-<tr class="memitem:a53d82222192794e3b6c0bf56cb873bd3"><td class="memItemLeft" align="right" valign="top">typedef void *(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a53d82222192794e3b6c0bf56cb873bd3">shardcache_fetch_item_callback_t</a> )(void *key, size_t klen, size_t *vlen, void *priv)</td></tr>
-<tr class="memdesc:a53d82222192794e3b6c0bf56cb873bd3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback to provide the value for a given key.  <a href="#a53d82222192794e3b6c0bf56cb873bd3">More...</a><br/></td></tr>
-<tr class="separator:a53d82222192794e3b6c0bf56cb873bd3"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae8af181c4715d81e26360ddf8ed54a8c"><td class="memItemLeft" align="right" valign="top">typedef int(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ae8af181c4715d81e26360ddf8ed54a8c">shardcache_store_item_callback_t</a> )(void *key, size_t klen, void *value, size_t vlen, void *priv)</td></tr>
-<tr class="memdesc:ae8af181c4715d81e26360ddf8ed54a8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback to store a new value for a given key.  <a href="#ae8af181c4715d81e26360ddf8ed54a8c">More...</a><br/></td></tr>
-<tr class="separator:ae8af181c4715d81e26360ddf8ed54a8c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:affdba97437b5cee4324163c52f79fb69"><td class="memItemLeft" align="right" valign="top">typedef int(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#affdba97437b5cee4324163c52f79fb69">shardcache_remove_item_callback_t</a> )(void *key, size_t klen, void *priv)</td></tr>
-<tr class="memdesc:affdba97437b5cee4324163c52f79fb69"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback to remove an existing value for a given key.  <a href="#affdba97437b5cee4324163c52f79fb69">More...</a><br/></td></tr>
-<tr class="separator:affdba97437b5cee4324163c52f79fb69"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aa44062df197ddbe2edf1b7863262e9ac"><td class="memItemLeft" align="right" valign="top">typedef int(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aa44062df197ddbe2edf1b7863262e9ac">shardcache_exist_item_callback_t</a> )(void *key, size_t klen, void *priv)</td></tr>
-<tr class="memdesc:aa44062df197ddbe2edf1b7863262e9ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback to check if a specific key exists on the storage.  <a href="#aa44062df197ddbe2edf1b7863262e9ac">More...</a><br/></td></tr>
-<tr class="separator:aa44062df197ddbe2edf1b7863262e9ac"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a217a191654966ca5097eac275cfac2bb"><td class="memItemLeft" align="right" valign="top">typedef size_t(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a217a191654966ca5097eac275cfac2bb">shardcache_count_items_callback_t</a> )(void *priv)</td></tr>
-<tr class="memdesc:a217a191654966ca5097eac275cfac2bb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback returning the number of items in the index.  <a href="#a217a191654966ca5097eac275cfac2bb">More...</a><br/></td></tr>
-<tr class="separator:a217a191654966ca5097eac275cfac2bb"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4e19cc72e3ba05cce02b21d548127c1d"><td class="memItemLeft" align="right" valign="top">typedef size_t(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a4e19cc72e3ba05cce02b21d548127c1d">shardcache_get_index_callback_t</a> )(<a class="el" href="shardcache_8h.html#structshardcache__storage__index__item__t">shardcache_storage_index_item_t</a> *index, size_t isize, void *priv)</td></tr>
-<tr class="memdesc:a4e19cc72e3ba05cce02b21d548127c1d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback to fetch the index of stored keys.  <a href="#a4e19cc72e3ba05cce02b21d548127c1d">More...</a><br/></td></tr>
-<tr class="separator:a4e19cc72e3ba05cce02b21d548127c1d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a242de502e390a032a605c1c12ce1ffc2"><td class="memItemLeft" align="right" valign="top">typedef <a class="el" href="shardcache_8h.html#structshardcache__storage__t">shardcache_storage_t</a> *(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a242de502e390a032a605c1c12ce1ffc2">shardcache_storage_constructor</a> )(const char **options)</td></tr>
-<tr class="memdesc:a242de502e390a032a605c1c12ce1ffc2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback used to create a new instance of a storage module.  <a href="#a242de502e390a032a605c1c12ce1ffc2">More...</a><br/></td></tr>
-<tr class="separator:a242de502e390a032a605c1c12ce1ffc2"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:acde1d2b29dcdc76637b64d76fb22a9e3"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#acde1d2b29dcdc76637b64d76fb22a9e3">shardcache_storage_destructor</a> )(<a class="el" href="shardcache_8h.html#structshardcache__storage__t">shardcache_storage_t</a> *storage)</td></tr>
-<tr class="memdesc:acde1d2b29dcdc76637b64d76fb22a9e3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback used to dispose all resources associated to a previously initialized storage module.  <a href="#acde1d2b29dcdc76637b64d76fb22a9e3">More...</a><br/></td></tr>
-<tr class="separator:acde1d2b29dcdc76637b64d76fb22a9e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a32947f5c645e606fe2284a1c28f7fcf9"><td class="memItemLeft" align="right" valign="top">typedef struct __shardcache_s&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a></td></tr>
-<tr class="memdesc:a32947f5c645e606fe2284a1c28f7fcf9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Opaque structure representing the actual shardcache instance.  <a href="#a32947f5c645e606fe2284a1c28f7fcf9">More...</a><br/></td></tr>
-<tr class="separator:a32947f5c645e606fe2284a1c28f7fcf9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3acf120b7116e8d820fc897eebc08db2"><td class="memItemLeft" align="right" valign="top">typedef int(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2">shardcache_get_async_callback_t</a> )(void *key, size_t klen, void *data, size_t dlen, size_t total_size, struct timeval *timestamp, void *priv)</td></tr>
 <tr class="memdesc:a3acf120b7116e8d820fc897eebc08db2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback passed to <a class="el" href="shardcache_8h.html#ae87bbf3da1b1a4b80f8c6213abc320ac" title="Get the value for a key asynchronously.">shardcache_get_async()</a> to receive the data asynchronously.  <a href="#a3acf120b7116e8d820fc897eebc08db2">More...</a><br/></td></tr>
 <tr class="separator:a3acf120b7116e8d820fc897eebc08db2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6c1c0f4fc9fde145696010fefaaee4c1"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1">shardcache_async_response_callback_t</a> )(void *key, size_t klen, int res, void *priv)</td></tr>
+<tr class="memdesc:a6c1c0f4fc9fde145696010fefaaee4c1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Callback expected by all the _async() routines returning an integer result (basically all apart <a class="el" href="shardcache_8h.html#ae87bbf3da1b1a4b80f8c6213abc320ac" title="Get the value for a key asynchronously.">shardcache_get_async()</a> shardcache_offset_async())  <a href="#a6c1c0f4fc9fde145696010fefaaee4c1">More...</a><br/></td></tr>
+<tr class="separator:a6c1c0f4fc9fde145696010fefaaee4c1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a075b1863d2be9c8ab1a863ea860112e2"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a075b1863d2be9c8ab1a863ea860112e2">shardcache_get_counters</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, <a class="el" href="shardcache_8h.html#structshardcache__counter__t">shardcache_counter_t</a> **counters)</td></tr>
-<tr class="memdesc:a075b1863d2be9c8ab1a863ea860112e2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the list of registered counters with their actual value.  <a href="#a075b1863d2be9c8ab1a863ea860112e2">More...</a><br/></td></tr>
-<tr class="separator:a075b1863d2be9c8ab1a863ea860112e2"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aa56ead41f7f61d7b88417fc9dc6937f8"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aa56ead41f7f61d7b88417fc9dc6937f8">shardcache_clear_counters</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache)</td></tr>
-<tr class="memdesc:aa56ead41f7f61d7b88417fc9dc6937f8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Resets all the counters to 0.  <a href="#aa56ead41f7f61d7b88417fc9dc6937f8">More...</a><br/></td></tr>
-<tr class="separator:aa56ead41f7f61d7b88417fc9dc6937f8"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae394c69ff91f95bd15b93c01264125b0"><td class="memItemLeft" align="right" valign="top"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ae394c69ff91f95bd15b93c01264125b0">shardcache_create</a> (char *me, <a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a> *nodes, int num_nodes, <a class="el" href="shardcache_8h.html#structshardcache__storage__t">shardcache_storage_t</a> *storage, char *secret, int num_workers, size_t cache_size)</td></tr>
-<tr class="memdesc:ae394c69ff91f95bd15b93c01264125b0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new shardcache instance.  <a href="#ae394c69ff91f95bd15b93c01264125b0">More...</a><br/></td></tr>
-<tr class="separator:ae394c69ff91f95bd15b93c01264125b0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a0c6344be0358998e1ba9809ba4f3fd4e"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a0c6344be0358998e1ba9809ba4f3fd4e">shardcache_use_persistent_connections</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, int new_value)</td></tr>
+<tr class="memitem:aff07062e3204d6cf55d96a68ceed3898"><td class="memItemLeft" align="right" valign="top"><a class="el" href="namespace_3global_scope_4.html#structshardcache__storage__t">shardcache_storage_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aff07062e3204d6cf55d96a68ceed3898">shardcache_storage_load</a> (char *filename, char **options)</td></tr>
+<tr class="separator:aff07062e3204d6cf55d96a68ceed3898"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a006cbd2785de669bc2182938932c42e2"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a006cbd2785de669bc2182938932c42e2">shardcache_storage_dispose</a> (<a class="el" href="namespace_3global_scope_4.html#structshardcache__storage__t">shardcache_storage_t</a> *st)</td></tr>
+<tr class="separator:a006cbd2785de669bc2182938932c42e2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6a094cb6df8cdae92d15b4ff3944fcc4"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a6a094cb6df8cdae92d15b4ff3944fcc4">shardcache_storage_reset</a> (<a class="el" href="namespace_3global_scope_4.html#structshardcache__storage__t">shardcache_storage_t</a> *st)</td></tr>
+<tr class="separator:a6a094cb6df8cdae92d15b4ff3944fcc4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a74346747eb9ad9da22cd1c6b06849d3e"><td class="memItemLeft" align="right" valign="top">shardcache_t *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a74346747eb9ad9da22cd1c6b06849d3e">shardcache_create</a> (char *me, <a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node_t</a> **nodes, int num_nodes, <a class="el" href="namespace_3global_scope_4.html#structshardcache__storage__t">shardcache_storage_t</a> *storage, char *secret, int num_workers, int num_async, size_t cache_size)</td></tr>
+<tr class="memdesc:a74346747eb9ad9da22cd1c6b06849d3e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a new shardcache instance.  <a href="#a74346747eb9ad9da22cd1c6b06849d3e">More...</a><br/></td></tr>
+<tr class="separator:a74346747eb9ad9da22cd1c6b06849d3e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0c6344be0358998e1ba9809ba4f3fd4e"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a0c6344be0358998e1ba9809ba4f3fd4e">shardcache_use_persistent_connections</a> (shardcache_t *cache, int new_value)</td></tr>
 <tr class="separator:a0c6344be0358998e1ba9809ba4f3fd4e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af443e10682cbc1755ed4514d8a5708ba"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#af443e10682cbc1755ed4514d8a5708ba">shardcache_evict_on_delete</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, int new_value)</td></tr>
+<tr class="memitem:af443e10682cbc1755ed4514d8a5708ba"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#af443e10682cbc1755ed4514d8a5708ba">shardcache_evict_on_delete</a> (shardcache_t *cache, int new_value)</td></tr>
 <tr class="separator:af443e10682cbc1755ed4514d8a5708ba"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4dfc8da5ca7b0d2ea2947db9b731a1fb"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a4dfc8da5ca7b0d2ea2947db9b731a1fb">shardcache_tcp_timeout</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, int new_value)</td></tr>
+<tr class="memitem:a450f19437f06b05ff8db556017d38394"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a450f19437f06b05ff8db556017d38394">shardcache_force_caching</a> (shardcache_t *cache, int new_value)</td></tr>
+<tr class="separator:a450f19437f06b05ff8db556017d38394"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4dfc8da5ca7b0d2ea2947db9b731a1fb"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a4dfc8da5ca7b0d2ea2947db9b731a1fb">shardcache_tcp_timeout</a> (shardcache_t *cache, int new_value)</td></tr>
 <tr class="separator:a4dfc8da5ca7b0d2ea2947db9b731a1fb"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a25fc04bda4021be45e33cbcf4590e849"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a25fc04bda4021be45e33cbcf4590e849">shardcache_destroy</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache)</td></tr>
+<tr class="memitem:ab37e1067d136856d61a75ba3b32d6516"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ab37e1067d136856d61a75ba3b32d6516">shardcache_conn_expire_time</a> (shardcache_t *cache, int new_value)</td></tr>
+<tr class="separator:ab37e1067d136856d61a75ba3b32d6516"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac73a0c6f12b5b5f0c035967cdcf82727"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ac73a0c6f12b5b5f0c035967cdcf82727">shardcache_iomux_run_timeout_low</a> (shardcache_t *cache, int new_value)</td></tr>
+<tr class="separator:ac73a0c6f12b5b5f0c035967cdcf82727"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a32e1cc626c927a974cd574d98a3a9124"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a32e1cc626c927a974cd574d98a3a9124">shardcache_iomux_run_timeout_high</a> (shardcache_t *cache, int new_value)</td></tr>
+<tr class="separator:a32e1cc626c927a974cd574d98a3a9124"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad47c6ef316980ae82605b303c87e3c4d"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ad47c6ef316980ae82605b303c87e3c4d">shardcache_expire_time</a> (shardcache_t *cache, int new_value)</td></tr>
+<tr class="separator:ad47c6ef316980ae82605b303c87e3c4d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aad3a553d54123b731207f95791f0022e"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aad3a553d54123b731207f95791f0022e">shardcache_serving_look_ahead</a> (shardcache_t *cache, int new_value)</td></tr>
+<tr class="separator:aad3a553d54123b731207f95791f0022e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a58997a3ef53dd994a9c495ff70a4e270"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a58997a3ef53dd994a9c495ff70a4e270">shardcache_lazy_expiration</a> (shardcache_t *cache, int new_value)</td></tr>
+<tr class="separator:a58997a3ef53dd994a9c495ff70a4e270"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a25fc04bda4021be45e33cbcf4590e849"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a25fc04bda4021be45e33cbcf4590e849">shardcache_destroy</a> (shardcache_t *cache)</td></tr>
 <tr class="memdesc:a25fc04bda4021be45e33cbcf4590e849"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release all the resources used by the shardcache instance.  <a href="#a25fc04bda4021be45e33cbcf4590e849">More...</a><br/></td></tr>
 <tr class="separator:a25fc04bda4021be45e33cbcf4590e849"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:add7d8054738f5061aeb051b827596519"><td class="memItemLeft" align="right" valign="top">void *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#add7d8054738f5061aeb051b827596519">shardcache_get</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen, size_t *vlen, struct timeval *timestamp)</td></tr>
+<tr class="memitem:add7d8054738f5061aeb051b827596519"><td class="memItemLeft" align="right" valign="top">void *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#add7d8054738f5061aeb051b827596519">shardcache_get</a> (shardcache_t *cache, void *key, size_t klen, size_t *vlen, struct timeval *timestamp)</td></tr>
 <tr class="memdesc:add7d8054738f5061aeb051b827596519"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the value for a key.  <a href="#add7d8054738f5061aeb051b827596519">More...</a><br/></td></tr>
 <tr class="separator:add7d8054738f5061aeb051b827596519"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a871f29a62beca074def85a144d359ec2"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a871f29a62beca074def85a144d359ec2">shardcache_head</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen, void *head, size_t hlen, struct timeval *timestamp)</td></tr>
+<tr class="memitem:a871f29a62beca074def85a144d359ec2"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a871f29a62beca074def85a144d359ec2">shardcache_head</a> (shardcache_t *cache, void *key, size_t klen, void *head, size_t hlen, struct timeval *timestamp)</td></tr>
 <tr class="memdesc:a871f29a62beca074def85a144d359ec2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get partial value data value for a key.  <a href="#a871f29a62beca074def85a144d359ec2">More...</a><br/></td></tr>
 <tr class="separator:a871f29a62beca074def85a144d359ec2"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aca9675ed9f8be9512d7e6151783168ed"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aca9675ed9f8be9512d7e6151783168ed">shardcache_get_offset</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen, void *out, size_t *olen, size_t offset, struct timeval *timestamp)</td></tr>
+<tr class="memitem:aca9675ed9f8be9512d7e6151783168ed"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aca9675ed9f8be9512d7e6151783168ed">shardcache_get_offset</a> (shardcache_t *cache, void *key, size_t klen, void *out, size_t *olen, size_t offset, struct timeval *timestamp)</td></tr>
 <tr class="memdesc:aca9675ed9f8be9512d7e6151783168ed"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get partial value data value for a key.  <a href="#aca9675ed9f8be9512d7e6151783168ed">More...</a><br/></td></tr>
 <tr class="separator:aca9675ed9f8be9512d7e6151783168ed"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae87bbf3da1b1a4b80f8c6213abc320ac"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ae87bbf3da1b1a4b80f8c6213abc320ac">shardcache_get_async</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen, <a class="el" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2">shardcache_get_async_callback_t</a> cb, void *priv)</td></tr>
+<tr class="memitem:ae87bbf3da1b1a4b80f8c6213abc320ac"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ae87bbf3da1b1a4b80f8c6213abc320ac">shardcache_get_async</a> (shardcache_t *cache, void *key, size_t klen, <a class="el" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2">shardcache_get_async_callback_t</a> cb, void *priv)</td></tr>
 <tr class="memdesc:ae87bbf3da1b1a4b80f8c6213abc320ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the value for a key asynchronously.  <a href="#ae87bbf3da1b1a4b80f8c6213abc320ac">More...</a><br/></td></tr>
 <tr class="separator:ae87bbf3da1b1a4b80f8c6213abc320ac"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9f4b6d4f7c21fe5e030fcc2cbf6c3bd4"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a9f4b6d4f7c21fe5e030fcc2cbf6c3bd4">shardcache_exists</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen)</td></tr>
-<tr class="memdesc:a9f4b6d4f7c21fe5e030fcc2cbf6c3bd4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if a specific key exists on the node responsible for it.  <a href="#a9f4b6d4f7c21fe5e030fcc2cbf6c3bd4">More...</a><br/></td></tr>
-<tr class="separator:a9f4b6d4f7c21fe5e030fcc2cbf6c3bd4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a55b425016e88f20934e14e338f795397"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a55b425016e88f20934e14e338f795397">shardcache_touch</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen)</td></tr>
+<tr class="memitem:a41dee186c3b877f32386da245bcc6a7e"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a41dee186c3b877f32386da245bcc6a7e">shardcache_get_offset_async</a> (shardcache_t *cache, void *key, size_t klen, size_t offset, size_t length, <a class="el" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2">shardcache_get_async_callback_t</a> cb, void *priv)</td></tr>
+<tr class="memdesc:a41dee186c3b877f32386da245bcc6a7e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get partial value data value for a key asynchronously.  <a href="#a41dee186c3b877f32386da245bcc6a7e">More...</a><br/></td></tr>
+<tr class="separator:a41dee186c3b877f32386da245bcc6a7e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9eb52ab9f65460bdc4958eaefb0b2954"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a9eb52ab9f65460bdc4958eaefb0b2954">shardcache_exists_async</a> (shardcache_t *cache, void *key, size_t klen, <a class="el" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1">shardcache_async_response_callback_t</a> cb, void *priv)</td></tr>
+<tr class="memdesc:a9eb52ab9f65460bdc4958eaefb0b2954"><td class="mdescLeft">&#160;</td><td class="mdescRight">Check if a specific key exists on the node responsible for it.  <a href="#a9eb52ab9f65460bdc4958eaefb0b2954">More...</a><br/></td></tr>
+<tr class="separator:a9eb52ab9f65460bdc4958eaefb0b2954"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a55b425016e88f20934e14e338f795397"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a55b425016e88f20934e14e338f795397">shardcache_touch</a> (shardcache_t *cache, void *key, size_t klen)</td></tr>
 <tr class="memdesc:a55b425016e88f20934e14e338f795397"><td class="mdescLeft">&#160;</td><td class="mdescRight">Load a key into the cache if not present already, otherwise update the loaded-timestamp.  <a href="#a55b425016e88f20934e14e338f795397">More...</a><br/></td></tr>
 <tr class="separator:a55b425016e88f20934e14e338f795397"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a671f35e550582e8e33f4d66ca03adc57"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a671f35e550582e8e33f4d66ca03adc57">shardcache_set</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen, void *value, size_t vlen)</td></tr>
+<tr class="memitem:a671f35e550582e8e33f4d66ca03adc57"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a671f35e550582e8e33f4d66ca03adc57">shardcache_set</a> (shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen)</td></tr>
 <tr class="memdesc:a671f35e550582e8e33f4d66ca03adc57"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the value for a key.  <a href="#a671f35e550582e8e33f4d66ca03adc57">More...</a><br/></td></tr>
 <tr class="separator:a671f35e550582e8e33f4d66ca03adc57"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a95760527edef026e88565106effe88b0"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a95760527edef026e88565106effe88b0">shardcache_add</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen, void *value, size_t vlen)</td></tr>
+<tr class="memitem:a7b16b6d50d4e163e92c44025f38ce581"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a7b16b6d50d4e163e92c44025f38ce581">shardcache_set_async</a> (shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen, time_t expire, int if_not_exists, <a class="el" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1">shardcache_async_response_callback_t</a> cb, void *priv)</td></tr>
+<tr class="memdesc:a7b16b6d50d4e163e92c44025f38ce581"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the value for a key fetching the response asyncrhonously.  <a href="#a7b16b6d50d4e163e92c44025f38ce581">More...</a><br/></td></tr>
+<tr class="separator:a7b16b6d50d4e163e92c44025f38ce581"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a95760527edef026e88565106effe88b0"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a95760527edef026e88565106effe88b0">shardcache_add</a> (shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen)</td></tr>
 <tr class="memdesc:a95760527edef026e88565106effe88b0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the value for a key if it doesn't already exist.  <a href="#a95760527edef026e88565106effe88b0">More...</a><br/></td></tr>
 <tr class="separator:a95760527edef026e88565106effe88b0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a2aa7a564fbe7884299d77eca29432319"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a2aa7a564fbe7884299d77eca29432319">shardcache_set_volatile</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen, void *value, size_t vlen, time_t expire)</td></tr>
+<tr class="memitem:a2aa7a564fbe7884299d77eca29432319"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a2aa7a564fbe7884299d77eca29432319">shardcache_set_volatile</a> (shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen, time_t expire)</td></tr>
 <tr class="memdesc:a2aa7a564fbe7884299d77eca29432319"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set a volatile value for a key.  <a href="#a2aa7a564fbe7884299d77eca29432319">More...</a><br/></td></tr>
 <tr class="separator:a2aa7a564fbe7884299d77eca29432319"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aa7c9051ef937c4b4ae02b0017d513274"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aa7c9051ef937c4b4ae02b0017d513274">shardcache_add_volatile</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen, void *value, size_t vlen, time_t expire)</td></tr>
+<tr class="memitem:aa7c9051ef937c4b4ae02b0017d513274"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aa7c9051ef937c4b4ae02b0017d513274">shardcache_add_volatile</a> (shardcache_t *cache, void *key, size_t klen, void *value, size_t vlen, time_t expire)</td></tr>
 <tr class="memdesc:aa7c9051ef937c4b4ae02b0017d513274"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the volatile value for a key if it doesn't already exist.  <a href="#aa7c9051ef937c4b4ae02b0017d513274">More...</a><br/></td></tr>
 <tr class="separator:aa7c9051ef937c4b4ae02b0017d513274"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af859541766d97b6afb992ef1c843711a"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#af859541766d97b6afb992ef1c843711a">shardcache_del</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen)</td></tr>
+<tr class="memitem:af859541766d97b6afb992ef1c843711a"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#af859541766d97b6afb992ef1c843711a">shardcache_del</a> (shardcache_t *cache, void *key, size_t klen)</td></tr>
 <tr class="memdesc:af859541766d97b6afb992ef1c843711a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove the value for a key.  <a href="#af859541766d97b6afb992ef1c843711a">More...</a><br/></td></tr>
 <tr class="separator:af859541766d97b6afb992ef1c843711a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af3630c66ba810d5dad9bfbc2492f6cce"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#af3630c66ba810d5dad9bfbc2492f6cce">shardcache_evict</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen)</td></tr>
+<tr class="memitem:a49754acc649df6ffb5a997ddb924968d"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a49754acc649df6ffb5a997ddb924968d">shardcache_del_async</a> (shardcache_t *cache, void *key, size_t klen, <a class="el" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1">shardcache_async_response_callback_t</a> cb, void *priv)</td></tr>
+<tr class="memdesc:a49754acc649df6ffb5a997ddb924968d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove the value for a key asynchronously.  <a href="#a49754acc649df6ffb5a997ddb924968d">More...</a><br/></td></tr>
+<tr class="separator:a49754acc649df6ffb5a997ddb924968d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af3630c66ba810d5dad9bfbc2492f6cce"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#af3630c66ba810d5dad9bfbc2492f6cce">shardcache_evict</a> (shardcache_t *cache, void *key, size_t klen)</td></tr>
 <tr class="memdesc:af3630c66ba810d5dad9bfbc2492f6cce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove the value from the cache for a key.  <a href="#af3630c66ba810d5dad9bfbc2492f6cce">More...</a><br/></td></tr>
 <tr class="separator:af3630c66ba810d5dad9bfbc2492f6cce"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae01e634aa1b7d2b152505b82c7212fe0"><td class="memItemLeft" align="right" valign="top"><a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ae01e634aa1b7d2b152505b82c7212fe0">shardcache_get_nodes</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, int *num_nodes)</td></tr>
-<tr class="memdesc:ae01e634aa1b7d2b152505b82c7212fe0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the list of all nodes (including this node itself) taking part to the shardcache 'cloud'.  <a href="#ae01e634aa1b7d2b152505b82c7212fe0">More...</a><br/></td></tr>
-<tr class="separator:ae01e634aa1b7d2b152505b82c7212fe0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7cac3c97e156092f9d560f54d37df98d"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a7cac3c97e156092f9d560f54d37df98d">shardcache_test_ownership</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, void *key, size_t klen, char *owner, size_t *len)</td></tr>
+<tr class="memitem:a7cac3c97e156092f9d560f54d37df98d"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a7cac3c97e156092f9d560f54d37df98d">shardcache_test_ownership</a> (shardcache_t *cache, void *key, size_t klen, char *owner, size_t *len)</td></tr>
 <tr class="memdesc:a7cac3c97e156092f9d560f54d37df98d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the node owning a specific key.  <a href="#a7cac3c97e156092f9d560f54d37df98d">More...</a><br/></td></tr>
 <tr class="separator:a7cac3c97e156092f9d560f54d37df98d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9d02396238920c93777e1eb2bc83dad0"><td class="memItemLeft" align="right" valign="top"><a class="el" href="shardcache_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0">shardcache_get_index</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache)</td></tr>
+<tr class="memitem:a9d02396238920c93777e1eb2bc83dad0"><td class="memItemLeft" align="right" valign="top"><a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0">shardcache_get_index</a> (shardcache_t *cache)</td></tr>
 <tr class="memdesc:a9d02396238920c93777e1eb2bc83dad0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the index of keys managed by the specific shardcache instance by querying the storage module.  <a href="#a9d02396238920c93777e1eb2bc83dad0">More...</a><br/></td></tr>
 <tr class="separator:a9d02396238920c93777e1eb2bc83dad0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7f3e042fe58a3dd7537c81de115bba25"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a7f3e042fe58a3dd7537c81de115bba25">shardcache_free_index</a> (<a class="el" href="shardcache_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a> *index)</td></tr>
+<tr class="memitem:a7f3e042fe58a3dd7537c81de115bba25"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a7f3e042fe58a3dd7537c81de115bba25">shardcache_free_index</a> (<a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a> *index)</td></tr>
 <tr class="memdesc:a7f3e042fe58a3dd7537c81de115bba25"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release all resources used by the index provided as argument.  <a href="#a7f3e042fe58a3dd7537c81de115bba25">More...</a><br/></td></tr>
 <tr class="separator:a7f3e042fe58a3dd7537c81de115bba25"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7da4e669a16da6d150d2f1d906960ab2"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a7da4e669a16da6d150d2f1d906960ab2">shardcache_migration_begin</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache, <a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a> *nodes, int num_nodes, int forward)</td></tr>
-<tr class="memdesc:a7da4e669a16da6d150d2f1d906960ab2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Start a migration process.  <a href="#a7da4e669a16da6d150d2f1d906960ab2">More...</a><br/></td></tr>
-<tr class="separator:a7da4e669a16da6d150d2f1d906960ab2"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a719c3343ec7ac158d71d6f286da5fec9"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a719c3343ec7ac158d71d6f286da5fec9">shardcache_migration_abort</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache)</td></tr>
+<tr class="memitem:ab9e3022be060e7b5e67af43c682632ac"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#ab9e3022be060e7b5e67af43c682632ac">shardcache_migration_begin</a> (shardcache_t *cache, <a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node_t</a> **nodes, int num_nodes, int forward)</td></tr>
+<tr class="memdesc:ab9e3022be060e7b5e67af43c682632ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Start a migration process.  <a href="#ab9e3022be060e7b5e67af43c682632ac">More...</a><br/></td></tr>
+<tr class="separator:ab9e3022be060e7b5e67af43c682632ac"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a719c3343ec7ac158d71d6f286da5fec9"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a719c3343ec7ac158d71d6f286da5fec9">shardcache_migration_abort</a> (shardcache_t *cache)</td></tr>
 <tr class="memdesc:a719c3343ec7ac158d71d6f286da5fec9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Abort the current migration process.  <a href="#a719c3343ec7ac158d71d6f286da5fec9">More...</a><br/></td></tr>
 <tr class="separator:a719c3343ec7ac158d71d6f286da5fec9"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a767a80d75a850f38c60c298cffe180fd"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a767a80d75a850f38c60c298cffe180fd">shardcache_migration_end</a> (<a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *cache)</td></tr>
+<tr class="memitem:a767a80d75a850f38c60c298cffe180fd"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a767a80d75a850f38c60c298cffe180fd">shardcache_migration_end</a> (shardcache_t *cache)</td></tr>
 <tr class="memdesc:a767a80d75a850f38c60c298cffe180fd"><td class="mdescLeft">&#160;</td><td class="mdescRight">End the current migration process by swapping the two continua and releasing resources for the old one.  <a href="#a767a80d75a850f38c60c298cffe180fd">More...</a><br/></td></tr>
 <tr class="separator:a767a80d75a850f38c60c298cffe180fd"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a83daa5cadcd1c2217f3d65bc8fbb8e77"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a83daa5cadcd1c2217f3d65bc8fbb8e77">shardcache_log_init</a> (char *ident, int loglevel)</td></tr>
-<tr class="separator:a83daa5cadcd1c2217f3d65bc8fbb8e77"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a578341075b54f9426cc8e8c595f58b03"><td class="memItemLeft" align="right" valign="top">unsigned int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a578341075b54f9426cc8e8c595f58b03">shardcache_log_level</a> ()</td></tr>
-<tr class="separator:a578341075b54f9426cc8e8c595f58b03"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7a1581a607007a0b51d1d53e018d20a9"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log_message</a> (int prio, int dbglevel, const char *fmt,...)</td></tr>
-<tr class="separator:a7a1581a607007a0b51d1d53e018d20a9"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a122b97f97ff3d2aea13b1eefbabc6ac3"><td class="memItemLeft" align="right" valign="top">char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a122b97f97ff3d2aea13b1eefbabc6ac3">shardcache_hex_escape</a> (const char *buf, int len, int limit)</td></tr>
-<tr class="separator:a122b97f97ff3d2aea13b1eefbabc6ac3"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aea1443844e55163940ecc71e2138b25d"><td class="memItemLeft" align="right" valign="top">unsigned long&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#aea1443844e55163940ecc71e2138b25d">shardcache_byte_escape</a> (char ch, char esc, char *buffer, unsigned long len, char **dest, unsigned long *newlen)</td></tr>
-<tr class="separator:aea1443844e55163940ecc71e2138b25d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a36c2f67d3e4dd28ba7d932b022e39985"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a36c2f67d3e4dd28ba7d932b022e39985">shardcache_thread_init</a> (shardcache_t *cache)</td></tr>
+<tr class="memdesc:a36c2f67d3e4dd28ba7d932b022e39985"><td class="mdescLeft">&#160;</td><td class="mdescRight">Notify the internal shardcache core about a new woerker thread which might access the API. This function must be called early within each user-created thread (which is intended to access the shardcache API at some stage during its lifespan) to initialize thread-specific variables.  <a href="#a36c2f67d3e4dd28ba7d932b022e39985">More...</a><br/></td></tr>
+<tr class="separator:a36c2f67d3e4dd28ba7d932b022e39985"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abf5bf17736aec39c86103020721c12cc"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#abf5bf17736aec39c86103020721c12cc">shardcache_thread_end</a> (shardcache_t *cache)</td></tr>
+<tr class="memdesc:abf5bf17736aec39c86103020721c12cc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Release the resources allocated by <a class="el" href="shardcache_8h.html#a36c2f67d3e4dd28ba7d932b022e39985" title="Notify the internal shardcache core about a new woerker thread which might access the API...">shardcache_thread_init()</a> This function needs to be called before calling pthread_exit() to free memory allocated by <a class="el" href="shardcache_8h.html#a36c2f67d3e4dd28ba7d932b022e39985" title="Notify the internal shardcache core about a new woerker thread which might access the API...">shardcache_thread_init()</a>.  <a href="#abf5bf17736aec39c86103020721c12cc">More...</a><br/></td></tr>
+<tr class="separator:abf5bf17736aec39c86103020721c12cc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:a212ce745de022f9dab442d5232cc1809"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="shardcache_8h.html#a212ce745de022f9dab442d5232cc1809">LIBSHARDCACHE_VERSION</a></td></tr>
+<tr class="separator:a212ce745de022f9dab442d5232cc1809"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>shardcache C implementation </p>
 <dl class="section author"><dt>Author</dt><dd>Andrea Guzzo </dd></dl>
-</div><hr/><h2 class="groupheader">Data Structure Documentation</h2>
-<a name="structshardcache__storage__index__item__t" id="structshardcache__storage__index__item__t"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">struct shardcache_storage_index_item_t</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<div class="textblock"><p>structure representing an item in the storage index </p>
-</div><table class="fieldtable">
-<tr><th colspan="3">Data Fields</th></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="a670ba9cfd8b46b173e8e5da4e82a3b8b"></a>void *</td>
-<td class="fieldname">
-key</td>
-<td class="fielddoc">
-A valid pointer to the key. </td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="aec24ca2e658b94af72eee3c685467072"></a>size_t</td>
-<td class="fieldname">
-klen</td>
-<td class="fielddoc">
-The length of the key. </td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="a95c9eeb86ef6dc93bdfcc4f4b79ef5b9"></a>size_t</td>
-<td class="fieldname">
-vlen</td>
-<td class="fielddoc">
-The length of the value. </td></tr>
-</table>
-
-</div>
-</div>
-<a name="structshardcache__storage__index__t" id="structshardcache__storage__index__t"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">struct shardcache_storage_index_t</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<div class="textblock"><p>structure representing the storage index, holding an array of <a class="el" href="shardcache_8h.html#structshardcache__storage__index__item__t" title="structure representing an item in the storage index">shardcache_storage_index_item_t</a> structures. </p>
-<dl class="section note"><dt>Note</dt><dd>Can be obtained calling <a class="el" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0" title="Get the index of keys managed by the specific shardcache instance by querying the storage module...">shardcache_get_index()</a> and MUST be disposed using <a class="el" href="shardcache_8h.html#a7f3e042fe58a3dd7537c81de115bba25" title="Release all resources used by the index provided as argument.">shardcache_free_index()</a> </dd></dl>
-</div><table class="fieldtable">
-<tr><th colspan="3">Data Fields</th></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="ad8fd15098581e807a536a2b087911304"></a><a class="el" href="shardcache_8h.html#structshardcache__storage__index__item__t">shardcache_storage_index_item_t</a> *</td>
-<td class="fieldname">
-items</td>
-<td class="fielddoc">
-Array of <a class="el" href="shardcache_8h.html#structshardcache__storage__index__item__t" title="structure representing an item in the storage index">shardcache_storage_index_item_t</a> structures. </td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="aa721e02948c35a4e004623da64ba00db"></a>size_t</td>
-<td class="fieldname">
-size</td>
-<td class="fielddoc">
-The number of elements in the 'items' array. </td></tr>
-</table>
-
-</div>
-</div>
-<a name="structshardcache__storage__t" id="structshardcache__storage__t"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">struct shardcache_storage_t</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<div class="textblock"><p>Structure holding all the callback pointers required by shardcache to interact with underlying storage. </p>
-</div><table class="fieldtable">
-<tr><th colspan="3">Data Fields</th></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="aaa00ffadd93d02ef58548c9923ee097e"></a><a class="el" href="shardcache_8h.html#a53d82222192794e3b6c0bf56cb873bd3">shardcache_fetch_item_callback_t</a></td>
-<td class="fieldname">
-fetch</td>
-<td class="fielddoc">
-The fecth callback. </td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="adac8862fb938810e5774ba08a804b2c6"></a><a class="el" href="shardcache_8h.html#ae8af181c4715d81e26360ddf8ed54a8c">shardcache_store_item_callback_t</a></td>
-<td class="fieldname">
-store</td>
-<td class="fielddoc">
-The store callback (optional if the storage is indended to be read-only) </td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="a6363463cd20b522ec922f8bc931d9c7f"></a><a class="el" href="shardcache_8h.html#affdba97437b5cee4324163c52f79fb69">shardcache_remove_item_callback_t</a></td>
-<td class="fieldname">
-remove</td>
-<td class="fielddoc">
-The remove callback (optional if the storage is intended to be read-only) </td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="a977ddd05f7f5a1e30aa0b4a3d9baba6d"></a><a class="el" href="shardcache_8h.html#aa44062df197ddbe2edf1b7863262e9ac">shardcache_exist_item_callback_t</a></td>
-<td class="fieldname">
-exist</td>
-<td class="fielddoc">
-Optional callback which can be used to 'quickly' check if a key exists in the storage. <dl class="section note"><dt>Note</dt><dd>The speed of this callback strictly depends on the storage implementation </dd></dl>
-</td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="a2f958de4182b95ef054e9dff32c3c8f4"></a><a class="el" href="shardcache_8h.html#a4e19cc72e3ba05cce02b21d548127c1d">shardcache_get_index_callback_t</a></td>
-<td class="fieldname">
-index</td>
-<td class="fielddoc">
-Optional callback which returns the index of keys accessible through the storage. <dl class="section note"><dt>Note</dt><dd>check <a class="el" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0" title="Get the index of keys managed by the specific shardcache instance by querying the storage module...">shardcache_get_index()</a> documentation for more details </dd></dl>
-</td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="ae45d5d91431a9b09213c43192851ab91"></a><a class="el" href="shardcache_8h.html#a217a191654966ca5097eac275cfac2bb">shardcache_count_items_callback_t</a></td>
-<td class="fieldname">
-count</td>
-<td class="fielddoc">
-If the index callback is set, this callback will be used to determine how many items are going to be returned in the index. <dl class="section note"><dt>Note</dt><dd>This callback is mandatory if the index callback is set, otherwise it's optional </dd>
-<dd>
-check <a class="el" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0" title="Get the index of keys managed by the specific shardcache instance by querying the storage module...">shardcache_get_index()</a> documentation for more details </dd></dl>
-</td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="a20d841b529cf3ade6c1bf0ed4f54c6b4"></a>int</td>
-<td class="fieldname">
-shared</td>
-<td class="fielddoc">
-If set to a non zero value, shardcache will assume that all the peers can access the same keys on the storage (for example a shared database, or a shared filesystem)) </td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="ac259b5598fd3c643774d9fae93f81f1e"></a>void *</td>
-<td class="fieldname">
-priv</td>
-<td class="fielddoc">
-Pointer to private data which will passed to all the callbacks. <dl class="section note"><dt>Note</dt><dd>The implementation can use this pointer to keep its internal data/status/handlers/whatever </dd></dl>
-</td></tr>
-</table>
-
-</div>
-</div>
-<a name="structshardcache__counter__t" id="structshardcache__counter__t"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">struct shardcache_counter_t</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<div class="textblock"><p>Structure representing an exposed counter. </p>
-<pre class="fragment">   Any of the internal shardcache modules can export counters
-   (as uint32_t integers) for stats purposes.
-   Any module can add new counters which will be included in the array
-   returned by shardcache_get_counters().
-   The value member of the structure will be always accessed via
-   the atomic builtins and the same is expected from the module 
-   exporting it.
-</pre><dl class="section note"><dt>Note</dt><dd>A list of exported counters can be obtained using <a class="el" href="shardcache_8h.html#a075b1863d2be9c8ab1a863ea860112e2" title="Returns the list of registered counters with their actual value.">shardcache_get_counters()</a> </dd></dl>
-</div><table class="fieldtable">
-<tr><th colspan="3">Data Fields</th></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="a16fc0f87ad25489df80d6968315516d6"></a>char</td>
-<td class="fieldname">
-name[256]</td>
-<td class="fielddoc">
-</td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="a7903a9e5ca031ee8aa95abbc30504f16"></a>uint32_t</td>
-<td class="fieldname">
-value</td>
-<td class="fielddoc">
-</td></tr>
-</table>
-
-</div>
-</div>
-<a name="structshardcache__node__t" id="structshardcache__node__t"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">struct shardcache_node_t</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<div class="textblock"><p>Structure representing a node taking part in the shard cache. </p>
-<dl class="section see"><dt>See Also</dt><dd><a class="el" href="shardcache_8h.html#ae394c69ff91f95bd15b93c01264125b0" title="Create a new shardcache instance.">shardcache_create()</a> </dd>
-<dd>
-<a class="el" href="shardcache_8h.html#ae01e634aa1b7d2b152505b82c7212fe0" title="Get the list of all nodes (including this node itself) taking part to the shardcache &#39;cloud&#39;...">shardcache_get_nodes()</a> </dd></dl>
-</div><table class="fieldtable">
-<tr><th colspan="3">Data Fields</th></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="a613c13a9fc77064d7d391c100a808966"></a>char</td>
-<td class="fieldname">
-label[<a class="el" href="shardcache_8h.html#a1216dc1e3ecd0c48c8de285179cf4b24">SHARDCACHE_NODE_LABEL_MAXLEN</a>]</td>
-<td class="fielddoc">
-</td></tr>
-<tr><td class="fieldtype">
-<a class="anchor" id="adb1954a5c17289b748995ef0bc13ddef"></a>char</td>
-<td class="fieldname">
-address[<a class="el" href="shardcache_8h.html#a638701bd253025fa203bf5c659d72366">SHARDCACHE_NODE_ADDRESS_MAXLEN</a>]</td>
-<td class="fielddoc">
-</td></tr>
-</table>
-
-</div>
-</div>
-<h2 class="groupheader">Macro Definition Documentation</h2>
+</div><h2 class="groupheader">Macro Definition Documentation</h2>
 <a class="anchor" id="a2acb8d72a99ea98491e67ec0031c7046"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define SHARDCACHE_PORT_DEFAULT&#160;&#160;&#160;9874</td>
+          <td class="memname">#define SHARDCACHE_PORT_DEFAULT&#160;&#160;&#160;4444</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -521,377 +285,79 @@ address[<a class="el" href="shardcache_8h.html#a638701bd253025fa203bf5c659d72366
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define SHARDCACHE_TCP_TIMEOUT_DEFAULT&#160;&#160;&#160;30</td>
+          <td class="memname">#define SHARDCACHE_TCP_TIMEOUT_DEFAULT&#160;&#160;&#160;5000</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a class="anchor" id="a1216dc1e3ecd0c48c8de285179cf4b24"></a>
+<a class="anchor" id="a0691be19b2b42d7c57ab709ffb6a179e"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define SHARDCACHE_NODE_LABEL_MAXLEN&#160;&#160;&#160;256</td>
+          <td class="memname">#define SHARDCACHE_EXPIRE_TIME_DEFAULT&#160;&#160;&#160;0</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a class="anchor" id="a638701bd253025fa203bf5c659d72366"></a>
+<a class="anchor" id="a22a3e8858304cad081b2f68a1b226ab0"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define SHARDCACHE_NODE_ADDRESS_MAXLEN&#160;&#160;&#160;256</td>
+          <td class="memname">#define SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW&#160;&#160;&#160;100000</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a class="anchor" id="a47343854a30632e853005c55aa412b2f"></a>
+<a class="anchor" id="a0f18275ed9bdb13b5b7fd7aefaa1e29d"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define SHC_ERROR</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;do { <a class="el" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log_message</a>(LOG_ERR,     0, __fmt, ## __args); } while (0)</td>
+          <td class="memname">#define SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH&#160;&#160;&#160;500000</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a class="anchor" id="a3ec9a169d886ff06f76774931f0edd71"></a>
+<a class="anchor" id="a43188213899813e2abb0a7c3710f374b"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define SHC_WARNING</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;do { <a class="el" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log_message</a>(LOG_WARNING, 0, __fmt, ## __args); } while (0)</td>
+          <td class="memname">#define SHARDCACHE_CONNECTION_EXPIRE_DEFAULT&#160;&#160;&#160;5000</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a class="anchor" id="a509a7a4fedbf44c473fc94e0d1ff31d5"></a>
+<a class="anchor" id="ae8cbc81ee9446683bb0c6b13da7a4fb5"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define SHC_WARN</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;WARNING(__fmt, ## __args)</td>
+          <td class="memname">#define SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT&#160;&#160;&#160;16</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a class="anchor" id="ad8424a700bcebe2ed362e72da046a4a3"></a>
+<a class="anchor" id="aa40f71288aa826fe0f8394061023bce1"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define SHC_NOTICE</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;do { <a class="el" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log_message</a>(LOG_NOTICE,  0, __fmt, ## __args); } while (0)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a class="anchor" id="a44321dbcac3b0196fefee592e13603e5"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define SHC_INFO</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;do { <a class="el" href="shardcache_8h.html#a7a1581a607007a0b51d1d53e018d20a9">shardcache_log_message</a>(LOG_INFO,    0, __fmt, ## __args); } while (0)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a class="anchor" id="ab59995d60636a51455084945f01fc37d"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define SHC_DIE</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;do { <a class="el" href="shardcache_8h.html#a47343854a30632e853005c55aa412b2f">SHC_ERROR</a>(__fmt, ## __args); exit(-1); } while (0)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a class="anchor" id="a19e9491c391d06acd031e5c49b30c836"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define __SHC_DEBUG</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__n, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><span class="keywordflow">do</span> { <span class="keywordflow">if</span> (<a class="code" href="shardcache_8h.html#a578341075b54f9426cc8e8c595f58b03">shardcache_log_level</a>() &gt;= LOG_DEBUG + __n) \</div>
-<div class="line">    shardcache_log_message(LOG_DEBUG,   __n + 1, __fmt, ## __args); } <span class="keywordflow">while</span> (0)</div>
-</div><!-- fragment -->
-</div>
-</div>
-<a class="anchor" id="aa2c1a05b61586536a8e4e860b32cba48"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define SHC_DEBUG</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(0, __fmt, ## __args)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a class="anchor" id="a7e9caca0c2676677794b14d83e0eba76"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define SHC_DEBUG1</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#aa2c1a05b61586536a8e4e860b32cba48">SHC_DEBUG</a>(__fmt, ## __args)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a class="anchor" id="a5cbc48c6b87385f39cae15201b64a749"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define SHC_DEBUG2</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(1, __fmt, ## __args)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a class="anchor" id="a97bde0d6c209a9137868e777ec0a1a71"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define SHC_DEBUG3</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(2, __fmt, ## __args)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a class="anchor" id="a9c156d27815c618dc5f1c2fd5eda7164"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define SHC_DEBUG4</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(3, __fmt, ## __args)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a class="anchor" id="abd926cd2de1dda73067b6fdc03852b5d"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define SHC_DEBUG5</td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__fmt, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname">__args...&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td>&#160;&#160;&#160;<a class="el" href="shardcache_8h.html#a19e9491c391d06acd031e5c49b30c836">__SHC_DEBUG</a>(4, __fmt, ## __args)</td>
+          <td class="memname">#define SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT&#160;&#160;&#160;1</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -899,225 +365,6 @@ address[<a class="el" href="shardcache_8h.html#a638701bd253025fa203bf5c659d72366
 </div>
 </div>
 <h2 class="groupheader">Typedef Documentation</h2>
-<a class="anchor" id="a53d82222192794e3b6c0bf56cb873bd3"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">typedef void*(* shardcache_fetch_item_callback_t)(void *key, size_t klen, size_t *vlen, void *priv)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Callback to provide the value for a given key. </p>
-<pre class="fragment">   The shardcache instance will call this callback
-   if the value has not been found in the cache.
-</pre><dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">key</td><td>A valid pointer to the key </td></tr>
-    <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
-    <tr><td class="paramname">vlen</td><td>If provided the length of the returned value will be stored at the location pointed by vlen </td></tr>
-    <tr><td class="paramname">priv</td><td>The 'priv' pointer previously stored in the <a class="el" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> structure at initialization time </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>A pointer to initialized memory containing the stored value. A NULL pointer if not found. </dd></dl>
-<dl class="section note"><dt>Note</dt><dd>The returned value MUST be a volatile copy and the caller WILL release its resources </dd></dl>
-
-</div>
-</div>
-<a class="anchor" id="ae8af181c4715d81e26360ddf8ed54a8c"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">typedef int(* shardcache_store_item_callback_t)(void *key, size_t klen, void *value, size_t vlen, void *priv)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Callback to store a new value for a given key. </p>
-<pre class="fragment">   The shardcache instance will call this callback
-   if a new value needs to be set in the underlying storage
-</pre><dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">key</td><td>A valid pointer to the key </td></tr>
-    <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
-    <tr><td class="paramname">value</td><td>A valid pointer to the value to store </td></tr>
-    <tr><td class="paramname">vlen</td><td>The length of the value </td></tr>
-    <tr><td class="paramname">priv</td><td>The 'priv' pointer previously stored in the <a class="el" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> structure at initialization time </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>0 if success, -1 otherwise </dd></dl>
-
-</div>
-</div>
-<a class="anchor" id="affdba97437b5cee4324163c52f79fb69"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">typedef int(* shardcache_remove_item_callback_t)(void *key, size_t klen, void *priv)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Callback to remove an existing value for a given key. </p>
-<pre class="fragment">   The shardcache instance will call this callback
-   if the value for a given key needs to be removed
-   from the underlying storage
-</pre><dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">key</td><td>A valid pointer to the key </td></tr>
-    <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
-    <tr><td class="paramname">priv</td><td>The 'priv' pointer previously stored in the <a class="el" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> structure at initialization time </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>0 if success, -1 otherwise </dd></dl>
-
-</div>
-</div>
-<a class="anchor" id="aa44062df197ddbe2edf1b7863262e9ac"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">typedef int(* shardcache_exist_item_callback_t)(void *key, size_t klen, void *priv)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Callback to check if a specific key exists on the storage. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">key</td><td>A valid pointer to the key </td></tr>
-    <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
-    <tr><td class="paramname">priv</td><td>The 'priv' pointer previously stored in the <a class="el" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> structure at initialization time </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>1 if exists, 0 otherwise </dd></dl>
-
-</div>
-</div>
-<a class="anchor" id="a217a191654966ca5097eac275cfac2bb"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">typedef size_t(* shardcache_count_items_callback_t)(void *priv)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Callback returning the number of items in the index. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">priv</td><td>The priv pointer owned by the storage</td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>The total number of items in the storage </dd></dl>
-<dl class="section note"><dt>Note</dt><dd>This callback is mandatory if the index callback is set, otherwise it's optional </dd></dl>
-<dl class="section see"><dt>See Also</dt><dd><a class="el" href="shardcache_8h.html#a4e19cc72e3ba05cce02b21d548127c1d" title="Callback to fetch the index of stored keys.">shardcache_get_index_callback_t</a> </dd>
-<dd>
-<a class="el" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0" title="Get the index of keys managed by the specific shardcache instance by querying the storage module...">shardcache_get_index()</a> </dd></dl>
-
-</div>
-</div>
-<a class="anchor" id="a4e19cc72e3ba05cce02b21d548127c1d"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">typedef size_t(* shardcache_get_index_callback_t)(<a class="el" href="shardcache_8h.html#structshardcache__storage__index__item__t">shardcache_storage_index_item_t</a> *index, size_t isize, void *priv)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Callback to fetch the index of stored keys. </p>
-<pre class="fragment">   The shardcache instance will call this callback
-   when it will need to retrieve the full index of the keys
-   owned (and stored) by the instance
-</pre><dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">index</td><td>An array of <a class="el" href="shardcache_8h.html#structshardcache__storage__index__item__t" title="structure representing an item in the storage index">shardcache_storage_index_item_t</a> structures to hold the index </td></tr>
-    <tr><td class="paramname">isize</td><td>The number of slots in the provided index array </td></tr>
-    <tr><td class="paramname">priv</td><td>The priv pointer owned by the storage</td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>The number of items in the index, 0 if none or errors </dd></dl>
-<dl class="section note"><dt>Note</dt><dd>If the caller didn't previously check the number of items via the count() callback, it MUST check if the returned value matches the passed isize and in case try again with a bigger index size to ensure there are no more items. Using the count() method ensure to get all the items which are expected to exist</dd>
-<dd>
-The count might change between the time the count callback returns and the this callback is called.<br/>
- If this happens the cases are 2 :<br/>
- 1 - More items have been added in the meanwhile. Which means that the caller will get exactly the expected number of items but there will be more new items in the storage which are not returned.<br/>
- 2 - Some items have been removed in the meanwhile. The caller will get less items than expecting but this is not a problem because the alloc'd memory is enough and the caller will also know how many items have been actually returned by the index callback. </dd></dl>
-
-</div>
-</div>
-<a class="anchor" id="a242de502e390a032a605c1c12ce1ffc2"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">typedef <a class="el" href="shardcache_8h.html#structshardcache__storage__t">shardcache_storage_t</a>*(* shardcache_storage_constructor)(const char **options)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Callback used to create a new instance of a storage module. </p>
-<pre class="fragment">   All storage modules need to expose this callback which will be 
-   called by the shardcache instance at initialization time 
-   to let the storage initialize and create the shardcache_storage_t
-   structure and its internals
-</pre><dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">options</td><td>A null-termianted array of strings holding the options specific to the storage module</td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>A newly initialized <a class="el" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> structure usable by the shardcache instance </dd></dl>
-
-</div>
-</div>
-<a class="anchor" id="acde1d2b29dcdc76637b64d76fb22a9e3"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">typedef void(* shardcache_storage_destructor)(<a class="el" href="shardcache_8h.html#structshardcache__storage__t">shardcache_storage_t</a> *storage)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Callback used to dispose all resources associated to a previously initialized storage module. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">storage</td><td>A pointer to a valid (and previously initialized) <a class="el" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> structure </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a class="anchor" id="a32947f5c645e606fe2284a1c28f7fcf9"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">typedef struct __shardcache_s <a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Opaque structure representing the actual shardcache instance. </p>
-
-</div>
-</div>
 <a class="anchor" id="a3acf120b7116e8d820fc897eebc08db2"></a>
 <div class="memitem">
 <div class="memproto">
@@ -1153,26 +400,50 @@ The count might change between the time the count callback returns and the this 
   </table>
   </dd>
 </dl>
-<dl class="section return"><dt>Returns</dt><dd>0 if no errors occurred and more data can be provided safely -1 if an error occurs and we don't want the callback to be called again (which could eventually abort the fetch operation) </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>0 if no errors occurred and more data can be provided safely;<br/>
+ -1 if an error occurs and we don't want the callback to be called again (which could eventually abort the fetch operation) </dd></dl>
 
 </div>
 </div>
-<h2 class="groupheader">Function Documentation</h2>
-<a class="anchor" id="a075b1863d2be9c8ab1a863ea860112e2"></a>
+<a class="anchor" id="a6c1c0f4fc9fde145696010fefaaee4c1"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int shardcache_get_counters </td>
+          <td class="memname">typedef void(* shardcache_async_response_callback_t)(void *key, size_t klen, int res, void *priv)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Callback expected by all the _async() routines returning an integer result (basically all apart <a class="el" href="shardcache_8h.html#ae87bbf3da1b1a4b80f8c6213abc320ac" title="Get the value for a key asynchronously.">shardcache_get_async()</a> shardcache_offset_async()) </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">key</td><td>A valid pointer to the key of the command this response refers to </td></tr>
+    <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
+    <tr><td class="paramname">res</td><td>The integer response returned from the issued command </td></tr>
+    <tr><td class="paramname">priv</td><td>The 'priv' pointer previously passed to the _async() function </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<h2 class="groupheader">Function Documentation</h2>
+<a class="anchor" id="aff07062e3204d6cf55d96a68ceed3898"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="namespace_3global_scope_4.html#structshardcache__storage__t">shardcache_storage_t</a>* shardcache_storage_load </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
-          <td class="paramname"><em>cache</em>, </td>
+          <td class="paramtype">char *&#160;</td>
+          <td class="paramname"><em>filename</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#structshardcache__counter__t">shardcache_counter_t</a> **&#160;</td>
-          <td class="paramname"><em>counters</em>&#160;</td>
+          <td class="paramtype">char **&#160;</td>
+          <td class="paramname"><em>options</em>&#160;</td>
         </tr>
         <tr>
           <td></td>
@@ -1182,49 +453,46 @@ The count might change between the time the count callback returns and the this 
       </table>
 </div><div class="memdoc">
 
-<p>Returns the list of registered counters with their actual value. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">cache</td><td>A valid pointer to a shardcache_t structure </td></tr>
-    <tr><td class="paramname">counters</td><td>A reference to a pointer which will be set to the initialized memory holding the array of counters </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section note"><dt>Note</dt><dd>The counters array needs to be released using free() once not necessary anymore. </dd></dl>
-<dl class="section return"><dt>Returns</dt><dd>The number of counters contained in the counters array </dd></dl>
-
 </div>
 </div>
-<a class="anchor" id="aa56ead41f7f61d7b88417fc9dc6937f8"></a>
+<a class="anchor" id="a006cbd2785de669bc2182938932c42e2"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void shardcache_clear_counters </td>
+          <td class="memname">void shardcache_storage_dispose </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
-          <td class="paramname"><em>cache</em></td><td>)</td>
+          <td class="paramtype"><a class="el" href="namespace_3global_scope_4.html#structshardcache__storage__t">shardcache_storage_t</a> *&#160;</td>
+          <td class="paramname"><em>st</em></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
 
-<p>Resets all the counters to 0. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">cache</td><td>A valid pointer to a shardcache_t structure </td></tr>
-  </table>
-  </dd>
-</dl>
-
 </div>
 </div>
-<a class="anchor" id="ae394c69ff91f95bd15b93c01264125b0"></a>
+<a class="anchor" id="a6a094cb6df8cdae92d15b4ff3944fcc4"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a>* shardcache_create </td>
+          <td class="memname">int shardcache_storage_reset </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespace_3global_scope_4.html#structshardcache__storage__t">shardcache_storage_t</a> *&#160;</td>
+          <td class="paramname"><em>st</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a class="anchor" id="a74346747eb9ad9da22cd1c6b06849d3e"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">shardcache_t* shardcache_create </td>
           <td>(</td>
           <td class="paramtype">char *&#160;</td>
           <td class="paramname"><em>me</em>, </td>
@@ -1232,7 +500,7 @@ The count might change between the time the count callback returns and the this 
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a> *&#160;</td>
+          <td class="paramtype"><a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node_t</a> **&#160;</td>
           <td class="paramname"><em>nodes</em>, </td>
         </tr>
         <tr>
@@ -1244,7 +512,7 @@ The count might change between the time the count callback returns and the this 
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#structshardcache__storage__t">shardcache_storage_t</a> *&#160;</td>
+          <td class="paramtype"><a class="el" href="namespace_3global_scope_4.html#structshardcache__storage__t">shardcache_storage_t</a> *&#160;</td>
           <td class="paramname"><em>storage</em>, </td>
         </tr>
         <tr>
@@ -1258,6 +526,12 @@ The count might change between the time the count callback returns and the this 
           <td></td>
           <td class="paramtype">int&#160;</td>
           <td class="paramname"><em>num_workers</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>num_async</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1276,20 +550,25 @@ The count might change between the time the count callback returns and the this 
 <p>Create a new shardcache instance. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">me</td><td>a valid &lt;address:port&gt; null-terminated string representing the new node to be created </td></tr>
-    <tr><td class="paramname">nodes</td><td>a list of &lt;address:port&gt; strings representing the nodes taking part to the shardcache 'cloud' </td></tr>
-    <tr><td class="paramname">num_nodes</td><td>the number of nodes present in the nodes list </td></tr>
-    <tr><td class="paramname">storage</td><td>a <a class="el" href="shardcache_8h.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> structure holding pointers to the storage callbacks. </td></tr>
-    <tr><td class="paramname">secret</td><td>a null-terminated string containing the shared secret used to authenticate incoming messages </td></tr>
-    <tr><td class="paramname">num_workers</td><td>number of worker threads taking care of serving input connections </td></tr>
-    <tr><td class="paramname">cache_size</td><td>the maximum size of the ARC cache </td></tr>
+    <tr><td class="paramname">me</td><td>A valid &lt;address:port&gt; null-terminated string representing the new node to be created </td></tr>
+    <tr><td class="paramname">nodes</td><td>A list of &lt;address:port&gt; strings representing the nodes taking part to the shardcache 'cloud' </td></tr>
+    <tr><td class="paramname">num_nodes</td><td>The number of nodes present in the nodes list </td></tr>
+    <tr><td class="paramname">storage</td><td>A <a class="el" href="namespace_3global_scope_4.html#structshardcache__storage__t" title="Structure holding all the callback pointers required by shardcache to interact with underlying storag...">shardcache_storage_t</a> structure holding pointers to the storage callbacks.<br/>
+ If NULL the internal (memory-only) volatile storage will be used for all the keys (and not only the ones being set with an expiration time) </td></tr>
+    <tr><td class="paramname">secret</td><td>A null-terminated string containing the shared secret used to authenticate incoming messages </td></tr>
+    <tr><td class="paramname">num_workers</td><td>The number of worker threads taking care of serving input connections </td></tr>
+    <tr><td class="paramname">num_async</td><td>The number of async i/o threads handling the inter-node communication.<br/>
+ If greater than 0 it will indicate the actual number of async-i/o threads to use.<br/>
+ If smaller than 0 (negative) the number of async threads will be calculated in function of the number of num_workers (in the actual implemenation 1 extra async thread will be created every 20 workers.<br/>
+ If 0 the default value (SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT) will be used. </td></tr>
+    <tr><td class="paramname">cache_size</td><td>The maximum size of the ARC cache </td></tr>
   </table>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>a newly initialized shardcache descriptor</dd></dl>
 <dl class="section note"><dt>Note</dt><dd>The returned shardcache_t structure MUST be disposed using <a class="el" href="shardcache_8h.html#a25fc04bda4021be45e33cbcf4590e849" title="Release all the resources used by the shardcache instance.">shardcache_destroy()</a></dd>
 <dd>
-The newly created instance will copy all the pointers contained in the storage structure to its internal descriptor so the resources eventually allocated for the storage structure passed as argument can be safely released after calling <a class="el" href="shardcache_8h.html#ae394c69ff91f95bd15b93c01264125b0" title="Create a new shardcache instance.">shardcache_create()</a> </dd></dl>
+The newly created instance will copy all the pointers contained in the storage structure to its internal descriptor so the resources eventually allocated for the storage structure passed as argument can be safely released after calling <a class="el" href="shardcache_8h.html#a74346747eb9ad9da22cd1c6b06849d3e" title="Create a new shardcache instance.">shardcache_create()</a> </dd></dl>
 
 </div>
 </div>
@@ -1300,7 +579,7 @@ The newly created instance will copy all the pointers contained in the storage s
         <tr>
           <td class="memname">int shardcache_use_persistent_connections </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1326,7 +605,33 @@ The newly created instance will copy all the pointers contained in the storage s
         <tr>
           <td class="memname">int shardcache_evict_on_delete </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a class="anchor" id="a450f19437f06b05ff8db556017d38394"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_force_caching </td>
+          <td>(</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1352,7 +657,163 @@ The newly created instance will copy all the pointers contained in the storage s
         <tr>
           <td class="memname">int shardcache_tcp_timeout </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a class="anchor" id="ab37e1067d136856d61a75ba3b32d6516"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_conn_expire_time </td>
+          <td>(</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a class="anchor" id="ac73a0c6f12b5b5f0c035967cdcf82727"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_iomux_run_timeout_low </td>
+          <td>(</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a class="anchor" id="a32e1cc626c927a974cd574d98a3a9124"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_iomux_run_timeout_high </td>
+          <td>(</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a class="anchor" id="ad47c6ef316980ae82605b303c87e3c4d"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_expire_time </td>
+          <td>(</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a class="anchor" id="aad3a553d54123b731207f95791f0022e"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_serving_look_ahead </td>
+          <td>(</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>new_value</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a class="anchor" id="a58997a3ef53dd994a9c495ff70a4e270"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_lazy_expiration </td>
+          <td>(</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1378,7 +839,7 @@ The newly created instance will copy all the pointers contained in the storage s
         <tr>
           <td class="memname">void shardcache_destroy </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em></td><td>)</td>
           <td></td>
         </tr>
@@ -1402,7 +863,7 @@ The newly created instance will copy all the pointers contained in the storage s
         <tr>
           <td class="memname">void* shardcache_get </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1460,7 +921,7 @@ The newly created instance will copy all the pointers contained in the storage s
         <tr>
           <td class="memname">size_t shardcache_head </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1525,7 +986,7 @@ The newly created instance will copy all the pointers contained in the storage s
         <tr>
           <td class="memname">size_t shardcache_get_offset </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1597,7 +1058,7 @@ The newly created instance will copy all the pointers contained in the storage s
         <tr>
           <td class="memname">int shardcache_get_async </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1650,14 +1111,14 @@ If the data requested is partially downloaded, the available data will be immedi
 
 </div>
 </div>
-<a class="anchor" id="a9f4b6d4f7c21fe5e030fcc2cbf6c3bd4"></a>
+<a class="anchor" id="a41dee186c3b877f32386da245bcc6a7e"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">int shardcache_exists </td>
+          <td class="memname">int shardcache_get_offset_async </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1670,7 +1131,93 @@ If the data requested is partially downloaded, the available data will be immedi
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">size_t&#160;</td>
-          <td class="paramname"><em>klen</em>&#160;</td>
+          <td class="paramname"><em>klen</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>offset</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>length</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2">shardcache_get_async_callback_t</a>&#160;</td>
+          <td class="paramname"><em>cb</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>priv</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Get partial value data value for a key asynchronously. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cache</td><td>A valid pointer to a shardcache_t structure </td></tr>
+    <tr><td class="paramname">key</td><td>A valid pointer to the key </td></tr>
+    <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
+    <tr><td class="paramname">offset</td><td>The offset from where to start retrieving data </td></tr>
+    <tr><td class="paramname">length</td><td>The amount of data to fetch </td></tr>
+    <tr><td class="paramname">cb</td><td>The shardcache_get_async_callback_t which will be called for each received chunk </td></tr>
+    <tr><td class="paramname">priv</td><td>A pointer which will be passed to the shardcache_get_async_callback_t at each call</td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>0 on success, -1 otherwise</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>This function might return immediately if the value for the requested key is already being downloaded (but not complete yet) In such a case The callback function will be called by the thread which is actually downloading the data hence the callback needs to be thread-safe.</dd>
+<dd>
+If the data requested is partially downloaded, the available data will be immediately passed to the callback and the rest will be passed while it's being downloaded. </dd></dl>
+
+</div>
+</div>
+<a class="anchor" id="a9eb52ab9f65460bdc4958eaefb0b2954"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_exists_async </td>
+          <td>(</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>klen</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1">shardcache_async_response_callback_t</a>&#160;</td>
+          <td class="paramname"><em>cb</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>priv</em>&#160;</td>
         </tr>
         <tr>
           <td></td>
@@ -1686,6 +1233,8 @@ If the data requested is partially downloaded, the available data will be immedi
     <tr><td class="paramname">cache</td><td>A valid pointer to a shardcache_t structure </td></tr>
     <tr><td class="paramname">key</td><td>A valid pointer to the key </td></tr>
     <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
+    <tr><td class="paramname">cb</td><td>The shardcache_async_response_callback_t which will be called once the response is completely retrieved </td></tr>
+    <tr><td class="paramname">priv</td><td>A pointer which will be passed to the shardcache_async_response_callback_t when called </td></tr>
   </table>
   </dd>
 </dl>
@@ -1700,7 +1249,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">int shardcache_touch </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1743,7 +1292,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">int shardcache_set </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1794,6 +1343,92 @@ If the data requested is partially downloaded, the available data will be immedi
 
 </div>
 </div>
+<a class="anchor" id="a7b16b6d50d4e163e92c44025f38ce581"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_set_async </td>
+          <td>(</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>klen</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>value</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>vlen</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">time_t&#160;</td>
+          <td class="paramname"><em>expire</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>if_not_exists</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1">shardcache_async_response_callback_t</a>&#160;</td>
+          <td class="paramname"><em>cb</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>priv</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Set the value for a key fetching the response asyncrhonously. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cache</td><td>A valid pointer to a shardcache_t structure </td></tr>
+    <tr><td class="paramname">key</td><td>A valid pointer to the key </td></tr>
+    <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
+    <tr><td class="paramname">value</td><td>A valid pointer to the value </td></tr>
+    <tr><td class="paramname">vlen</td><td>The length of the value </td></tr>
+    <tr><td class="paramname">expire</td><td>The number of seconds after which the volatile value expires If 0 the value will not expire and it will be stored using the actual storage module (which might evntually be a presistent storage backend as the filesystem or database ones) </td></tr>
+    <tr><td class="paramname">if_not_exists</td><td>If this param is true, the value will be set only if there isn't one already stored </td></tr>
+    <tr><td class="paramname">cb</td><td>The shardcache_async_response_callback_t which will be called once the result has been retreived </td></tr>
+    <tr><td class="paramname">priv</td><td>A pointer which will be passed to the shardcache_async_response_callback_t when called </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>0 on success, -1 otherwise </dd></dl>
+<dl class="section see"><dt>See Also</dt><dd><a class="el" href="shardcache_8h.html#a2aa7a564fbe7884299d77eca29432319" title="Set a volatile value for a key.">shardcache_set_volatile()</a> </dd></dl>
+
+</div>
+</div>
 <a class="anchor" id="a95760527edef026e88565106effe88b0"></a>
 <div class="memitem">
 <div class="memproto">
@@ -1801,7 +1436,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">int shardcache_add </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1859,7 +1494,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">int shardcache_set_volatile </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1924,7 +1559,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">int shardcache_add_volatile </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -1989,7 +1624,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">int shardcache_del </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -2022,6 +1657,65 @@ If the data requested is partially downloaded, the available data will be immedi
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>0 on success, -1 otherwise </dd></dl>
+<dl class="section see"><dt>See Also</dt><dd><a class="el" href="shardcache_8h.html#a2aa7a564fbe7884299d77eca29432319" title="Set a volatile value for a key.">shardcache_set_volatile()</a> </dd></dl>
+
+</div>
+</div>
+<a class="anchor" id="a49754acc649df6ffb5a997ddb924968d"></a>
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int shardcache_del_async </td>
+          <td>(</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>klen</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1">shardcache_async_response_callback_t</a>&#160;</td>
+          <td class="paramname"><em>cb</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>priv</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Remove the value for a key asynchronously. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cache</td><td>A valid pointer to a shardcache_t structure </td></tr>
+    <tr><td class="paramname">key</td><td>A valid pointer to the key </td></tr>
+    <tr><td class="paramname">klen</td><td>The length of the key </td></tr>
+    <tr><td class="paramname">cb</td><td>The shardcache_async_response_callback_t which will be called once the result has been retreived </td></tr>
+    <tr><td class="paramname">priv</td><td>A pointer which will be passed to the shardcache_async_response_callback_t when called </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>0 on success, -1 otherwise </dd></dl>
+<dl class="section see"><dt>See Also</dt><dd><a class="el" href="shardcache_8h.html#a2aa7a564fbe7884299d77eca29432319" title="Set a volatile value for a key.">shardcache_set_volatile()</a> </dd></dl>
 
 </div>
 </div>
@@ -2032,7 +1726,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">int shardcache_evict </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -2069,43 +1763,6 @@ If the data requested is partially downloaded, the available data will be immedi
 
 </div>
 </div>
-<a class="anchor" id="ae01e634aa1b7d2b152505b82c7212fe0"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"><a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a>* shardcache_get_nodes </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
-          <td class="paramname"><em>cache</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">int *&#160;</td>
-          <td class="paramname"><em>num_nodes</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Get the list of all nodes (including this node itself) taking part to the shardcache 'cloud'. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramname">cache</td><td>A valid pointer to a shardcache_t structure </td></tr>
-    <tr><td class="paramname">num_nodes</td><td>If provided the number of nodes in the returned array will be will be stored at the location pointed by num_nodes </td></tr>
-  </table>
-  </dd>
-</dl>
-<dl class="section return"><dt>Returns</dt><dd>A list containing all the nodes &lt;address:port&gt; strings </dd></dl>
-<dl class="section note"><dt>Note</dt><dd>the caller MUST release the returned pointer once done with it </dd></dl>
-
-</div>
-</div>
 <a class="anchor" id="a7cac3c97e156092f9d560f54d37df98d"></a>
 <div class="memitem">
 <div class="memproto">
@@ -2113,7 +1770,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">int shardcache_test_ownership </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
@@ -2168,9 +1825,9 @@ If the data requested is partially downloaded, the available data will be immedi
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="shardcache_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a>* shardcache_get_index </td>
+          <td class="memname"><a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a>* shardcache_get_index </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em></td><td>)</td>
           <td></td>
         </tr>
@@ -2178,7 +1835,7 @@ If the data requested is partially downloaded, the available data will be immedi
 </div><div class="memdoc">
 
 <p>Get the index of keys managed by the specific shardcache instance by querying the storage module. </p>
-<dl class="section return"><dt>Returns</dt><dd>A pointer to a <a class="el" href="shardcache_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a> structure holding the index. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>A pointer to a <a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a> structure holding the index. </dd></dl>
 <dl class="section note"><dt>Note</dt><dd>The caller MUST release the returned pointer once done with it by using the <a class="el" href="shardcache_8h.html#a7f3e042fe58a3dd7537c81de115bba25" title="Release all resources used by the index provided as argument.">shardcache_free_index()</a> function </dd></dl>
 
 </div>
@@ -2190,7 +1847,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">void shardcache_free_index </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a> *&#160;</td>
+          <td class="paramtype"><a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__t">shardcache_storage_index_t</a> *&#160;</td>
           <td class="paramname"><em>index</em></td><td>)</td>
           <td></td>
         </tr>
@@ -2200,27 +1857,27 @@ If the data requested is partially downloaded, the available data will be immedi
 <p>Release all resources used by the index provided as argument. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramname">index</td><td>A pointer to a valid <a class="el" href="shardcache_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a> structure previously obtained via the <a class="el" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0" title="Get the index of keys managed by the specific shardcache instance by querying the storage module...">shardcache_get_index()</a> function </td></tr>
+    <tr><td class="paramname">index</td><td>A pointer to a valid <a class="el" href="shardcache__storage_8h.html#structshardcache__storage__index__t" title="structure representing the storage index, holding an array of shardcache_storage_index_item_t structu...">shardcache_storage_index_t</a> structure previously obtained via the <a class="el" href="shardcache_8h.html#a9d02396238920c93777e1eb2bc83dad0" title="Get the index of keys managed by the specific shardcache instance by querying the storage module...">shardcache_get_index()</a> function </td></tr>
   </table>
   </dd>
 </dl>
 
 </div>
 </div>
-<a class="anchor" id="a7da4e669a16da6d150d2f1d906960ab2"></a>
+<a class="anchor" id="ab9e3022be060e7b5e67af43c682632ac"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
           <td class="memname">int shardcache_migration_begin </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#structshardcache__node__t">shardcache_node_t</a> *&#160;</td>
+          <td class="paramtype"><a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node_t</a> **&#160;</td>
           <td class="paramname"><em>nodes</em>, </td>
         </tr>
         <tr>
@@ -2264,7 +1921,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">int shardcache_migration_abort </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em></td><td>)</td>
           <td></td>
         </tr>
@@ -2289,7 +1946,7 @@ If the data requested is partially downloaded, the available data will be immedi
         <tr>
           <td class="memname">int shardcache_migration_end </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache_t</a> *&#160;</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
           <td class="paramname"><em>cache</em></td><td>)</td>
           <td></td>
         </tr>
@@ -2307,161 +1964,51 @@ If the data requested is partially downloaded, the available data will be immedi
 
 </div>
 </div>
-<a class="anchor" id="a83daa5cadcd1c2217f3d65bc8fbb8e77"></a>
+<a class="anchor" id="a36c2f67d3e4dd28ba7d932b022e39985"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void shardcache_log_init </td>
+          <td class="memname">void shardcache_thread_init </td>
           <td>(</td>
-          <td class="paramtype">char *&#160;</td>
-          <td class="paramname"><em>ident</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">int&#160;</td>
-          <td class="paramname"><em>loglevel</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
-<a class="anchor" id="a578341075b54f9426cc8e8c595f58b03"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">unsigned int shardcache_log_level </td>
-          <td>(</td>
-          <td class="paramname"></td><td>)</td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Notify the internal shardcache core about a new woerker thread which might access the API. This function must be called early within each user-created thread (which is intended to access the shardcache API at some stage during its lifespan) to initialize thread-specific variables. </p>
+<dl class="section note"><dt>Note</dt><dd><a class="el" href="shardcache_8h.html#abf5bf17736aec39c86103020721c12cc" title="Release the resources allocated by shardcache_thread_init() This function needs to be called before c...">shardcache_thread_end()</a> MUST be esplicitly called before the background thread exits to avoid memory leakage. </dd></dl>
+
 </div>
 </div>
-<a class="anchor" id="a7a1581a607007a0b51d1d53e018d20a9"></a>
+<a class="anchor" id="abf5bf17736aec39c86103020721c12cc"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void shardcache_log_message </td>
+          <td class="memname">void shardcache_thread_end </td>
           <td>(</td>
-          <td class="paramtype">int&#160;</td>
-          <td class="paramname"><em>prio</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
+          <td class="paramtype">shardcache_t *&#160;</td>
+          <td class="paramname"><em>cache</em></td><td>)</td>
           <td></td>
-          <td class="paramtype">int&#160;</td>
-          <td class="paramname"><em>dbglevel</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const char *&#160;</td>
-          <td class="paramname"><em>fmt</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>...</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
         </tr>
       </table>
 </div><div class="memdoc">
 
-</div>
-</div>
-<a class="anchor" id="a122b97f97ff3d2aea13b1eefbabc6ac3"></a>
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">char* shardcache_hex_escape </td>
-          <td>(</td>
-          <td class="paramtype">const char *&#160;</td>
-          <td class="paramname"><em>buf</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">int&#160;</td>
-          <td class="paramname"><em>len</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">int&#160;</td>
-          <td class="paramname"><em>limit</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
+<p>Release the resources allocated by <a class="el" href="shardcache_8h.html#a36c2f67d3e4dd28ba7d932b022e39985" title="Notify the internal shardcache core about a new woerker thread which might access the API...">shardcache_thread_init()</a> This function needs to be called before calling pthread_exit() to free memory allocated by <a class="el" href="shardcache_8h.html#a36c2f67d3e4dd28ba7d932b022e39985" title="Notify the internal shardcache core about a new woerker thread which might access the API...">shardcache_thread_init()</a>. </p>
+<dl class="section note"><dt>Note</dt><dd><a class="el" href="shardcache_8h.html#abf5bf17736aec39c86103020721c12cc" title="Release the resources allocated by shardcache_thread_init() This function needs to be called before c...">shardcache_thread_end()</a> is not invoked automatically by the client library. It must be called explicitly to avoid a memory leak. </dd></dl>
 
 </div>
 </div>
-<a class="anchor" id="aea1443844e55163940ecc71e2138b25d"></a>
+<h2 class="groupheader">Variable Documentation</h2>
+<a class="anchor" id="a212ce745de022f9dab442d5232cc1809"></a>
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">unsigned long shardcache_byte_escape </td>
-          <td>(</td>
-          <td class="paramtype">char&#160;</td>
-          <td class="paramname"><em>ch</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">char&#160;</td>
-          <td class="paramname"><em>esc</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">char *&#160;</td>
-          <td class="paramname"><em>buffer</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">unsigned long&#160;</td>
-          <td class="paramname"><em>len</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">char **&#160;</td>
-          <td class="paramname"><em>dest</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">unsigned long *&#160;</td>
-          <td class="paramname"><em>newlen</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
+          <td class="memname">const char* LIBSHARDCACHE_VERSION</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -2474,7 +2021,7 @@ If the data requested is partially downloaded, the available data will be immedi
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
     <li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li><li class="navelem"><a class="el" href="shardcache_8h.html">shardcache.h</a></li>
-    <li class="footer">Generated on Thu Jan 16 2014 16:09:26 for libshardcache by
+    <li class="footer">Generated on Thu Sep 11 2014 16:37:01 for libshardcache by
     <a href="http://www.doxygen.org/index.html">
     <img class="footer" src="doxygen.png" alt="doxygen"/></a> 1.8.3.1 </li>
   </ul>

@@ -1,4 +1,10 @@
 var searchData=
 [
-  ['address',['address',['../shardcache_8h.html#adb1954a5c17289b748995ef0bc13ddef',1,'shardcache_node_t']]]
+  ['addr',['addr',['../shardcache__internal_8h.html#a6137e5fb6a50f81e2951ec0f149a6f8b',1,'__shardcache_s']]],
+  ['arc',['arc',['../shardcache__internal_8h.html#a28e647b7f9299af50ebf904972403ce9',1,'__shardcache_s']]],
+  ['arc_5fsize',['arc_size',['../shardcache__internal_8h.html#af21efb606d6545f5db74d00db51974f4',1,'__shardcache_s']]],
+  ['async_5fcontext',['async_context',['../shardcache__internal_8h.html#a5a09df1adc72e59db88d246307c6fe71',1,'__shardcache_s']]],
+  ['async_5findex',['async_index',['../shardcache__internal_8h.html#a5e5dd8dd504772cea5bca891d5b541cd',1,'__shardcache_s']]],
+  ['async_5fquit',['async_quit',['../shardcache__internal_8h.html#a60d75abaea5b53b4ece543de98f7caae',1,'__shardcache_s']]],
+  ['auth',['auth',['../shardcache__internal_8h.html#a5efbe789d0966def37f983b67cb33676',1,'__shardcache_s']]]
 ];

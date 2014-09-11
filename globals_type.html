@@ -44,6 +44,7 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
   <div id="navrow1" class="tabs">
     <ul class="tablist">
       <li><a href="index.html"><span>Main&#160;Page</span></a></li>
+      <li><a href="pages.html"><span>Related&#160;Pages</span></a></li>
       <li><a href="annotated.html"><span>Data&#160;Structures</span></a></li>
       <li class="current"><a href="files.html"><span>Files</span></a></li>
       <li>
@@ -74,7 +75,10 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
     <ul class="tablist">
       <li><a href="globals.html"><span>All</span></a></li>
       <li><a href="globals_func.html"><span>Functions</span></a></li>
+      <li><a href="globals_vars.html"><span>Variables</span></a></li>
       <li class="current"><a href="globals_type.html"><span>Typedefs</span></a></li>
+      <li><a href="globals_enum.html"><span>Enumerations</span></a></li>
+      <li><a href="globals_eval.html"><span>Enumerator</span></a></li>
       <li><a href="globals_defs.html"><span>Macros</span></a></li>
     </ul>
   </div>
@@ -98,7 +102,7 @@ $(document).ready(function(){initNavTree('globals_type.html','');});
      onmouseover="return searchBox.OnSearchSelectShow()"
      onmouseout="return searchBox.OnSearchSelectHide()"
      onkeydown="return searchBox.OnSearchSelectKey(event)">
-<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Macros</a></div>
+<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Data Structures</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Files</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(5)"><span class="SelectionMark">&#160;</span>Typedefs</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(6)"><span class="SelectionMark">&#160;</span>Enumerations</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(7)"><span class="SelectionMark">&#160;</span>Enumerator</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(8)"><span class="SelectionMark">&#160;</span>Macros</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(9)"><span class="SelectionMark">&#160;</span>Pages</a></div>
 
 <!-- iframe showing the search results (closed by default) -->
 <div id="MSearchResultsWindow">
@@ -109,41 +113,71 @@ $(document).ready(function(){initNavTree('globals_type.html','');});
 
 <div class="contents">
 &#160;<ul>
+<li>chash_t
+: <a class="el" href="shardcache__internal_8h.html#a1ce0d303d201c97f16732e53ea98877a">shardcache_internal.h</a>
+</li>
+<li>shardcache_async_response_callback_t
+: <a class="el" href="shardcache_8h.html#a6c1c0f4fc9fde145696010fefaaee4c1">shardcache.h</a>
+</li>
 <li>shardcache_client_get_aync_data_cb
-: <a class="el" href="shardcache__client_8h.html#a01dd180fd921bd30aa89313bfe4e9ae6">shardcache_client.h</a>
+: <a class="el" href="shardcache__client_8h.html#ad8da911ec4f76fe333c18f05d09ab921">shardcache_client.h</a>
 </li>
 <li>shardcache_client_t
 : <a class="el" href="shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc">shardcache_client.h</a>
 </li>
 <li>shardcache_count_items_callback_t
-: <a class="el" href="shardcache_8h.html#a217a191654966ca5097eac275cfac2bb">shardcache.h</a>
+: <a class="el" href="shardcache__storage_8h.html#a217a191654966ca5097eac275cfac2bb">shardcache_storage.h</a>
 </li>
 <li>shardcache_exist_item_callback_t
-: <a class="el" href="shardcache_8h.html#aa44062df197ddbe2edf1b7863262e9ac">shardcache.h</a>
+: <a class="el" href="shardcache__storage_8h.html#aa44062df197ddbe2edf1b7863262e9ac">shardcache_storage.h</a>
 </li>
 <li>shardcache_fetch_item_callback_t
-: <a class="el" href="shardcache_8h.html#a53d82222192794e3b6c0bf56cb873bd3">shardcache.h</a>
+: <a class="el" href="shardcache__storage_8h.html#a48b235496cb8b8cd4d057c9d09548372">shardcache_storage.h</a>
+</li>
+<li>shardcache_fetch_items_callback_t
+: <a class="el" href="shardcache__storage_8h.html#a148bc006e02d3baffd2e8e632b632634">shardcache_storage.h</a>
 </li>
 <li>shardcache_get_async_callback_t
 : <a class="el" href="shardcache_8h.html#a3acf120b7116e8d820fc897eebc08db2">shardcache.h</a>
 </li>
 <li>shardcache_get_index_callback_t
-: <a class="el" href="shardcache_8h.html#a4e19cc72e3ba05cce02b21d548127c1d">shardcache.h</a>
+: <a class="el" href="shardcache__storage_8h.html#a4e19cc72e3ba05cce02b21d548127c1d">shardcache_storage.h</a>
+</li>
+<li>shardcache_node_t
+: <a class="el" href="shardcache__node_8h.html#a860894af5414a0540d590e28afe950c7">shardcache_node.h</a>
 </li>
 <li>shardcache_remove_item_callback_t
-: <a class="el" href="shardcache_8h.html#affdba97437b5cee4324163c52f79fb69">shardcache.h</a>
+: <a class="el" href="shardcache__storage_8h.html#affdba97437b5cee4324163c52f79fb69">shardcache_storage.h</a>
+</li>
+<li>shardcache_replica_command_t
+: <a class="el" href="shardcache__replica_8h.html#a74252a46f0b2dfba0fc6c87a71983f0e">shardcache_replica.h</a>
+</li>
+<li>shardcache_replica_t
+: <a class="el" href="shardcache__replica_8h.html#a8fe55adf7727793fc0a9e8840d665747">shardcache_replica.h</a>
 </li>
 <li>shardcache_storage_constructor
-: <a class="el" href="shardcache_8h.html#a242de502e390a032a605c1c12ce1ffc2">shardcache.h</a>
+: <a class="el" href="shardcache__storage_8h.html#a242de502e390a032a605c1c12ce1ffc2">shardcache_storage.h</a>
+</li>
+<li>shardcache_storage_destroy_t
+: <a class="el" href="shardcache__storage_8h.html#a24e33f52eafb99933790b7f0496e8428">shardcache_storage.h</a>
 </li>
 <li>shardcache_storage_destructor
-: <a class="el" href="shardcache_8h.html#acde1d2b29dcdc76637b64d76fb22a9e3">shardcache.h</a>
+: <a class="el" href="shardcache__storage_8h.html#acde1d2b29dcdc76637b64d76fb22a9e3">shardcache_storage.h</a>
+</li>
+<li>shardcache_storage_init_t
+: <a class="el" href="shardcache__storage_8h.html#a8a0967a133e1420a4d295105cac0391d">shardcache_storage.h</a>
+</li>
+<li>shardcache_storage_reset_t
+: <a class="el" href="shardcache__storage_8h.html#a1c73e23ccc90b7b35ba1019e21c023c9">shardcache_storage.h</a>
 </li>
 <li>shardcache_store_item_callback_t
-: <a class="el" href="shardcache_8h.html#ae8af181c4715d81e26360ddf8ed54a8c">shardcache.h</a>
+: <a class="el" href="shardcache__storage_8h.html#ae8af181c4715d81e26360ddf8ed54a8c">shardcache_storage.h</a>
 </li>
-<li>shardcache_t
-: <a class="el" href="shardcache_8h.html#a32947f5c645e606fe2284a1c28f7fcf9">shardcache.h</a>
+<li>shardcache_thread_exit_callback_t
+: <a class="el" href="shardcache__storage_8h.html#a6046fe1c1c1eab5c53435b17b9dc0b77">shardcache_storage.h</a>
+</li>
+<li>shardcache_thread_start_callback_t
+: <a class="el" href="shardcache__storage_8h.html#a2e3be21b148c191b3676d57992576570">shardcache_storage.h</a>
 </li>
 </ul>
 </div><!-- contents -->
@@ -151,7 +185,7 @@ $(document).ready(function(){initNavTree('globals_type.html','');});
 <!-- start footer part -->
 <div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
   <ul>
-    <li class="footer">Generated on Thu Jan 16 2014 16:09:26 for libshardcache by
+    <li class="footer">Generated on Thu Sep 11 2014 16:37:01 for libshardcache by
     <a href="http://www.doxygen.org/index.html">
     <img class="footer" src="doxygen.png" alt="doxygen"/></a> 1.8.3.1 </li>
   </ul>
