@@ -47,7 +47,7 @@ our @EXPORT = qw(
     
 );
 
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -548,14 +548,13 @@ None by default.
 
 =head1 SEE ALSO
 
-Mention other useful documentation such as the documentation of
-related modules or operating system documentation (such as man pages
-in UNIX), or any relevant external documentation such as RFCs or
-standards.
+=over 4
 
-If you have a mailing list set up for your module, mention it here.
+=item * https://github.com/xant/libshardcache
 
-If you have a web site set up for your module, mention it here.
+=item * http://xant.github.io/libshardcache/
+
+=back
 
 =head1 AUTHOR
 

@@ -1,5 +1,8 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.17  Thu Sep 11 16:25:05 CEST 2014
+        - fixed the "SEE ALSO" section in the pod documentation
+
 0.16  Thu Sep 11 16:07:34 CEST 2014
         - safety belts to not crash if the underlying shardcache_client_get_multi() fails
 
