@@ -503,8 +503,7 @@ get_async_data(shardcache_t *cache,
     }
     if (rc != 0) {
         SHC_ERROR("shardcache_get_async returned error");
-        ATOMIC_INCREMENT(req->done);
-        write_status(req, rc, WRITE_STATUS_MODE_SIMPLE);
+        ATOMIC_INCREMENT(req->error);
     }
 
     return rc;
