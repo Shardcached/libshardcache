@@ -724,7 +724,7 @@ shc_multi_collect_data(void *data, size_t len, int idx, void *priv)
 {
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
     if (ctx->response_index >= ctx->num_requests) {
-        fprintf(stderr, "response_index overflow");
+        fprintf(stderr, "response_index overflow\n");
         return -1;
     }
 
