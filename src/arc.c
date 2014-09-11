@@ -592,7 +592,10 @@ int arc_lookup_multi(arc_t *cache,
         }
 
         if (missing_count) {
-            void **missing_objects = malloc(sizeof(void *) * missing_count);
+            void *mem = malloc((sizeof(void *) + sizeof(size_t) + sizeof(int)) * missing_count);
+            void **missing_objects = &mem;
+            size_t *sizes = (size_t *)(mem + missing_count);
+            int *statuses = (int *)(sizes + missing_count); 
             int to_fetch = 0;
             for (i = 0; i < missing_count; i++) {
                 void *key = keys[missing[i]];
@@ -600,6 +603,7 @@ int arc_lookup_multi(arc_t *cache,
                 arc_object_t *obj = arc_object_create(cache, key, klen);
                 if (UNLIKELY(!obj)) {
                     //TODO - handle error and release resources
+                    free(mem);
                     return -1;
                 }
 
@@ -633,7 +637,26 @@ int arc_lookup_multi(arc_t *cache,
                         break;
                 }
             }
-            cache->ops->fetch_multi(missing_objects, NULL, to_fetch, cache->ops->priv);
+            if (cache->ops->fetch_multi(missing_objects, sizes, statuses, to_fetch, cache->ops->priv) != 0) {
+                // TODO - Handle error
+                free(mem);
+                return -1;
+            }
+            
+            for (i = 0; i < to_fetch; i++) {
+                switch (statuses[i]) {
+                    case 0:
+                        break;
+                    case 1:
+                        break;
+                    case -1:
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            free(mem);
         }
     } else {
         for (i = 0; i < num_keys; i++) {

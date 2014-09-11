@@ -33,7 +33,7 @@ typedef struct _arc_ops {
      */
     int (*fetch) (void *obj, size_t *size, void *priv);
 
-    int (*fetch_multi) (void **objs, size_t **sizes, int num_objects, void *priv);
+    int (*fetch_multi) (void **objs, size_t *sizes, int *statuses, int num_objects, void *priv);
 
     void (*store) (void *obj, void *data, size_t size, void *priv);
     

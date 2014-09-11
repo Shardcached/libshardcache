@@ -446,6 +446,72 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     return evicted;
 }
 
+int
+arc_ops_fetch_multi(void **objs, size_t *sizes, int *statuses, int num_objects, void *priv)
+{
+    shardcache_t *cache = (shardcache_t *)priv;
+
+    hashtable_t *remote = ht_create(cache->num_shards, cache->num_shards,  (ht_free_item_callback_t)list_destroy);
+    linked_list_t *local = list_create();
+
+    // first determine for which objects we are responsible for
+    // and which need to be retrieved from a peer (and from which peer)
+    int i;
+    for (i = 0; i < num_objects; i++) {
+        cached_object_t *obj = (cached_object_t *)objs[i];
+        MUTEX_LOCK(&obj->lock);
+        COBJ_SET_FLAG(obj, COBJ_FLAG_FETCHING);
+        MUTEX_UNLOCK(&obj->lock);
+        char node_name[1024];
+        size_t node_len = sizeof(node_name);
+        memset(node_name, 0, node_len);
+        if (shardcache_test_ownership(cache, obj->key, obj->klen, node_name, &node_len) ||
+            shardcache_test_migration_ownership(cache, obj->key, obj->klen, node_name, &node_len))
+        {
+            tagged_value_t *tval = list_create_tagged_value_nocopy(node_name, obj);
+            linked_list_t *remote_list = ht_get(remote, node_name, node_len, NULL);
+            if (!remote_list)
+                remote_list = list_create();
+            list_push_value(remote_list, obj);
+        } else {
+            list_push_value(local, obj);
+        }
+    }
+
+    int n_local = list_count(local);
+    if (LIKELY(n_local)) {
+        if (cache->storage.fetch_multi) {
+            void *mem = malloc(((sizeof(void *) * 2) + (sizeof(size_t) * 2)) * n_local);
+            void **keys = mem;
+            void **values = keys + n_local;
+            size_t *klens = (size_t *)(values + n_local);
+            size_t *vlens = klens + n_local;
+            int i;
+            for (i = 0; i < n_local; i++) {
+                cached_object_t *obj = list_pick_value(local, i);
+                keys[i] = obj->key;
+                klens[i] = obj->klen;
+            }
+            cache->storage.fetch_multi(keys, klens, n_local, values, vlens, cache->storage.priv);
+            free(mem);
+        } else {
+            cached_object_t *obj = list_shift_value(local);
+            while(obj) {
+                MUTEX_LOCK(&obj->lock);
+                int rc = cache->storage.fetch(obj->key, obj->klen, &obj->data, &obj->dlen, cache->storage.priv);
+                COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
+                if (rc != 0) {
+                    COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
+                }
+                MUTEX_UNLOCK(&obj->lock);
+                obj = list_shift_value(local);
+            }
+        }
+    }
+    ht_destroy(remote);
+    list_destroy(local);
+    return 0;
+}
 
 void
 arc_ops_store(void *item, void *data, size_t size, void *priv)
