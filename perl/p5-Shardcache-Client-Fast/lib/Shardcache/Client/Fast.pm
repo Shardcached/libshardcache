@@ -47,7 +47,7 @@ our @EXPORT = qw(
     
 );
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -312,6 +312,7 @@ sub index {
 sub get_multi {
     my ($self, $keys, $results) = @_;
     my $res = shardcache_client_get_multi($self->{_client}, $keys, $results);
+    return undef unless $res;
     wantarray ? @$res : $res;
 }
 
