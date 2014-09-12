@@ -405,13 +405,9 @@ None by default.
 
 =over 4
 
-=item me
+=item @$hosts
 
-    A 'address:port' string describing the current node
-
-=item storage
-
-    A valid Shardcache::Storage subclass, implementing the underlying storage
+    An arrayref of 'name:address:port' strings describing the nodes serving the sharded cache
 
 =back
 
@@ -419,15 +415,18 @@ None by default.
 
 =over
 
-=item nodes
-
-    An arrayref containing the nodes in our shardcache 'cloud'
-
-=item secret
+=item $secret
 
     A secret used to compute the signature used for internal communication.
     If not specified the string 'default' will be used 
 
+=item $log_level
+
+    The loglevel used by libshardcache internal routines.
+    Note that libshardcache uses syslog levels and it initializes
+    itself by evaluating the expression : "LOG_INFO + $log_level".
+    So anything greater than 0 will enable debug messages (there are up to 5 debug levels);
+    negative numbers will progressively inhibit info, notice, warning and error messages.
 
 =back
 
@@ -442,7 +441,7 @@ None by default.
 
 =item * use_random_node ( $new_value )
 
-    Set the internal shardcache client flag which determines if using the consistent hashing to
+    Set/Get the internal shardcache client flag which determines if using the consistent hashing to
     always query the node responsible for a given key, or select any random node among the available
     ones when executing a get/set/del/evict command.
     If $new_value is true a random node will be used, if false the node responsible for the specific
@@ -451,7 +450,7 @@ None by default.
 
 =item * pipeline_max ( $new_value )
 
-    Set the maximum number of requests to pipeline on a single connection.
+    Set/Get the maximum number of requests to pipeline on a single connection.
     This setting affects how many parallel connections will be used to execute a multi command
 
 =item * get ( $key )
