@@ -257,56 +257,103 @@ write_status(shardcache_request_t *req, int rc, char mode)
     ATOMIC_INCREMENT(req->done);
 }
 
-static int get_async_data_handler(void *key,
-                                   size_t klen,
-                                   void *data,
-                                   size_t dlen,
-                                   size_t total_size,
-                                   struct timeval *timestamp,
-                                   void *priv)
+static inline int
+send_async_data_response_preamble(shardcache_request_t *req)
+{
+    shardcache_hdr_t hdr = SHC_HDR_RESPONSE;
+
+    uint32_t magic = htonl(SHC_MAGIC);
+
+    fbuf_t output = FBUF_STATIC_INITIALIZER;
+    fbuf_minlen(&output, 64);
+    fbuf_fastgrowsize(&output, 1024);
+    fbuf_slowgrowsize(&output, 512);
+    fbuf_add_binary(&output, (char *)&magic, sizeof(magic));
+
+    if (req->ctx->serv->cache->auth) {
+        if (req->fetch_shash) {
+            sip_hash_free(req->fetch_shash);
+            req->fetch_shash = NULL;
+        }
+        req->fetch_shash = sip_hash_new((uint8_t *)req->ctx->serv->cache->auth, 2, 4);
+        fbuf_add_binary(&output, (void *)&req->sig_hdr, 1);
+    }
+
+    fbuf_add_binary(&output, (void *)&hdr, 1);
+
+    if (req->ctx->serv->cache->auth && req->fetch_shash) {
+        sip_hash_update(req->fetch_shash, (uint8_t *)&hdr, 1);
+        if (req->sig_hdr&0x01) {
+            uint64_t digest;
+            if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
+                ATOMIC_INCREMENT(req->error);
+                SHC_ERROR("Can't compute the siphash digest!\n");
+                fbuf_destroy(&output);
+                return -1;
+            }
+            fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
+        }
+
+    }
+    send_data(req, &output);
+    fbuf_destroy(&output);
+
+    return 0;
+}
+
+static inline int
+send_async_data_response_epilogue(shardcache_request_t *req)
+{
+    uint16_t eor = 0;
+    char eom = 0;
+    fbuf_t output = FBUF_STATIC_INITIALIZER;
+    fbuf_minlen(&output, 64);
+    fbuf_fastgrowsize(&output, 1024);
+    fbuf_slowgrowsize(&output, 512);
+
+    fbuf_add_binary(&output, (void *)&eor, 2);
+    fbuf_add_binary(&output, &eom, 1);
+    if (req->fetch_shash) {
+        uint64_t digest;
+        sip_hash_update(req->fetch_shash, (void *)&eor, 2);
+        sip_hash_update(req->fetch_shash, (uint8_t *)&eom, 1);
+        if (sip_hash_final_integer(req->fetch_shash, &digest)) {
+            fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
+        } else {
+            SHC_ERROR("Can't compute the siphash digest!\n");
+            fbuf_destroy(&output);
+            ATOMIC_INCREMENT(req->error);
+            return -1;
+        }
+        sip_hash_free(req->fetch_shash);
+        req->fetch_shash = NULL;
+    }
+
+    send_data(req, &output);
+    fbuf_destroy(&output);
+
+    ATOMIC_INCREMENT(req->done);
+    return 0;
+}
+
+static int
+get_async_data_handler(void *key,
+                       size_t klen,
+                       void *data,
+                       size_t dlen,
+                       size_t total_size,
+                       struct timeval *timestamp,
+                       void *priv)
 {
 
     shardcache_request_t *req =
         (shardcache_request_t *)priv;
 
     if (req->skipped == 0 && req->copied == 0) {
-        shardcache_hdr_t hdr = SHC_HDR_RESPONSE;
-
-        uint32_t magic = htonl(SHC_MAGIC);
-
-        fbuf_t output = FBUF_STATIC_INITIALIZER;
-        fbuf_minlen(&output, 64);
-        fbuf_fastgrowsize(&output, 1024);
-        fbuf_slowgrowsize(&output, 512);
-        fbuf_add_binary(&output, (char *)&magic, sizeof(magic));
-
-        if (req->ctx->serv->cache->auth) {
-            if (req->fetch_shash) {
-                sip_hash_free(req->fetch_shash);
-                req->fetch_shash = NULL;
-            }
-            req->fetch_shash = sip_hash_new((uint8_t *)req->ctx->serv->cache->auth, 2, 4);
-            fbuf_add_binary(&output, (void *)&req->sig_hdr, 1);
+        if (send_async_data_response_preamble(req) != 0) {
+            ATOMIC_INCREMENT(req->error);
+            return -1;
         }
-
-        fbuf_add_binary(&output, (void *)&hdr, 1);
-
-        if (req->ctx->serv->cache->auth && req->fetch_shash) {
-            sip_hash_update(req->fetch_shash, (uint8_t *)&hdr, 1);
-            if (req->sig_hdr&0x01) {
-                uint64_t digest;
-                if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
-                    ATOMIC_INCREMENT(req->error);
-                    SHC_ERROR("Can't compute the siphash digest!\n");
-                    fbuf_destroy(&output);
-                    return -1;
-                }
-                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-            }
-
-        }
-        send_data(req, &output);
-        fbuf_destroy(&output);
     }
 
     if (dlen == 0 && total_size == 0) {
@@ -314,37 +361,17 @@ static int get_async_data_handler(void *key,
             // if there is no timestamp here it means there was an
             // error (and not just an empty item)
             SHC_ERROR("Error notified to the get_async_data callback");
+            // XXX - at the moment the protocol doesn't allow to distinguish
+            //       between an empty value and an error, so for now we choose
+            //       to return a valid response for an empty value instead of
+            //       silently shutdown the connection.
+            //ATOMIC_INCREMENT(req->error);
+            //return -1;
+        }
+        if (send_async_data_response_epilogue(req) != 0) {
             ATOMIC_INCREMENT(req->error);
             return -1;
-        }
-        uint16_t eor = 0;
-        char eom = 0;
-        fbuf_t output = FBUF_STATIC_INITIALIZER;
-        fbuf_minlen(&output, 64);
-        fbuf_fastgrowsize(&output, 1024);
-        fbuf_slowgrowsize(&output, 512);
-
-        fbuf_add_binary(&output, (void *)&eor, 2);
-        fbuf_add_binary(&output, &eom, 1);
-        if (req->fetch_shash) {
-            uint64_t digest;
-            sip_hash_update(req->fetch_shash, (void *)&eor, 2);
-            sip_hash_update(req->fetch_shash, (uint8_t *)&eom, 1);
-            if (sip_hash_final_integer(req->fetch_shash, &digest)) {
-                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-            } else {
-                SHC_ERROR("Can't compute the siphash digest!\n");
-                fbuf_destroy(&output);
-                ATOMIC_INCREMENT(req->error);
-                return -1;
-            }
-            sip_hash_free(req->fetch_shash);
-            req->fetch_shash = NULL;
-        }
-
-        send_data(req, &output);
-        fbuf_destroy(&output);
-        ATOMIC_INCREMENT(req->done);
+        } 
         return !timestamp ? -1 : 0;
     }
 
@@ -427,13 +454,11 @@ static int get_async_data_handler(void *key,
     }
 
     if (total_size > 0 && timestamp) {
-        fbuf_t output = FBUF_STATIC_INITIALIZER;
-        fbuf_minlen(&output, 64);
-        fbuf_fastgrowsize(&output, 1024);
-        fbuf_slowgrowsize(&output, 512);
-        uint16_t eor = 0;
-        char eom = 0;
         if (accumulated_size) {
+            fbuf_t output = FBUF_STATIC_INITIALIZER;
+            fbuf_minlen(&output, 64);
+            fbuf_fastgrowsize(&output, 1024);
+            fbuf_slowgrowsize(&output, 512);
             // flush what we have left in the accumulator
             uint16_t clen = htons(accumulated_size);
             fbuf_add_binary(&output, (void *)&clen, sizeof(clen));
@@ -457,27 +482,14 @@ static int get_async_data_handler(void *key,
             }
             if (copied)
                 fbuf_remove(&req->fetch_accumulator, copied);
-        }
-        fbuf_add_binary(&output, (void *)&eor, 2);
-        fbuf_add_binary(&output, &eom, 1);
-        if (req->fetch_shash) {
-            uint64_t digest;
-            sip_hash_update(req->fetch_shash, (void *)&eor, 2);
-            sip_hash_update(req->fetch_shash, (uint8_t *)&eom, 1);
-            if (sip_hash_final_integer(req->fetch_shash, &digest)) {
-                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-            } else {
-                fbuf_destroy(&output);
-                ATOMIC_INCREMENT(req->error);
-                SHC_ERROR("Can't compute the siphash digest!\n");
-                return -1;
-            }
-            sip_hash_free(req->fetch_shash);
-            req->fetch_shash = NULL;
-        }
 
-        send_data(req, &output);
-        fbuf_destroy(&output);
+            send_data(req, &output);
+            fbuf_destroy(&output);
+        }
+        if (send_async_data_response_epilogue(req) != 0) {
+            ATOMIC_INCREMENT(req->error);
+            return -1;
+        }
         ATOMIC_INCREMENT(req->done);
     }
 
@@ -503,7 +515,13 @@ get_async_data(shardcache_t *cache,
     }
     if (rc != 0) {
         SHC_ERROR("shardcache_get_async returned error");
-        ATOMIC_INCREMENT(req->error);
+        // XXX - at the moment the protocol doesn't allow to distinguish
+        //       between an empty value and an error, so for now we choose
+        //       to return a valid response for an empty value instead of
+        //       silently shutdown the connection.
+        //ATOMIC_INCREMENT(req->error);
+        send_async_data_response_preamble(req);
+        send_async_data_response_epilogue(req);
     }
 
     return rc;
