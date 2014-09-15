@@ -534,7 +534,7 @@ shardcache_create(char *me,
 
     // we need to tell the arc subsystem how big are the cached objects (well ... at least the container struct
     // which is attached to each cached object to encapsulate its actual data and extra flags/members
-    cache->arc = arc_create(&cache->ops, cache_size, sizeof(cached_object_t));
+    cache->arc = arc_create(&cache->ops, cache_size, sizeof(cached_object_t), cache->arc_lists_size);
     cache->arc_size = cache_size;
 
     // check if there is already signal handler registered on SIGPIPE
@@ -567,6 +567,11 @@ shardcache_create(char *me,
         cache->cnt[i].name = counters_names[i];
         shardcache_counter_add(cache->counters, cache->cnt[i].name, &cache->cnt[i].value); 
     }
+
+    shardcache_counter_add(cache->counters, "mru_size", cache->arc_lists_size[0]);
+    shardcache_counter_add(cache->counters, "mfu_size", cache->arc_lists_size[1]);
+    shardcache_counter_add(cache->counters, "mrug_size", cache->arc_lists_size[2]);
+    shardcache_counter_add(cache->counters, "mfug_size", cache->arc_lists_size[3]);
 
     if (ATOMIC_READ(cache->evict_on_delete)) {
         MUTEX_INIT(&cache->evictor_lock);
@@ -706,6 +711,10 @@ shardcache_destroy(shardcache_t *cache)
         for (i = 0; i < SHARDCACHE_NUM_COUNTERS; i ++) {
             shardcache_counter_remove(cache->counters, cache->cnt[i].name);
         }
+        shardcache_counter_remove(cache->counters, "mru_size");
+        shardcache_counter_remove(cache->counters, "mfu_size");
+        shardcache_counter_remove(cache->counters, "mrug_size");
+        shardcache_counter_remove(cache->counters, "mfug_size");
         shardcache_release_counters(cache->counters);
     }
 
@@ -831,23 +840,12 @@ shardcache_get_async_helper(void *key,
 static inline void
 shardcache_update_size_counters(shardcache_t *cache)
 {
-    size_t mru_size, mfu_size, mrug_size, mfug_size;
-    arc_get_size(cache->arc, &mru_size, &mfu_size, &mrug_size, &mfug_size);
     ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
                ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value),
-               mru_size + mfu_size + mrug_size + mfug_size);
-    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRU_SIZE].value,
-               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRU_SIZE].value),
-               mru_size);
-    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFU_SIZE].value,
-               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFU_SIZE].value),
-               mfu_size);
-    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRUG_SIZE].value,
-               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_MRUG_SIZE].value),
-               mrug_size);
-    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFUG_SIZE].value,
-               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_MFUG_SIZE].value),
-               mfug_size);
+               ATOMIC_READ(*cache->arc_lists_size[0]) +
+               ATOMIC_READ(*cache->arc_lists_size[1]) +
+               ATOMIC_READ(*cache->arc_lists_size[2]) +
+               ATOMIC_READ(*cache->arc_lists_size[3]));
 }
 
 int

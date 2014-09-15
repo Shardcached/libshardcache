@@ -139,6 +139,7 @@ struct __shardcache_s {
                       // NOTE: arc_size is updated using the atomic builtins,
                       // don't access it directly but use ATOMIC_READ() instead
                       // (see deps/libhl/src/atomic_defs.h)
+    size_t *arc_lists_size[4];
 
     // lock used internally during the migration procedures
     // and when selecting the node owner for a key
@@ -219,8 +220,7 @@ struct __shardcache_s {
 #define SHARDCACHE_COUNTER_LABELS_ARRAY  \
         { "gets", "sets", "dels", "heads", "evicts", "expires", \
           "cache_misses", "fetch_remote", "fetch_local", "not_found", \
-          "volatile_table_size", "cache_size", "mru_size", "mfu_size", \
-          "mrug_size", "mfug_size", "cached_items", "errors" }
+          "volatile_table_size", "cache_size", "cached_items", "errors" }
 
 #define SHARDCACHE_COUNTER_GETS             0
 #define SHARDCACHE_COUNTER_SETS             1
@@ -234,13 +234,9 @@ struct __shardcache_s {
 #define SHARDCACHE_COUNTER_NOT_FOUND        9
 #define SHARDCACHE_COUNTER_TABLE_SIZE       10
 #define SHARDCACHE_COUNTER_CACHE_SIZE       11
-#define SHARDCACHE_COUNTER_CACHE_MRU_SIZE   12
-#define SHARDCACHE_COUNTER_CACHE_MFU_SIZE   13
-#define SHARDCACHE_COUNTER_CACHE_MRUG_SIZE  14
-#define SHARDCACHE_COUNTER_CACHE_MFUG_SIZE  15
-#define SHARDCACHE_COUNTER_CACHED_ITEMS     16
-#define SHARDCACHE_COUNTER_ERRORS           17
-#define SHARDCACHE_NUM_COUNTERS             18
+#define SHARDCACHE_COUNTER_CACHED_ITEMS     12
+#define SHARDCACHE_COUNTER_ERRORS           13
+#define SHARDCACHE_NUM_COUNTERS             14
     struct {
         const char *name; // the exported label of the counter
         uint64_t value;   // the actual value (accessed using the atomic builtins)

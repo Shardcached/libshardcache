@@ -379,7 +379,7 @@ terminate_node_callback(refcnt_node_t *node, void *priv)
 
 /* Create a new cache. */
 arc_t *
-arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size)
+arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, size_t *lists_size[4])
 {
     arc_t *cache = calloc(1, sizeof(arc_t));
 
@@ -395,6 +395,11 @@ arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size)
     arc_list_init(&cache->mru.head);
     arc_list_init(&cache->mfu.head);
     arc_list_init(&cache->mfug.head);
+
+    lists_size[0] = &cache->mru.size;
+    lists_size[1] = &cache->mfu.size;
+    lists_size[2] = &cache->mrug.size;
+    lists_size[3] = &cache->mfug.size;
 
     MUTEX_INIT_RECURSIVE(&cache->lock);
 

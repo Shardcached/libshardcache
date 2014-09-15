@@ -51,7 +51,7 @@ typedef struct __arc_ops {
  * @param c   : The size of the cache
  * @return    : A valid pointer to an initialized arc_t structure
  */
-arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size);
+arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, size_t *lists_size[4]);
 
 /**
  * @brief Release an existing ARC cache instance
