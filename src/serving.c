@@ -396,10 +396,7 @@ get_async_data_handler(void *key,
     size_t to_process = accumulated_size + dlen;
     size_t data_offset = 0;
     while(to_process >= max_chunk_size) {
-        fbuf_t output = FBUF_STATIC_INITIALIZER;
-        fbuf_minlen(&output, 64);
-        fbuf_fastgrowsize(&output, 1024);
-        fbuf_slowgrowsize(&output, 512);
+        fbuf_t output = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
         size_t copy_size = max_chunk_size;
 
         uint16_t clen = htons((uint16_t)copy_size);
@@ -455,10 +452,7 @@ get_async_data_handler(void *key,
 
     if (total_size > 0 && timestamp) {
         if (accumulated_size) {
-            fbuf_t output = FBUF_STATIC_INITIALIZER;
-            fbuf_minlen(&output, 64);
-            fbuf_fastgrowsize(&output, 1024);
-            fbuf_slowgrowsize(&output, 512);
+            fbuf_t output = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
             // flush what we have left in the accumulator
             uint16_t clen = htons(accumulated_size);
             fbuf_add_binary(&output, (void *)&clen, sizeof(clen));
@@ -660,10 +654,7 @@ process_request(shardcache_request_t *req)
         }
         case SHC_HDR_STATS:
         {
-            fbuf_t buf = FBUF_STATIC_INITIALIZER;
-            fbuf_minlen(&buf, 64);
-            fbuf_fastgrowsize(&buf, 1024);
-            fbuf_slowgrowsize(&buf, 512);
+            fbuf_t buf = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
 
             shardcache_counter_t *counters = NULL;
             int i, num_nodes;
@@ -687,10 +678,7 @@ process_request(shardcache_request_t *req)
                                 counters[i].name, counters[i].value);
                 }
 
-                fbuf_t out = FBUF_STATIC_INITIALIZER;
-                fbuf_minlen(&out, 64);
-                fbuf_fastgrowsize(&out, 1024);
-                fbuf_slowgrowsize(&out, 512);
+                fbuf_t out = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
                 shardcache_record_t record = {
                     .v = fbuf_data(&buf),
                     .l = fbuf_used(&buf)
@@ -778,10 +766,7 @@ process_request(shardcache_request_t *req)
                                                     &response,
                                                     &response_len);
             if (response_len) {
-                fbuf_t out = FBUF_STATIC_INITIALIZER;
-                fbuf_minlen(&out, 64);
-                fbuf_fastgrowsize(&out, 1024);
-                fbuf_slowgrowsize(&out, 512);
+                fbuf_t out = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
 
                 shardcache_record_t record = {
                     .v = response,
@@ -839,9 +824,7 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
 
     int i;
     for (i = 0; i < SHARDCACHE_REQUEST_RECORDS_MAX; i++) {
-        fbuf_minlen(&req->records[i], 64);
-        fbuf_fastgrowsize(&req->records[i], 1024);
-        fbuf_slowgrowsize(&req->records[i], 512);
+        FBUF_STATIC_INITIALIZER_POINTER(&req->records[i], FBUF_MAXLEN_NONE, 64, 1024, 512);
         char *buf = NULL;
         int len = 0;
         int used = fbuf_detach(&ctx->records[i], &buf, &len);
@@ -849,13 +832,9 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
             fbuf_attach(&req->records[i], buf, len, used);
     }
 
-    fbuf_minlen(&req->fetch_accumulator, 64);
-    fbuf_fastgrowsize(&req->fetch_accumulator, 1024);
-    fbuf_slowgrowsize(&req->fetch_accumulator, 512);
+    FBUF_STATIC_INITIALIZER_POINTER(&req->fetch_accumulator, FBUF_MAXLEN_NONE, 64, 1024, 512);
+    FBUF_STATIC_INITIALIZER_POINTER(&req->output, FBUF_MAXLEN_NONE, 64, 1024, 512);
 
-    fbuf_minlen(&req->output, 64);
-    fbuf_fastgrowsize(&req->output, 1024);
-    fbuf_slowgrowsize(&req->output, 512);
     return req;
 }
 
