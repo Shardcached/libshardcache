@@ -25,14 +25,14 @@ is intended as a replacement for memcached with some additions:
  * It ensures fetching the items from the peers or from the storage only once
    even when multiple concurrent requests are looking for the same uncached item.
 
-Unlike [groupcache](http://github.com/golang/groupcache "groupcache") :
+Unlike [groupcache](http://github.com/golang/groupcache "groupcache"):
 
  * Supports SET operations. If the node which receives the SET operation
    is responsible for the specified KEY, the new value will be provided to
    the underlying storage (and to next GET requests).
    If the receiving node is not the responsible for the key, the request
    will be forwarded (through the internal communication channel)
-   to the responsible peer which will eventualy store the new value and make it
+   to the responsible peer which will eventually store the new value and make it
    available to all the [shardcache](http://github.com/xant/libshardcache "shardcache") nodes.
  
  * Supports DEL operations. If the node which receives the DEL operation
@@ -56,7 +56,7 @@ Unlike [groupcache](http://github.com/golang/groupcache "groupcache") :
    the keys taking the newly added ones into account.
    
    While the migration is in progress (and keys are being redistributed) 
-   the behaviour is the following :
+   the behaviour is the following:
 
    - If a get operation arrives, first the old continuum is checked,
      if not found the new continuum is checked.
