@@ -166,11 +166,10 @@ arc_state_lru(arc_state_t *state)
 static inline void
 arc_balance(arc_t *cache)
 {
-    MUTEX_LOCK(&cache->lock);
-    if (!cache->needs_balance) {
-        MUTEX_UNLOCK(&cache->lock);
+    if (!ATOMIC_READ(cache->needs_balance))
         return;
-    }
+
+    MUTEX_LOCK(&cache->lock);
     /* First move objects from MRU/MFU to their respective ghost lists. */
     while (cache->mru.size + cache->mfu.size > cache->c) {
         if (cache->mru.size > cache->p) {
@@ -197,7 +196,7 @@ arc_balance(arc_t *cache)
         }
     }
 
-    cache->needs_balance = 0;
+    ATOMIC_SET(cache->needs_balance, 0);
     MUTEX_UNLOCK(&cache->lock);
 }
 
@@ -207,12 +206,13 @@ arc_update_resource_size(arc_t *cache, arc_resource_t res, size_t size)
     arc_object_t *obj = (arc_object_t *)res;
     if (obj) {
         MUTEX_LOCK(&cache->lock);
-        if (LIKELY(obj->state == &cache->mru || obj->state == &cache->mfu)) {
-            ATOMIC_DECREASE(obj->state->size, obj->size);
+        arc_state_t *state = ATOMIC_READ(obj->state);
+        if (LIKELY(state == &cache->mru || state == &cache->mfu)) {
+            ATOMIC_DECREASE(state->size, obj->size);
             obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
-            ATOMIC_INCREASE(obj->state->size, obj->size);
+            ATOMIC_INCREASE(state->size, obj->size);
         }
-        cache->needs_balance = 1;
+        ATOMIC_INCREMENT(cache->needs_balance);
         MUTEX_UNLOCK(&cache->lock);
     }
 }
@@ -222,9 +222,9 @@ arc_update_resource_size(arc_t *cache, arc_resource_t res, size_t size)
 static inline int
 arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 {
-    arc_state_t *obj_state = NULL;
-
     MUTEX_LOCK(&cache->lock);
+
+    arc_state_t *obj_state = ATOMIC_READ(obj->state);
 
     // In the first conditional we check If the object is being locked,
     // which means someone is fetching its value and we don't what
@@ -247,14 +247,14 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     // before it's being deleted it will try putting the object to the mfu list without checking first
     // if it was already in a list or not (new objects should be first moved to the 
     // mru list and not the mfu one)
-    if (UNLIKELY(obj->locked || (state == &cache->mfu && obj->state == NULL))) {
+    if (UNLIKELY(obj->locked || (state == &cache->mfu && obj_state == NULL))) {
         MUTEX_UNLOCK(&cache->lock);
         return 0;
     }
 
-    if (LIKELY(obj->state != NULL)) {
+    if (LIKELY(obj_state != NULL)) {
 
-        if (LIKELY(obj->state == state)) {
+        if (LIKELY(obj_state == state)) {
             // short path for recurring keys
             // (those in the mfu list being hit again)
             if (LIKELY(state->head.next != &obj->head))
@@ -262,7 +262,6 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             MUTEX_UNLOCK(&cache->lock);
             return 0;
         }
-        obj_state = obj->state;
 
         // if the state is not NULL
         // (and the object is not going to be being removed)
@@ -281,10 +280,10 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             }
         }
 
-        ATOMIC_DECREASE(obj->state->size, obj->size);
+        ATOMIC_DECREASE(obj_state->size, obj->size);
         arc_list_remove(&obj->head);
-        ATOMIC_DECREMENT(obj->state->count);
-        obj->state = NULL;
+        ATOMIC_DECREMENT(obj_state->count);
+        ATOMIC_SET(obj->state, NULL);
     }
 
     if (state == NULL) {
@@ -294,8 +293,8 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         obj->async = 0;
         arc_list_prepend(&obj->head, &state->head);
         ATOMIC_INCREMENT(state->count);
-        obj->state = state;
-        ATOMIC_INCREASE(obj->state->size, obj->size);
+        ATOMIC_SET(obj->state, state);
+        ATOMIC_INCREASE(state->size, obj->size);
     } else if (obj_state == NULL) {
 
         obj->locked = 1;
@@ -327,9 +326,9 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
                 arc_list_prepend(&obj->head, &state->head);
                 ATOMIC_INCREMENT(state->count);
-                obj->state = state;
-                ATOMIC_INCREASE(obj->state->size, obj->size);
-                cache->needs_balance = 1;
+                ATOMIC_SET(obj->state, state);
+                ATOMIC_INCREASE(state->size, obj->size);
+                ATOMIC_INCREMENT(cache->needs_balance);
                 break;
             }
         }
@@ -340,8 +339,8 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     } else {
         arc_list_prepend(&obj->head, &state->head);
         ATOMIC_INCREMENT(state->count);
-        obj->state = state;
-        ATOMIC_INCREASE(obj->state->size, obj->size);
+        ATOMIC_SET(obj->state, state);
+        ATOMIC_INCREASE(state->size, obj->size);
     }
     MUTEX_UNLOCK(&cache->lock);
     return 0;
@@ -497,9 +496,11 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
     //       of the object (if found)
     arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
     if (obj) {
-        if (UNLIKELY(arc_move(cache, obj, &cache->mfu) == -1)) {
-            fprintf(stderr, "Can't move the object into the cache\n");
-            return NULL;
+        if (UNLIKELY(ATOMIC_READ(obj->state) != &cache->mfu)) {
+            if (UNLIKELY(arc_move(cache, obj, &cache->mfu) == -1)) {
+                fprintf(stderr, "Can't move the object into the cache\n");
+                return NULL;
+            }
         }
 
         if (valuep)
