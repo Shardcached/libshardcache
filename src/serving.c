@@ -970,6 +970,7 @@ shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
             ctx->closed = 1;
             gettimeofday(&ctx->in_prune_since, NULL);
             list_push_value(ctx->worker->prune, ctx);
+            ATOMIC_INCREMENT(ctx->worker->pruning);
             return;
         }
         shardcache_connection_context_destroy(ctx);
@@ -1034,6 +1035,7 @@ worker(void *priv)
         int to_check = list_count(wrkctx->prune);
         while (to_check--) {
             shardcache_connection_context_t *to_prune = list_shift_value(wrkctx->prune);
+            ATOMIC_DECREMENT(wrkctx->pruning);
             shardcache_request_t *req = TAILQ_FIRST(&to_prune->requests);
             int done = 0;
             if (req) {
@@ -1052,11 +1054,11 @@ worker(void *priv)
                 shardcache_connection_context_destroy(to_prune);
             } else {
                 list_push_value(wrkctx->prune, to_prune);
+                ATOMIC_INCREMENT(wrkctx->pruning);
             }
         }
 
         ATOMIC_SET(wrkctx->numfds, iomux_num_fds(wrkctx->iomux));
-        ATOMIC_SET(wrkctx->pruning, list_count(wrkctx->prune));
 
         if (iomux_isempty(wrkctx->iomux)) {
             // we don't have any filedescriptor to handle in the mux,
@@ -1212,6 +1214,7 @@ clear_workers_list(linked_list_t *list)
 
         shardcache_connection_context_t *ctx = list_shift_value(wrk->prune);
         while (ctx) {
+            ATOMIC_DECREMENT(wrk->pruning);
             shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
             while (req) {
                 TAILQ_REMOVE(&ctx->requests, req, next);

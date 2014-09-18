@@ -2,7 +2,7 @@
 
 #define SHC_ESCAPE_BUFFER_SIZE_MAX (1<<16)
 
-static unsigned int __loglevel = 0;
+unsigned int shardcache_loglevel = 0;
 
 int shardcache_log_initialized = 0;
 
@@ -82,7 +82,7 @@ char *shardcache_hex_escape(char *buf, int len, int limit, int include_prefix)
 
 void shardcache_log_init(char *ident, int loglevel)
 {
-    __loglevel = loglevel;
+    shardcache_loglevel = loglevel;
     openlog(ident, LOG_CONS|LOG_PERROR, LOG_LOCAL0);
     setlogmask(LOG_UPTO(loglevel));
     shardcache_log_initialized = 1;
@@ -90,7 +90,7 @@ void shardcache_log_init(char *ident, int loglevel)
 
 unsigned int shardcache_log_level()
 {
-    return __loglevel;
+    return shardcache_loglevel;
 }
 
 void shardcache_log_message(int prio, int dbglevel, const char *fmt, ...)

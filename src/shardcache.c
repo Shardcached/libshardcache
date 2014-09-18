@@ -24,6 +24,8 @@
 const char *LIBSHARDCACHE_VERSION = "0.31";
 
 extern int shardcache_log_initialized;
+extern unsigned int shardcache_loglevel;
+
 
 static int
 shardcache_test_ownership_internal(shardcache_t *cache,
@@ -167,6 +169,18 @@ evict_key(hashtable_t *table, void *value, size_t vlen, void *user)
     return -2;
 }
 
+static inline void
+shardcache_update_size_counters(shardcache_t *cache)
+{
+    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
+               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value),
+               ATOMIC_READ(*cache->arc_lists_size[0]) +
+               ATOMIC_READ(*cache->arc_lists_size[1]) +
+               ATOMIC_READ(*cache->arc_lists_size[2]) +
+               ATOMIC_READ(*cache->arc_lists_size[3]));
+}
+
+
 static void *
 evictor(void *priv)
 {
@@ -186,7 +200,7 @@ evictor(void *priv)
         if (job) {
             char keystr[1024] = { 0 };
 
-            if (shardcache_log_level() >= LOG_DEBUG)
+            if (shardcache_loglevel >= LOG_DEBUG)
                 KEY2STR(job->key, job->klen, keystr, sizeof(keystr));
 
             SHC_DEBUG2("Eviction job for key '%s' started", keystr);
@@ -263,6 +277,7 @@ evictor(void *priv)
                 // TODO - Error messsages
             }
         }
+        shardcache_update_size_counters(cache);
     }
     connections_pool_destroy(connections);
     return NULL;
@@ -391,6 +406,7 @@ shardcache_expire_keys(void *priv)
 
         struct timeval tv = { 1, 0 };
         iomux_run(cache->expirer_mux, &tv);
+        shardcache_update_size_counters(cache);
     }
     return NULL;
 }
@@ -837,17 +853,6 @@ shardcache_get_async_helper(void *key,
     return 0;
 }
 
-static inline void
-shardcache_update_size_counters(shardcache_t *cache)
-{
-    ATOMIC_CAS(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value,
-               ATOMIC_READ(cache->cnt[SHARDCACHE_COUNTER_CACHE_SIZE].value),
-               ATOMIC_READ(*cache->arc_lists_size[0]) +
-               ATOMIC_READ(*cache->arc_lists_size[1]) +
-               ATOMIC_READ(*cache->arc_lists_size[2]) +
-               ATOMIC_READ(*cache->arc_lists_size[3]));
-}
-
 int
 shardcache_get_offset_async(shardcache_t *cache,
                             void *key,
@@ -959,7 +964,6 @@ shardcache_get_offset_async(shardcache_t *cache,
     }
 
     arc_release_resource(cache->arc, res);
-    shardcache_update_size_counters(cache);
     return 0;
 }
 
@@ -1003,7 +1007,6 @@ size_t shardcache_get_offset(shardcache_t *cache,
         MUTEX_UNLOCK(&obj->lock);
     }
     arc_release_resource(cache->arc, res);
-    shardcache_update_size_counters(cache);
     return (offset < vlen + copied) ? (vlen - offset - copied) : 0;
 }
 
@@ -1019,10 +1022,10 @@ shardcache_get_async(shardcache_t *cache,
 
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_GETS].value);
 
-    if (shardcache_log_level() > LOG_DEBUG+1) {
+    if (UNLIKELY(shardcache_loglevel > LOG_DEBUG+3)) {
         char keystr[1024];
         KEY2STR(key, klen, keystr, sizeof(keystr));
-        SHC_DEBUG3("Getting value for key: %s", keystr);
+        SHC_DEBUG4("Getting value for key: %s", keystr);
     }
 
     void *obj_ptr = NULL;
@@ -1101,8 +1104,6 @@ shardcache_get_async(shardcache_t *cache,
         list_push_value(obj->listeners, listener);
         MUTEX_UNLOCK(&obj->lock);
     }
-
-    shardcache_update_size_counters(cache);
 
     return 0;
 }
@@ -1895,8 +1896,6 @@ shardcache_del_internal(shardcache_t *cache,
                 shardcache_commence_eviction(cache, key, klen);
         }
 
-        shardcache_update_size_counters(cache);
-
         if (cb)
             cb(key, klen, rc, priv);
 
@@ -1990,8 +1989,6 @@ shardcache_evict(shardcache_t *cache, void *key, size_t klen)
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_EVICT, key, klen, NULL, 0, 0);
 
     arc_remove(cache->arc, (const void *)key, klen);
-
-    shardcache_update_size_counters(cache);
 
     return 0;
 }
