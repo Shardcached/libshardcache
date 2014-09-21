@@ -3,20 +3,12 @@ package Shardcache::Client::Fast;
 use v5.10;
 use strict;
 use warnings;
-use Carp;
-
-require Exporter;
+use Carp qw(croak);
+use Exporter;
 use AutoLoader;
 
 our @ISA = qw(Exporter);
 
-# Items to export into callers namespace by default. Note: do not export
-# names by default without a very good reason. Use EXPORT_OK instead.
-# Do not simply export all your public functions/methods/constants.
-
-# This allows declaration use Shardcache::Client::Fast ':all';
-# If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
-# will save memory.
 our %EXPORT_TAGS = ( 'all' => [ qw(
         shardcache_client_create
         shardcache_client_del
@@ -43,9 +35,7 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 
-our @EXPORT = qw(
-    
-);
+our @EXPORT;
 
 our $VERSION = '0.17';
 
@@ -61,23 +51,13 @@ sub AUTOLOAD {
     if ($error) { croak $error; }
     {
         no strict 'refs';
-        # Fixed between 5.005_53 and 5.005_61
-#XXX        if ($] >= 5.00561) {
-#XXX            *$AUTOLOAD = sub () { $val };
-#XXX        }
-#XXX        else {
-            *$AUTOLOAD = sub { $val };
-#XXX        }
+        *$AUTOLOAD = sub { $val };
     }
     goto &$AUTOLOAD;
 }
 
-require XSLoader;
+use XSLoader;
 XSLoader::load('Shardcache::Client::Fast', $VERSION);
-
-# Preloaded methods go here.
-
-# Autoload methods go after =cut, and are processed by the autosplit program.
 
 sub new {
     my ($class, $nodes, $secret, $log_level) = @_;
@@ -159,29 +139,28 @@ sub current_node {
     return shardcache_client_current_node($self->{_client});
 }
 
-sub get {
-    my ($self, $key) = @_;
-    my $val =  shardcache_client_get($self->{_client}, $key);
+sub _clear_err {
+    my ($self, $val) = @_;
     if ($val) {
-        undef($self->{_errstr});
+        delete $self->{_errstr};
         $self->{_errno} = 0;
     } else {
         $self->{_errstr} = shardcache_client_errstr($self->{_client});
         $self->{_errno} = shardcache_client_errno($self->{_client});
     }
+}
+
+sub get {
+    my ($self, $key) = @_;
+    my $val =  shardcache_client_get($self->{_client}, $key);
+    $self->_clear_err($val);
     return $val;
 }
 
 sub offset {
     my ($self, $key, $offset, $length) = @_;
     my $val =  shardcache_client_offset($self->{_client}, $key, $offset, $length);
-    if ($val) {
-        undef($self->{_errstr});
-        $self->{_errno} = 0;
-    } else {
-        $self->{_errstr} = shardcache_client_errstr($self->{_client});
-        $self->{_errno} = shardcache_client_errno($self->{_client});
-    }
+    $self->_clear_err($val);
     return $val;
 }
 
@@ -193,81 +172,45 @@ sub get_async {
 sub set {
     my ($self, $key, $value, $expire) = @_;
     $expire = 0 unless defined $expire;
-    my $ret = shardcache_client_set($self->{_client}, $key, $value, $expire);
-    if ($ret == 0) {
-        undef($self->{_errstr});
-        $self->{_errno} = 0;
-    } else {
-        $self->{_errstr} = shardcache_client_errstr($self->{_client});
-        $self->{_errno} = shardcache_client_errno($self->{_client});
-    }
-    return ($ret == 0);
+    my $val = shardcache_client_set($self->{_client}, $key, $value, $expire) == 0;
+    $self->_clear_err($val);
+    return $val;
 }
 
 sub add {
     my ($self, $key, $value, $expire) = @_;
     $expire = 0 unless defined $expire;
-    my $ret = shardcache_client_add($self->{_client}, $key, $value, $expire);
-    if ($ret == 0) {
-        undef($self->{_errstr});
-        $self->{_errno} = 0;
-    } else {
-        $self->{_errstr} = shardcache_client_errstr($self->{_client});
-        $self->{_errno} = shardcache_client_errno($self->{_client});
-    }
-    return ($ret == 0);
+    my $val = shardcache_client_add($self->{_client}, $key, $value, $expire) == 0;
+    $self->_clear_err($val);
+    return $val;
 }
 
 sub exists {
     my ($self, $key) = @_;
     my $ret = shardcache_client_exists($self->{_client}, $key);
-    if ($ret == 1 || $ret == 0) {
-        undef($self->{_errstr});
-        $self->{_errno} = 0;
-    } else {
-        $self->{_errstr} = shardcache_client_errstr($self->{_client});
-        $self->{_errno} = shardcache_client_errno($self->{_client});
-    }
+    $self->_clear_err($ret == 1 || $ret == 0);
     return $ret;
 }
 
 sub touch {
     my ($self, $key) = @_;
-    my $ret = shardcache_client_touch($self->{_client}, $key);
-    if ($ret == 0) {
-        undef($self->{_errstr});
-        $self->{_errno} = 0;
-    } else {
-        $self->{_errstr} = shardcache_client_errstr($self->{_client});
-        $self->{_errno} = shardcache_client_errno($self->{_client});
-    }
-    return ($ret == 0);
+    my $val = shardcache_client_touch($self->{_client}, $key) == 0;
+    $self->_clear_err($val);
+    return $val;
 }
 
 sub del {
     my ($self, $key) = @_;
-    my $ret = shardcache_client_del($self->{_client}, $key);
-    if ($ret == 0) {
-        undef($self->{_errstr});
-        $self->{_errno} = 0;
-    } else {
-        $self->{_errstr} = shardcache_client_errstr($self->{_client});
-        $self->{_errno} = shardcache_client_errno($self->{_client});
-    }
-    return ($ret == 0);
+    my $val = shardcache_client_del($self->{_client}, $key) == 0;
+    $self->_clear_err($val);
+    return $val;
 }
 
 sub evict {
     my ($self, $key) = @_;
-    my $ret = shardcache_client_evict($self->{_client}, $key);
-    if ($ret == 0) {
-        undef($self->{_errstr});
-        $self->{_errno} = 0;
-    } else {
-        $self->{_errstr} = shardcache_client_errstr($self->{_client});
-        $self->{_errno} = shardcache_client_errno($self->{_client});
-    }
-    return ($ret == 0);
+    my $val = shardcache_client_evict($self->{_client}, $key) == 0;
+    $self->_clear_err($val);
+    return $val;
 }
 
 sub stats {
@@ -338,8 +281,8 @@ sub DESTROY {
         if ($self->{_client})
 }
 
-
 1;
+
 __END__
 
 =head1 NAME
@@ -386,7 +329,7 @@ Shardcache::Client::Fast - Perl extension for the client part of libshardcache
 =head1 DESCRIPTION
 
 Perl bindings to libshardcache-client. This library is a replacement for the pure-perl
-Sharcache::Client allowing faster access to shardcache nodes by using libshardcache directly
+Shardcache::Client allowing faster access to shardcache nodes by using libshardcache directly
 instead of reimplementing the protocol and handling connections on the perl side.
 
 =head2 EXPORT

@@ -1,29 +1,16 @@
-# Before `make install' is performed this script should be runnable with
-# `make test'. After `make install' it should work as `perl Shardcache.t'
-
-#########################
-
-# change 'tests => 2' to 'tests => last_test_to_print';
+#!perl
 
 use strict;
 use warnings;
-use Data::Dumper;
 
 use Test::More; # tests => 3;
 BEGIN { use_ok('Shardcache::Client::Fast') };
 
 unless($ENV{SHC_HOSTS}) {
-    warn "no SHC_HOTSS defined";
+    diag "no SHC_HOTSS defined";
     done_testing();
     exit(0);
 }
-
-
-#########################
-
-# Insert your test code below, the Test::More module is use()ed here so read
-# its man page ( perldoc Test::More ) for help writing this test script.
-
 
 # we are in the main process ... let's start two shardcache instances
 my @nodes = split(',', $ENV{SHC_HOSTS});
@@ -39,7 +26,7 @@ is($rc, 1, "set(test_key2, test_value2)");
 $rc = $c->set("test_key3", "test_value3");
 is($rc, 1, "set(test_key3, test_value3)");
 
-# check their existance/value on the second one
+# check their existence/value on the second one
 is($c->get("test_key1"), "test_value1", "get(test_key1) == test_value1");
 is($c->get("test_key2"), "test_value2", "get(test_key2) == test_value2");
 is($c->get("test_key3"), "test_value3", "get(test_key3) == test_value3");
