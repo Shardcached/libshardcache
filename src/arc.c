@@ -610,6 +610,7 @@ int arc_lookup_multi(arc_t *cache,
                 // let our cache user initialize the underlying object
                 cache->ops->init(key, klen, 1, (arc_resource_t)obj, obj->ptr, cache->ops->priv);
                 obj->async = 1;
+                obj->locked = 1;
 
                 retain_ref(cache->refcnt, obj->node);
                 // NOTE: atomicity here is ensured by the hashtable implementation
@@ -627,9 +628,8 @@ int arc_lookup_multi(arc_t *cache,
                         resources[missing[i]] = arc_lookup(cache, key, klen, NULL, 1);
                         break;
                     case 0:
-                        missing_objects[to_fetch] = obj;
-                        to_fetch++;
-                        resources[missing[i]] = arc_get_resource_ptr(obj);
+                        missing_objects[to_fetch++] = obj;
+                        resources[missing[i]] = obj;
                         break;
                     default:
                         fprintf(stderr, "Unknown return code from ht_set_if_not_exists() : %d\n", rc);
@@ -637,7 +637,9 @@ int arc_lookup_multi(arc_t *cache,
                         break;
                 }
             }
-            if (cache->ops->fetch_multi(missing_objects, sizes, statuses, to_fetch, cache->ops->priv) != 0) {
+            if (to_fetch &&
+                cache->ops->fetch_multi(missing_objects, sizes, statuses, to_fetch, cache->ops->priv) != 0)
+            {
                 // TODO - Handle error
                 free(mem);
                 return -1;

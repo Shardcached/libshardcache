@@ -468,7 +468,6 @@ arc_ops_fetch_multi(void **objs, size_t *sizes, int *statuses, int num_objects, 
         if (shardcache_test_ownership(cache, obj->key, obj->klen, node_name, &node_len) ||
             shardcache_test_migration_ownership(cache, obj->key, obj->klen, node_name, &node_len))
         {
-            tagged_value_t *tval = list_create_tagged_value_nocopy(node_name, obj);
             linked_list_t *remote_list = ht_get(remote, node_name, node_len, NULL);
             if (!remote_list)
                 remote_list = list_create();
@@ -508,6 +507,11 @@ arc_ops_fetch_multi(void **objs, size_t *sizes, int *statuses, int num_objects, 
             }
         }
     }
+
+    if (ht_count(remote)) {
+        
+    }
+
     ht_destroy(remote);
     list_destroy(local);
     return 0;
