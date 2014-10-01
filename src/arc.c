@@ -209,7 +209,7 @@ arc_update_resource_size(arc_t *cache, arc_resource_t res, size_t size)
         arc_state_t *state = ATOMIC_READ(obj->state);
         if (LIKELY(state == &cache->mru || state == &cache->mfu)) {
             ATOMIC_DECREASE(state->size, obj->size);
-            obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
+            obj->size = ARC_OBJ_BASE_SIZE(obj) + cache->cos + size;
             ATOMIC_INCREASE(state->size, obj->size);
         }
         ATOMIC_INCREMENT(cache->needs_balance);
@@ -323,7 +323,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                     return 1;
                 }
                 MUTEX_LOCK(&cache->lock);
-                obj->size = ARC_OBJ_BASE_SIZE(obj) + size;
+                obj->size = ARC_OBJ_BASE_SIZE(obj) + cache->cos + size;
                 arc_list_prepend(&obj->head, &state->head);
                 ATOMIC_INCREMENT(state->count);
                 ATOMIC_SET(obj->state, state);
@@ -480,7 +480,7 @@ arc_object_create(arc_t *cache, const void *key, size_t len)
     memcpy(obj->key, key, len);
     obj->klen = len;
 
-    obj->size = ARC_OBJ_BASE_SIZE(obj);
+    obj->size = ARC_OBJ_BASE_SIZE(obj) + cache->cos;
 
     obj->ptr = (void *)((char *)obj + sizeof(arc_object_t));
 
@@ -548,6 +548,59 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
     } 
     release_ref(cache->refcnt, obj->node);
     return NULL;
+}
+
+static void *
+update_obj_cb(void *data, size_t dlen, void *user)
+{
+    arc_object_t *obj = (arc_object_t *)data;
+    arc_t *cache = (arc_t *)user;
+    cache->ops->store(obj->ptr, data, dlen, cache->ops->priv);
+    //retain_ref(cache->refcnt, obj->node);
+    return data;
+}
+
+int
+arc_load(arc_t *cache, const void *key, size_t klen, void *valuep, size_t vlen)
+{
+    arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, klen, NULL, update_obj_cb, cache);
+    if (obj) {
+        //release_ref(cache->refcnt, obj->node);
+        return 1;
+    }
+
+    obj = arc_object_create(cache, key, klen);
+    if (!obj)
+        return -1;
+
+    // let our cache user initialize the underlying object
+    cache->ops->init(key, klen, 0, (arc_resource_t)obj, obj->ptr, cache->ops->priv);
+    cache->ops->store(obj->ptr, valuep, vlen, cache->ops->priv);
+
+    retain_ref(cache->refcnt, obj->node);
+    // NOTE: atomicity here is ensured by the hashtable implementation
+    int rc = ht_set_if_not_exists(cache->hash, (void *)key, klen, obj, sizeof(arc_object_t));
+    switch(rc) {
+        case -1:
+            fprintf(stderr, "Can't set the new value in the internal hashtable\n");
+            release_ref(cache->refcnt, obj->node);
+            break;
+        case 1:
+            // the object has been created in the meanwhile
+            release_ref(cache->refcnt, obj->node);
+            // XXX - yes, we have to release it twice
+            release_ref(cache->refcnt, obj->node);
+            return arc_load(cache, key, klen, valuep, vlen);
+        case 0:
+            break;
+        default:
+            fprintf(stderr, "Unknown return code from ht_set_if_not_exists() : %d\n", rc);
+            release_ref(cache->refcnt, obj->node);
+            rc = -1;
+    }
+
+    release_ref(cache->refcnt, obj->node);
+    return rc;
 }
 
 size_t

@@ -155,8 +155,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
                       COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
 
         if (total_len && !COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP)) {
-            arc_update_resource_size(cache->arc, obj->res,
-                    sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : total_len));
+            arc_update_resource_size(cache->arc, obj->res, (obj->data == obj->dbuf) ? 0 : total_len);
 
             if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
                 shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
@@ -355,7 +354,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             if (ret == 0) {
                 ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
                 gettimeofday(&obj->ts, NULL);
-                *size = sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : obj->dlen);
+                *size = (obj->data == obj->dbuf) ? 0 : obj->dlen;
                 int drop = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP|COBJ_FLAG_COMPLETE);
                 MUTEX_UNLOCK(&obj->lock);
                 ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
@@ -432,7 +431,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
     }
 
-    *size = sizeof(cached_object_t) + ((obj->data == obj->dbuf) ? 0 : obj->dlen);
+    *size = (obj->data == obj->dbuf) ? 0 : obj->dlen;
 
     int evicted = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
                    COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED));
@@ -446,6 +445,24 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
 
     return evicted;
+}
+
+
+void
+arc_ops_store(void *item, void *data, size_t size, void *priv)
+{
+    cached_object_t *obj = (cached_object_t *)item;
+    //shardcache_t *cache = (shardcache_t *)priv;
+    MUTEX_LOCK(&obj->lock); // XXX - this shouldn't be really necessary
+
+    if (obj->data && obj->data != obj->dbuf)
+        free(obj->data);
+
+    obj->data = (size > sizeof(obj->dbuf)) ? malloc(size) : obj->dbuf;
+    memcpy(obj->data, data, size);
+    obj->dlen = size;
+
+    MUTEX_UNLOCK(&obj->lock);
 }
 
 void

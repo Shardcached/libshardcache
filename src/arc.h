@@ -31,6 +31,8 @@ typedef struct __arc_ops {
      *        -1 in case of errors, *size will not be modified
      */
     int (*fetch) (void *obj, size_t *size, void *priv);
+
+    void (*store) (void *obj, void *data, size_t size, void *priv);
     
     /**
      * @brief This function is called when the cache is full and we need to evict
@@ -77,6 +79,8 @@ void arc_destroy(arc_t *cache);
  *       the caller releases it using the arc_release_resource() function
  */
 arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t klen, void **valuep, int async);
+
+int arc_load(arc_t *cache, const void *key, size_t klen, void *valuep, size_t vlen);
 
 /**
  * @brief Release the resource previously alloc'd by arc_lookup()
