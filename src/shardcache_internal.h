@@ -173,6 +173,11 @@ struct __shardcache_s {
     pthread_t expirer_th; // the thread taking care of propagating expiration commands
     queue_t *expirer_queue; // the queue holding shedule/unschedule expiration jobs
 
+    int arc_mode; // the arc mode to use **TODO - DOCUMENT**
+
+    int cache_on_set; // cache the value on set commands (instead of waiting for a get
+                      // to happen before loading the new value into the cache)
+
     int evict_on_delete;  // boolean flag indicating if eviction will be automatically
                           // triggered when deleting an existing key 
 

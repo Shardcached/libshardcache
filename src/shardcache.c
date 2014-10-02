@@ -551,7 +551,7 @@ shardcache_create(char *me,
 
     // we need to tell the arc subsystem how big are the cached objects (well ... at least the container struct
     // which is attached to each cached object to encapsulate its actual data and extra flags/members
-    cache->arc = arc_create(&cache->ops, cache_size, sizeof(cached_object_t), cache->arc_lists_size);
+    cache->arc = arc_create(&cache->ops, cache_size, sizeof(cached_object_t), cache->arc_lists_size, cache->arc_mode);
     cache->arc_size = cache_size;
 
     // check if there is already signal handler registered on SIGPIPE
@@ -1518,8 +1518,6 @@ shardcache_set_internal(shardcache_t *cache,
                         shardcache_async_response_callback_t cb,
                         void *priv)
 {
-    // if we are not the owner try propagating the command to the responsible peer
-    
     if (klen == 0 || vlen == 0 || !key || !value) {
         if (cb)
             cb(key, klen, -1, priv);
@@ -1534,6 +1532,7 @@ shardcache_set_internal(shardcache_t *cache,
     size_t node_len = sizeof(node_name);
     memset(node_name, 0, node_len);
     
+    // first check if we are the owner for this key
     int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
     if (is_mine == -1)
         is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
@@ -1591,7 +1590,11 @@ shardcache_set_internal(shardcache_t *cache,
                                     prev->dlen - vlen);
                 }
                 destroy_volatile(prev); 
-                arc_remove(cache->arc, (const void *)key, klen);
+                if (cache->cache_on_set) {
+                    arc_load(cache->arc, (const void *)key, klen, value, vlen);
+                } else {
+                    arc_remove(cache->arc, (const void *)key, klen);
+                }
                 if (!replica)
                     shardcache_commence_eviction(cache, key, klen);
             } else {
@@ -2469,6 +2472,18 @@ int
 shardcache_use_persistent_connections(shardcache_t *cache, int new_value)
 {
     return shardcache_get_set_option(&cache->use_persistent_connections, new_value);
+}
+
+int
+shardcache_arc_mode(shardcache_t *cache, arc_mode_t new_value)
+{
+    return shardcache_get_set_option(&cache->arc_mode, (int)new_value);
+}
+
+int
+shardcache_cache_on_set(shardcache_t *cache, int new_value)
+{
+    return shardcache_get_set_option(&cache->cache_on_set, new_value);
 }
 
 int

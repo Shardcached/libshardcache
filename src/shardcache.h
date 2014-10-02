@@ -103,20 +103,16 @@ shardcache_t *shardcache_create(char *me,
                         int num_async,
                         size_t cache_size);
 
-/*
- * @brief Allows to switch between using persistent connections, or making a new connection for
- *        each message sent to a peer
- * @param cache       A valid pointer to a shardcache_t structure
- * @param new_value   1 if persistent connections should be used, 0 otherwise.
- *                    If -1 is provided as new_value, no change will be applied
- *                    but the actual value will still be returned
- *                    (effectively querying the actual status).
- * @return the previous value for the use_persistent_connections setting
- * @note if evict-on-delete is true, an evict command is sent to all other nodes
- *       when an item is removed from the storage
- * @note defaults to 1
- */
-int shardcache_use_persistent_connections(shardcache_t *cache, int new_value);
+
+
+typedef enum {
+    SHARDCACHE_ARC_MODE_STRICT = 0,
+    SHARDCACHE_ARC_MODE_LOOSE = 1
+} arc_mode_t;
+
+int shardcache_arc_mode(shardcache_t *cache, arc_mode_t new_value);
+
+int shardcache_cache_on_set(shardcache_t *cache, int new_value);
 
 /*
  * @brief Allows to change the evict_on_delete behaviour at runtime
@@ -126,9 +122,24 @@ int shardcache_use_persistent_connections(shardcache_t *cache, int new_value);
  *                    but the actual value will still be returned
  *                    (effectively querying the actual status).
  * @return the previous value for the evict_on_delete setting
+ * @note if evict-on-delete is true, an evict command is sent to all other nodes
+ *       when an item is removed from the storage
  * @note defaults to 1
  */
 int shardcache_evict_on_delete(shardcache_t *cache, int new_value);
+
+/*
+ * @brief Allows to switch between using persistent connections, or making a new connection for
+ *        each message sent to a peer
+ * @param cache       A valid pointer to a shardcache_t structure
+ * @param new_value   1 if persistent connections should be used, 0 otherwise.
+ *                    If -1 is provided as new_value, no change will be applied
+ *                    but the actual value will still be returned
+ *                    (effectively querying the actual status).
+ * @return the previous value for the use_persistent_connections setting
+ * @note defaults to 1
+ */
+int shardcache_use_persistent_connections(shardcache_t *cache, int new_value);
 
 /*
  * @brief Allows to force caching of remote items
