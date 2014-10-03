@@ -574,14 +574,20 @@ process_request(shardcache_request_t *req)
         case SHC_HDR_SET:
         {
             uint32_t expire = 0;
+            uint32_t cexpire = 0;
             if (fbuf_used(&req->records[2]) == 4) {
                 memcpy(&expire, fbuf_data(&req->records[2]), sizeof(uint32_t));
                 expire = ntohl(expire);
+            }
+            if (fbuf_used(&req->records[3]) == 4) {
+                memcpy(&cexpire, fbuf_data(&req->records[2]), sizeof(uint32_t));
+                cexpire = ntohl(cexpire);
             }
             shardcache_set_async(cache, key, klen,
                                  fbuf_data(&req->records[1]),
                                  fbuf_used(&req->records[1]),
                                  expire,
+                                 cexpire,
                                  req->hdr == SHC_HDR_SET ? 0 : 1,
                                  shardcache_async_command_response,
                                  req);

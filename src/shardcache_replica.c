@@ -94,6 +94,7 @@ typedef struct {
 typedef struct {
     size_t len;
     uint32_t expire;
+    uint32_t cexpire;
     char data; // first byte of the data
 } kepaxos_data_t;
 
@@ -255,6 +256,7 @@ kepaxos_commit(unsigned char type,
                                          &kdata->data,
                                          kdata->len,
                                          kdata->expire,
+                                         kdata->cexpire,
                                          0,
                                          leader ? 0 : 1,
                                          NULL, NULL);
@@ -546,7 +548,7 @@ shardcache_replica_recover(void *priv)
                                                  item->klen,
                                                  fbuf_data(&data),
                                                  fbuf_used(&data),
-                                                 0, 0, 0, NULL, NULL);
+                                                 0, 0, 0, 0, NULL, NULL);
                     if (rc != 0) {
                         SHC_ERROR("Can't set value for the recovered item");
                     }
@@ -815,7 +817,8 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
                             size_t klen,
                             void *data,
                             size_t dlen,
-                            uint32_t expire)
+                            uint32_t expire,
+                            uint32_t cexpire)
 {
     //       (and later for the 0-key in using kepaxos)
     //       We still want migration commands to run into
@@ -842,6 +845,7 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
     kepaxos_data_t *kdata = malloc(kdlen);
     kdata->len = dlen;
     kdata->expire = expire;
+    kdata->cexpire = cexpire;
     memcpy(&kdata->data, data, dlen);
 
     ATOMIC_INCREMENT(replica->counters.dispached);

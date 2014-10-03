@@ -31,7 +31,8 @@ int shardcache_replica_dispatch(shardcache_replica_t *replica,
                                 size_t klen,
                                 void *data,
                                 size_t dlen,
-                                uint32_t expire);
+                                uint32_t expire,
+                                uint32_t cexpire);
 
 shardcache_hdr_t
 shardcache_replica_received_command(shardcache_replica_t *replica,

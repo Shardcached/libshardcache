@@ -1617,6 +1617,7 @@ shardcache_set_internal(shardcache_t *cache,
                         void *value,
                         size_t vlen,
                         time_t expire,
+                        time_t cexpire,
                         int inx,
                         int replica,
                         shardcache_async_response_callback_t cb,
@@ -1833,11 +1834,10 @@ shardcache_set_volatile(shardcache_t *cache,
         return -1;
 
     if (cache->replica) {
-        time_t real_expire = expire ? time(NULL) + expire : 0;
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, real_expire);
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, expire, 0);
     }
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 0, 0, NULL, NULL);
+    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 0, 0, 0, NULL, NULL);
 }
 
 int
@@ -1852,11 +1852,10 @@ shardcache_add_volatile(shardcache_t *cache,
         return -1;
 
     if (cache->replica) {
-        time_t real_expire = expire ? time(NULL) + expire : 0;
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, real_expire);
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, expire, 0);
     }
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 1, 0, NULL, NULL);
+    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 0, 1, 0, NULL, NULL);
 }
 
 int
@@ -1870,9 +1869,9 @@ shardcache_set(shardcache_t *cache,
         return -1;
 
     if (cache->replica && (!cache->use_persistent_storage || !cache->storage.shared))
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, 0);
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, 0, 0);
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 0, NULL, NULL);
+    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 0, 0, NULL, NULL);
 }
 
 int
@@ -1886,9 +1885,9 @@ shardcache_add(shardcache_t *cache,
         return -1;
 
     if (cache->replica && (!cache->use_persistent_storage || !cache->storage.shared))
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, 0);
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, 0, 0);
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 1, 0, NULL, NULL);
+    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 1, 0, NULL, NULL);
 }
 
 int shardcache_set_async(shardcache_t *cache,
@@ -1897,6 +1896,7 @@ int shardcache_set_async(shardcache_t *cache,
                          void  *value,
                          size_t vlen,
                          time_t expire,
+                         time_t cexpire,
                          int    if_not_exists,
                          shardcache_async_response_callback_t cb,
                          void *priv)
@@ -1905,13 +1905,13 @@ int shardcache_set_async(shardcache_t *cache,
         return -1;
 
     if (cache->replica && !expire && (!cache->use_persistent_storage || !cache->storage.shared)) {
-        int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, 0);
+        int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, expire, cexpire);
         if (cb)
             cb(key, klen, rc, priv);
         return rc;
     }
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, expire, if_not_exists, 0, cb, priv);
+    return shardcache_set_internal(cache, key, klen, value, vlen, expire, cexpire, if_not_exists, 0, cb, priv);
 }
 
 
@@ -2034,7 +2034,7 @@ shardcache_del(shardcache_t *cache, void *key, size_t klen)
         return -1;
 
     if (cache->replica)
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_DELETE, key, klen, NULL, 0, 0);
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_DELETE, key, klen, NULL, 0, 0, 0);
 
     return shardcache_del_internal(cache, key, klen, 0, NULL, NULL);
 }
@@ -2050,7 +2050,7 @@ shardcache_del_async(shardcache_t *cache,
         return -1;
 
     if (cache->replica) {
-        int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_DELETE, key, klen, NULL, 0, 0);
+        int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_DELETE, key, klen, NULL, 0, 0, 0);
         if (cb)
             cb(key, klen, rc, priv);
         return rc;
@@ -2066,7 +2066,7 @@ shardcache_evict(shardcache_t *cache, void *key, size_t klen)
         return -1;
 
     if (cache->replica)
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_EVICT, key, klen, NULL, 0, 0);
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_EVICT, key, klen, NULL, 0, 0, 0);
 
     arc_remove(cache->arc, (const void *)key, klen);
 
@@ -2447,7 +2447,7 @@ shardcache_migration_begin(shardcache_t *cache,
                            int forward)
 {
     if (cache->replica)
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_MIGRATION_BEGIN, NULL, 0, nodes, num_nodes, 0);
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_MIGRATION_BEGIN, NULL, 0, nodes, num_nodes, 0, 0);
     return shardcache_migration_begin_internal(cache, nodes, num_nodes, forward);
 }
 
@@ -2475,7 +2475,7 @@ int
 shardcache_migration_abort(shardcache_t *cache)
 {
     if (cache->replica)
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_MIGRATION_ABORT, NULL, 0, NULL, 0, 0);
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_MIGRATION_ABORT, NULL, 0, NULL, 0, 0, 0);
     return shardcache_migration_abort_internal(cache);
 }
 
@@ -2506,7 +2506,7 @@ int
 shardcache_migration_end(shardcache_t *cache)
 {
     if (cache->replica)
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_MIGRATION_END, NULL, 0, NULL, 0, 0);
+        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_MIGRATION_END, NULL, 0, NULL, 0, 0, 0);
     return shardcache_migration_end_internal(cache);
 }
 
