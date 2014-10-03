@@ -1848,7 +1848,7 @@ int shardcache_set_async(shardcache_t *cache,
     if (!key || !klen)
         return -1;
 
-    if (cache->replica && !expire && (!cache->use_persistent_storage || !cache->storage.shared))
+    if (cache->replica && !expire && (!cache->use_persistent_storage || !cache->storage.shared)) {
         int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, 0);
         if (cb)
             cb(key, klen, rc, priv);
