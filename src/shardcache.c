@@ -1813,7 +1813,7 @@ shardcache_set(shardcache_t *cache,
     if (!key || !klen)
         return -1;
 
-    if (cache->replica)
+    if (cache->replica && (!cache->use_persistent_storage || !cache->storage.shared))
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, 0);
 
     return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 0, NULL, NULL);
@@ -1829,7 +1829,7 @@ shardcache_add(shardcache_t *cache,
     if (!key || !klen)
         return -1;
 
-    if (cache->replica)
+    if (cache->replica && (!cache->use_persistent_storage || !cache->storage.shared))
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, 0);
 
     return shardcache_set_internal(cache, key, klen, value, vlen, 0, 1, 0, NULL, NULL);
@@ -1848,7 +1848,7 @@ int shardcache_set_async(shardcache_t *cache,
     if (!key || !klen)
         return -1;
 
-    if (cache->replica) {
+    if (cache->replica && !expire && (!cache->use_persistent_storage || !cache->storage.shared))
         int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, 0);
         if (cb)
             cb(key, klen, rc, priv);

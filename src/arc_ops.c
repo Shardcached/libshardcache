@@ -436,9 +436,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     int evicted = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
                    COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED));
 
-    if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration) {
+    if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
         shardcache_schedule_expiration(cache, obj->key, obj->klen, cache->expire_time, 0);
-    }
 
     MUTEX_UNLOCK(&obj->lock);
 
