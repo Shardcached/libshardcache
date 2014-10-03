@@ -272,7 +272,7 @@ struct __shardcache_storage_s {
 
     /**
      * @brief If set to a non zero value, shardcache will assume that all the replicas
-     *        of a given peer can access the same storage son set commands won't be propagated
+     *        of a given peer can access the same storage and set commands won't be propagated
      *        to all the replicas by a receiving node
      */
     int                                    shared;

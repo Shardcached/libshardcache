@@ -220,7 +220,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
 
             shardcache_queue_async_read_wrk(cache, wrk);
         } else {
-            // if the storage is flagged as 'global' we don't want to notify the listeners yest
+            // if the storage is flagged as 'global' we don't want to notify the listeners yet
             // because an attempt of fetching form the local storage will be done in arc_ops_fetch()
             if (!cache->storage.global) {
                 if (obj->listeners) {
