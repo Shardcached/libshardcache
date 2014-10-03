@@ -127,7 +127,7 @@ EXISTS            : <MSG_EXISTS><KEY><EOM>
 TOUCH             : <MSG_TOUCH><KEY><EOM>
                     RESPONSE: <MSG_RESPONSE><STATUS<<EOM>
 
-SET               : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
+SET               : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>[<RSEP><CTTL>]]<EOM>
                     RESPONSE: <MSG_RESPONSE><STATUS><EOM>
 
 ADD               : <MSG_ADD><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
@@ -289,6 +289,12 @@ key, value and ttl need to be provided (still fitting in one chunk) :
 |----------|---------|--------------------------------------------------------|
 |   TTL    | 4 Bytes |  ttl in seconds (uint32_t in network byte order)       |
 |----------|---------|--------------------------------------------------------|
+|   RSEP   | 1 Bytes |  Record Separator (0x80)                               |
+|----------|---------|--------------------------------------------------------|
+|   SIZE   | 2 Bytes |  Size of the cttl record (must be 4 == 0x00,0x04)      |
+|----------|---------|--------------------------------------------------------|
+|   CTTL   | 4 Bytes |  cttl in seconds (uint32_t in network byte order)      |
+|----------|---------|--------------------------------------------------------|
 |   EOR    | 2 Bytes |  End Of Record (0x00, 0x00)                            |
 |----------|---------|--------------------------------------------------------|
 |   EOM    | 1 Byte  |  Message Terminator (0x00)                             |
@@ -399,6 +405,13 @@ if found, an empty value otherwise
 
 Responses to 'SET', 'DEL' and 'EVI' requests will return either the
 <OK> response byte or the <ERR> one depending on the status of the operation
+
+'SET' commands have 2 optional arguments 'TTL' and 'CTTL'.
+  - 'TTL'  : if not 0 marks the value as being volatile and determines how long it
+             will be kept in the volatile storage.
+  - 'CTTL' : if not 0 and 'set_on_cache' is true, determines how long the value
+             will be kept into the cache (and also triggers the 'cache_on_load'
+             behaviour for the actual key being set))
 
 The actual implementation will try reusing connections so they won't be closed
 after serving a response. This should be taken into account when implementing
