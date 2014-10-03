@@ -407,11 +407,26 @@ Responses to 'SET', 'DEL' and 'EVI' requests will return either the
 <OK> response byte or the <ERR> one depending on the status of the operation
 
 'SET' commands have 2 optional arguments 'TTL' and 'CTTL'.
-  - 'TTL'  : if not 0 marks the value as being volatile and determines how long it
-             will be kept in the volatile storage.
+  - 'TTL'  : if not 0 marks the value as being volatile and determines how long
+             it will be kept in the volatile storage.
   - 'CTTL' : if not 0 and 'set_on_cache' is true, determines how long the value
              will be kept into the cache (and also triggers the 'cache_on_load'
              behaviour for the actual key being set))
+             implementations of protocol version == 1 should just ignore the
+             'CTTL' parameter
+
+The following commands are supported only by protocol versions >= 2:
+  - 'CAS'
+  - 'GET_MULTI'
+  - 'SET_MULTI'
+  - 'DELETE_MULTI'
+  - 'EVICT_MULTI'
+  - 'INCREMENT'
+  - 'DECREMENT'
+
+The 'STATUS' record in responses to GET and GET_ASYNC commands will be included
+only if the requests was done using a protocol version >= 2
+(otherwise it will be omitted)
 
 The actual implementation will try reusing connections so they won't be closed
 after serving a response. This should be taken into account when implementing
