@@ -1446,7 +1446,6 @@ shardcache_touch(shardcache_t *cache, void *key, size_t klen)
     return -1;
 }
 
-
 static void
 shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
 {
@@ -1590,13 +1589,14 @@ shardcache_set_internal(shardcache_t *cache,
                                     prev->dlen - vlen);
                 }
                 destroy_volatile(prev); 
-                if (cache->cache_on_set) {
+                if (cache->cache_on_set)
                     arc_load(cache->arc, (const void *)key, klen, value, vlen);
-                } else {
+                else
                     arc_remove(cache->arc, (const void *)key, klen);
-                }
+
                 if (!replica)
                     shardcache_commence_eviction(cache, key, klen);
+
             } else {
                 ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, vlen);
             }
@@ -1637,7 +1637,11 @@ shardcache_set_internal(shardcache_t *cache,
 
             rc = cache->storage.store(key, klen, value, vlen, cache->storage.priv);
 
-            arc_remove(cache->arc, (const void *)key, klen);
+            if (cache->cache_on_set)
+                arc_load(cache->arc, (const void *)key, klen, value, vlen);
+            else
+                arc_remove(cache->arc, (const void *)key, klen);
+
             if (!replica)
                 shardcache_commence_eviction(cache, key, klen);
         }
@@ -1732,9 +1736,10 @@ shardcache_set_internal(shardcache_t *cache,
         }
 
         if (rc == 0) {
-            arc_remove(cache->arc, (const void *)key, klen);
-            if (!replica)
-                shardcache_commence_eviction(cache, key, klen);
+            if (cache->cache_on_set)
+                arc_load(cache->arc, (const void *)key, klen, value, vlen);
+            else
+                arc_remove(cache->arc, (const void *)key, klen);
         }
 
         return rc;
