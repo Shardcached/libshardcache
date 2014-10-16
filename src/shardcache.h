@@ -30,7 +30,7 @@ typedef struct __shardcache_s shardcache_t;
 #define SHARDCACHE_IOMUX_RUN_TIMEOUT_LOW      100000 // (in microsecs)
 #define SHARDCACHE_IOMUX_RUN_TIMEOUT_HIGH     500000 // (in microsecs)
 #define SHARDCACHE_CONNECTION_EXPIRE_DEFAULT  5000   // (in millisecs)
-#define SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT 16     // number of queued/pipelined
+#define SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT 64     // number of queued/pipelined
                                                      // requests to handle ahead
 #define SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT  1      // number of async i/o threads used
                                                      // for inter-node communication

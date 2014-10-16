@@ -18,7 +18,7 @@
 #include "connections_pool.h"
 #include "shardcache_client.h"
 
-#define SHC_PIPELINE_MAX_DEFAULT 1024
+#define SHC_PIPELINE_MAX_DEFAULT SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT
 
 typedef struct chash_t chash_t;
 
@@ -77,7 +77,7 @@ shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth)
 {
     int i;
     if (!num_nodes) {
-        fprintf(stderr, "Can't create a shardcache client with no nodes\n");
+        SHC_ERROR("Can't create a shardcache client with no nodes");
         return NULL;
     }
     shardcache_client_t *c = calloc(1, sizeof(shardcache_client_t));
@@ -722,14 +722,21 @@ typedef struct {
 static int
 shc_multi_collect_data(void *data, size_t len, int idx, void *priv)
 {
+    if (idx != 0)
+        return 0;
+
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
+
     if (ctx->response_index >= ctx->num_requests) {
-        fprintf(stderr, "response_index overflow\n");
+        ctx->client->errno = SHARDCACHE_CLIENT_ERROR_PROTOCOL;
+        snprintf(ctx->client->errstr, sizeof(ctx->client->errstr),
+                "Unexpected response (response_index: %d, expected_requests: %d)",
+                ctx->response_index, ctx->num_requests);
         return -1;
     }
 
     shc_multi_item_t *item = ctx->items[ctx->response_index];
-    if (idx == 0 && len) {
+    if (len) {
         if (ctx->cmd == SHC_HDR_GET) {
             item->data = realloc(item->data, item->dlen + len);
             memcpy(item->data + item->dlen, data, len);
@@ -812,7 +819,8 @@ shc_multi_context_create(shardcache_client_t *c,
         }
 
         if (build_message(secret, sig_hdr, cmd, record, num_records, ctx->commands) != 0) {
-            fprintf(stderr, "Can't create new command!\n");
+            c->errno = SHARDCACHE_CLIENT_ERROR_INTERNAL;
+            snprintf(c->errstr, sizeof(c->errstr), "Can't create new command!");
             fbuf_free(ctx->commands);
             free(ctx->items);
             async_read_context_destroy(ctx->reader);
@@ -830,7 +838,7 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
     int processed = 0;
 
-    //printf("received %d\n", len);
+    SHC_DEBUG3("received %d\n", len);
     async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
     while (state == SHC_STATE_READING_DONE) {
         ctx->response_index++;
@@ -839,7 +847,12 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
     }
 
     if (state == SHC_STATE_READING_ERR) {
-        fprintf(stderr, "Async context returned error\n");
+        if (ctx->client->errno != SHARDCACHE_CLIENT_ERROR_PROTOCOL) {
+            ctx->client->errno = SHARDCACHE_CLIENT_ERROR_PROTOCOL;
+            snprintf(ctx->client->errstr, sizeof(ctx->client->errstr),
+                    "Async context returned error while parsing response for item %d",
+                    ctx->response_index + 1);
+        }
         iomux_close(iomux, fd);
     } else if (ctx->response_index == ctx->num_requests) {
         iomux_close(iomux, fd);
@@ -849,20 +862,64 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
 }
 
 static inline int
+shardcache_client_multi_loop(shardcache_client_t *c, iomux_t *iomux, int num_items, int *total_count)
+{
+    int rc = 0;
+    uint32_t previous_count = 0;
+    struct timeval hang_time = { 0, 0 };
+    struct timeval max_hang_time = { c->multi_command_max_wait, 0 };
+    for (;;) {
+        struct timeval tv = { 1, 0 };
+        iomux_run(iomux, &tv);
+
+        if (iomux_isempty(iomux) || *total_count == num_items)
+            break;
+
+        if (previous_count == *total_count) {
+            struct timeval now;
+            struct timeval diff;
+            if (hang_time.tv_sec == 0) {
+                gettimeofday(&hang_time, NULL);
+            } else {
+                gettimeofday(&now, NULL);
+                timersub(&now, &hang_time, &diff);
+                if (timercmp(&diff, &max_hang_time, >)) {
+                    rc = (*total_count == 0) ? -1 : 1;
+                    break;
+                }
+            }
+        } else {
+            memset(&hang_time, 0, sizeof(hang_time));
+        }
+
+        previous_count = *total_count;
+    }
+
+    return rc;
+}
+
+static inline int
 shardcache_client_multi(shardcache_client_t *c,
                          shc_multi_item_t **items,
                          shardcache_hdr_t cmd)
 {
     int num_items = 0;
     linked_list_t *pools = shc_split_buckets(c, items, &num_items);
+    uint32_t count = list_count(pools);
+
+    SHC_DEBUG("Requesting %d items using %u connections",
+              num_items, list_count(pools));
 
     uint32_t total_count = 0;
     uint32_t total_requests = 0;
     iomux_t *iomux = iomux_create(0, 0);
-    uint32_t count = list_count(pools);
-    int i;
+
+    c->errno = SHARDCACHE_CLIENT_OK;
+    c->errstr[0] = 0;
+
     linked_list_t *contexts = list_create();
 
+    int i;
     for (i = 0; i < count; i++) {
 
         tagged_value_t *tval = list_pick_tagged_value(pools, i);
@@ -905,7 +962,14 @@ shardcache_client_multi(shardcache_client_t *c,
 
         list_push_value(contexts, ctx);
         if (!iomux_add(iomux, ctx->fd, &cbs)) {
-            // TODO - Error Messages
+            while ((ctx = list_shift_value(contexts))) {
+                iomux_remove(iomux, ctx->fd);
+                shc_multi_context_destroy(ctx);
+            }
+            iomux_destroy(iomux);
+            list_destroy(pools);
+            list_destroy(contexts);
+            return -1;
         }
 
         char *output = NULL;
@@ -914,36 +978,9 @@ shardcache_client_multi(shardcache_client_t *c,
         total_requests += ctx->num_requests;
     }
 
-    int rc = 0;
-    uint32_t previous_count = 0;
-    struct timeval hang_time = { 0, 0 };
-    struct timeval max_hang_time = { c->multi_command_max_wait, 0 };
-    for (;;) {
-        struct timeval tv = { 1, 0 };
-        iomux_run(iomux, &tv);
-
-        if (iomux_isempty(iomux) || total_count == num_items)
-            break;
-
-        if (previous_count == total_count) {
-            struct timeval now;
-            struct timeval diff;
-            if (hang_time.tv_sec == 0) {
-                gettimeofday(&hang_time, NULL);
-            } else {
-                gettimeofday(&now, NULL);
-                timersub(&now, &hang_time, &diff);
-                if (timercmp(&diff, &max_hang_time, >)) {
-                    rc = (total_count == 0) ? -1 : 1;
-                    break;
-                }
-            }
-        } else {
-            memset(&hang_time, 0, sizeof(hang_time));
-        }
-
-        previous_count = total_count;
-    }
+    // this will run the iomux until we get all the response, an error occurs
+    // or the timeout (c->multi_command_max_wait) expires
+    int rc = shardcache_client_multi_loop(c, iomux, num_items, &total_count);
 
     shc_multi_ctx_t *ctx = NULL;
     while ((ctx = list_shift_value(contexts))) {
@@ -954,8 +991,16 @@ shardcache_client_multi(shardcache_client_t *c,
     list_destroy(contexts);
     list_destroy(pools);
 
-    if (rc == 0 && total_count != num_items)
+    if (total_count != num_items) {
+        if (c->errno != SHARDCACHE_CLIENT_ERROR_PROTOCOL) {
+            c->errno = SHARDCACHE_CLIENT_ERROR_PROTOCOL;
+            snprintf(c->errstr, sizeof(c->errstr),
+                    "Number of responses doesn't match (received: %d, expected: %d)",
+                    total_count, num_items);
+
+        }
         rc = 2;
+    }
 
     return rc;
 }

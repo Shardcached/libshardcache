@@ -7,6 +7,8 @@
 #define SHARDCACHE_CLIENT_ERROR_NODE     1
 #define SHARDCACHE_CLIENT_ERROR_NETWORK  2
 #define SHARDCACHE_CLIENT_ERROR_ARGS     3
+#define SHARDCACHE_CLIENT_ERROR_PROTOCOL 4
+#define SHARDCACHE_CLIENT_ERROR_INTERNAL 5
 
 /**
  * @brief Opaque structure representing the shardcache client
