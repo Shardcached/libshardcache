@@ -2593,7 +2593,7 @@ shardcache_storage_load(char *filename, char **options)
 
     if (*version != SHARDCACHE_STORAGE_API_VERSION) {
         SHC_ERROR("The storage plugin version doesn't match (%d != %d)",
-                    version, SHARDCACHE_STORAGE_API_VERSION);
+                    *version, SHARDCACHE_STORAGE_API_VERSION);
         dlclose(st->internal.handle);
         free(st);
         return NULL;
