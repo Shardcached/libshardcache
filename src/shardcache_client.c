@@ -146,7 +146,7 @@ select_node(shardcache_client_t *c, void *key, size_t klen, int *fd)
             int retries = 3;
             do {
                 *fd = connections_pool_get(c->connections, addr);
-                if (*fd < 0 && c->use_random_node && c->num_shards > 1) {
+                if (*fd < 0 && c->num_shards > 1) {
                     shardcache_node_t *prev = node;
                     do {
                         node = c->shards[random()%c->num_shards];
