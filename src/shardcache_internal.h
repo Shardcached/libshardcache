@@ -101,7 +101,7 @@ struct _shardcache_s {
                       // NOTE: arc_size is updated using the atomic builtins,
                       // don't access it directly but use ATOMIC_READ() instead
                       // (see deps/libhl/src/atomic_defs.h)
-    size_t *arc_lists_size[4];
+    uint64_t *arc_lists_size[4];
 
     // lock used internally during the migration procedures
     // and when selecting the node owner for a key

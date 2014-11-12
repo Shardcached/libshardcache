@@ -41,7 +41,7 @@ typedef struct _arc_list {
 #pragma pack(push, 1)
 typedef struct _arc_state {
     arc_list_t head;
-    size_t size; // note must be accessed only via atomic functions
+    uint64_t size; // note must be accessed only via atomic functions
     uint64_t count; // note must be accessed only via atomic functions
 } arc_state_t;
 #pragma pack(pop)
