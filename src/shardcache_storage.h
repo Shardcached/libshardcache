@@ -54,10 +54,14 @@ typedef int (*shardcache_fetch_item_callback_t)
  *              at the location pointed by vlen
  * @param priv  The 'priv' pointer previously stored in the shardcache_storage_t
  *              structure at initialization time
- * @return 0 on success; -1 otherwise
+ * @return 0 on success; the number of successfully fetched items otherwise
  *
  * @note The returned value pointers MUST be a volatile copy and the caller
- *       WILL release their resources
+ *       MUST release their resources
+ * @note In case of failure the function will return how many items it has been able to
+ *       fetch before failing.\nThe caller MUST release the memory for the successfully
+ *       retrieved items (if any) in such a case.
+ *
  */
 typedef int (*shardcache_fetch_items_callback_t)
     (void **keys, size_t *klens, int nkeys, void **values, size_t *vlens, void *priv);
@@ -225,7 +229,7 @@ struct _shardcache_storage_s {
     //! The fecth callback
     shardcache_fetch_item_callback_t       fetch;
 
-    //! The fetch multiple items callback (XXX - still unused)
+    //! The fetch multiple items callback
     shardcache_fetch_items_callback_t      fetch_multi;
 
     //! The store callback (optional if the storage is indended to be read-only)
