@@ -93,6 +93,7 @@ typedef struct {
 
 typedef struct {
     size_t len;
+    size_t len2;
     uint32_t expire;
     uint32_t cexpire;
     char data; // first byte of the data
@@ -817,6 +818,8 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
                             size_t klen,
                             void *data,
                             size_t dlen,
+                            void *data2,
+                            size_t dlen2,
                             uint32_t expire,
                             uint32_t cexpire)
 {
@@ -841,12 +844,14 @@ shardcache_replica_dispatch(shardcache_replica_t *replica,
     if (item)
         free_item_to_recover((shardcache_item_to_recover_t *)item);
 
-    size_t kdlen = sizeof(kepaxos_data_t) + dlen;
+    size_t kdlen = sizeof(kepaxos_data_t) + dlen + dlen2;
     kepaxos_data_t *kdata = malloc(kdlen);
     kdata->len = dlen;
+    kdata->len2 = dlen2;
     kdata->expire = expire;
     kdata->cexpire = cexpire;
     memcpy(&kdata->data, data, dlen);
+    memcpy(&kdata->data + dlen, data2, dlen2);
 
     ATOMIC_INCREMENT(replica->counters.dispached);
 

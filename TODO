@@ -65,3 +65,9 @@
    API to allow getting/setting internal flags and params and a better way of storing
    those within the shardcache_t structure
 
+* remove the distinction between synchronous and asynchronous api calls,
+  they should all be asynchronous by default and require a callback among the arguments
+  (this means renaming shardcache_*_async &co as their synchronous counterparts and getting
+   rid of the old implementations)
+
+

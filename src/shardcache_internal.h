@@ -256,6 +256,19 @@ int shardcache_del_internal(shardcache_t *cache,
                             shardcache_async_response_callback_t cb,
                             void *priv);
 
+int shardcache_cas_internal(shardcache_t *cache,
+                            void *key,
+                            size_t klen,
+                            void *prev_value,
+                            size_t prev_len,
+                            void *new_value,
+                            size_t new_len,
+                            time_t expire,
+                            time_t cexpire,
+                            int replica,
+                            shardcache_async_response_callback_t cb,
+                            void *priv);
+
 int shardcache_set_migration_continuum(shardcache_t *cache, shardcache_node_t **nodes, int num_nodes);
 
 int shardcache_schedule_expiration(shardcache_t *cache, void *key, size_t klen, time_t expire, int is_volatile);

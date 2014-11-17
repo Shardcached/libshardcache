@@ -861,13 +861,13 @@ shardcache_get_async_helper(void *key,
 }
 
 int
-shardcache_get_offset_async(shardcache_t *cache,
-                            void *key,
-                            size_t klen,
-                            size_t offset,
-                            size_t length,
-                            shardcache_get_async_callback_t cb,
-                            void *priv)
+shardcache_get_offset(shardcache_t *cache,
+                      void *key,
+                      size_t klen,
+                      size_t offset,
+                      size_t length,
+                      shardcache_get_async_callback_t cb,
+                      void *priv)
 {
     if (!key) {
         return -1;
@@ -895,7 +895,7 @@ shardcache_get_offset_async(shardcache_t *cache,
         arc_release_resource(cache->arc, res);
         // but we will try to fetch it again
         SHC_DEBUG("The retreived object has been already evicted, try fetching it again (offset)");
-        return shardcache_get_async(cache, key, klen, cb, priv);
+        return shardcache_get(cache, key, klen, cb, priv);
     } else if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_COMPLETE)) {
         size_t dlen = obj->dlen;
         void *data = NULL;
@@ -926,7 +926,7 @@ shardcache_get_offset_async(shardcache_t *cache,
             arc_drop_resource(cache->arc, res);
             free(data);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
-            return shardcache_get_offset_async(cache, key, klen, offset, length, cb, priv);
+            return shardcache_get_offset(cache, key, klen, offset, length, cb, priv);
         } else {
             cb(key, klen, data, dlen, dlen, &obj->ts, priv);
             MUTEX_UNLOCK(obj->lock);
@@ -971,13 +971,14 @@ shardcache_get_offset_async(shardcache_t *cache,
     return 0;
 }
 
-size_t shardcache_get_offset(shardcache_t *cache,
-                             void *key,
-                             size_t klen,
-                             void *data,
-                             size_t *dlen,
-                             size_t offset,
-                             struct timeval *timestamp)
+size_t
+shardcache_get_offset_sync(shardcache_t *cache,
+                           void *key,
+                           size_t klen,
+                           void *data,
+                           size_t *dlen,
+                           size_t offset,
+                           struct timeval *timestamp)
 {
     size_t vlen = 0;
     size_t copied = 0;
@@ -1015,11 +1016,11 @@ size_t shardcache_get_offset(shardcache_t *cache,
 }
 
 int
-shardcache_get_async(shardcache_t *cache,
-                     void *key,
-                     size_t klen,
-                     shardcache_get_async_callback_t cb,
-                     void *priv)
+shardcache_get(shardcache_t *cache,
+               void *key,
+               size_t klen,
+               shardcache_get_async_callback_t cb,
+               void *priv)
 {
     if (!key)
         return -1;
@@ -1083,7 +1084,7 @@ shardcache_get_async(shardcache_t *cache,
             MUTEX_UNLOCK(obj->lock);
             arc_drop_resource(cache->arc, res);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
-            return shardcache_get_async(cache, key, klen, cb, priv);
+            return shardcache_get(cache, key, klen, cb, priv);
 
         } else {
             cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
@@ -1156,15 +1157,16 @@ shardcache_get_helper(void *key,
     return 0;
 }
 
-void *
-shardcache_get(shardcache_t *cache,
-               void *key,
-               size_t klen,
-               size_t *vlen,
-               struct timeval *timestamp)
+int
+shardcache_get_sync(shardcache_t *cache,
+                    void *key,
+                    size_t klen,
+                    void **value,
+                    size_t *vlen,
+                    struct timeval *timestamp)
 {
     if (!key)
-        return NULL;
+        return -1;
 
     shardcache_get_helper_arg_t *arg = calloc(1, sizeof(shardcache_get_helper_arg_t));
 
@@ -1178,7 +1180,7 @@ shardcache_get(shardcache_t *cache,
     char keystr[1024];
     KEY2STR(key, klen, keystr, sizeof(keystr));
 
-    int rc = shardcache_get_async(cache, key, klen, shardcache_get_helper, arg);
+    int rc = shardcache_get(cache, key, klen, shardcache_get_helper, arg);
 
     if (rc == 0) {
         while (!ATOMIC_READ(arg->complete) && ATOMIC_READ(arg->stat) == 0) {
@@ -1196,7 +1198,7 @@ shardcache_get(shardcache_t *cache,
             }
         }
 
-        char *value = fbuf_data(&arg->data);
+        char *data = fbuf_data(&arg->data);
         uint32_t len = fbuf_used(&arg->data);
         int stat = ATOMIC_READ(arg->stat);
 
@@ -1209,23 +1211,26 @@ shardcache_get(shardcache_t *cache,
 
         if (stat != 0 && !ATOMIC_READ(cache->async_quit)) {
             SHC_ERROR("Error trying to get key: %s", keystr);
-            free(value);
-            return NULL;
+            free(data);
+            return -1;
         }
 
         if (vlen)
             *vlen = len;
 
-        if (!value)
+        if (!data)
             SHC_DEBUG("No value for key: %s", keystr);
 
-        return value;
+        if (value)
+            *value = data;
+
+        return 0;
     }
     fbuf_destroy(&arg->data);
     MUTEX_DESTROY(arg->lock);
     CONDITION_DESTROY(arg->cond);
     free(arg);
-    return NULL;
+    return rc;
 }
 
 size_t
@@ -1242,7 +1247,7 @@ shardcache_head(shardcache_t *cache,
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_HEADS].value);
 
     size_t rlen = hlen;
-    size_t remainder =  shardcache_get_offset(cache, key, len, head, &rlen, 0, timestamp);
+    size_t remainder =  shardcache_get_offset_sync(cache, key, len, head, &rlen, 0, timestamp);
     return remainder + rlen;
 }
 
@@ -1380,11 +1385,11 @@ static int shardcache_async_command_helper(void *data,
 }
 
 int
-shardcache_exists_async(shardcache_t *cache,
-                        void *key,
-                        size_t klen,
-                        shardcache_async_response_callback_t cb,
-                        void *priv)
+shardcache_exists(shardcache_t *cache,
+                  void *key,
+                  size_t klen,
+                  shardcache_async_response_callback_t cb,
+                  void *priv)
 {
     if (!key || !klen)
         return -1;
@@ -1458,13 +1463,6 @@ shardcache_exists_async(shardcache_t *cache,
     }
 
     return rc;
-}
-
-
-int
-shardcache_exists(shardcache_t *cache, void *key, size_t klen)
-{
-    return shardcache_exists_async(cache, key, klen, NULL, NULL);
 }
 
 int
@@ -1715,6 +1713,8 @@ shardcache_set_internal(shardcache_t *cache,
     }
     else if (node_len)
     {
+        // if we are not the owner try propagating the command to the responsible peer
+    
         SHC_DEBUG2("Forwarding set command %s => %s (%d) to %s",
                 keystr, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE, 0),
                 (int)vlen, node_name);
@@ -1823,88 +1823,43 @@ shardcache_set_internal(shardcache_t *cache,
 }
 
 int
-shardcache_set_volatile(shardcache_t *cache,
-                        void *key,
-                        size_t klen,
-                        void *value,
-                        size_t vlen,
-                        time_t expire)
-{
-    if (!key || !klen)
-        return -1;
-
-    if (cache->replica) {
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, expire, 0);
-    }
-
-    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 0, 0, 0, NULL, NULL);
-}
-
-int
-shardcache_add_volatile(shardcache_t *cache,
-                        void *key,
-                        size_t klen,
-                        void *value,
-                        size_t vlen,
-                        time_t expire)
-{
-    if (!key || !klen)
-        return -1;
-
-    if (cache->replica) {
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, expire, 0);
-    }
-
-    return shardcache_set_internal(cache, key, klen, value, vlen, expire, 0, 1, 0, NULL, NULL);
-}
-
-int
-shardcache_set(shardcache_t *cache,
-               void *key,
-               size_t klen,
-               void *value,
-               size_t vlen)
-{
-    if (!key || !klen)
-        return -1;
-
-    if (cache->replica && (!cache->use_persistent_storage || !cache->storage.shared))
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, 0, 0);
-
-    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 0, 0, NULL, NULL);
-}
-
-int
 shardcache_add(shardcache_t *cache,
                void *key,
                size_t klen,
                void *value,
-               size_t vlen)
+               size_t vlen,
+               time_t expire,
+               time_t cexpire,
+               shardcache_async_response_callback_t cb,
+               void *priv)
 {
     if (!key || !klen)
         return -1;
 
-    if (cache->replica && (!cache->use_persistent_storage || !cache->storage.shared))
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, 0, 0);
+    if (cache->replica && (!cache->use_persistent_storage || !cache->storage.shared)) {
+        int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_ADD, key, klen, value, vlen, expire, cexpire);
+        if (cb)
+            cb(key, klen, rc, priv);
+    }
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, 0, 0, 1, 0, NULL, NULL);
+    return shardcache_set_internal(cache, key, klen, value, vlen, expire, cexpire, 1, 0, cb, priv);
 }
 
-int shardcache_set_async(shardcache_t *cache,
-                         void  *key,
-                         size_t klen,
-                         void  *value,
-                         size_t vlen,
-                         time_t expire,
-                         time_t cexpire,
-                         int    if_not_exists,
-                         shardcache_async_response_callback_t cb,
-                         void *priv)
+int shardcache_set(shardcache_t *cache,
+                   void  *key,
+                   size_t klen,
+                   void  *value,
+                   size_t vlen,
+                   time_t expire,
+                   time_t cexpire,
+                   int    if_not_exists,
+                   shardcache_async_response_callback_t cb,
+                   void *priv)
 {
     if (!key || !klen)
         return -1;
 
-    if (cache->replica && !expire && (!cache->use_persistent_storage || !cache->storage.shared)) {
+    if (cache->replica && (!cache->use_persistent_storage || !cache->storage.shared)) {
         int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_SET, key, klen, value, vlen, expire, cexpire);
         if (cb)
             cb(key, klen, rc, priv);
@@ -1912,6 +1867,110 @@ int shardcache_set_async(shardcache_t *cache,
     }
 
     return shardcache_set_internal(cache, key, klen, value, vlen, expire, cexpire, if_not_exists, 0, cb, priv);
+}
+
+int
+shardcache_set_multi(shardcache_t *cache,
+                     void **keys,
+                     size_t *klens,
+                     void **values,
+                     size_t *vlens,
+                     int nkeys,
+                     time_t expire,
+                     time_t cexpire,
+                     int if_not_exists,
+                     shardcache_async_response_callback_t cb,
+                     void *priv)
+{
+    int i;
+
+    if (!nkeys || !keys || !klens || ! values || !vlens)
+        return -1;
+
+    // TODO - create different buckets grouping keys by owner so that we can 
+    // call shardcache_set() to set local keys only, and forward the rest to the
+    // proper peer using a SET_MULTI command
+    for (i = 0; i < nkeys; i++) {
+        shardcache_set(cache,
+                       keys[i],
+                       klens[i],
+                       values[i],
+                       vlens[i],
+                       expire,
+                       cexpire,
+                       if_not_exists,
+                       cb,
+                       priv);
+    }
+
+    return 0;
+}
+
+int
+shardcache_cas_internal(shardcache_t *cache,
+                        void *key,
+                        size_t klen,
+                        void *prev_value,
+                        size_t prev_len,
+                        void *new_value,
+                        size_t new_len,
+                        time_t expire,
+                        time_t cexpire,
+                        int replica,
+                        shardcache_async_response_callback_t cb,
+                        void *priv)
+{
+    int rc = -1;
+
+    char node_name[1024];
+    size_t node_len = sizeof(node_name);
+    memset(node_name, 0, node_len);
+
+    int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+    if (is_mine == -1)
+        is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
+
+    if (is_mine == 1) {
+        if (cache->storage.cas) {
+            rc = cache->storage.cas(key,
+                                    klen,
+                                    prev_value,
+                                    prev_len,
+                                    new_value,
+                                    new_len,
+                                    cache->storage.priv);
+            if (rc == 0 && !replica)
+                shardcache_commence_eviction(cache, key, klen);
+            
+        }
+    } else {
+
+    }
+    return rc;
+}
+
+int
+shardcache_cas(shardcache_t *cache,
+               void *key,
+               size_t klen,
+               void *prev_value,
+               size_t prev_len,
+               void *new_value,
+               size_t new_len,
+               time_t expire,
+               time_t cexpire,
+               shardcache_async_response_callback_t cb,
+               void *priv)
+{
+    if (cache->replica) {
+        int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_CAS, key, klen, NULL, 0, 0, 0);
+        if (cb)
+            cb(key, klen, rc, priv);
+        return rc;
+    }
+
+
+    return shardcache_cas_internal(cache, key, klen, prev_value, prev_len, new_value, new_len, expire, cexpire, 0, cb, priv);
 }
 
 
@@ -2028,23 +2087,11 @@ shardcache_del_internal(shardcache_t *cache,
 }
 
 int
-shardcache_del(shardcache_t *cache, void *key, size_t klen)
-{
-    if (!key || !key)
-        return -1;
-
-    if (cache->replica)
-        return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_DELETE, key, klen, NULL, 0, 0, 0);
-
-    return shardcache_del_internal(cache, key, klen, 0, NULL, NULL);
-}
-
-int
-shardcache_del_async(shardcache_t *cache,
-                     void *key,
-                     size_t klen,
-                     shardcache_async_response_callback_t cb,
-                     void *priv)
+shardcache_del(shardcache_t *cache,
+               void *key,
+               size_t klen,
+               shardcache_async_response_callback_t cb,
+               void *priv)
 {
     if (!key || !key)
         return -1;
@@ -2060,6 +2107,33 @@ shardcache_del_async(shardcache_t *cache,
 }
 
 int
+shardcache_del_multi(shardcache_t *cache,
+                     void **keys,
+                     size_t *klens,
+                     int nkeys,
+                     shardcache_async_response_callback_t cb,
+                     void *priv)
+{
+    int i;
+
+    if (!nkeys || !keys || !klens)
+        return -1;
+
+    // TODO - create different buckets grouping keys by owner so that we can 
+    // call shardcache_del() to del local keys only, and forward the rest to the
+    // proper peer using a DEL_MULTI command
+    for (i = 0; i < nkeys; i++) {
+        shardcache_del(cache,
+                       keys[i],
+                       klens[i],
+                       cb,
+                       priv);
+    }
+
+    return 0;
+}
+
+int
 shardcache_evict(shardcache_t *cache, void *key, size_t klen)
 {
     if (!key || !klen)
@@ -2069,6 +2143,25 @@ shardcache_evict(shardcache_t *cache, void *key, size_t klen)
         return shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_EVICT, key, klen, NULL, 0, 0, 0);
 
     arc_remove(cache->arc, (const void *)key, klen);
+
+    return 0;
+}
+
+into
+shardcache_evict_multi(shardcache_t *cache,
+                     void **keys,
+                     size_t *klens,
+                     int nkeys,
+                     shardcache_async_response_callback_t cb,
+                     void *priv)
+{
+    int i;
+
+    if (!nkeys || !keys || !klens)
+        return -1;
+
+    for (i = 0; i < nkeys; i++)
+        shardcache_evict(cache, keys[i], klens[i]);
 
     return 0;
 }

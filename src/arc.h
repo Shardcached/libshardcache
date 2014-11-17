@@ -44,7 +44,7 @@ typedef struct _arc_ops {
      * The callback CAN free all data associated with the object and the object itself
      */
     void (*evict) (void *obj, void *priv);
-    
+
     //! Pointer to private data which will provided to all callbacks
     void *priv;
 } arc_ops_t;

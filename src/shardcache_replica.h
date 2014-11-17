@@ -7,11 +7,12 @@
 typedef enum {
     SHARDCACHE_REPLICA_OP_SET             = 0x01,
     SHARDCACHE_REPLICA_OP_ADD             = 0x02,
-    SHARDCACHE_REPLICA_OP_DELETE          = 0x03,
-    SHARDCACHE_REPLICA_OP_EVICT           = 0x04,
-    SHARDCACHE_REPLICA_OP_MIGRATION_BEGIN = 0x05,
-    SHARDCACHE_REPLICA_OP_MIGRATION_ABORT = 0x06,
-    SHARDCACHE_REPLICA_OP_MIGRATION_END   = 0x07
+    SHARDCACHE_REPLICA_OP_CAS             = 0x03,
+    SHARDCACHE_REPLICA_OP_DELETE          = 0x04,
+    SHARDCACHE_REPLICA_OP_EVICT           = 0x05,
+    SHARDCACHE_REPLICA_OP_MIGRATION_BEGIN = 0x06,
+    SHARDCACHE_REPLICA_OP_MIGRATION_ABORT = 0x07,
+    SHARDCACHE_REPLICA_OP_MIGRATION_END   = 0x08
 } shardcache_replica_operation_t;
 
 typedef struct _shardcache_replica_s shardcache_replica_t;
@@ -31,6 +32,8 @@ int shardcache_replica_dispatch(shardcache_replica_t *replica,
                                 size_t klen,
                                 void *data,
                                 size_t dlen,
+                                void *data2,
+                                size_t dlen2,
                                 uint32_t expire,
                                 uint32_t cexpire);
 

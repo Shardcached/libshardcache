@@ -147,6 +147,19 @@ int send_to_peer(char *peer,
                  int fd,
                  int expect_response);
 
+// cas operation for a given key on a peer
+int cas_on_peer(char *peer,
+                char *auth,
+                unsigned char sig_hdr,
+                void *key,
+                size_t klen,
+                void *old_value,
+                size_t old_vlen,
+                void *new_value,
+                size_t new_vlen,
+                uint32_t expire,
+                int fd,
+                int expect_response);
 
 // add a new value (set if not exists) for a given key to a peer 
 int

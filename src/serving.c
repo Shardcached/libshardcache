@@ -508,9 +508,9 @@ get_async_data(shardcache_t *cache,
     if (req->hdr == SHC_HDR_GET_OFFSET) {
         uint32_t offset = ntohl(*((uint32_t *)fbuf_data(&req->records[1])));
         uint32_t length = ntohl(*((uint32_t *)fbuf_data(&req->records[2])));
-        rc = shardcache_get_offset_async(cache, key, klen, offset, length, cb, req);
+        rc = shardcache_get_offset(cache, key, klen, offset, length, cb, req);
     } else {
-        rc = shardcache_get_async(cache, key, klen, cb, req);
+        rc = shardcache_get(cache, key, klen, cb, req);
     }
     if (rc != 0) {
         SHC_ERROR("shardcache_get_async returned error");
@@ -583,19 +583,19 @@ process_request(shardcache_request_t *req)
                 memcpy(&cexpire, fbuf_data(&req->records[2]), sizeof(uint32_t));
                 cexpire = ntohl(cexpire);
             }
-            shardcache_set_async(cache, key, klen,
-                                 fbuf_data(&req->records[1]),
-                                 fbuf_used(&req->records[1]),
-                                 expire,
-                                 cexpire,
-                                 req->hdr == SHC_HDR_SET ? 0 : 1,
-                                 shardcache_async_command_response,
-                                 req);
+            shardcache_set(cache, key, klen,
+                           fbuf_data(&req->records[1]),
+                           fbuf_used(&req->records[1]),
+                           expire,
+                           cexpire,
+                           req->hdr == SHC_HDR_SET ? 0 : 1,
+                           shardcache_async_command_response,
+                           req);
             break;
         }
         case SHC_HDR_EXISTS:
         {
-            shardcache_exists_async(cache, key, klen, shardcache_async_command_response, req);
+            shardcache_exists(cache, key, klen, shardcache_async_command_response, req);
             break;
         }
         case SHC_HDR_TOUCH:
@@ -606,7 +606,7 @@ process_request(shardcache_request_t *req)
         }
         case SHC_HDR_DELETE:
         {
-            shardcache_del_async(cache, key, klen, shardcache_async_command_response, req);
+            shardcache_del(cache, key, klen, shardcache_async_command_response, req);
             break;
         }
         case SHC_HDR_EVICT:
@@ -614,6 +614,30 @@ process_request(shardcache_request_t *req)
             shardcache_evict(cache, key, klen);
             write_status(req, 0, WRITE_STATUS_MODE_SIMPLE);
             break;
+        }
+        case SHC_HDR_EVICT_MULTI:
+        {
+            uint32_t num_items = *((uint32_t *)key);
+            char *p = ((char *)key) + sizeof(uint32_t);
+            while (num_items-- > 0) {
+                uint32_t ks = *((uint32_t *)p);
+                p += ks;
+                shardcache_evict(cache, (void *)p, ks);
+            }
+            write_status(req, 0, WRITE_STATUS_MODE_SIMPLE);
+            break;
+        }
+        case SHC_HDR_CAS:
+        {
+        }
+        case SHC_HDR_GET_MULTI:
+        {
+        }
+        case SHC_HDR_SET_MULTI:
+        {
+        }
+        case SHC_HDR_DELETE_MULTI:
+        {
         }
         case SHC_HDR_MIGRATION_BEGIN:
         {

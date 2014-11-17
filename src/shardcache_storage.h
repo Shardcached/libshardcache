@@ -84,6 +84,22 @@ typedef int (*shardcache_store_item_callback_t)
     (void *key, size_t klen, void *value, size_t vlen, void *priv);
 
 /**
+ * @brief Callback to atomically compare and swap a value for a given key
+ *
+ * @param key       A valid pointer to the key
+ * @param klen      The length of the key
+ * @param old_value A valid pointer to the expected old value
+ * @param old_len   The length of the expected old value
+ * @param new_value A valid pointer to the new value to store if the old value matched
+ * @param new_len   The length of the new value
+ * @param priv  The 'priv' pointer previously stored in the shardcache_storage_t
+ *              structure at initialization time
+ * @return 0 if success, -1 otherwise
+ */
+typedef int (*shardcache_cas_item_callback_t)
+    (void *key, size_t klen, void *old_value, size_t old_len, void *new_value, size_t new_len, void *priv);
+
+/**
  * @brief Callback to remove an existing value for a given key.
  *
  *        The shardcache instance will call this callback
@@ -209,7 +225,7 @@ typedef void (*shardcache_thread_start_callback_t)(void *priv);
 typedef void (*shardcache_thread_exit_callback_t)(void *priv);
 
 
-#define SHARDCACHE_STORAGE_API_VERSION 0x01
+#define SHARDCACHE_STORAGE_API_VERSION 0x02
 
 typedef struct _shardcache_storage_s shardcache_storage_t;
 typedef int (*shardcache_storage_init_t)(shardcache_storage_t *, char **);
@@ -234,6 +250,9 @@ struct _shardcache_storage_s {
 
     //! The store callback (optional if the storage is indended to be read-only)
     shardcache_store_item_callback_t       store;
+
+    shardcache_cas_item_callback_t         cas;
+
     //! The remove callback (optional if the storage is intended to be read-only)
     shardcache_remove_item_callback_t      remove;
     /**

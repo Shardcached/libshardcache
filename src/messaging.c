@@ -762,6 +762,11 @@ read_message(int fd,
                 hdr != SHC_HDR_ADD &&
                 hdr != SHC_HDR_EXISTS &&
                 hdr != SHC_HDR_TOUCH &&
+                hdr != SHC_HDR_CAS &&
+                hdr != SHC_HDR_GET_MULTI &&
+                hdr != SHC_HDR_SET_MULTI &&
+                hdr != SHC_HDR_DELETE_MULTI &&
+                hdr != SHC_HDR_EVICT_MULTI &&
                 hdr != SHC_HDR_MIGRATION_BEGIN &&
                 hdr != SHC_HDR_MIGRATION_ABORT &&
                 hdr != SHC_HDR_MIGRATION_END &&
