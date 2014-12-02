@@ -1,3 +1,6 @@
+0.04  Tue Dec  2 15:46:54 CET 2014
+        - Updated the protocol implementation to include the magic number
+        - index and multi commands implemented
 0.03  Thu Jan  9 16:24:50 CET 2014
         - Updated to the last shardcache protocol spec (changed in libshardcache 0.9.3)
         - Various fixes and cleanings
