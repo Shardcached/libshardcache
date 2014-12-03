@@ -1109,6 +1109,7 @@ typedef struct {
             void *key;
             size_t klen;
             int fd;
+            async_read_wrk_t *wrk;
         } single;
         struct {
             shc_multi_item_t **items;
@@ -1120,7 +1121,6 @@ typedef struct {
     } arg;
     int pipe[2];
     fbuf_t buf;
-    async_read_wrk_t *wrk;
 } async_job_t;
 
 static async_job_t *
@@ -1163,6 +1163,8 @@ async_job_destroy(async_job_t *job)
             free(job->arg.single.key);
             if (job->arg.single.fd >= 0)
                 close(job->arg.single.fd);
+            if (job->arg.single.wrk)
+                free(job->arg.single.wrk);
             break;
         case JOB_CMD_GET_MULTI:
             if (job->arg.multi.pools)
@@ -1175,9 +1177,6 @@ async_job_destroy(async_job_t *job)
         close(job->pipe[1]);
 
     fbuf_destroy(&job->buf);
-
-    if (job->wrk)
-        free(job->wrk);
 
     free(job);
 }
@@ -1295,13 +1294,13 @@ async_thread(void *priv)
                                                    async_thread_get,
                                                    job,
                                                    job->arg.single.fd,
-                                                   &job->wrk);
+                                                   &job->arg.single.wrk);
                     if (rc == 0) {
-                        if (!iomux_add(iomux, job->wrk->fd, &job->wrk->cbs)) {
-                             if (job->wrk->fd >= 0)
-                                 job->wrk->cbs.mux_eof(iomux, job->wrk->fd, job->wrk->cbs.priv);
+                        if (!iomux_add(iomux, job->arg.single.wrk->fd, &job->arg.single.wrk->cbs)) {
+                             if (job->arg.single.wrk->fd >= 0)
+                                 job->arg.single.wrk->cbs.mux_eof(iomux, job->arg.single.wrk->fd, job->arg.single.wrk->cbs.priv);
                              else
-                                 async_read_context_destroy(job->wrk->ctx);
+                                 async_read_context_destroy(job->arg.single.wrk->ctx);
                              async_job_destroy(job);
                         }
                     } else {
@@ -1315,8 +1314,7 @@ async_thread(void *priv)
                                                                                     SHC_HDR_GET,
                                                                                     job->arg.multi.items,
                                                                                     job->arg.multi.nitems,
-                                                                                    job->arg.multi.
-                                                                                    pools,
+                                                                                    job->arg.multi.pools,
                                                                                     iomux,
                                                                                     NULL,
                                                                                     async_thread_get_multi,
