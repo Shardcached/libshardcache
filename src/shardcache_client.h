@@ -345,6 +345,7 @@ typedef struct {
     size_t dlen;
     int status;
     uint32_t expire;
+    uint32_t idx; // reserved for internal use
 } shc_multi_item_t;
 
 /**
@@ -399,6 +400,10 @@ int shardcache_client_set_multi(shardcache_client_t *c,
  * @param c          A valid pointer to a shardcache_Client_t structure
  */
 shardcache_node_t *shardcache_client_current_node(shardcache_client_t *c);
+
+int shardcache_client_getf(shardcache_client_t *c, void *key, size_t klen);
+
+int shardcache_client_get_multif(shardcache_client_t *c, shc_multi_item_t **items);
 
 #endif
 

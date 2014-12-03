@@ -12,6 +12,7 @@ void usage(char *prgname) {
     printf("Usage: %s <Command> <Key>\n"
            "   Commands: \n"
            "        get       <key> [ <output_file> (defaults to stdout) ]\n"
+           "        getf      <key> [ <output_file> (defaults to stdout) ]\n"
            "        get_async <key> [ <output_file> (defaults to stdout) ]\n"
            "        get_multi <key> [ <key> ... ] [ -o <output_dir>   (defaults to stdout) ]\n"
            "        offset    <key> <offset> <kength> [ <output_file> (defaults to stdout)\n"
@@ -93,10 +94,30 @@ int main (int argc, char **argv) {
     int rc = 0;
     int is_boolean = 0;
 
-    FILE *output_file = NULL;
+    FILE *output_file = stdout;
 
     char *cmd = argv[1];
-    if (strcasecmp(cmd, "get") == 0) {
+    if (strcasecmp(cmd, "getf") == 0) {
+        int fd = shardcache_client_getf(client, argv[2], strlen(argv[2]));
+        if (fd >= 0) {
+            if (argc > 3) {
+                output_file = fopen(argv[3], "w");
+                if (!output_file) {
+                    fprintf(stderr, "Can't open file %s for writing : %s\n",
+                            argv[3], strerror(errno));
+                    exit(-1);
+                }
+            }
+            char buf[1024];
+            int rb = 0;
+            while ((rb = read(fd, &buf, sizeof(buf))) > 0)
+               fwrite(&buf, 1, rb, output_file);
+            close(fd);
+        } else {
+            fprintf(stderr, "Can't fetch data using shardcache_client_getf()\n");
+            exit(-1);
+        }
+    } else if (strcasecmp(cmd, "get") == 0) {
         void *out = NULL;
         size_t len = shardcache_client_get(client, argv[2], strlen(argv[2]), &out); 
         if (len && out) {
