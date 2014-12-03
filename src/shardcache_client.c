@@ -19,11 +19,10 @@
 #include "connections.h"
 #include "messaging.h"
 #include "connections_pool.h"
+#include "shardcache_internal.h"
 #include "shardcache_client.h"
 
 #define SHC_PIPELINE_MAX_DEFAULT SHARDCACHE_SERVING_LOOK_AHEAD_DEFAULT
-
-typedef struct chash_t chash_t;
 
 struct shardcache_client_s {
     chash_t *chash;
@@ -39,6 +38,8 @@ struct shardcache_client_s {
     char errstr[1024];
     queue_t *async_jobs;
     pthread_t thread;
+    pthread_cond_t wakeup_cond;
+    pthread_mutex_t wakeup_lock;
     int quit;
 };
 
@@ -141,7 +142,8 @@ select_node(shardcache_client_t *c, void *key, size_t klen, int *fd)
         chash_lookup(c->chash, key, klen, &node_name, &name_len);
 
         for (i = 0; i < c->num_shards; i++) {
-            if (strncmp(node_name, shardcache_node_get_label(c->shards[i]), name_len) == 0) {
+            if (strncmp(node_name, shardcache_node_get_label(c->shards[i]), name_len) == 0)
+            {
                 node = c->shards[i];
                 c->current_node = node;
                 break;
@@ -461,6 +463,9 @@ shardcache_client_destroy(shardcache_client_t *c)
     if (c->thread) {
         __sync_fetch_and_add(&c->quit, 1);
         pthread_join(c->thread, NULL);
+        CONDITION_SIGNAL(&c->wakeup_cond, &c->wakeup_lock);
+        CONDITION_DESTROY(&c->wakeup_cond);
+        MUTEX_DESTROY(&c->wakeup_lock);
     }
     queue_destroy(c->async_jobs);
     chash_free(c->chash);
@@ -860,9 +865,16 @@ shc_multi_eof(iomux_t *iomux, int fd, void *priv)
     if (ctx->cb) {
         ctx->cb(ctx, 1);
     } else {
-        close(fd);
-        if (ctx->fd == fd)
+        if (ctx->fd == fd) {
+            if (ctx->response_index == ctx->num_requests)
+                connections_pool_add(ctx->client->connections, ctx->peer, ctx->fd);
+            else
+                close(ctx->fd);
             ctx->fd = -1;
+        } else {
+            // TODO - Warning message for unexpected condition
+            close(fd);
+        }
     }
 }
 
@@ -875,8 +887,10 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
     SHC_DEBUG3("received %d\n", len);
     async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
     while (state == SHC_STATE_READING_DONE) {
-        if (ctx->cb && ctx->cb(ctx, 0) != 0)
+        if (ctx->cb && ctx->cb(ctx, 0) != 0) {
             iomux_close(iomux, fd);
+            return processed;
+        }
 
         ctx->response_index++;
         if (ctx->total_count)
@@ -1138,7 +1152,6 @@ async_job_create(shardcache_client_t *c, int cmd, void *argp, size_t argn)
     }
 
     FBUF_STATIC_INITIALIZER_POINTER(&job->buf, FBUF_MAXLEN_NONE, 64, 1024, 512);
-    queue_push_left(c->async_jobs, job);
     return job;
 }
 
@@ -1298,7 +1311,16 @@ async_thread(void *priv)
                 }
                 case JOB_CMD_GET_MULTI:
                 {
-                    job->arg.multi.contexts = shardcache_client_multi_send_requests(c, SHC_HDR_GET, job->arg.multi.items, job->arg.multi.nitems, job->arg.multi.pools, iomux, NULL, async_thread_get_multi, job);
+                    job->arg.multi.contexts = shardcache_client_multi_send_requests(c,
+                                                                                    SHC_HDR_GET,
+                                                                                    job->arg.multi.items,
+                                                                                    job->arg.multi.nitems,
+                                                                                    job->arg.multi.
+                                                                                    pools,
+                                                                                    iomux,
+                                                                                    NULL,
+                                                                                    async_thread_get_multi,
+                                                                                    job);
                     if (!job->arg.multi.contexts) {
                         // TODO - Error messages
                         async_job_destroy(job);
@@ -1314,7 +1336,9 @@ async_thread(void *priv)
             struct timeval tv = { 0, 1 };
             iomux_run(iomux, &tv); 
         } else {
-            usleep(500);
+            static __thread struct timespec ts = { 0, 0 };
+            ts.tv_sec = time(NULL) + 1;
+            CONDITION_TIMEDWAIT(&c->wakeup_cond, &c->wakeup_lock, &ts);
         }
 
     }
@@ -1329,8 +1353,13 @@ shardcache_client_getf(shardcache_client_t *c, void *key, size_t klen)
     async_job_t *job = async_job_create(c, JOB_CMD_GET, key, klen);
 
     if (job) {
-        if (!c->thread)
+        if (!c->thread) {
+            MUTEX_INIT(&c->wakeup_lock);
+            CONDITION_INIT(&c->wakeup_cond);
             pthread_create(&c->thread, NULL, async_thread, c);
+        }
+        queue_push_left(c->async_jobs, job);
+        CONDITION_SIGNAL(&c->wakeup_cond, &c->wakeup_lock);
         return job->pipe[0];
     }
     return -1;
@@ -1342,8 +1371,14 @@ shardcache_client_get_multif(shardcache_client_t *c, shc_multi_item_t **items)
     async_job_t *job = async_job_create(c, JOB_CMD_GET_MULTI, items, 0);
 
     if (job) {
-        if (!c->thread)
+        if (!c->thread) {
+            MUTEX_INIT(&c->wakeup_lock);
+            CONDITION_INIT(&c->wakeup_cond);
             pthread_create(&c->thread, NULL, async_thread, c);
+        }
+
+        queue_push_left(c->async_jobs, job);
+        CONDITION_SIGNAL(&c->wakeup_cond, &c->wakeup_lock);
         return job->pipe[0];
     }
     return -1;
