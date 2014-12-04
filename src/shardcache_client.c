@@ -864,17 +864,9 @@ shc_multi_eof(iomux_t *iomux, int fd, void *priv)
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
     if (ctx->cb) {
         ctx->cb(ctx, 1);
-    } else {
-        if (ctx->fd == fd) {
-            if (ctx->response_index == ctx->num_requests)
-                connections_pool_add(ctx->client->connections, ctx->peer, ctx->fd);
-            else
-                close(ctx->fd);
-            ctx->fd = -1;
-        } else {
+    } else if (ctx->fd != fd) {
             // TODO - Warning message for unexpected condition
             close(fd);
-        }
     }
 }
 
@@ -1169,8 +1161,12 @@ async_job_destroy(async_job_t *job)
         case JOB_CMD_GET_MULTI:
             if (job->arg.multi.pools)
                 list_destroy(job->arg.multi.pools);
-            if (job->arg.multi.contexts)
+            if (job->arg.multi.contexts) {
+                shc_multi_ctx_t *ctx = NULL;
+                while ((ctx = list_shift_value(job->arg.multi.contexts)))
+                    shc_multi_context_destroy(ctx);
                 list_destroy(job->arg.multi.contexts);
+            }
             break;
     }
     if (job->pipe[1] >= 0)
@@ -1238,6 +1234,17 @@ async_thread_get_multi(shc_multi_ctx_t *ctx, int eof)
     async_job_t *job = (async_job_t *)ctx->priv;
     shc_multi_item_t *item = ctx->items[ctx->response_index];
     
+    int pending = fbuf_used(&job->buf);
+    if (pending) {
+        int wb = write(job->pipe[1], fbuf_data(&job->buf), pending);
+        if (wb == -1) {
+            async_job_destroy(job);
+            return -1;
+        } else if (wb > 0) {
+            fbuf_remove(&job->buf, wb);
+        }
+    }
+
     if (eof) {
         job->arg.multi.done++;
         if (job->arg.multi.done == list_count(job->arg.multi.contexts))
@@ -1245,9 +1252,17 @@ async_thread_get_multi(shc_multi_ctx_t *ctx, int eof)
         return 0;
     }
 
+    if (fbuf_used(&job->buf)) {
+        fbuf_add_binary(&job->buf, (char *)&item->idx, sizeof(item->idx));
+        fbuf_add_binary(&job->buf, (char *)&item->dlen, sizeof(item->dlen));
+        fbuf_add_binary(&job->buf, item->data, item->dlen);
+        return 0;
+    }
+
     int wb = write(job->pipe[1], &item->idx, sizeof(item->idx));
     if (wb != sizeof(item->idx)) {
-        return -1;
+        if (wb == -1)
+            return -1;
     }
 
     wb = write(job->pipe[1], &item->dlen, sizeof(item->dlen));
@@ -1256,8 +1271,13 @@ async_thread_get_multi(shc_multi_ctx_t *ctx, int eof)
     }
 
     wb = write(job->pipe[1], item->data, item->dlen);
-    if (wb != item->dlen)
-        return -1;
+    if (wb != item->dlen) {
+        if (wb >= 0) {
+            fbuf_add_binary(&job->buf, item->data + wb, item->dlen - wb);
+        } else {
+            return -1;
+        }
+    }
 
     return 0;
 }
