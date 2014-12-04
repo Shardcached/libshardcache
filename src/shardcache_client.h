@@ -375,7 +375,7 @@ void shc_multi_item_destroy(shc_multi_item_t *item);
 
 
 /**
- * @brief get multiple keys at once
+ * @brief Get multiple keys at once
  *
  * @param c          A valid pointer to a shardcache_client_t structure to release
  * @param items      A NULL-terminated array of shc_multi_item_t structures
@@ -385,7 +385,7 @@ void shc_multi_item_destroy(shc_multi_item_t *item);
 int shardcache_client_get_multi(shardcache_client_t *c,
                                 shc_multi_item_t **items);
 /**
- * @brief get multiple keys at once
+ * @brief Get multiple keys at once
  *
  * @param c          A valid pointer to a shardcache_client_t structure to release
  * @param items      A NULL-terminated array of shc_multi_item_t structures
@@ -396,13 +396,40 @@ int shardcache_client_set_multi(shardcache_client_t *c,
                                 shc_multi_item_t **items);
 
 /**
- * @brief get the node used to fulfil last request
+ * @brief Get the node used to fulfil last request
  * @param c          A valid pointer to a shardcache_Client_t structure
  */
 shardcache_node_t *shardcache_client_current_node(shardcache_client_t *c);
 
+/**
+ * @brief Get the value for a key asynchronously using a filedescriptor
+ *        to retrieve the data
+ * @param key     A valid pointer to the key
+ * @param klen    The length of the key
+ * @return        A valid file descritor that the caller can use to retrieve
+ *                the data asynchronously
+ * @note          The caller will read an EOF from the returned filedescriptor
+ *                once there is no more data to read
+ * @note          In case of errors during the transfer the data might be truncated.\n
+ *                At the moment there is no way to detect such a problem apart checking
+ *                the size of the retrieved data against what expected
+ */
 int shardcache_client_getf(shardcache_client_t *c, void *key, size_t klen);
 
+/**
+ * @brief Get the values for multiple keys asynchronously using a filedescriptor
+ *        to retrieve the data
+ * @param items      A NULL-terminated array of shc_multi_item_t structures
+ * @return        A valid file descritor that the caller can use to retrieve
+ *                the data asynchronously
+ * @note          each value is prefixed with an header containing the index of the key
+ *                to which the data refers to and the size of the data
+ * @note          The caller will read an EOF from the returned filedescriptor
+ *                once there is no more data to read
+ * @note          Each value is returned only when completely fetched, so it's not possible\n
+ *                to read truncated values. A value size of 0 indicates that the value was not
+ *                found (or was NULL on the storage)
+ */
 int shardcache_client_get_multif(shardcache_client_t *c, shc_multi_item_t **items);
 
 #endif
