@@ -262,6 +262,23 @@ kepaxos_commit(unsigned char type,
                                          leader ? 0 : 1,
                                          NULL, NULL);
             break;
+        case SHARDCACHE_REPLICA_OP_CAS:
+        {
+            void *new_data = (void *)(kdata->data + kdata->len);
+            size_t new_len = kdata->len2;
+            rc = shardcache_cas_internal(replica->shc,
+                                         key,
+                                         klen,
+                                         &kdata->data,
+                                         kdata->len,
+                                         new_data,
+                                         new_len,
+                                         kdata->expire,
+                                         kdata->cexpire,
+                                         leader ? 0 : 1,
+                                         NULL, NULL);
+            break;
+        }
         case SHARDCACHE_REPLICA_OP_DELETE:
             rc = shardcache_del_internal(replica->shc, key, klen, leader ? 0 : 1, NULL, NULL);
             break;
