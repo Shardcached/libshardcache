@@ -1152,14 +1152,26 @@ async_job_create(shardcache_client_t *c, int cmd, void *argp, size_t argn)
 
     switch(cmd) {
         case JOB_CMD_GET:
+        {
             job->arg.single.key = malloc(argn);
             memcpy(job->arg.single.key, argp, argn);
             job->arg.single.klen = argn;
             break;
+        }
         case JOB_CMD_GET_MULTI:
-            job->arg.multi.items = (shc_multi_item_t **)argp;
+        {
+            shc_multi_item_t **items = (shc_multi_item_t **)argp;
+            shc_multi_item_t **copy = malloc(sizeof(shc_multi_item_t *));
+            int i;
+            for (i = 0; items[i]; i++) {
+                copy = realloc(copy, (sizeof(shc_multi_item_t *) * (i+1)) + 1);
+                copy[i] = shc_multi_item_create(items[i]->key, items[i]->klen, NULL, 0);
+            }
+            copy[i] = NULL;
+            job->arg.multi.items = copy;
             job->arg.multi.pools = shc_split_buckets(c,  job->arg.multi.items, &job->arg.multi.nitems);
             break;
+        }
         default:
             // TODO - error message for unsupported command
             free(job);
@@ -1190,6 +1202,10 @@ async_job_destroy(async_job_t *job)
                 while ((ctx = list_shift_value(job->arg.multi.contexts)))
                     shc_multi_context_destroy(ctx);
                 list_destroy(job->arg.multi.contexts);
+                int i;
+                for (i = 0; job->arg.multi.items[i]; i++)
+                    shc_multi_item_destroy(job->arg.multi.items[i]);
+                free(job->arg.multi.items);
             }
             break;
     }
