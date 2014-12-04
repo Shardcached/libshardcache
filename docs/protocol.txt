@@ -66,6 +66,9 @@ ERR                  : 0xff
 YES                  : 0x01
 NO                   : 0xfe
 EXISTS               : 0x02
+RESPONSE_STATUS      : <RECORD[STATUS]>
+RESPONSE_BSTATUS     : <RECORD[BSTATUS]>
+RESPONSE_CSTATUS     : <RECORD[CSTATUS]>
 STATUS               : <OK> | <ERR>
 BSTATUS              : <YES> | <NO>
 CSTATUS              : <OK> | <ERR> | <EXISTS>
@@ -78,26 +81,33 @@ Extra definitions:
 KEY                  : <RECORD>
 VALUE                : <RECORD>
 TTL                  : <RECORD>
-INDEX                : <RECORD>
-OFFSET               : <LONG_SIZE>
+INDEX_RECORD         : <RECORD[INDEX]>
+INDEX                : <KSIZE><KDATA><VSIZE>[<KSIZE><KDATA><VSIZE>...]<EOR>
+KSIZE                : <LONG_SIZE>
 LONG_SIZE            : <DOUBLE_WORD>
 DOUBLE_WORD          : <WORD_HIGH><WORD_LOW>
 WORD_HIGH            : <WORD>
 WORD_LOW             : <WORD>
+KDATA                : <DATA>
+VSIZE                : <LONG_SIZE>
+OFFSET               : <RECORD[LONG_SIZE]>
 LONG_LONG_SIZE:      : <QUAD_WORD>
 QUAD_WORD            : <DOUBLE_WORD_HIGH><DOUBLE_WORD_LOW>
 DOUBLE_WORD_HIGH     : <DOUBLE_WORD>
 DOUBLE_WORD_LOW      : <DOUBLE_WORD>
-LENGTH               : <LONG_SIZE>
-REMAINING_BYTES      : <LONG_SIZE>
+LENGTH               : <RECORD[LONG_SIZE]>
+REMAINING_BYTES      : <RECORD[LONG_SIZE]>
 ARRAY                : <NUM_ITEMS><ITEM_SIZE><ITEM_DATA>[<ITEM_SIZE><ITEM_DATA>]<EOR>
 NUM_ITEMS            : <LENGTH>
 ITEM_SIZE            : <LONG_SIZE>
 ITEM_DATA            : <DATA>
+KEYS                 : <RECORD[KEYS_ARRAY]>
 KEYS_ARRAY           : <ARRAY[DATA]>
+VALUES               : <RECORD[VALUES_ARRAY]>
 VALUES_ARRAY         : <ARRAY[DATA]>
+RESPONSE_STATUSES    : <RECORD[STATUS_ARRAY]>
 STATUS_ARRAY         : <ARRAY[STATUS]>
-NODES_LIST           : <NODES_STRING>
+NODES_LIST           : <RECORD[NODES_STRING]>
 NODES_STRING         : <LABEL><:><ADDRESS><:><PORT>[<,><LABEL><:><ADDRESS><:><PORT>...]
 LABEL                : <STRING>
 ADDRESS              : <STRING>
@@ -113,78 +123,73 @@ The implemented messages in libshardcache are the following:
 
 
 GET               : <MSG_GET><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><RECORD><STATUS><EOM>
+                    RESPONSE: <MSG_RESPONSE><LENGTH><VALUE><RESPONSE_STATUS><EOM>
 
 GET_ASYNC         : <MSG_GET_ASYNC><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><RECORD><STATUS><EOM>
+                    RESPONSE: <MSG_RESPONSE><LENGTH><VALUE><RESPONSE_STATUS><EOM>
 
 GET_OFFSET        : <MSG_GET_OFFSET><KEY><OFFSET><LENGTH><EOM>
-                    RESPONSE: <MSG_RESPONSE><RECORD><REMAINING_BYTES><EOM>
+                    RESPONSE: <MSG_RESPONSE><LENGTH><VALUE><REMAINING_BYTES><EOM>
 
 EXISTS            : <MSG_EXISTS><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><BSTATUS><EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_BSTATUS><EOM>
 
 TOUCH             : <MSG_TOUCH><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS<<EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUS<<EOM>
 
-SET               : <MSG_SET><KEY><RSEP><VALUE>[<RSEP><TTL>[<RSEP><CTTL>]]<EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
+SET               : <MSG_SET><KEY><VALUE>[<TTL>[<CTTL>]]<EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
-ADD               : <MSG_ADD><KEY><RSEP><VALUE>[<RSEP><TTL>]<EOM>
-                    RESPONSE: <MSG_RESPONSE><CSTATUS><EOM>
+ADD               : <MSG_ADD><KEY><VALUE>[<TTL>[<CTTL>]]<EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_CSTATUS><EOM>
 
 DELETE            : <MSG_DELETE><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
 EVICT             : <MSG_EVICT><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
-GET_MULTI         : <MSG_GET_MULTI><KEYS_ARRAY><EOM>
-                    RESPONSE: <MSG_RESPONSE><DATA_ARRAY><STATUS_ARRAY><EOM>
+GET_MULTI         : <MSG_GET_MULTI><KEYS><EOM>
+                    RESPONSE: <MSG_RESPONSE><VALUES><RESPONSE_STATUSES><EOM>
 
-SET_MULTI         : <MSG_SET_MULTI><KEYS_ARRAY><VALUES_ARRAY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS_ARRAY><EOM>
+SET_MULTI         : <MSG_SET_MULTI><KEYS><VALUES><EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUSES><EOM>
 
-DELETE_MULTI      : <MSG_DELETE_MULTI><KEYS_ARRAY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS_ARRAY><EOM>
+DELETE_MULTI      : <MSG_DELETE_MULTI><KEYS><EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUSES><EOM>
 
-EVICT_MULTI       : <MSG_EVICT_MULTI><KEYS_ARRAY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS_ARRAY><EOM>
+EVICT_MULTI       : <MSG_EVICT_MULTI><KEYS><EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUSES><EOM>
 
 CAS               : <MSG_CAS><KEY><VALUE><VALUE><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
 INCREMENT         : <MSG_INCREMENT><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
 DECREMENT         : <MSG_DECREMENT><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><STATUS><EOM>
+                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
 MGB               : <MSG_MIGRATION_BEGIN><NODES_LIST><EOM>
-RESPONSE          : <MSG_RESPONSE><STATUS><EOM>
+RESPONSE          : <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
 MGA               : <MSG_MIGRATION_ABORT><NULL_RECORD><EOM>
-RESPONSE          : <MSG_RESPONSE><STATUS><EOM>
+RESPONSE          : <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
 MGE               : <MSG_MIGRATION_END><NULL_RECORD><EOM>
-RESPONSE          : <MSG_RESPONSE><STATUS><EOM>
+RESPONSE          : <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
 STS               : <MSG_STATS><NULL_RECORD><EOM>
-RESPONSE          : <MSG_RESPONSE><RECORD><EOM>
+RESPONSE          : <MSG_RESPONSE><RESPONSE_RECORD><EOM>
 
 CHK               : <MSG_CHECK><NULL_RECORD><EOM>
-RESPONSE          : <MSG_RESPONSE><STATUS><EOM>
+RESPONSE          : <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
 IDG               : <MSG_GET_INDEX><NULL_RECORD><EOM>
-RESPONSE          : <MSG_INDEX_RESPONSE><INDEX><EOM>
+RESPONSE          : <MSG_INDEX_RESPONSE><INDEX_RECORD><EOM>
 
 NOTE: The index record contained in the MSG_INDEX_RESPONSE is encoded using
       a specific format
-
-INDEX_RECORD      : <KSIZE><KDATA><VSIZE>[<KSIZE><KDATA><VSIZE>...]<EOR>
-KSIZE             : <LONG_SIZE>
-KDATA             : <DATA>
-VSIZE             : <LONG_SIZE>
 
 
 
