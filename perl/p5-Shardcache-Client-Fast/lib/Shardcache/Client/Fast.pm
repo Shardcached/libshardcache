@@ -268,6 +268,14 @@ sub get_multi {
     wantarray ? @$res : $res;
 }
 
+sub get_multif {
+    my ($self, $keys) = @_;
+    my $fd = shardcache_client_get_multif($self->{_client}, $keys);
+    my $fh;
+    open($fh, "<&=", $fd);
+    return $fh;
+}
+
 sub set_multi {
     my ($self, $pairs) = @_;
     my $res = shardcache_client_set_multi($self->{_client}, $pairs);
