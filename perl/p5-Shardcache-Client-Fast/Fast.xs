@@ -200,6 +200,18 @@ shardcache_client_get(c, key)
     OUTPUT:
         RETVAL
 
+int
+shardcache_client_getf(c, key)
+    shardcache_client_t *c
+    SV *key
+    CODE:
+	STRLEN	klen = 0;
+        char *k = SvPVbyte(key, klen);
+        RETVAL = shardcache_client_getf(c, k, klen);
+    OUTPUT:
+        RETVAL
+
+
 SV *
 shardcache_client_offset(c, key, offset, length)
 	shardcache_client_t *	c
@@ -406,6 +418,42 @@ shardcache_client_get_multi(c, keys, results = &PL_sv_undef)
 
     OUTPUT:
         RETVAL
+
+int
+shardcache_client_get_multif(c, keys)
+        shardcache_client_t *c
+        SV *keys
+    CODE:
+        RETVAL = -1;
+        if (SvOK(keys)) {
+            if (!SvROK(keys) || SvTYPE(SvRV(keys)) != SVt_PVAV)
+              croak("shardcache_client_get_multi(): Expected an array reference as 'keys' parameter");
+
+            AV *items_av = (AV *)SvRV(keys);
+
+            int num_items = av_len(items_av) + 1;
+            if (num_items > 0) {
+                shc_multi_item_t *items_array[num_items+1];
+                int i;
+                for (i = 0; i < num_items; i++) {
+                   SV **svp = av_fetch(items_av, i, 0);
+                    if (!svp)
+                        croak("shardcache_client_get_multi(): null element in the 'keys' array");
+
+                    STRLEN klen = 0;
+                    char *key = SvPVbyte(*svp, klen);
+                    items_array[i] = shc_multi_item_create(key, klen, NULL, 0);
+                }
+                items_array[num_items] = NULL; // null-terminate it
+
+                RETVAL = shardcache_client_get_multif(c, items_array);
+                for (i = 0; i < num_items; i++)
+                    shc_multi_item_destroy(items_array[i]);
+            }
+        }
+    OUTPUT:
+        RETVAL
+
 
 SV *
 shardcache_client_set_multi(c, keys)

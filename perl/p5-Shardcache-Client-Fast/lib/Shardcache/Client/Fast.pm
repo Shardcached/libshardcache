@@ -15,6 +15,7 @@ our %EXPORT_TAGS = ( 'all' => [ qw(
         shardcache_client_destroy
         shardcache_client_evict
         shardcache_client_get
+        shardcache_client_getf
         shardcache_client_get_async
         shardcache_client_touch
         shardcache_client_exists
@@ -152,9 +153,17 @@ sub _clear_err {
 
 sub get {
     my ($self, $key) = @_;
-    my $val =  shardcache_client_get($self->{_client}, $key);
+    my $val = shardcache_client_get($self->{_client}, $key);
     $self->_clear_err($val);
     return $val;
+}
+
+sub getf {
+    my ($self, $key) = @_;
+    my $fd = shardcache_client_getf($self->{_client}, $key);
+    my $fh;
+    open($fh, "<&=", $fd);
+    return $fh;
 }
 
 sub offset {
