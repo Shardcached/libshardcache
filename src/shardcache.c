@@ -2147,7 +2147,7 @@ shardcache_evict(shardcache_t *cache, void *key, size_t klen)
     return 0;
 }
 
-into
+int
 shardcache_evict_multi(shardcache_t *cache,
                      void **keys,
                      size_t *klens,
