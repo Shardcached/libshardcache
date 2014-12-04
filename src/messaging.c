@@ -430,22 +430,21 @@ read_async_input_eof(iomux_t *iomux, int fd, void *priv)
     async_read_context_destroy(ctx);
 }
 
-/*
 static void
 read_async_timeout(iomux_t *iomux, int fd, void *priv)
 {
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
-    struct timeval maxwait = { 3, 0 };
+    int tcp_timeout = global_tcp_timeout(-1);
+    struct timeval maxwait = { tcp_timeout / 1000, (tcp_timeout % 1000) * 1000 };
     struct timeval now, diff;
     gettimeofday(&now, NULL);
     timersub(&now, &ctx->last_update, &diff);
     if (timercmp(&diff, &maxwait, >)) {
+        iomux_close(iomux, fd);
     } else { 
-        struct timeval tv = { 1, 0 };
-        iomux_set_timeout(iomux, fd, &tv);
+        iomux_set_timeout(iomux, fd, &maxwait);
     }
 }
-*/
 
 int
 read_message_async(int fd,
@@ -462,14 +461,12 @@ read_message_async(int fd,
     async_read_wrk_t *wrk = calloc(1, sizeof(async_read_wrk_t));
     wrk->ctx = async_read_context_create(auth, cb, priv);
     wrk->cbs.mux_input = read_async_input_data;
+    wrk->cbs.mux_timeout = read_async_timeout;
     wrk->cbs.mux_eof = read_async_input_eof;
     wrk->cbs.priv = wrk->ctx;
     wrk->fd = fd;
 
     wrk->ctx->blocking = (!worker);
-
-    //struct timeval tv = { 1, 0 };
-    //iomux_set_timeout(iomux, fd, &tv);
 
     if (wrk->ctx->blocking) {
         iomux_t *iomux = iomux_create(1<<13, 0);
@@ -481,6 +478,10 @@ read_message_async(int fd,
 
         char state = SHC_STATE_READING_ERR;
         if (iomux_add(iomux, fd, &wrk->cbs)) {
+            int tcp_timeout = global_tcp_timeout(-1);
+            struct timeval maxwait = { tcp_timeout / 1000, (tcp_timeout % 1000) * 1000 };
+            iomux_set_timeout(iomux, fd, &maxwait);
+
             // we are in blocking mode, let's wait for the job
             // to be completed
             for (;;) {

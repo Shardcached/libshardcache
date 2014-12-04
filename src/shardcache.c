@@ -442,6 +442,9 @@ shardcache_run_async(void *priv)
                  else
                      async_read_context_destroy(wrk->ctx);
             }
+            int tcp_timeout = global_tcp_timeout(-1);
+            struct timeval maxwait = { tcp_timeout / 1000, (tcp_timeout % 1000) * 1000 };
+            iomux_set_timeout(async_mux, wrk->fd, &maxwait);
             free(wrk);
             wrk = queue_pop_left(async_queue);
         }

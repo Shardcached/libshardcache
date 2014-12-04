@@ -737,6 +737,7 @@ struct shc_multi_ctx_s {
     int num_requests;
     shardcache_hdr_t cmd;
     uint32_t *total_count;
+    struct timeval last_update;
     int fd;
     int (*cb)(shc_multi_ctx_t *, int);
     void *priv;
@@ -855,6 +856,7 @@ shc_multi_context_create(shardcache_client_t *c,
             return NULL;
         }
     }
+    gettimeofday(&ctx->last_update, NULL);
     return ctx;
 }
 
@@ -875,6 +877,8 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
 {
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
     int processed = 0;
+
+    gettimeofday(&ctx->last_update, NULL);
 
     SHC_DEBUG3("received %d\n", len);
     async_read_context_state_t state = async_read_context_input_data(ctx->reader, data, len, &processed);
@@ -903,6 +907,22 @@ shc_multi_fetch_response(iomux_t *iomux, int fd, unsigned char *data, int len, v
     }
 
     return processed;
+}
+
+static void
+shc_multi_timeout(iomux_t *iomux, int fd, void *priv)
+{
+    shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
+    int tcp_timeout = global_tcp_timeout(-1);
+    struct timeval maxwait = { tcp_timeout / 1000, (tcp_timeout % 1000) * 1000 };
+    struct timeval now, diff;
+    gettimeofday(&now, NULL);
+    timersub(&now, &ctx->last_update, &diff);
+    if (timercmp(&diff, &maxwait, >)) {
+        iomux_close(iomux, fd);
+    } else { 
+        iomux_set_timeout(iomux, fd, &maxwait);
+    }
 }
 
 static inline int
@@ -961,6 +981,8 @@ shardcache_client_multi_send_requests(shardcache_client_t *c,
     linked_list_t *contexts = list_create();
 
     int i;
+    int tcp_timeout = shardcache_client_tcp_timeout(c, -1);
+    struct timeval maxwait = { tcp_timeout / 1000, (tcp_timeout % 1000) * 1000 };
     for (i = 0; i < count; i++) {
 
         tagged_value_t *tval = list_pick_tagged_value(pools, i);
@@ -995,7 +1017,7 @@ shardcache_client_multi_send_requests(shardcache_client_t *c,
 
         iomux_callbacks_t cbs = {
             .mux_output = NULL,
-            .mux_timeout = NULL,
+            .mux_timeout = shc_multi_timeout,
             .mux_eof = shc_multi_eof,
             .mux_input = shc_multi_fetch_response,
             .priv = ctx
@@ -1010,6 +1032,8 @@ shardcache_client_multi_send_requests(shardcache_client_t *c,
             list_destroy(contexts);
             return NULL;
         }
+
+        iomux_set_timeout(iomux, fd, &maxwait);
 
         char *output = NULL;
         unsigned int len = fbuf_detach(ctx->commands, &output, NULL);
@@ -1322,6 +1346,10 @@ async_thread(void *priv)
                              else
                                  async_read_context_destroy(job->arg.single.wrk->ctx);
                              async_job_destroy(job);
+                        } else {
+                            int tcp_timeout = shardcache_client_tcp_timeout(c, -1);
+                            struct timeval maxwait = { tcp_timeout / 1000, (tcp_timeout % 1000) * 1000 };
+                            iomux_set_timeout(iomux, job->arg.single.wrk->fd, &maxwait);
                         }
                     } else {
                         async_job_destroy(job);
