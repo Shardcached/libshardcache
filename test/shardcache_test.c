@@ -278,8 +278,7 @@ int main(int argc, char **argv)
                 ofx += sizeof(uint32_t);
                 ls = ntohl(*((uint32_t *)(p + ofx)));
                 ofx += sizeof(uint32_t);
-            }
-            if (ls > 0 && rs >= ofx + ls) {
+            } else if (ls > 0 && rs >= ofx + ls) {
                 char rv[64];
                 snprintf(v, ls+1, "%s", p + ofx);
                 sprintf(rv, "test_value%d", 200+idx);
@@ -292,6 +291,8 @@ int main(int argc, char **argv)
                 cnt++;
                 ofx += ls;
                 ls = 0;
+            } else {
+                break;
             }
         }
         if (!failed && cnt == 10)
