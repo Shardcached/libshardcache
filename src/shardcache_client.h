@@ -342,7 +342,7 @@ typedef struct {
     void *key;
     size_t klen;
     void *data;
-    size_t dlen;
+    uint64_t dlen;
     int status;
     uint32_t expire;
     uint32_t idx; // reserved for internal use
