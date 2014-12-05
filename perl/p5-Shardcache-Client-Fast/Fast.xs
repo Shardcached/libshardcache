@@ -18,7 +18,7 @@ static int _get_async_helper (char *node,
                               size_t klen,
                               void *data,
                               size_t dlen,
-                              int status,
+                              int idx,
                               void *priv)
 {
         get_async_helper_arg_t *arg = (get_async_helper_arg_t *)priv;
@@ -190,8 +190,9 @@ shardcache_client_get(c, key)
 	void *	data = NULL;
 	STRLEN	klen = 0;
         char *k = SvPVbyte(key, klen);
-        size_t size = shardcache_client_get(c, k, klen, &data);
-        if (data && size > 0) {
+        size_t size = 0;
+        int rc = shardcache_client_get_sync(c, k, klen, &data, &size, NULL);
+        if (rc == 0 && data && size > 0) {
             RETVAL = newSVpv(data, size);
             free(data);
         } else {
@@ -250,7 +251,7 @@ shardcache_client_get_async(c, key, coderef, priv=&PL_sv_undef)
             .code = coderef,
             .priv = priv
         };
-        RETVAL = shardcache_client_get_async(c, k, klen, _get_async_helper, &arg);
+        RETVAL = shardcache_client_get(c, k, klen, _get_async_helper, &arg);
     OUTPUT:
         RETVAL
 
