@@ -588,10 +588,10 @@ shardcache_create(char *me,
         shardcache_counter_add(cache->counters, cache->cnt[i].name, &cache->cnt[i].value); 
     }
 
-    shardcache_counter_add(cache->counters, "mru_size", cache->arc_lists_size[0]);
-    shardcache_counter_add(cache->counters, "mfu_size", cache->arc_lists_size[1]);
-    shardcache_counter_add(cache->counters, "mrug_size", cache->arc_lists_size[2]);
-    shardcache_counter_add(cache->counters, "mfug_size", cache->arc_lists_size[3]);
+    shardcache_counter_add(cache->counters, "mru_size", (uint64_t *)cache->arc_lists_size[0]);
+    shardcache_counter_add(cache->counters, "mfu_size", (uint64_t *)cache->arc_lists_size[1]);
+    shardcache_counter_add(cache->counters, "mrug_size", (uint64_t *)cache->arc_lists_size[2]);
+    shardcache_counter_add(cache->counters, "mfug_size", (uint64_t *)cache->arc_lists_size[3]);
 
     if (ATOMIC_READ(cache->evict_on_delete)) {
         MUTEX_INIT(&cache->evictor_lock);
