@@ -423,7 +423,8 @@ int shardcache_client_getf(shardcache_client_t *c, void *key, size_t klen);
  * @return        A valid file descritor that the caller can use to retrieve
  *                the data asynchronously
  * @note          each value is prefixed with an header containing the index of the key
- *                to which the data refers to and the size of the data
+ *                to which the data refers to and the size of the data,\n
+ *                both encoded as 32bit integers in network byte order
  * @note          The caller will read an EOF from the returned filedescriptor
  *                once there is no more data to read
  * @note          Each value is returned only when completely fetched, so it's not possible\n
