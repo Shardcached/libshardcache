@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <ut.h>
 #include <libgen.h>
+#include <arpa/inet.h>
 
 int main(int argc, char **argv)
 {
