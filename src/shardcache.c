@@ -813,6 +813,7 @@ shardcache_get_async_helper(void *key,
 
     arc_t *arc = arg->cache->arc;
 
+
     if (ATOMIC_READ(arg->cache->async_quit)) {
         arc_release_resource(arc, arg->res);
         free(arg);
@@ -852,7 +853,8 @@ shardcache_get_async_helper(void *key,
 
     arg->dlen += dlen;
 
-    if (total_size || timestamp) {
+    if (!dlen && total_size && timestamp) {
+        // we are done
         arc_release_resource(arc, arg->res);
         free(arg);
     }

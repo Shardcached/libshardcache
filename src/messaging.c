@@ -78,6 +78,12 @@ async_read_context_sig_hdr(async_read_ctx_t *ctx)
     return ctx->sig_hdr;
 }
 
+char
+async_read_context_protocol_version(async_read_ctx_t *ctx)
+{
+    return ctx->version;
+}
+
 async_read_context_state_t
 async_read_context_update(async_read_ctx_t *ctx)
 {
@@ -123,7 +129,7 @@ async_read_context_update(async_read_ctx_t *ctx)
         rbuf_read(ctx->buf, (u_char *)&ctx->magic[ctx->moff], sizeof(uint32_t) - ctx->moff);
         uint32_t rmagic;
         memcpy((char *)&rmagic, ctx->magic, sizeof(uint32_t));
-        if ((rmagic&0xFFFFFF00) != (htonl(SHC_MAGIC)&0xFFFFFF00)) {
+        if ((ntohl(rmagic)&0xFFFFFF00) != (SHC_MAGIC&0xFFFFFF00)) {
             ctx->state = SHC_STATE_READING_ERR;
             if (ctx->cb)
                 ctx->cb(NULL, 0, -2, ctx->cb_priv);
@@ -544,9 +550,9 @@ fetch_from_peer_helper(void *data,
         if (idx >= 0)
             ret = arg->cb(arg->peer, arg->key, arg->klen, data, len, idx, arg->priv);
         else if (idx == -1)
-            ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, 0, arg->priv);
+            ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, -1, arg->priv);
         else
-            ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx == -3) ? 1 : -1, arg->priv);
+            ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx == -3) ? -3 : -2, arg->priv);
     }
 
     if (ret != 0) {
@@ -692,7 +698,7 @@ read_message(int fd,
 
     int record_index = 0;
     fbuf_t *out = records[record_index];
-    int initial_len = fbuf_used(out);
+    int initial_len = out ? fbuf_used(out) : 0;
 
     for(;;) {
         int rb;
@@ -812,7 +818,8 @@ read_message(int fd,
                 unsigned char rsep = 0;
                 rb = read_socket(fd, (char *)&rsep, 1, ignore_timeout);
                 if (rb != 1) {
-                    fbuf_set_used(out, initial_len);
+                    if (out)
+                        fbuf_set_used(out, initial_len);
                     if (shash)
                         sip_hash_free(shash);
                     return -1;
@@ -826,7 +833,8 @@ read_message(int fd,
                     if (shash && csig) {
                         if (!read_and_check_siphash_signature(fd, shash)) {
                             sip_hash_free(shash);
-                            fbuf_set_used(out, initial_len);
+                            if (out)
+                                fbuf_set_used(out, initial_len);
                             SHC_WARNING("Unauthorized message type %02x in read_message()", hdr);
                             return -1;
                         }
@@ -842,7 +850,8 @@ read_message(int fd,
                     if (shash) {
                         if (!read_and_check_siphash_signature(fd, shash)) {
                             sip_hash_free(shash);
-                            fbuf_set_used(out, initial_len);
+                            if (out)
+                                fbuf_set_used(out, initial_len);
                             SHC_WARNING("Unauthorized message type %02x in read_message()", hdr);
                             return -1;
                         }
@@ -851,7 +860,8 @@ read_message(int fd,
                     return record_index + 1;
                 } else {
                     // BOGUS RESPONSE
-                    fbuf_set_used(out, initial_len);
+                    if (out)
+                        fbuf_set_used(out, initial_len);
                     if (shash)
                         sip_hash_free(shash);
                     return -1;
@@ -864,7 +874,8 @@ read_message(int fd,
                 if (rb == -1) {
                     if (errno != EINTR && errno != EAGAIN) {
                         // ERROR
-                        fbuf_set_used(out, initial_len);
+                        if (out)
+                            fbuf_set_used(out, initial_len);
                         if (shash)
                             sip_hash_free(shash);
 
@@ -872,17 +883,19 @@ read_message(int fd,
                     }
                     continue;
                 } else if (rb == 0) {
-                    fbuf_set_used(out, initial_len);
+                    if (out)
+                        fbuf_set_used(out, initial_len);
                     if (shash)
                         sip_hash_free(shash);
 
                     return -1;
                 }
                 chunk_len -= rb;
-                fbuf_add_binary(out, buf, rb);
+                if (out)
+                    fbuf_add_binary(out, buf, rb);
                 if (shash)
                     sip_hash_update(shash, (uint8_t *)buf, rb);
-                if (fbuf_used(out) > SHARDCACHE_MSG_MAX_RECORD_LEN) {
+                if (out && fbuf_used(out) > SHARDCACHE_MSG_MAX_RECORD_LEN) {
                     // we have exceeded the maximum size for a record
                     // let's abort this request
                     fprintf(stderr, "Maximum record size exceeded (%dMB)",
@@ -898,7 +911,8 @@ read_message(int fd,
             if (shash && csig) {
                 if (!read_and_check_siphash_signature(fd, shash)) {
                     sip_hash_free(shash);
-                    fbuf_set_used(out, initial_len);
+                    if (out)
+                        fbuf_set_used(out, initial_len);
                     SHC_WARNING("Unauthorized message type %02x in read_message()", hdr);
                     return -1;
                 }
@@ -1313,8 +1327,9 @@ fetch_from_peer(char *peer,
                 SHC_HDR_GET, &record, 1);
         if (rc == 0) {
             shardcache_hdr_t hdr = 0;
-            int num_records = read_message(fd, auth, &out, 1, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
+            fbuf_t *records[3] = { NULL, out, NULL };
+            int num_records = read_message(fd, auth, records, 3, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 3) {
                 if (fbuf_used(out)) {
                     char keystr[1024];
                     memcpy(keystr, key, len < 1024 ? len : 1024);
@@ -1324,6 +1339,7 @@ fetch_from_peer(char *peer,
                 }
                 if (should_close)
                     close(fd);
+                
                 return 0;
             } else {
                 // TODO - Error messages
@@ -1374,8 +1390,9 @@ offset_from_peer(char *peer,
 
         if (rc == 0) {
             shardcache_hdr_t hdr = 0;
-            int num_records = read_message(fd, auth, &out, 1, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
+            fbuf_t *records[3] = { NULL, out, NULL };
+            int num_records = read_message(fd, auth, records, 3, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 3) {
                 if (fbuf_used(out)) {
                     char keystr[1024];
                     memcpy(keystr, key, len < 1024 ? len : 1024);

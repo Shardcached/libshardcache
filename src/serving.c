@@ -222,7 +222,7 @@ write_status(shardcache_request_t *req, int rc, char mode)
         }
     }
 
-    uint32_t magic = htonl(SHC_MAGIC);
+    uint32_t magic = htonl((SHC_MAGIC & 0xFFFFFF00) | async_read_context_protocol_version(req->ctx->reader_ctx));
     fbuf_t output = FBUF_STATIC_INITIALIZER;
     fbuf_minlen(&output, 64);
     fbuf_fastgrowsize(&output, 1024);
@@ -263,11 +263,11 @@ write_status(shardcache_request_t *req, int rc, char mode)
 }
 
 static inline int
-send_async_data_response_preamble(shardcache_request_t *req)
+send_async_data_response_preamble(shardcache_request_t *req, uint32_t total_size)
 {
     shardcache_hdr_t hdr = SHC_HDR_RESPONSE;
 
-    uint32_t magic = htonl(SHC_MAGIC);
+    uint32_t magic = htonl((SHC_MAGIC & 0xFFFFFF00) | async_read_context_protocol_version(req->ctx->reader_ctx));
 
     fbuf_t output = FBUF_STATIC_INITIALIZER;
     fbuf_minlen(&output, 64);
@@ -300,6 +300,35 @@ send_async_data_response_preamble(shardcache_request_t *req)
         }
 
     }
+
+    if (async_read_context_protocol_version(req->ctx->reader_ctx) > 1) {
+        uint16_t chunk_size = htons(4);
+        uint16_t chunk_term = 0;
+        char rsep = SHARDCACHE_RSEP;
+        uint32_t size = htonl(total_size);
+        fbuf_add_binary(&output, (char *)&chunk_size, 2);
+        fbuf_add_binary(&output, (char *)&size, 4);
+        fbuf_add_binary(&output, (char *)&chunk_term, 2);
+        fbuf_add_binary(&output, (char *)&rsep, 1);
+        if (req->ctx->serv->cache->auth && req->fetch_shash) {
+            sip_hash_update(req->fetch_shash, (uint8_t *)&chunk_size, 2);
+            sip_hash_update(req->fetch_shash, (uint8_t *)&size, 4);
+            sip_hash_update(req->fetch_shash, (uint8_t *)&chunk_term, 2);
+            sip_hash_update(req->fetch_shash, (uint8_t *)&rsep, 1);
+            if (req->sig_hdr&0x01) {
+                uint64_t digest;
+                if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
+                    ATOMIC_INCREMENT(req->error);
+                    SHC_ERROR("Can't compute the siphash digest!\n");
+                    fbuf_destroy(&output);
+                    return -1;
+                }
+                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
+            }
+
+        }
+    }
+
     send_data(req, &output);
     fbuf_destroy(&output);
 
@@ -310,18 +339,23 @@ static inline int
 send_async_data_response_epilogue(shardcache_request_t *req)
 {
     uint16_t eor = 0;
-    char eom = 0;
+    char eom = SHARDCACHE_EOM;
+    char pver = async_read_context_protocol_version(req->ctx->reader_ctx);
+    char rsep = pver == 1 ? eom : SHARDCACHE_RSEP;
     fbuf_t output = FBUF_STATIC_INITIALIZER;
     fbuf_minlen(&output, 64);
     fbuf_fastgrowsize(&output, 1024);
     fbuf_slowgrowsize(&output, 512);
 
     fbuf_add_binary(&output, (void *)&eor, 2);
-    fbuf_add_binary(&output, &eom, 1);
+
+    fbuf_add_binary(&output, &rsep, 1);
+
     if (req->fetch_shash) {
         uint64_t digest;
         sip_hash_update(req->fetch_shash, (void *)&eor, 2);
-        sip_hash_update(req->fetch_shash, (uint8_t *)&eom, 1);
+        sip_hash_update(req->fetch_shash, (uint8_t *)&rsep, 1);
+
         if (sip_hash_final_integer(req->fetch_shash, &digest)) {
             fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
         } else {
@@ -330,9 +364,37 @@ send_async_data_response_epilogue(shardcache_request_t *req)
             ATOMIC_INCREMENT(req->error);
             return -1;
         }
+    }
+
+    if (pver > 1) {
+        uint16_t status_size = htons(1);
+        char status = req->error ? -1 : 0;
+        fbuf_add_binary(&output, (void *)&status_size, 2);
+        fbuf_add_binary(&output, (void *)&status, 1);
+        fbuf_add_binary(&output, (void *)&eor, 2);
+        fbuf_add_binary(&output, &eom, 1);
+        if (req->fetch_shash) {
+            uint64_t digest;
+            sip_hash_update(req->fetch_shash, (void *)&status_size, 2);
+            sip_hash_update(req->fetch_shash, (void *)&status, 1);
+            sip_hash_update(req->fetch_shash, (void *)&eor, 2);
+            sip_hash_update(req->fetch_shash, (uint8_t *)&eom, 1);
+            if (sip_hash_final_integer(req->fetch_shash, &digest)) {
+                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
+            } else {
+                SHC_ERROR("Can't compute the siphash digest!\n");
+                fbuf_destroy(&output);
+                ATOMIC_INCREMENT(req->error);
+                return -1;
+            }
+            sip_hash_free(req->fetch_shash);
+            req->fetch_shash = NULL;
+        }
+    } else if (req->fetch_shash) {
         sip_hash_free(req->fetch_shash);
         req->fetch_shash = NULL;
     }
+
 
     send_data(req, &output);
     fbuf_destroy(&output);
@@ -355,7 +417,7 @@ get_async_data_handler(void *key,
         (shardcache_request_t *)priv;
 
     if (req->skipped == 0 && req->copied == 0) {
-        if (send_async_data_response_preamble(req) != 0) {
+        if (send_async_data_response_preamble(req, total_size) != 0) {
             ATOMIC_INCREMENT(req->error);
             return -1;
         }
@@ -519,7 +581,7 @@ get_async_data(shardcache_t *cache,
         //       to return a valid response for an empty value instead of
         //       silently shutdown the connection.
         //ATOMIC_INCREMENT(req->error);
-        send_async_data_response_preamble(req);
+        send_async_data_response_preamble(req, 0);
         send_async_data_response_epilogue(req);
     }
 

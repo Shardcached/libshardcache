@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <limits.h>
+#include <arpa/inet.h>
 
 #include "shardcache.h"
 #include "shardcache_internal.h"
@@ -17,6 +18,7 @@ typedef struct {
     cached_object_t *obj;
     void *data;
     size_t len;
+    size_t total_size;
 } shardcache_fetch_from_peer_notify_arg;
 
 static int
@@ -25,7 +27,7 @@ arc_ops_fetch_from_peer_notify_listener (void *item, size_t idx, void *user)
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
     shardcache_fetch_from_peer_notify_arg *arg = (shardcache_fetch_from_peer_notify_arg *)user;
     cached_object_t *obj = arg->obj;
-    int rc = listener->cb(obj->key, obj->klen, arg->data, arg->len, 0, NULL, listener->priv);
+    int rc = listener->cb(obj->key, obj->klen, arg->data, arg->len, arg->total_size, NULL, listener->priv);
     if (rc != 0) {
         free(listener);
         return -1;
@@ -59,6 +61,8 @@ typedef struct
     shardcache_t *cache;
     char *peer_addr;
     int fd;
+    size_t total_size;
+    char status;
 } shc_fetch_async_arg_t;
 
 static int
@@ -67,7 +71,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
                                  size_t klen,
                                  void *data,
                                  size_t len,
-                                 int status, // 0 OK, -1 ERR, 1 DONE
+                                 int idx, // >= 0 OK, -1 DONE, -2 ERR -3 CLOSE
                                  void *priv)
 {
     shc_fetch_async_arg_t *arg = (shc_fetch_async_arg_t *)priv;
@@ -87,6 +91,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         MUTEX_UNLOCK(obj->lock);
         return -1;
     }
+
     if (!obj->listeners) {
         if (fd >= 0)
             close(fd);
@@ -96,77 +101,103 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         arc_release_resource(cache->arc, obj->res);
         return -1;
     }
-    if (status == -1) {
-        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
-        if (fd >= 0)
-            close(fd);
-        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-        MUTEX_UNLOCK(obj->lock);
-        arc_drop_resource(cache->arc, obj->res);
-        free(arg);
-        return -1;
-    } else if (status == 1) {
 
-        if (fd >= 0)
-            shardcache_release_connection_for_peer(cache, peer_addr, fd);
-        free(arg);
+    switch(idx) {
+        case -1:
+        {
+            list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
+            COBJ_SET_FLAG(obj, COBJ_FLAG_COMPLETE);
+            COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
+            total_len = obj->dlen;
 
-        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-        int drop = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) || !obj->dlen);
+            int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
+                          COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
 
-        MUTEX_UNLOCK(obj->lock);
+            if (total_len && !COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP)) {
+                arc_update_resource_size(cache->arc, obj->res, (obj->data == obj->dbuf) ? 0 : total_len);
 
-        if (drop)
-            arc_drop_resource(cache->arc, obj->res);
-        else
-            arc_release_resource(cache->arc, obj->res);
+                if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
+                    shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
 
-        return 0;
-    } else if (len) {
-        size_t olen = obj->dlen;
-        obj->dlen += len;
-        if (obj->dlen > sizeof(obj->dbuf)) {
-            if (obj->data == obj->dbuf) {
-                obj->data = malloc(obj->dlen);
-                if (olen)
-                    memcpy(obj->data, obj->dbuf, olen);
-            } else {
-                obj->data = realloc(obj->data, obj->dlen);
             }
-        } else {
-            obj->data = obj->dbuf;
+            if (!total_len)
+                COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
+
+            break;
         }
-        memcpy(obj->data + olen, data, len);
-        shardcache_fetch_from_peer_notify_arg arg = {
-            .obj = obj,
-            .data = data,
-            .len = len
-        };
-        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
-        MUTEX_UNLOCK(obj->lock);
-        return 0;
-    } else {
-        list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
-        COBJ_SET_FLAG(obj, COBJ_FLAG_COMPLETE);
-        COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-        total_len = obj->dlen;
-
-        int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
-                      COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
-
-        if (total_len && !COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP)) {
-            arc_update_resource_size(cache->arc, obj->res, (obj->data == obj->dbuf) ? 0 : total_len);
-
-            if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
-                shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
-
+        case -2:
+        {
+            list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
+            if (fd >= 0)
+                close(fd);
+            COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
+            MUTEX_UNLOCK(&obj->lock);
+            arc_drop_resource(cache->arc, obj->res);
+            free(arg);
+            return -1;
         }
-        if (!total_len)
-            COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
+        case -3:
+        {
 
-        MUTEX_UNLOCK(obj->lock);
-        return 0;
+            if (fd >= 0)
+                shardcache_release_connection_for_peer(cache, peer_addr, fd);
+            free(arg);
+
+            COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
+            int drop = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) || !obj->dlen);
+
+            MUTEX_UNLOCK(&obj->lock);
+
+            if (drop)
+                arc_drop_resource(cache->arc, obj->res);
+            else
+                arc_release_resource(cache->arc, obj->res);
+
+            return 0;
+        }
+        case 0:
+        {
+            // TODO - check if the size for data matches sizeof(uint32_t)
+            if (data)
+                arg->total_size = ntohl(*((uint32_t *)data));
+            break;
+        }
+        case 1:
+        {
+            size_t olen = obj->dlen;
+            obj->dlen += len;
+            if (obj->dlen > sizeof(obj->dbuf)) {
+                if (obj->data == obj->dbuf) {
+                    obj->data = malloc(obj->dlen);
+                    if (olen)
+                        memcpy(obj->data, obj->dbuf, olen);
+                } else {
+                    obj->data = realloc(obj->data, obj->dlen);
+                }
+            } else {
+                obj->data = obj->dbuf;
+            }
+            if (len)
+                memcpy(obj->data + olen, data, len);
+            shardcache_fetch_from_peer_notify_arg notify_arg = {
+                .obj = obj,
+                .data = data,
+                .len = len,
+                .total_size = arg->total_size
+            };
+            list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &notify_arg);
+            break;
+        }
+        case 2:
+        {
+            arg->status = *((char *)data);
+            break;
+        }
+        default:
+            break;
     }
+    MUTEX_UNLOCK(&obj->lock);
+    return 0;
 }
 
 
@@ -425,7 +456,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         shardcache_fetch_from_peer_notify_arg arg = {
             .obj = obj,
             .data = obj->data,
-            .len = obj->dlen
+            .len = obj->dlen,
+            .total_size = obj->dlen
         };
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);

@@ -85,6 +85,7 @@ typedef struct _shardcache_record_s {
     size_t l;
 } shardcache_record_t;
 
+#define SHARDCACHE_EOM 0x00
 #define SHARDCACHE_RSEP 0x80
 
 // TODO - Document all exposed functions
@@ -280,6 +281,7 @@ typedef enum {
 int async_read_context_state(async_read_ctx_t *ctx);
 shardcache_hdr_t async_read_context_hdr(async_read_ctx_t *ctx);
 shardcache_hdr_t async_read_context_sig_hdr(async_read_ctx_t *ctx);
+char async_read_context_protocol_version(async_read_ctx_t *ctx);
 
 async_read_context_state_t async_read_context_consume_data(async_read_ctx_t *ctx, rbuf_t *input);
 async_read_context_state_t async_read_context_input_data(async_read_ctx_t *ctx, void *data, int len, int *processed);
@@ -290,7 +292,7 @@ typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         size_t klen,
                                         void *data,
                                         size_t len,
-                                        int status,
+                                        int idx,
                                         void *priv);
 
 // NOTE: when the async_read_wrk_t param is provided to the following

@@ -625,26 +625,29 @@ shardcache_client_get_async_data_helper(char *node,
                                         size_t klen,
                                         void *data,
                                         size_t dlen,
-                                        int status,
+                                        int idx,  // >= 0 OK, -1 DONE, -2 ERR -3 CLOSE
                                         void *priv)
 {
     shardcache_client_get_async_data_arg_t *arg = (shardcache_client_get_async_data_arg_t *)priv;
-    int rc = -1;
-    switch(status) {
-        case 0:
-            rc = arg->cb(node, key, klen, data, dlen, 0, arg->priv);
-            break;
+    int rc = 0;
+    switch(idx) {
         case -1:
+            rc = arg->cb(node, key, klen, NULL, 0, 0, arg->priv);
+            break;
+        case -2:
             arg->cb(node, key, klen, data, dlen, 1, arg->priv);
             close(arg->fd);
+            rc = -1;
             break;
-        case 1:
+        case -3:
             connections_pool_add(arg->connections, node, arg->fd);
-            rc = 0;
+            free(arg);
+            break;
+        case 1: // in protocol v2 the record with index 1 holds the actual data
+            rc = arg->cb(node, key, klen, data, dlen, 0, arg->priv);
             break;
     }
 
-    free(arg);
     return rc;
 }
 
@@ -761,7 +764,8 @@ struct shc_multi_ctx_s {
 static int
 shc_multi_collect_data(void *data, size_t len, int idx, void *priv)
 {
-    if (idx != 0)
+    if (idx != 1) // XXX - HC (should use the record 0 to check the total_size
+                  //           and record 2 for the actual status)
         return 0;
 
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;
@@ -1249,12 +1253,12 @@ async_thread_get(char *peer,
                  size_t klen,
                  void *data,
                  size_t len,
-                 int status, // 0 OK, -1 ERR, 1 DONE
+                 int idx, // >= 0 OK, -1 DONE, -2 ERR -3 CLOSE
                  void *priv)
 {
     async_job_t *job = (async_job_t *)priv;
-    switch (status) {
-        case 0:
+    switch (idx) {
+        case 1:
         {
             int pending = fbuf_used(&job->buf);
             if (pending) {
@@ -1284,11 +1288,14 @@ async_thread_get(char *peer,
             break;
         }
         case -1:
+            break;
+        case -2:
             async_job_destroy(job);
             return -1;
-        case 1:
-        default:
+        case -3:
             async_job_destroy(job);
+            break;
+        default:
             break;
     }
     return 0;
