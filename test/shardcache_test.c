@@ -261,7 +261,7 @@ int main(int argc, char **argv)
         int rb = 0;
         int rs = 0;
         int ofx = 0;
-        uint64_t ls = 0;
+        uint32_t ls = 0;
         uint32_t idx = 0;
         char buf[64];
         char v[64];
@@ -273,10 +273,10 @@ int main(int argc, char **argv)
 
         while (rs > ofx) {
             if (!ls && rs >= ofx + 12) {
-                idx = *((uint32_t *)(p + ofx));
-                ofx += 4;
-                ls = *((uint64_t *)(p + ofx));
-                ofx += 8;
+                idx = ntohl(*((uint32_t *)(p + ofx)));
+                ofx += sizeof(uint32_t);
+                ls = ntohl(*((uint32_t *)(p + ofx)));
+                ofx += sizeof(uint32_t);
             }
             if (ls > 0 && rs >= ofx + ls) {
                 char rv[64];

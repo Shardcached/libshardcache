@@ -1292,21 +1292,23 @@ async_thread_get_multi(shc_multi_ctx_t *ctx, int eof)
         return 0;
     }
 
+    uint32_t idx_nbo = htonl(item->idx);
+    uint32_t dlen_nbo = htonl(item->dlen);
     if (fbuf_used(&job->buf)) {
-        fbuf_add_binary(&job->buf, (char *)&item->idx, sizeof(item->idx));
-        fbuf_add_binary(&job->buf, (char *)&item->dlen, sizeof(item->dlen));
+        fbuf_add_binary(&job->buf, (char *)&idx_nbo, sizeof(idx_nbo));
+        fbuf_add_binary(&job->buf, (char *)&dlen_nbo, sizeof(dlen_nbo));
         fbuf_add_binary(&job->buf, item->data, item->dlen);
         return 0;
     }
 
-    int wb = write(job->pipe[1], &item->idx, sizeof(item->idx));
-    if (wb != sizeof(item->idx)) {
+    int wb = write(job->pipe[1], &idx_nbo, sizeof(idx_nbo));
+    if (wb != sizeof(idx_nbo)) {
         if (wb == -1)
             return -1;
     }
 
-    wb = write(job->pipe[1], &item->dlen, sizeof(item->dlen));
-    if (wb != sizeof(item->dlen)) {
+    wb = write(job->pipe[1], &dlen_nbo, sizeof(dlen_nbo));
+    if (wb != sizeof(dlen_nbo)) {
         return -1;
     }
 
