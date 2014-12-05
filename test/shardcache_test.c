@@ -228,6 +228,82 @@ int main(int argc, char **argv)
     if (!failed)
         ut_success();
 
+    ut_testing("shardcache_client_getf(client, test_key200) == test_value200");
+    int fd = shardcache_client_getf(client, "test_key200", 11);
+    if (fd >= 0) {
+        char buf[64];
+        int rb = 0;
+        int rs = 0;
+        char p[64];
+        while ((rb = read(fd, &buf, sizeof(buf))) > 0) {
+            memcpy(p + (rs ? (rs - 1) : 0), buf, rb);
+            rs += rb;
+        }
+        ut_validate_buffer(p, rs, "test_value200", 13);
+        close(fd);
+    } else {
+        ut_failure("Can't obtain a valid fd from shardcache_client_getf()");
+    }
+
+    for (i = 0; i < 10; i++) {
+        char key[32];
+        snprintf(key, sizeof(key), "test_key%d", 200+i);
+        items[i] = shc_multi_item_create(key, strlen(key), NULL, 0);
+    }
+    items[10] = NULL; // null-terminate it
+
+    failed = 0;
+    ut_testing("shardcache_client_get_multif(c, items)");
+    fd = shardcache_client_get_multif(client, items);
+
+    if (fd >= 0) {
+        int cnt = 0;
+        int rb = 0;
+        int rs = 0;
+        int ofx = 0;
+        uint64_t ls = 0;
+        uint32_t idx = 0;
+        char buf[64];
+        char v[64];
+        char p[1024];
+        while ((rb = read(fd, &buf, sizeof(buf))) > 0) {
+            memcpy(p + rs, buf, rb);
+            rs += rb;
+        }
+
+        while (rs > ofx) {
+            if (!ls && rs >= ofx + 12) {
+                idx = *((uint32_t *)(p + ofx));
+                ofx += 4;
+                ls = *((uint64_t *)(p + ofx));
+                ofx += 8;
+            }
+            if (ls > 0 && rs >= ofx + ls) {
+                char rv[64];
+                snprintf(v, ls+1, "%s", p + ofx);
+                sprintf(rv, "test_value%d", 200+idx);
+                if (!v[0] || strncmp(v, rv, ls) != 0)
+                { 
+                    ut_failure("%s != %s", v, rv);
+                    failed = 1;
+                    break;
+                }
+                cnt++;
+                ofx += ls;
+                ls = 0;
+            }
+        }
+        if (!failed && cnt == 10)
+            ut_success();
+
+        close(fd);
+    } else {
+        ut_failure("Can't obtain a valid fd from shardcache_client_get_multif()");
+    }
+
+    for (i = 0; i < 10; i++)
+        shc_multi_item_destroy(items[i]);
+
     char *volatile_key = "volatile_key";
     char *volatile_value = "volatile_value";
 
