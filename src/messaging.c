@@ -440,6 +440,10 @@ read_async_timeout(iomux_t *iomux, int fd, void *priv)
     gettimeofday(&now, NULL);
     timersub(&now, &ctx->last_update, &diff);
     if (timercmp(&diff, &maxwait, >)) {
+        struct sockaddr_in saddr;
+        socklen_t addr_len = sizeof(struct sockaddr_in);
+        getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
+        SHC_WARNING("Timeout while waiting for data from %s", inet_ntoa(saddr.sin_addr));
         iomux_close(iomux, fd);
     } else { 
         iomux_set_timeout(iomux, fd, &maxwait);
