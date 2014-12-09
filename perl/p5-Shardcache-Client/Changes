@@ -1,3 +1,5 @@
+0.05  Tue Dec  9 13:10:10 CET 2014
+        - make it work on 32bit systems (where no siphash64() is available)
 0.04  Tue Dec  2 15:46:54 CET 2014
         - Updated the protocol implementation to include the magic number
         - index and multi commands implemented

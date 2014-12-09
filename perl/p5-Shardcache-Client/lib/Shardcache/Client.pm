@@ -2,27 +2,24 @@ package Shardcache::Client;
 
 use strict;
 use IO::Socket::INET;
-use Digest::SipHash qw/siphash64/;
+use Digest::SipHash qw/siphash/;
 use Algorithm::ConsistentHash::CHash;
 
-our $VERSION = "0.04";
+our $VERSION = "0.05";
 
 sub _read_bytes {
     my ($sock, $len) = @_;
     my $to_read = $len;
     my $read;
     my $data;
-    do {
+    while ($read != $len) {
         my $buffer;
         my $rb = read($sock, $buffer, $to_read); 
-        if ($rb > 0) {
-            $data .= $buffer;
-            $read += $rb;
-            $to_read -= $rb;
-        } else {
-            last;
-        }
-    } while ($read != $len);
+        last if ($rb <= 0);
+        $data .= $buffer;
+        $read += $rb;
+        $to_read -= $rb;
+    }
 
     return ($read == $len) ? $data : undef;
 }
@@ -132,8 +129,8 @@ sub send_msg {
     my $msg = pack $templ, @vars;
 
     if ($self->{_secret}) {
-        my $sig = siphash64($msg,  pack("a16", $self->{_secret}));
-        $msg .= pack("Q", $sig);
+        my ($hi, $lo) = siphash($msg, pack("a16", $self->{_secret}));
+        $msg .= pack("LL", $hi, $lo);
     }
 
     my $addr;
@@ -255,9 +252,8 @@ sub send_msg {
     if ($self->{_secret}) {
         # now that we have the whole message, let's compute the signature
         # (we know it's 8 bytes long and is the trailer of the message
-        my $signature = siphash64(substr($in, 0, length($in)),  pack("a16", $self->{_secret}));
-
-        my $csig = pack("Q", $signature);
+        my ($hi, $lo) = siphash(substr($in, 0, length($in)), pack("a16", $self->{_secret}));
+        my $csig = pack("LL", $hi, $lo);
 
         unless ($data = _read_bytes($sock, 8)) {
             delete $self->{_sock}->{"$addr:$port"} if ($addr);
