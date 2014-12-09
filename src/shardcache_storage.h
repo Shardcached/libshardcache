@@ -76,12 +76,17 @@ typedef int (*shardcache_fetch_items_callback_t)
  * @param klen  The length of the key
  * @param value A valid pointer to the value to store
  * @param vlen  The length of the value
+ * @param if_not_exists A boolean flag which determines if the value should be stored
+ *                      only if there is none already
  * @param priv  The 'priv' pointer previously stored in the shardcache_storage_t
  *              structure at initialization time
- * @return 0 if success, -1 otherwise
+ * @return 0 if success;\n
+ *         1 if a value was already present in the storage while the 'if_not_exists
+ *           flag is on\n
+ *         -1 otherwise
  */
 typedef int (*shardcache_store_item_callback_t)
-    (void *key, size_t klen, void *value, size_t vlen, void *priv);
+    (void *key, size_t klen, void *value, size_t vlen, int if_not_exists, void *priv);
 
 /**
  * @brief Callback to atomically compare and swap a value for a given key
