@@ -62,7 +62,7 @@ sub read_data {
     my $data;
 
     my $rb = read($self->{fh}, $data, 1024);
-    return undef unless ($rb && $rb > 0);
+    return $rb unless ($rb && $rb > 0);
 
     return $self->process_data($data);
 }
