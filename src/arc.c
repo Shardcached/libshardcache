@@ -503,12 +503,12 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
                 fprintf(stderr, "Can't move the object into the cache\n");
                 return NULL;
             }
+            arc_balance(cache);
         }
 
         if (valuep)
             *valuep = obj->ptr;
 
-        arc_balance(cache);
         return obj;
     }
 
