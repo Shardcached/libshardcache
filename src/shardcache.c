@@ -1519,28 +1519,24 @@ shardcache_store(shardcache_t *cache,
 
 {
     void *prev_ptr = NULL;
-    if (inx) {
-        if (ht_exists(cache->volatile_storage, key, klen) == 1)
-            return 1;
-    } else {
-        // remove this key from the volatile storage (if present)
-        // it's going to be eventually persistent now (depending on the storage type)
-        ht_delete(cache->volatile_storage, key, klen, prev_ptr, NULL);
+    
+    int rc = 0;
+
+    if (!cache->use_persistent_storage || !cache->storage.store) { // the storage is readonly
+        if (inx) {
+            rc = ht_set_if_not_exists(cache->volatile_storage, key, klen, value, vlen);
+        } else {
+            rc = ht_get_and_set(cache->volatile_storage, key, klen, value, vlen, &prev_ptr, NULL);
+            if (prev_ptr) {
+                volatile_object_t *prev = (volatile_object_t *)prev_ptr;
+                ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, prev->dlen);
+                destroy_volatile(prev);
+            }
+        }
+        return rc;
     }
 
-    if (prev_ptr) {
-        volatile_object_t *prev = (volatile_object_t *)prev_ptr;
-        ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, prev->dlen);
-        destroy_volatile(prev);
-    }
-
-    if (inx && cache->storage.exist &&
-            cache->storage.exist(key, klen, cache->storage.priv) == 1)
-    {
-        return 1;
-    }
-
-    int rc = cache->storage.store(key, klen, value, vlen, cache->storage.priv);
+    rc = cache->storage.store(key, klen, value, vlen, inx, cache->storage.priv);
 
     if (cache->cache_on_set)
         arc_load(cache->arc, (const void *)key, klen, value, vlen);
@@ -1654,7 +1650,7 @@ shardcache_set_internal(shardcache_t *cache,
             if (obj->expire)
                 shardcache_schedule_expiration(cache, key, klen, expire, 1);
         }
-        else if (cache->use_persistent_storage && cache->storage.store)
+        else if (cache->use_persistent_storage)
         {
             rc = shardcache_store(cache, key, klen, value, vlen, inx, replica);
         }
