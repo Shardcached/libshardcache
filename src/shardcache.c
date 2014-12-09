@@ -2500,7 +2500,10 @@ shardcache_use_persistent_connections(shardcache_t *cache, int new_value)
 int
 shardcache_arc_mode(shardcache_t *cache, arc_mode_t new_value)
 {
-    return shardcache_get_set_option(&cache->arc_mode, (int)new_value);
+    int old_value = shardcache_get_set_option(&cache->arc_mode, (int)new_value);
+    if (new_value != -1 && old_value != new_value)
+        arc_set_mode(cache->arc, new_value);
+    return old_value;
 }
 
 int

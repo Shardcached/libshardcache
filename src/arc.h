@@ -8,6 +8,7 @@
 #ifndef __ARC_H__
 #define __ARC_H__
 #include <sys/types.h>
+#include "shardcache.h"
 
 typedef struct __arc arc_t;
 
@@ -51,9 +52,10 @@ typedef struct __arc_ops {
  *
  * @param ops : A valid pointer to an initialized arc_ops_t structure
  * @param c   : The size of the cache
+ * @param mode : 0 for strict mode, 1 for loose_mode
  * @return    : A valid pointer to an initialized arc_t structure
  */
-arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, size_t *lists_size[4], int loose_mode);
+arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, size_t *lists_size[4], arc_mode_t mode);
 
 /**
  * @brief Release an existing ARC cache instance
@@ -187,6 +189,8 @@ void arc_get_size(arc_t *cache,
  * @return The total number of items in the cache
  */
 uint64_t arc_count(arc_t *cache);
+
+void arc_set_mode(arc_t *cache, arc_mode_t mode);
 
 #endif /* __ARC_H__ */
 

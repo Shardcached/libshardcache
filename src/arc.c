@@ -76,7 +76,7 @@ struct __arc {
     struct __arc_state mrug, mru, mfu, mfug;
 
     int needs_balance;
-    int loose_mode;
+    int mode;
 
     pthread_mutex_t lock;
 
@@ -378,11 +378,11 @@ terminate_node_callback(refcnt_node_t *node, void *priv)
 
 /* Create a new cache. */
 arc_t *
-arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, size_t *lists_size[4], int loose_mode)
+arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, size_t *lists_size[4], arc_mode_t mode)
 {
     arc_t *cache = calloc(1, sizeof(arc_t));
 
-    cache->loose_mode = loose_mode;
+    cache->mode = mode;
 
     cache->ops = ops;
 
@@ -498,7 +498,7 @@ arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
     //       of the object (if found)
     arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, len, NULL, retain_obj_cb, cache);
     if (obj) {
-        if (!cache->loose_mode || UNLIKELY(ATOMIC_READ(obj->state) != &cache->mfu)) {
+        if (!ATOMIC_READ(cache->mode) || UNLIKELY(ATOMIC_READ(obj->state) != &cache->mfu)) {
             if (UNLIKELY(arc_move(cache, obj, &cache->mfu) == -1)) {
                 fprintf(stderr, "Can't move the object into the cache\n");
                 return NULL;
@@ -655,6 +655,12 @@ void *
 arc_get_resource_ptr(arc_resource_t res)
 {
     return ((arc_object_t *)res)->ptr;
+}
+
+void
+arc_set_mode(arc_t *cache, arc_mode_t mode)
+{
+    ATOMIC_SET(cache->mode, mode);
 }
 
 // vim: tabstop=4 shiftwidth=4 expandtab:
