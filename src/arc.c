@@ -382,6 +382,8 @@ arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, size_t *lists_si
 {
     arc_t *cache = calloc(1, sizeof(arc_t));
 
+    cache->loose_mode = loose_mode;
+
     cache->ops = ops;
 
     cache->hash = ht_create(1<<16, 1<<22, NULL);
