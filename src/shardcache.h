@@ -495,7 +495,9 @@ int shardcache_touch(shardcache_t *cache,
  *               called once the result has been retreived
  * @param priv   A pointer which will be passed to the
  *               shardcache_async_response_callback_t when called
- * @return 0 on success, -1 otherwise
+ * @return 0 on success,
+ *         1 if the value already exists on the storage and the if_not_exists param is true;\n
+ *        -1 otherwise
  */
 int shardcache_set(shardcache_t *cache,
                    void *key,
