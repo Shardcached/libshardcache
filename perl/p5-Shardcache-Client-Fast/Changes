@@ -1,5 +1,11 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.19  Tue Dec  9 13:19:01 CET 2014
+        - added the Shardcache::Client::Fast::MultifResult.pm implementation file to the distribution
+0.18  Tue Dec  9 13:12:49 CET 2014
+        - support the filedescriptor-based API (getf and get_multif)
+        - conform to the newest libshardcache API
+
 0.17  Thu Sep 11 16:25:05 CEST 2014
         - fixed the "SEE ALSO" section in the pod documentation
 
