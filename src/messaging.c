@@ -443,7 +443,8 @@ read_async_timeout(iomux_t *iomux, int fd, void *priv)
         struct sockaddr_in saddr;
         socklen_t addr_len = sizeof(struct sockaddr_in);
         getpeername(fd, (struct sockaddr *)&saddr, &addr_len);
-        SHC_WARNING("Timeout while waiting for data from %s", inet_ntoa(saddr.sin_addr));
+        SHC_WARNING("Timeout while waiting for data from %s (timeout: %d milliseconds)",
+                    inet_ntoa(saddr.sin_addr), tcp_timeout);
         iomux_close(iomux, fd);
     } else { 
         iomux_set_timeout(iomux, fd, &maxwait);
