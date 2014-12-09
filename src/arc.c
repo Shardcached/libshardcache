@@ -224,10 +224,6 @@ arc_update_resource_size(arc_t *cache, arc_resource_t res, size_t size)
 static inline int
 arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
 {
-    MUTEX_LOCK(&cache->lock);
-
-    arc_state_t *obj_state = ATOMIC_READ(obj->state);
-
     // In the first conditional we check If the object is being locked,
     // which means someone is fetching its value and we don't what
     // don't mess up with it. Whoever is fetching will also take care of moving it
@@ -249,10 +245,12 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     // before it's being deleted it will try putting the object to the mfu list without checking first
     // if it was already in a list or not (new objects should be first moved to the 
     // mru list and not the mfu one)
-    if (UNLIKELY(obj->locked || (state == &cache->mfu && obj_state == NULL))) {
-        MUTEX_UNLOCK(&cache->lock);
+    if (UNLIKELY(obj->locked || (state == &cache->mfu && ATOMIC_READ(obj->state) == NULL)))
         return 0;
-    }
+
+    MUTEX_LOCK(&cache->lock);
+
+    arc_state_t *obj_state = ATOMIC_READ(obj->state);
 
     if (LIKELY(obj_state != NULL)) {
 
