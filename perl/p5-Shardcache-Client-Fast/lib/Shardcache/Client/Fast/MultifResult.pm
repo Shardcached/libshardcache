@@ -3,70 +3,75 @@ package Shardcache::Client::Fast::MultifResult;
 use strict;
 use warnings;
 
-sub new
-{
-    my $class = shift;
-    my $keys = shift;
-    my $fh = shift;
+sub new {
+    my ($class, $keys, $fh) = @_;
 
-    my $self = bless {}, $class;
+    return bless( {
+      keys => $keys,
+      results => {},
+      fh => $fh,
+      _accumulator => '',
+    }, $class);
 
-    $self->{keys} = $keys;
-    $self->{results} = {};
-    $self->{fh} = $fh;
-    $self->{processed} = 0;
-
-    return $self;
 }
 
-sub process_data
-{
+sub process_data {
     my ($self, $data) = @_;
 
-    $self->{accumulator} .= $data;
-    if ($self->{pending}) {
-        if (length($self->{accumulator}) >= $self->{pending}->{size}) {
-            my $index = $self->{pending}->{index};
-            my $size = $self->{pending}->{size};
-            ($self->{results}->{$self->{keys}->[$index]}, $self->{accumulator}) = unpack("a${size}a*", $self->{accumulator});
-            $self->{processed}++;
-        }
-    } else {
-        if (length($self->{accumulator}) > 8) {
-            (my $index, my $size, $self->{accumulator}) = unpack("NNa*", $self->{accumulator});
-            if ($size == 0) {
-                $self->{processed}++;
-            } elsif (length($self->{accumulator}) >= $size) {
-                ($self->{results}->{$self->{keys}->[$index]}, $self->{accumulator}) = unpack("a${size}a*", $self->{accumulator});
-                $self->{processed}++;
+    $self->{_accumulator} .= $data;
+
+    my @keys_processed;
+    my $results = $self->{results};
+
+    while (1) {
+        if ($self->{_pending}) {
+
+            # not enough data: bail out
+            length($self->{_accumulator}) >= $self->{_pending}->{size}
+              or return \@keys_processed;
+
+            # enough data: delete _pending and create result
+            my $pending = delete $self->{_pending};
+            my $key = $pending->{key};
+            push @keys_processed, $key;
+            my $size = $pending->{size};
+            ($results->{$key}, $self->{_accumulator}) = unpack("a${size}a*", $self->{_accumulator});
+
+        } else {
+
+            # nothing pending. if not enough data, bail out
+            length($self->{_accumulator}) >= 8
+              or return \@keys_processed;
+
+            # enough data for a new result header
+            (my $index, my $size, $self->{_accumulator}) = unpack("NNa*", $self->{_accumulator});
+            my $key = $self->{keys}->[$index];
+            if (length($self->{_accumulator}) >= $size) {
+                ($results->{$key}, $self->{_accumulator}) = unpack("a${size}a*", $self->{_accumulator});
+                push @keys_processed, $key;
             } else {
-                $self->{pending} = { size => $size, index => $index };
+                $self->{_pending} = { size => $size, key => $key };
             }
         }
+        # reloop
     }
 }
 
-sub read_data
-{
+sub read_data {
     my $self = shift;
     my $data;
 
     my $rb = read($self->{fh}, $data, 1024);
-    return $rb unless ($rb && $rb > 0);
+    return undef unless ($rb && $rb > 0);
 
-    $self->process_data($data);
+    return $self->process_data($data);
 }
 
-sub results
-{
-    my $self = shift;
-    return $self->{results};
-}
+sub results { $_[0]->{results} }
 
-sub is_complete
-{
-    my $self = shift;
-    return $self->{processed} == scalar(@{$self->{keys}});
+sub is_complete {
+    my ($self) = @_;
+    scalar keys %{$self->{results}} == scalar @{$self->{keys}};
 }
 
 1;
