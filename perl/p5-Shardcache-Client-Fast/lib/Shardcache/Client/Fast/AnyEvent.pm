@@ -7,7 +7,7 @@ use Carp;
 use AnyEvent::Handle;
 
 use Shardcache::Client::Fast;
-use Shardcache::Client::Fast::MultifResult;
+use Shardcache::Client::Fast::MultifResultParser;
 
 our @ISA = qw(Shardcache::Client::Fast);
 
@@ -19,7 +19,7 @@ sub get_multif_ae {
       or croak 'options->{on_result} is mandatory';
 
     my $fh = $self->get_multif($keys);
-    my $multif_result = Shardcache::Client::Fast::MultifResult->new($keys, undef);
+    my $multif_result = Shardcache::Client::Fast::MultifResultParser->new($keys, undef);
 
     return AnyEvent::Handle->new(
       fh => $fh,
@@ -31,12 +31,12 @@ sub get_multif_ae {
       on_read => sub {
           my ($handle) = @_;
           my $keys_processed = $multif_result->process_data($handle->{rbuf});
-          $keys_processed && ref $keys_processed eq 'ARRAY'
+          $keys_processed && ref $keys_processed eq 'HASH'
             or $handle->destroy,
                return $on_error->("failed to process data");
           substr $handle->{rbuf}, 0, length($handle->{rbuf}), '';
-          foreach my $key (@$keys_processed) {
-              $on_result->($key, $multif_result->results->{$key});
+          foreach my $key (keys %$keys_processed) {
+              $on_result->($key, $keys_processed->{$key});
           }
       });
 }

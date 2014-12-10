@@ -8,4 +8,4 @@ t/Shardcache-Client-Fast.t
 fallback/const-c.inc
 fallback/const-xs.inc
 lib/Shardcache/Client/Fast.pm
-lib/Shardcache/Client/Fast/MultifResult.pm
+lib/Shardcache/Client/Fast/MultifResultParser.pm
