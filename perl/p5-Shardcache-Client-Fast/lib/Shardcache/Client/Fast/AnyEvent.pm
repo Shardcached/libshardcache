@@ -19,7 +19,7 @@ sub get_multif_ae {
       or croak 'options->{on_result} is mandatory';
 
     my $fh = $self->get_multif($keys);
-    my $multif_result = Shardcache::Client::Fast::MultifResultParser->new($keys, undef);
+    my $multif_result = Shardcache::Client::Fast::MultifResultParser->new($keys);
 
     return AnyEvent::Handle->new(
       fh => $fh,
