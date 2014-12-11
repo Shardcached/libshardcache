@@ -404,6 +404,7 @@ shardcache_node_t *shardcache_client_current_node(shardcache_client_t *c);
 /**
  * @brief Get the value for a key asynchronously using a filedescriptor
  *        to retrieve the data
+ * @param c          A valid pointer to a shardcache_Client_t structure
  * @param key     A valid pointer to the key
  * @param klen    The length of the key
  * @return        A valid file descritor that the caller can use to retrieve
@@ -419,6 +420,7 @@ int shardcache_client_getf(shardcache_client_t *c, void *key, size_t klen);
 /**
  * @brief Get the values for multiple keys asynchronously using a filedescriptor
  *        to retrieve the data
+ * @param c          A valid pointer to a shardcache_Client_t structure
  * @param items      A NULL-terminated array of shc_multi_item_t structures
  * @return        A valid file descritor that the caller can use to retrieve
  *                the data asynchronously
