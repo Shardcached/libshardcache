@@ -1400,12 +1400,14 @@ async_thread(void *priv)
             job = queue_pop_right(c->async_jobs);
         }
 
+        struct timeval wait_time = { 0, 500000 }; // 500 ms
         if (!iomux_isempty(iomux)) {
-            struct timeval tv = { 0, 1 };
-            iomux_run(iomux, &tv); 
+            iomux_run(iomux, &wait_time);
         } else {
-            static __thread struct timespec ts = { 0, 0 };
-            ts.tv_sec = time(NULL) + 1;
+            struct timeval now, abs_wait_time;
+            gettimeofday(&now, NULL);
+            timeradd(&now, &wait_time, &abs_wait_time);
+            struct timespec ts = { abs_wait_time.tv_sec, abs_wait_time.tv_usec * 1000 };
             CONDITION_TIMEDWAIT(&c->wakeup_cond, &c->wakeup_lock, &ts);
         }
 
