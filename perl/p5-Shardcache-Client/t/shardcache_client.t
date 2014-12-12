@@ -13,7 +13,7 @@ use Test::More; # tests => 3;
 BEGIN { use_ok('Shardcache::Client'); };
 
 unless($ENV{SHC_HOSTS}) {
-    warn "no SHC_HOTSS defined";
+    warn "no SHC_HOSTS defined";
     done_testing();
     exit(0);
 }
