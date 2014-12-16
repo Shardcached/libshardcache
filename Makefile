@@ -29,12 +29,20 @@ ifeq ("$(INCDIR)", "")
 INCDIR=/usr/local/include
 endif
 
+ifeq ("$(SHARDCACHE_INSTALL_PREFIX)", "")
+SHARDCACHE_INSTALL_PREFIX=/usr/local
+endif
+
 ifeq ("$(SHARDCACHE_INSTALL_LIBDIR)", "")
-SHARDCACHE_INSTALL_LIBDIR=$(LIBDIR)
+SHARDCACHE_INSTALL_LIBDIR="$(SHARDCACHE_INSTALL_PREFIX)/lib"
 endif
 
 ifeq ("$(SHARDCACHE_INSTALL_INCDIR)", "")
-SHARDCACHE_INSTALL_INCDIR=$(INCDIR)
+SHARDCACHE_INSTALL_INCDIR="$(SHARDCACHE_INSTALL_PREFIX)/include"
+endif
+
+ifeq ("$(SHARDCACHE_INSTALL_BINDIR)", "")
+SHARDCACHE_INSTALL_BINDIR="$(SHARDCACHE_INSTALL_PREFIX)/bin"
 endif
 
 IS_CLANG := $(shell $(CC) --version | grep clang)
@@ -152,14 +160,21 @@ perl_clean:
 perl_build:
 	make -C perl all
 
+.PHONY: install
 install:
 	 @echo "Installing libraries in $(SHARDCACHE_INSTALL_LIBDIR)"; \
-	 cp -v libshardcache.a $(SHARDCACHE_INSTALL_LIBDIR)/;\
-	 cp -v libshardcache.$(SHAREDEXT) $(SHARDCACHE_INSTALL_LIBDIR)/;\
+	 cp -v libshardcache.a "$(SHARDCACHE_INSTALL_LIBDIR)"/;\
+	 cp -v libshardcache.$(SHAREDEXT) "$(SHARDCACHE_INSTALL_LIBDIR)/";\
 	 echo "Installing headers in $(SHARDCACHE_INSTALL_INCDIR)"; \
-	 cp -v src/shardcache.h $(SHARDCACHE_INSTALL_INCDIR)/; \
-	 cp -v src/shardcache_client.h $(SHARDCACHE_INSTALL_INCDIR)/; \
-	 cp -v src/shardcache_node.h $(SHARDCACHE_INSTALL_INCDIR)/; \
-	 cp -v src/shardcache_storage.h $(SHARDCACHE_INSTALL_INCDIR)/; \
-	 cp -v src/shardcache_log.h $(SHARDCACHE_INSTALL_INCDIR)/; \
+	 cp -v src/shardcache.h "$(SHARDCACHE_INSTALL_INCDIR)/"; \
+	 cp -v src/shardcache_client.h "$(SHARDCACHE_INSTALL_INCDIR)/"; \
+	 cp -v src/shardcache_node.h "$(SHARDCACHE_INSTALL_INCDIR)/"; \
+	 cp -v src/shardcache_storage.h "$(SHARDCACHE_INSTALL_INCDIR)/"; \
+	 cp -v src/shardcache_log.h "$(SHARDCACHE_INSTALL_INCDIR)/";
+
+.PHONY: install_utils
+install_utils:
+	@echo "Install utils in $(SHARDCACHE_INSTALL_BINDIR)"; \
+	cp -v utils/shardcachec "$(SHARDCACHE_INSTALL_BINDIR)/"; \
+	cp -v utils/shc_benchmark "$(SHARDCACHE_INSTALL_BINDIR)/";
 
