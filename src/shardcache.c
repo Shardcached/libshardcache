@@ -1583,7 +1583,7 @@ shardcache_store(shardcache_t *cache,
     
     int rc = 0;
 
-    if (!cache->storage.store) { // the storage is readonly
+    if (!cache->use_persistent_storage || !cache->storage.store) { // the storage is readonly
         if (inx) {
             rc = ht_set_if_not_exists(cache->volatile_storage, key, klen, value, vlen);
         } else {
@@ -1597,7 +1597,7 @@ shardcache_store(shardcache_t *cache,
         return rc;
     }
 
-    rc = cache->storage.store(key, klen, value, vlen, cache->storage.priv);
+    rc = cache->storage.store(key, klen, value, vlen, inx, cache->storage.priv);
 
     if (cache->cache_on_set)
         arc_load(cache->arc, (const void *)key, klen, value, vlen);
@@ -1645,12 +1645,14 @@ shardcache_set_internal(shardcache_t *cache,
     if (is_mine == -1)
         is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
 
-    if (is_mine == 1) {
+    if (is_mine == 1)
+    {
         SHC_DEBUG2("Storing value %s (%d) for key %s",
                    shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE, 0),
                    (int)vlen, keystr);
 
-        if (!cache->use_persistent_storage || expire) {
+        if (!cache->use_persistent_storage || expire)
+        {
             volatile_object_t *prev = NULL;
             // ensure removing this key from the persistent storage (if present)
             // since it's now going to be a volatile item
@@ -1709,7 +1711,9 @@ shardcache_set_internal(shardcache_t *cache,
 
             if (obj->expire)
                 shardcache_schedule_expiration(cache, key, klen, expire, 1);
-        } else {
+        }
+        else if (cache->use_persistent_storage)
+        {
             rc = shardcache_store(cache, key, klen, value, vlen, inx, replica);
         }
     }
