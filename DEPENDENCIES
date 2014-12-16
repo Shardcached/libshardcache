@@ -1,0 +1,10 @@
+* To build libshardcache *
+
+libhl - https://github.com/xant/libhl
+libiomux - https://github.com/xant/libiomux
+libchash - https://github.com/dgryski/libchash
+siphash-c - https://github.com/xant/siphash-c
+
+* To build and run testunits *
+
+libut - https://github.com/xant/libut.git
