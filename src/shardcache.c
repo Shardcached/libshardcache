@@ -1944,6 +1944,8 @@ shardcache_cas_internal(shardcache_t *cache,
             if (rc == 0 && !replica)
                 shardcache_commence_eviction(cache, key, klen);
             
+        } else {
+            SHC_WARNING("CAS command can't be executed because the storage doesn't implement it");
         }
     } else {
 
