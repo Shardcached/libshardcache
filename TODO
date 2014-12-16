@@ -70,4 +70,4 @@
   (this means renaming shardcache_*_async &co as their synchronous counterparts and getting
    rid of the old implementations)
 
-
+* document the internal APIs (messaging.h, shardcache_internal.h, arc_ops.h, arc.h)
