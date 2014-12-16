@@ -53,6 +53,7 @@ typedef struct {
     uint64_t num_requests;
     uint64_t num_responses;
     char *node;
+    struct timeval last_update;
 } client_ctx;
 
 static void
@@ -164,15 +165,16 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
             }
         }
 
-        if (build_message(secret, sig_hdr, hdr, record, num_records, output_buffer) != 0)
+        if (build_message(secret, sig_hdr, hdr, record, num_records, output_buffer) == 0)  {
+            if (hdr == SHC_HDR_GET)
+                __sync_add_and_fetch(&num_gets, 1);
+            else
+                __sync_add_and_fetch(&num_sets, 1);
+
+            __sync_fetch_and_add(&ctx->num_requests, 1);
+        } else {
             fprintf(stderr, "Can't create new command!\n");
-
-        if (hdr == SHC_HDR_GET)
-            __sync_add_and_fetch(&num_gets, 1);
-        else
-            __sync_add_and_fetch(&num_sets, 1);
-
-        __sync_fetch_and_add(&ctx->num_requests, 1);
+        }
     }
 
     // flush as much as we can
@@ -229,8 +231,26 @@ discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *pri
 
         iomux_close(iomux, fd);
     
+    } else {
+        gettimeofday(&ctx->last_update, NULL);
     }
     return len;
+}
+
+static void
+timeout_connection(iomux_t *iomux, int fd, void *priv)
+{
+    client_ctx *ctx = (client_ctx *)priv;
+    struct timeval now, diff;
+    struct timeval max_timeout = { 10, 0 };
+    gettimeofday(&now, NULL);
+    timersub(&now, &ctx->last_update, &diff);
+    if (timercmp(&diff, &max_timeout, >)) {
+        fprintf(stderr, "Timeout on connection %p \n", ctx);
+        iomux_close(iomux, fd);
+    } else {
+        iomux_set_timeout(iomux, fd, &max_timeout);
+    }
 }
 
 static void
@@ -254,7 +274,7 @@ static void
             ctx->node = addr;
             iomux_callbacks_t cbs = {
                 .mux_output = send_command,
-                .mux_timeout = NULL,
+                .mux_timeout = timeout_connection,
                 .mux_input = discard_response,
                 .mux_eof = close_connection,
                 .priv = ctx
@@ -265,8 +285,12 @@ static void
             shardcache_counter_add(counters, label, &ctx->num_requests);
             snprintf(label, sizeof(label), "[client %p] responses", ctx);
             shardcache_counter_add(counters, label, &ctx->num_responses);
-            if (iomux_add(iomux, fd, &cbs) == 1)
+            if (iomux_add(iomux, fd, &cbs) == 1) {
+                //struct timeval max_timeout = { 10, 0 };
                 __sync_add_and_fetch(&num_running_clients, 1);
+                gettimeofday(&ctx->last_update, NULL);
+                //iomux_set_timeout(iomux, fd, &max_timeout);
+            }
         }
     }
 
