@@ -1,0 +1,50 @@
+Installation Instructions
+*************************
+
+Copyright (C) 2014 Free Software Foundation, Inc.
+
+This file is free documentation; the Free Software Foundation gives
+unlimited permission to copy, distribute and modify it.
+
+
+Basic Installation
+==================
+
+Shipped makefiles should work on most unix systems.
+Note that libshardcache requires to be built on a system supporting uint64_t
+otherwise it won't compile.
+
+The simplest way to compile libshardcache is:
+  1. `cd' to the directory containing the package's source code and type
+     `make' to build the package. Note that this will also download and build
+     all the dependencies.
+     The built package will statically link its dependencies so there is no
+     need to install those system-wide
+
+  2. Optionally, type `make test' to compile and run run all the unit tests
+     that come with the package.
+
+  3. Type `make install' to install the library and include files
+
+  4. Type `make install_utils' to install the cmdline utilities
+
+  5. You can remove the program binaries and object files from the
+     source code directory by typing `make clean'.  To also removes the
+     dependencies built in the `./deps' directory and clean both
+     the `./deps/.incs' and `./deps/.libs' directories.
+
+Installation Names
+==================
+
+By default, `make install' installs the built libraries under `/usr/local/lib`
+and the publicinclude files under `/usr/local/include'. 
+`make install_utils' will install the cmdline utils under `/usr/local/bin'.
+
+    You can specify a prefix other than `/usr/local' by defining the environment
+variable `SHARDCACHE_INSTALL_PREFIX'.
+
+    You can override single installation directories by defining the environment
+variables SHARDCACHE_INSTALL_LIBDIR, SHARDCACHE_INSTALL_INCDIR and
+SHARDCACHE_INSTALL_BINDIR
+
+
