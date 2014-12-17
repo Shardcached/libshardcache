@@ -176,7 +176,13 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
     free(ctx);
 }
 
-static void send_data(shardcache_request_t *req, fbuf_t *data);
+static inline void
+send_data(shardcache_request_t *req, fbuf_t *data)
+{
+    SPIN_LOCK(&req->output_lock);
+    fbuf_concat(&req->output, data);
+    SPIN_UNLOCK(&req->output_lock);
+}
 
 #define WRITE_STATUS_MODE_SIMPLE  0x00
 #define WRITE_STATUS_MODE_BOOLEAN 0x01
@@ -915,14 +921,6 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char **out, int *len,
         iomux_unset_output_callback(iomux, fd);
     }
     return IOMUX_OUTPUT_MODE_FREE;
-}
-
-static inline void
-send_data(shardcache_request_t *req, fbuf_t *data)
-{
-    SPIN_LOCK(&req->output_lock);
-    fbuf_concat(&req->output, data);
-    SPIN_UNLOCK(&req->output_lock);
 }
 
 static int
