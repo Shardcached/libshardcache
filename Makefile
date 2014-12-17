@@ -21,24 +21,24 @@ SHAREDFLAGS = -shared
 SHAREDEXT = so
 endif
 
-ifeq ("$(LIBDIR)", "")
-LIBDIR=/usr/local/lib
-endif
-
-ifeq ("$(INCDIR)", "")
-INCDIR=/usr/local/include
-endif
-
 ifeq ("$(SHARDCACHE_INSTALL_PREFIX)", "")
 SHARDCACHE_INSTALL_PREFIX=/usr/local
 endif
 
 ifeq ("$(SHARDCACHE_INSTALL_LIBDIR)", "")
+ifneq ("$(LIBDIR)", "")
+SHARDCACHE_INSTALL_LIBDIR="$(LIBDIR)"
+else
 SHARDCACHE_INSTALL_LIBDIR="$(SHARDCACHE_INSTALL_PREFIX)/lib"
+endif
 endif
 
 ifeq ("$(SHARDCACHE_INSTALL_INCDIR)", "")
+ifneq ("$(INCDIR)", "")
+SHARDCACHE_INSTALL_INCDIR="$(INCDIR)"
+else
 SHARDCACHE_INSTALL_INCDIR="$(SHARDCACHE_INSTALL_PREFIX)/include"
+endif
 endif
 
 ifeq ("$(SHARDCACHE_INSTALL_BINDIR)", "")
