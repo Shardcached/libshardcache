@@ -41,7 +41,7 @@ typedef struct {
     iomux_t *iomux;
     linked_list_t *prune;
     uint64_t numfds;
-    uint64_t pruning;
+    //uint64_t pruning;
 } shardcache_worker_context_t;
 
 struct __shardcache_serving_s {
@@ -970,7 +970,7 @@ shardcache_eof_handler(iomux_t *iomux, int fd, void *priv)
             ctx->closed = 1;
             gettimeofday(&ctx->in_prune_since, NULL);
             list_push_value(ctx->worker->prune, ctx);
-            ATOMIC_INCREMENT(ctx->worker->pruning);
+            //ATOMIC_INCREMENT(ctx->worker->pruning);
             return;
         }
         shardcache_connection_context_destroy(ctx);
@@ -1035,7 +1035,7 @@ worker(void *priv)
         int to_check = list_count(wrkctx->prune);
         while (to_check--) {
             shardcache_connection_context_t *to_prune = list_shift_value(wrkctx->prune);
-            ATOMIC_DECREMENT(wrkctx->pruning);
+            //ATOMIC_DECREMENT(wrkctx->pruning);
             shardcache_request_t *req = TAILQ_FIRST(&to_prune->requests);
             int done = 0;
             if (req) {
@@ -1054,7 +1054,7 @@ worker(void *priv)
                 shardcache_connection_context_destroy(to_prune);
             } else {
                 list_push_value(wrkctx->prune, to_prune);
-                ATOMIC_INCREMENT(wrkctx->pruning);
+                //ATOMIC_INCREMENT(wrkctx->pruning);
             }
         }
 
@@ -1168,8 +1168,10 @@ shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers)
         char label[64];
         snprintf(label, sizeof(label), "worker[%d].numfds", i);
         shardcache_counter_add(cache->counters, label, &wrk->numfds);
+        /*
         snprintf(label, sizeof(label), "worker[%d].pruning", i);
         shardcache_counter_add(cache->counters, label, &wrk->pruning);
+        */
 
         MUTEX_INIT(&wrk->wakeup_lock);
         CONDITION_INIT(&wrk->wakeup_cond);
@@ -1214,7 +1216,7 @@ clear_workers_list(linked_list_t *list)
 
         shardcache_connection_context_t *ctx = list_shift_value(wrk->prune);
         while (ctx) {
-            ATOMIC_DECREMENT(wrk->pruning);
+            //ATOMIC_DECREMENT(wrk->pruning);
             shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
             while (req) {
                 TAILQ_REMOVE(&ctx->requests, req, next);
@@ -1229,8 +1231,8 @@ clear_workers_list(linked_list_t *list)
         char label[64];
         snprintf(label, sizeof(label), "worker[%d].numfds", cnt);
         shardcache_counter_remove(wrk->serv->cache->counters, label);
-        snprintf(label, sizeof(label), "worker[%d].pruning", cnt);
-        shardcache_counter_remove(wrk->serv->cache->counters, label);
+        //snprintf(label, sizeof(label), "worker[%d].pruning", cnt);
+        //shardcache_counter_remove(wrk->serv->cache->counters, label);
         cnt++;
 
         iomux_destroy(wrk->iomux);
