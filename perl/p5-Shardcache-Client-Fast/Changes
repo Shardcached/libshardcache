@@ -1,7 +1,12 @@
 Revision history for Perl extension Shardcache::Client::Fast.
 
+0.20  Thu Dec 18 13:09:37 CET 2014
+        - some cleanings int he fd-based API and in MultifResult
+        - AnyEvent client
+
 0.19  Tue Dec  9 13:19:01 CET 2014
         - added the Shardcache::Client::Fast::MultifResult.pm implementation file to the distribution
+
 0.18  Tue Dec  9 13:12:49 CET 2014
         - support the filedescriptor-based API (getf and get_multif)
         - conform to the newest libshardcache API
