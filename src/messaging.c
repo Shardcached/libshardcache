@@ -1742,8 +1742,28 @@ abort_migrate_peer(char *peer,
 int
 connect_to_peer(char *address_string, unsigned int timeout)
 {
-    int fd = open_connection(address_string, SHARDCACHE_PORT_DEFAULT, timeout);
-    if (fd < 0 && errno != EMFILE)
+    static __thread char host[2048];
+    static __thread int port = 0;
+    static __thread int len = 0;
+
+    char *sep = strchr(address_string, ':');
+
+    if (sep) {
+        len = sep - address_string;
+        port = strtol(sep+1, NULL , 10);
+    } else {
+        len = strlen(address_string);
+        port = SHARDCACHE_PORT_DEFAULT;
+    }
+
+    if (__builtin_expect(len < sizeof(host), 1)) {
+        snprintf(host, len + 1, "%s", address_string);
+    } else {
+        SHC_ERROR("address_string too long : %s", address_string);
+        return -1;
+    }
+    int fd = open_connection(host, port, timeout);
+    if (__builtin_expect(fd < 0 && errno != EMFILE, 0))
         SHC_DEBUG("Can't connect to %s", address_string);
     return fd;
 }
