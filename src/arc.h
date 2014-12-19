@@ -57,7 +57,7 @@ typedef struct _arc_ops {
  * @param mode : 0 for strict mode, 1 for loose_mode
  * @return    : A valid pointer to an initialized arc_t structure
  */
-arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, size_t *lists_size[4], arc_mode_t mode);
+arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, uint64_t *lists_size[4], arc_mode_t mode);
 
 /**
  * @brief Release an existing ARC cache instance

@@ -380,7 +380,7 @@ terminate_node_callback(refcnt_node_t *node, void *priv)
 
 /* Create a new cache. */
 arc_t *
-arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, size_t *lists_size[4], arc_mode_t mode)
+arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, uint64_t *lists_size[4], arc_mode_t mode)
 {
     arc_t *cache = calloc(1, sizeof(arc_t));
 

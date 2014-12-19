@@ -222,7 +222,9 @@ write_status(shardcache_request_t *req, int rc, char mode)
         }
     }
 
-    uint32_t magic = htonl((SHC_MAGIC & 0xFFFFFF00) | async_read_context_protocol_version(req->ctx->reader_ctx));
+    // NOTE: we will respond using the same protocol version used by the client
+    char version = async_read_context_protocol_version(req->ctx->reader_ctx);
+    uint32_t magic = htonl((SHC_MAGIC & 0xFFFFFF00) | version);
     fbuf_t output = FBUF_STATIC_INITIALIZER;
     fbuf_minlen(&output, 64);
     fbuf_fastgrowsize(&output, 1024);
@@ -267,7 +269,8 @@ send_async_data_response_preamble(shardcache_request_t *req, uint32_t total_size
 {
     shardcache_hdr_t hdr = SHC_HDR_RESPONSE;
 
-    uint32_t magic = htonl((SHC_MAGIC & 0xFFFFFF00) | async_read_context_protocol_version(req->ctx->reader_ctx));
+    char version = async_read_context_protocol_version(req->ctx->reader_ctx);
+    uint32_t magic = htonl((SHC_MAGIC & 0xFFFFFF00) | version);
 
     fbuf_t output = FBUF_STATIC_INITIALIZER;
     fbuf_minlen(&output, 64);
@@ -301,7 +304,12 @@ send_async_data_response_preamble(shardcache_request_t *req, uint32_t total_size
 
     }
 
-    if (async_read_context_protocol_version(req->ctx->reader_ctx) > 1) {
+    // NOTE: From protocol version 2 responses to get/offset commands 
+    //       prefix the first record contains the size of the data and then
+    //       a second record eventually holds the data.
+    //       In protocol version 1 the data was returned immediately
+    //       in the first record
+    if (version > 1) {
         uint16_t chunk_size = htons(4);
         uint16_t chunk_term = 0;
         char rsep = SHARDCACHE_RSEP;
@@ -340,8 +348,14 @@ send_async_data_response_epilogue(shardcache_request_t *req)
 {
     uint16_t eor = 0;
     char eom = SHARDCACHE_EOM;
-    char pver = async_read_context_protocol_version(req->ctx->reader_ctx);
-    char rsep = pver == 1 ? eom : SHARDCACHE_RSEP;
+    char version = async_read_context_protocol_version(req->ctx->reader_ctx);
+    // NOTE: From protocol version 2 responses to get/offset commands are terminated
+    //       with a third record containing a status code (so allowing to distinguish
+    //       between not-found/empty-data and underlying errors happening at the
+    //       cache/storage level.
+    //       In protocol version1 no status code was available because the response
+    //       contained exactly one record holding the data.
+    char rsep = version == 1 ? eom : SHARDCACHE_RSEP;
     fbuf_t output = FBUF_STATIC_INITIALIZER;
     fbuf_minlen(&output, 64);
     fbuf_fastgrowsize(&output, 1024);
@@ -366,7 +380,9 @@ send_async_data_response_epilogue(shardcache_request_t *req)
         }
     }
 
-    if (pver > 1) {
+    // read above about the third record in get/offset responses
+    // introduced from protocol version 2
+    if (version > 1) {
         uint16_t status_size = htons(1);
         char status = req->error ? -1 : 0;
         fbuf_add_binary(&output, (void *)&status_size, 2);

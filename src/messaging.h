@@ -6,87 +6,8 @@
 #include <fbuf.h>
 #include <rbuf.h>
 #include "shardcache.h"
-
-/* For the protocol specification check the 'docs/protocol.txt' file
- * in the libshardcache source distribution
- */
-
-// in bytes
-#define SHARDCACHE_MSG_SIG_LEN 8
-#define SHARDCACHE_MSG_MAX_RECORD_LEN (1<<28) // 256MB
-
-// last byte holds the protocol version
-#define SHC_PROTOCOL_VERSION 2
-#define SHC_MAGIC 0x73686300 | SHC_PROTOCOL_VERSION
-
-typedef enum {
-    // data commands
-    SHC_HDR_GET              = 0x01,
-    SHC_HDR_SET              = 0x02,
-    SHC_HDR_DELETE           = 0x03,
-    SHC_HDR_EVICT            = 0x04,
-    SHC_HDR_GET_ASYNC        = 0x05,
-    SHC_HDR_GET_OFFSET       = 0x06,
-    SHC_HDR_ADD              = 0x07,
-    SHC_HDR_EXISTS           = 0x08,
-    SHC_HDR_TOUCH            = 0x09,
-    SHC_HDR_CAS              = 0x0A,
-
-    // multi commands
-    SHC_HDR_GET_MULTI        = 0x0B,
-    SHC_HDR_SET_MULTI        = 0x0C,
-    SHC_HDR_DELETE_MULTI     = 0x0D,
-    SHC_HDR_EVICT_MULTI      = 0x0E,
-
-    // atomic commands (assuming that the value is a 64bit integer)
-    SHC_HDR_INCREMENT        = 0x10,
-    SHC_HDR_DECREMENT        = 0x11,
-
-    // migration commands
-    SHC_HDR_MIGRATION_ABORT  = 0x21,
-    SHC_HDR_MIGRATION_BEGIN  = 0x22,
-    SHC_HDR_MIGRATION_END    = 0x23,
-
-    // administrative commands
-    SHC_HDR_CHECK            = 0x31,
-    SHC_HDR_STATS            = 0x32,
-
-    // index-related commands
-    SHC_HDR_GET_INDEX        = 0x41,
-    SHC_HDR_INDEX_RESPONSE   = 0x42,
-
-    // no-op (for ping/health-check)
-    SHC_HDR_NOOP             = 0x90,
-
-    // generic response header
-    SHC_HDR_RESPONSE         = 0x99,
-
-    SHC_HDR_REPLICA_COMMAND  = 0xA0,
-    SHC_HDR_REPLICA_RESPONSE = 0xA1,
-    SHC_HDR_REPLICA_PING     = 0xA2,
-    SHC_HDR_REPLICA_ACK      = 0xA3,
-
-    // signature headers
-    SHC_HDR_SIGNATURE_SIP    = 0xF0,
-    SHC_HDR_CSIGNATURE_SIP   = 0xF1
-
-} shardcache_hdr_t;
-
-typedef enum {
-    SHC_RES_OK     = 0x00,
-    SHC_RES_YES    = 0x01,
-    SHC_RES_EXISTS = 0x02,
-    SHC_RES_NO     = 0xFE,
-    SHC_RES_ERR    = 0xFF
-} shardcache_res_t;
-
-typedef struct _shardcache_record_s {
-    void *v;
-    size_t l;
-} shardcache_record_t;
-
-#define SHARDCACHE_EOM 0x00
-#define SHARDCACHE_RSEP 0x80
+#include "protocol.h"
+#include "async_reader.h"
 
 // TODO - Document all exposed functions
 
@@ -99,6 +20,14 @@ int read_message(int fd,
                  int expected_records,
                  shardcache_hdr_t *hdr,
                  int ignore_timeout);
+
+// asynchronously read a message (callback-based)
+int read_message_async(int fd,
+                   char *auth,
+                   async_read_callback_t cb,
+                   void *priv,
+                   async_read_wrk_t **worker);
+
 
 // synchronously write a message (blocking)
 int write_message(int fd,
@@ -250,43 +179,6 @@ shardcache_storage_index_t *index_from_peer(char *peer,
                                             unsigned char sig_hdr,
                                             int fd);
 
-// idx = -1 , data == NULL, len = 0 when finished
-// idx = -2 , data == NULL, len = 0 if an error occurred
-typedef int (*async_read_callback_t)(void *data,
-                                     size_t len,
-                                     int  idx,
-                                     void *priv);
-
-
-typedef struct _async_read_ctx_s async_read_ctx_t;
-
-async_read_ctx_t *async_read_context_create(char *auth,
-                                            async_read_callback_t cb,
-                                            void *priv);
-void async_read_context_destroy(async_read_ctx_t *ctx);
-
-typedef enum {
-    SHC_STATE_READING_NONE    = 0x00,
-    SHC_STATE_READING_MAGIC   = 0x01,
-    SHC_STATE_READING_SIG_HDR = 0x02,
-    SHC_STATE_READING_HDR     = 0x03,
-    SHC_STATE_READING_RECORD  = 0x04,
-    SHC_STATE_READING_RSEP    = 0x05,
-    SHC_STATE_READING_AUTH    = 0x06,
-    SHC_STATE_READING_DONE    = 0x07,
-    SHC_STATE_READING_ERR     = 0x08,
-    SHC_STATE_AUTH_ERR        = 0x09
-} async_read_context_state_t;
-
-int async_read_context_state(async_read_ctx_t *ctx);
-shardcache_hdr_t async_read_context_hdr(async_read_ctx_t *ctx);
-shardcache_hdr_t async_read_context_sig_hdr(async_read_ctx_t *ctx);
-char async_read_context_protocol_version(async_read_ctx_t *ctx);
-
-async_read_context_state_t async_read_context_consume_data(async_read_ctx_t *ctx, rbuf_t *input);
-async_read_context_state_t async_read_context_input_data(async_read_ctx_t *ctx, void *data, int len, int *processed);
-async_read_context_state_t async_read_context_update(async_read_ctx_t *ctx);
-
 typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         void *key,
                                         size_t klen,
@@ -294,21 +186,6 @@ typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         size_t len,
                                         int idx,
                                         void *priv);
-
-// NOTE: when the async_read_wrk_t param is provided to the following
-//       functions accepting it, they will return immediately and 
-//       initialize the given pointer so that the caller can
-//       use the callbacks and the context to create a new iomux
-//       connection and retreive the data asynchronously.
-//       If the async_read_wrk_t param is not provided the functions
-//       will block until the response has been fully retrieved
-#pragma pack(push, 1)
-typedef struct {
-    async_read_ctx_t *ctx;
-    iomux_callbacks_t cbs;
-    int fd;
-} async_read_wrk_t;
-#pragma pack(pop)
 
 int fetch_from_peer_async(char *peer,
                           char *auth,
@@ -322,12 +199,6 @@ int fetch_from_peer_async(char *peer,
                           int fd,
                           async_read_wrk_t **async_read_wrk_t);
 
-
-int read_message_async(int fd,
-                   char *auth,
-                   async_read_callback_t cb,
-                   void *priv,
-                   async_read_wrk_t **worker);
 
 #endif
 
