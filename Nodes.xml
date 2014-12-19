@@ -267,6 +267,11 @@
               <Anchor>af21efb606d6545f5db74d00db51974f4</Anchor>
              </Node>
              <Node>
+              <Name>arc_lists_size</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a02a8c761b06505f26c8fef93f444beb1</Anchor>
+             </Node>
+             <Node>
               <Name>migration_lock</Name>
               <Path>shardcache__internal_8h.html</Path>
               <Anchor>a3bc34d7a676a6a11bfd8904139a7243d</Anchor>
@@ -335,6 +340,16 @@
               <Name>expirer_queue</Name>
               <Path>shardcache__internal_8h.html</Path>
               <Anchor>afcad9bd8e57839fc076af0660f7f497e</Anchor>
+             </Node>
+             <Node>
+              <Name>arc_mode</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a3f63abadd5251dd823db7f9b665d4d9a</Anchor>
+             </Node>
+             <Node>
+              <Name>cache_on_set</Name>
+              <Path>shardcache__internal_8h.html</Path>
+              <Anchor>a570bba463dc62e6549d0dd26dbf04945</Anchor>
              </Node>
              <Node>
               <Name>evict_on_delete</Name>
@@ -493,6 +508,11 @@
               <Path>shardcache__client_8h.html</Path>
               <Anchor>a206e40341f2560b6818c59e475503366</Anchor>
              </Node>
+             <Node>
+              <Name>idx</Name>
+              <Path>shardcache__client_8h.html</Path>
+              <Anchor>adc3596a0fbaac029aa923b2c38a54a06</Anchor>
+             </Node>
             </Subnodes>
            </Node>
            <Node>
@@ -606,6 +626,23 @@
                 <Anchor>a6c1c0f4fc9fde145696010fefaaee4c1</Anchor>
                </Node>
                <Node>
+                <Name>arc_mode_t</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>ab0b0adba8354729610d68cba4eda1fa7</Anchor>
+                <Subnodes>
+                 <Node>
+                  <Name>SHARDCACHE_ARC_MODE_STRICT</Name>
+                  <Path>shardcache_8h.html</Path>
+                  <Anchor>ab0b0adba8354729610d68cba4eda1fa7ad42b15f1154713ddcb8617d5825f0553</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>SHARDCACHE_ARC_MODE_LOOSE</Name>
+                  <Path>shardcache_8h.html</Path>
+                  <Anchor>ab0b0adba8354729610d68cba4eda1fa7a6656dcb4c84fd8cae7ce5bf8d7b76970</Anchor>
+                 </Node>
+                </Subnodes>
+               </Node>
+               <Node>
                 <Name>shardcache_storage_load</Name>
                 <Path>shardcache_8h.html</Path>
                 <Anchor>aff07062e3204d6cf55d96a68ceed3898</Anchor>
@@ -626,14 +663,24 @@
                 <Anchor>a74346747eb9ad9da22cd1c6b06849d3e</Anchor>
                </Node>
                <Node>
-                <Name>shardcache_use_persistent_connections</Name>
+                <Name>shardcache_arc_mode</Name>
                 <Path>shardcache_8h.html</Path>
-                <Anchor>a0c6344be0358998e1ba9809ba4f3fd4e</Anchor>
+                <Anchor>ac9dfadde24e74bb0425400d37723ff1f</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_cache_on_set</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>a1e9c84fbf55c44d0be33608b2021a976</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_evict_on_delete</Name>
                 <Path>shardcache_8h.html</Path>
                 <Anchor>af443e10682cbc1755ed4514d8a5708ba</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_use_persistent_connections</Name>
+                <Path>shardcache_8h.html</Path>
+                <Anchor>a0c6344be0358998e1ba9809ba4f3fd4e</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_force_caching</Name>
@@ -841,6 +888,11 @@
                   <Path>shardcache__client_8h.html</Path>
                   <Anchor>a206e40341f2560b6818c59e475503366</Anchor>
                  </Node>
+                 <Node>
+                  <Name>idx</Name>
+                  <Path>shardcache__client_8h.html</Path>
+                  <Anchor>adc3596a0fbaac029aa923b2c38a54a06</Anchor>
+                 </Node>
                 </Subnodes>
                </Node>
                <Node>
@@ -862,6 +914,16 @@
                 <Name>SHARDCACHE_CLIENT_ERROR_ARGS</Name>
                 <Path>shardcache__client_8h.html</Path>
                 <Anchor>ab786722217a8f10ebd311c9f022b447e</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_CLIENT_ERROR_PROTOCOL</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>a77c04ed77e75685a194435203bc54e5b</Anchor>
+               </Node>
+               <Node>
+                <Name>SHARDCACHE_CLIENT_ERROR_INTERNAL</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>a8681dba288f18fd32a70a042581a2f70</Anchor>
                </Node>
                <Node>
                 <Name>shardcache_client_t</Name>
@@ -1013,6 +1075,16 @@
                 <Path>shardcache__client_8h.html</Path>
                 <Anchor>a9780342da47b282fe8ada4bf5962df62</Anchor>
                </Node>
+               <Node>
+                <Name>shardcache_client_getf</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>a7a796486f2c3d3ccba02421203f1c9d4</Anchor>
+               </Node>
+               <Node>
+                <Name>shardcache_client_get_multif</Name>
+                <Path>shardcache__client_8h.html</Path>
+                <Anchor>a2429ce6e52b901415bd3d586ab998fc3</Anchor>
+               </Node>
               </Subnodes>
              </Node>
              <Node>
@@ -1087,6 +1159,11 @@
                   <Anchor>af21efb606d6545f5db74d00db51974f4</Anchor>
                  </Node>
                  <Node>
+                  <Name>arc_lists_size</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a02a8c761b06505f26c8fef93f444beb1</Anchor>
+                 </Node>
+                 <Node>
                   <Name>migration_lock</Name>
                   <Path>shardcache__internal_8h.html</Path>
                   <Anchor>a3bc34d7a676a6a11bfd8904139a7243d</Anchor>
@@ -1155,6 +1232,16 @@
                   <Name>expirer_queue</Name>
                   <Path>shardcache__internal_8h.html</Path>
                   <Anchor>afcad9bd8e57839fc076af0660f7f497e</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>arc_mode</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a3f63abadd5251dd823db7f9b665d4d9a</Anchor>
+                 </Node>
+                 <Node>
+                  <Name>cache_on_set</Name>
+                  <Path>shardcache__internal_8h.html</Path>
+                  <Anchor>a570bba463dc62e6549d0dd26dbf04945</Anchor>
                  </Node>
                  <Node>
                   <Name>evict_on_delete</Name>
@@ -1481,26 +1568,6 @@
                 <Name>SHARDCACHE_COUNTER_CACHE_SIZE</Name>
                 <Path>shardcache__internal_8h.html</Path>
                 <Anchor>afc7a59a012161ebaad59ee9a61bf550a</Anchor>
-               </Node>
-               <Node>
-                <Name>SHARDCACHE_COUNTER_CACHE_MRU_SIZE</Name>
-                <Path>shardcache__internal_8h.html</Path>
-                <Anchor>a4e01e05177ebab4e5550c4f4908efe22</Anchor>
-               </Node>
-               <Node>
-                <Name>SHARDCACHE_COUNTER_CACHE_MFU_SIZE</Name>
-                <Path>shardcache__internal_8h.html</Path>
-                <Anchor>af829e44d505fca8b7bc9318fa4a61a2e</Anchor>
-               </Node>
-               <Node>
-                <Name>SHARDCACHE_COUNTER_CACHE_MRUG_SIZE</Name>
-                <Path>shardcache__internal_8h.html</Path>
-                <Anchor>ad2eaeabd4eddfe66a5bf4c6684e091f6</Anchor>
-               </Node>
-               <Node>
-                <Name>SHARDCACHE_COUNTER_CACHE_MFUG_SIZE</Name>
-                <Path>shardcache__internal_8h.html</Path>
-                <Anchor>ad51a3e29eefee5f9979d31e670f3f13f</Anchor>
                </Node>
                <Node>
                 <Name>SHARDCACHE_COUNTER_CACHED_ITEMS</Name>
@@ -2091,6 +2158,44 @@
            <Node>
             <Name>All</Name>
             <Path>globals.html</Path>
+            <Subnodes>
+             <Node>
+              <Name>_</Name>
+              <Path>globals.html</Path>
+             </Node>
+             <Node>
+              <Name>a</Name>
+              <Path>globals_0x61.html</Path>
+             </Node>
+             <Node>
+              <Name>c</Name>
+              <Path>globals_0x63.html</Path>
+             </Node>
+             <Node>
+              <Name>d</Name>
+              <Path>globals_0x64.html</Path>
+             </Node>
+             <Node>
+              <Name>k</Name>
+              <Path>globals_0x6b.html</Path>
+             </Node>
+             <Node>
+              <Name>l</Name>
+              <Path>globals_0x6c.html</Path>
+             </Node>
+             <Node>
+              <Name>m</Name>
+              <Path>globals_0x6d.html</Path>
+             </Node>
+             <Node>
+              <Name>s</Name>
+              <Path>globals_0x73.html</Path>
+             </Node>
+             <Node>
+              <Name>u</Name>
+              <Path>globals_0x75.html</Path>
+             </Node>
+            </Subnodes>
            </Node>
            <Node>
             <Name>Functions</Name>

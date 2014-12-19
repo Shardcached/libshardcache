@@ -15,5 +15,9 @@
      <string>org.doxygen.Publisher</string>
      <key>DocSetPublisherName</key>
      <string>Publisher</string>
+     <key>DashDocSetFamily</key>
+     <string>doxy</string>
+     <key>DocSetPlatformFamily</key>
+     <string>doxygen</string>
 </dict>
 </plist>

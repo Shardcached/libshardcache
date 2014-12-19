@@ -1,5 +1,7 @@
 var searchData=
 [
+  ['shardcache_5farc_5fmode_5floose',['SHARDCACHE_ARC_MODE_LOOSE',['../shardcache_8h.html#ab0b0adba8354729610d68cba4eda1fa7a6656dcb4c84fd8cae7ce5bf8d7b76970',1,'shardcache.h']]],
+  ['shardcache_5farc_5fmode_5fstrict',['SHARDCACHE_ARC_MODE_STRICT',['../shardcache_8h.html#ab0b0adba8354729610d68cba4eda1fa7ad42b15f1154713ddcb8617d5825f0553',1,'shardcache.h']]],
   ['shardcache_5freplica_5fop_5fadd',['SHARDCACHE_REPLICA_OP_ADD',['../shardcache__replica_8h.html#abd8aa3a9a9b7937be4293a8641e025dbaf90feb602d58bee3d5d1647fa59103a8',1,'shardcache_replica.h']]],
   ['shardcache_5freplica_5fop_5fdelete',['SHARDCACHE_REPLICA_OP_DELETE',['../shardcache__replica_8h.html#abd8aa3a9a9b7937be4293a8641e025dbae21a21d8f52ac746ffc4f597acb464e8',1,'shardcache_replica.h']]],
   ['shardcache_5freplica_5fop_5fevict',['SHARDCACHE_REPLICA_OP_EVICT',['../shardcache__replica_8h.html#abd8aa3a9a9b7937be4293a8641e025dba9402d865a6ec4b9c676d987d9e9045a3',1,'shardcache_replica.h']]],

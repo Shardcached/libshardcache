@@ -6,12 +6,15 @@ var shardcache__client_8h =
       [ "data", "shardcache__client_8h.html#a8bb17eadbc7ce8a3f0a729cba73f6391", null ],
       [ "dlen", "shardcache__client_8h.html#aab7de0277350fd097988d78a50436ffa", null ],
       [ "status", "shardcache__client_8h.html#ab5e45edefd32b88319d85539c4a5a23d", null ],
-      [ "expire", "shardcache__client_8h.html#a206e40341f2560b6818c59e475503366", null ]
+      [ "expire", "shardcache__client_8h.html#a206e40341f2560b6818c59e475503366", null ],
+      [ "idx", "shardcache__client_8h.html#adc3596a0fbaac029aa923b2c38a54a06", null ]
     ] ],
     [ "SHARDCACHE_CLIENT_OK", "shardcache__client_8h.html#abf2b82c9da13faf809b7bad02626a2ae", null ],
     [ "SHARDCACHE_CLIENT_ERROR_NODE", "shardcache__client_8h.html#a7ca6f4ee9ac339ad1c6f40f5c897803d", null ],
     [ "SHARDCACHE_CLIENT_ERROR_NETWORK", "shardcache__client_8h.html#aceaff77ea24a3cebc15700bd2e18cc40", null ],
     [ "SHARDCACHE_CLIENT_ERROR_ARGS", "shardcache__client_8h.html#ab786722217a8f10ebd311c9f022b447e", null ],
+    [ "SHARDCACHE_CLIENT_ERROR_PROTOCOL", "shardcache__client_8h.html#a77c04ed77e75685a194435203bc54e5b", null ],
+    [ "SHARDCACHE_CLIENT_ERROR_INTERNAL", "shardcache__client_8h.html#a8681dba288f18fd32a70a042581a2f70", null ],
     [ "shardcache_client_t", "shardcache__client_8h.html#a8a2a09a207bf5c4bb3270a144422c6bc", null ],
     [ "shardcache_client_get_aync_data_cb", "shardcache__client_8h.html#ad8da911ec4f76fe333c18f05d09ab921", null ],
     [ "shardcache_client_create", "shardcache__client_8h.html#a483867140a804fdf07314be9491054e1", null ],
@@ -41,5 +44,7 @@ var shardcache__client_8h =
     [ "shc_multi_item_destroy", "shardcache__client_8h.html#aa2ce54dd57a9a3c8b51880207fdd1730", null ],
     [ "shardcache_client_get_multi", "shardcache__client_8h.html#ade1a0a0eb900b3a9a71bedc43d5c7473", null ],
     [ "shardcache_client_set_multi", "shardcache__client_8h.html#ad6920148b74ab68c472b9b73614fd2a0", null ],
-    [ "shardcache_client_current_node", "shardcache__client_8h.html#a9780342da47b282fe8ada4bf5962df62", null ]
+    [ "shardcache_client_current_node", "shardcache__client_8h.html#a9780342da47b282fe8ada4bf5962df62", null ],
+    [ "shardcache_client_getf", "shardcache__client_8h.html#a7a796486f2c3d3ccba02421203f1c9d4", null ],
+    [ "shardcache_client_get_multif", "shardcache__client_8h.html#a2429ce6e52b901415bd3d586ab998fc3", null ]
 ];

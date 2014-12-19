@@ -88,7 +88,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a3acf120b7116e8d820fc897eebc08db2</Anchor>
-    <Abstract>Callback passed to shardcache_get_async() to receive the data asynchronously.</Abstract>
+    <Abstract>Callback passed to shardcache_get_async() to receive the data asynchronously. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -140,17 +140,27 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a74346747eb9ad9da22cd1c6b06849d3e</Anchor>
-    <Abstract>Create a new shardcache instance.</Abstract>
+    <Abstract>Create a new shardcache instance. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
     <TokenIdentifier>
-      <Name>shardcache_use_persistent_connections</Name>
+      <Name>shardcache_arc_mode</Name>
       <APILanguage>c</APILanguage>
       <Type>func</Type>
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
-    <Anchor>a0c6344be0358998e1ba9809ba4f3fd4e</Anchor>
+    <Anchor>ac9dfadde24e74bb0425400d37723ff1f</Anchor>
+    <DeclaredIn>shardcache.h</DeclaredIn>
+  </Token>
+  <Token>
+    <TokenIdentifier>
+      <Name>shardcache_cache_on_set</Name>
+      <APILanguage>c</APILanguage>
+      <Type>func</Type>
+    </TokenIdentifier>
+    <Path>shardcache_8h.html</Path>
+    <Anchor>a1e9c84fbf55c44d0be33608b2021a976</Anchor>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -161,6 +171,16 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>af443e10682cbc1755ed4514d8a5708ba</Anchor>
+    <DeclaredIn>shardcache.h</DeclaredIn>
+  </Token>
+  <Token>
+    <TokenIdentifier>
+      <Name>shardcache_use_persistent_connections</Name>
+      <APILanguage>c</APILanguage>
+      <Type>func</Type>
+    </TokenIdentifier>
+    <Path>shardcache_8h.html</Path>
+    <Anchor>a0c6344be0358998e1ba9809ba4f3fd4e</Anchor>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -251,7 +271,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a25fc04bda4021be45e33cbcf4590e849</Anchor>
-    <Abstract>Release all the resources used by the shardcache instance.</Abstract>
+    <Abstract>Release all the resources used by the shardcache instance. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -262,7 +282,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>add7d8054738f5061aeb051b827596519</Anchor>
-    <Abstract>Get the value for a key.</Abstract>
+    <Abstract>Get the value for a key. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -273,7 +293,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a871f29a62beca074def85a144d359ec2</Anchor>
-    <Abstract>Get partial value data value for a key.</Abstract>
+    <Abstract>Get partial value data value for a key. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -284,7 +304,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>aca9675ed9f8be9512d7e6151783168ed</Anchor>
-    <Abstract>Get partial value data value for a key.</Abstract>
+    <Abstract>Get partial value data value for a key. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -295,7 +315,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>ae87bbf3da1b1a4b80f8c6213abc320ac</Anchor>
-    <Abstract>Get the value for a key asynchronously.</Abstract>
+    <Abstract>Get the value for a key asynchronously. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -306,7 +326,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a41dee186c3b877f32386da245bcc6a7e</Anchor>
-    <Abstract>Get partial value data value for a key asynchronously.</Abstract>
+    <Abstract>Get partial value data value for a key asynchronously. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -317,7 +337,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a9eb52ab9f65460bdc4958eaefb0b2954</Anchor>
-    <Abstract>Check if a specific key exists on the node responsible for it.</Abstract>
+    <Abstract>Check if a specific key exists on the node responsible for it. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -328,7 +348,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a55b425016e88f20934e14e338f795397</Anchor>
-    <Abstract>Load a key into the cache if not present already, otherwise update the loaded-timestamp.</Abstract>
+    <Abstract>Load a key into the cache if not present already, otherwise update the loaded-timestamp. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -339,7 +359,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a671f35e550582e8e33f4d66ca03adc57</Anchor>
-    <Abstract>Set the value for a key.</Abstract>
+    <Abstract>Set the value for a key. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -350,7 +370,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a7b16b6d50d4e163e92c44025f38ce581</Anchor>
-    <Abstract>Set the value for a key fetching the response asyncrhonously.</Abstract>
+    <Abstract>Set the value for a key fetching the response asyncrhonously. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -361,7 +381,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a95760527edef026e88565106effe88b0</Anchor>
-    <Abstract>Set the value for a key if it doesn&amp;#39;t already exist.</Abstract>
+    <Abstract>Set the value for a key if it doesn&amp;#39;t already exist. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -372,7 +392,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a2aa7a564fbe7884299d77eca29432319</Anchor>
-    <Abstract>Set a volatile value for a key.</Abstract>
+    <Abstract>Set a volatile value for a key. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -383,7 +403,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>aa7c9051ef937c4b4ae02b0017d513274</Anchor>
-    <Abstract>Set the volatile value for a key if it doesn&amp;#39;t already exist.</Abstract>
+    <Abstract>Set the volatile value for a key if it doesn&amp;#39;t already exist. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -394,7 +414,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>af859541766d97b6afb992ef1c843711a</Anchor>
-    <Abstract>Remove the value for a key.</Abstract>
+    <Abstract>Remove the value for a key. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -405,7 +425,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a49754acc649df6ffb5a997ddb924968d</Anchor>
-    <Abstract>Remove the value for a key asynchronously.</Abstract>
+    <Abstract>Remove the value for a key asynchronously. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -416,7 +436,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>af3630c66ba810d5dad9bfbc2492f6cce</Anchor>
-    <Abstract>Remove the value from the cache for a key.</Abstract>
+    <Abstract>Remove the value from the cache for a key. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -427,7 +447,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a7cac3c97e156092f9d560f54d37df98d</Anchor>
-    <Abstract>Get the node owning a specific key.</Abstract>
+    <Abstract>Get the node owning a specific key. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -449,7 +469,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a7f3e042fe58a3dd7537c81de115bba25</Anchor>
-    <Abstract>Release all resources used by the index provided as argument.</Abstract>
+    <Abstract>Release all resources used by the index provided as argument. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -460,7 +480,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>ab9e3022be060e7b5e67af43c682632ac</Anchor>
-    <Abstract>Start a migration process.</Abstract>
+    <Abstract>Start a migration process. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -471,7 +491,7 @@
     </TokenIdentifier>
     <Path>shardcache_8h.html</Path>
     <Anchor>a719c3343ec7ac158d71d6f286da5fec9</Anchor>
-    <Abstract>Abort the current migration process.</Abstract>
+    <Abstract>Abort the current migration process. </Abstract>
     <DeclaredIn>shardcache.h</DeclaredIn>
   </Token>
   <Token>
@@ -519,6 +539,26 @@
   </Token>
   <Token>
     <TokenIdentifier>
+      <Name>SHARDCACHE_ARC_MODE_STRICT</Name>
+      <APILanguage>c</APILanguage>
+      <Type>econst</Type>
+    </TokenIdentifier>
+    <Path>shardcache_8h.html</Path>
+    <Anchor>ab0b0adba8354729610d68cba4eda1fa7ad42b15f1154713ddcb8617d5825f0553</Anchor>
+    <DeclaredIn>shardcache.h</DeclaredIn>
+  </Token>
+  <Token>
+    <TokenIdentifier>
+      <Name>SHARDCACHE_ARC_MODE_LOOSE</Name>
+      <APILanguage>c</APILanguage>
+      <Type>econst</Type>
+    </TokenIdentifier>
+    <Path>shardcache_8h.html</Path>
+    <Anchor>ab0b0adba8354729610d68cba4eda1fa7a6656dcb4c84fd8cae7ce5bf8d7b76970</Anchor>
+    <DeclaredIn>shardcache.h</DeclaredIn>
+  </Token>
+  <Token>
+    <TokenIdentifier>
       <Name>SHARDCACHE_CLIENT_OK</Name>
       <APILanguage>unknown</APILanguage>
       <Type>macro</Type>
@@ -559,13 +599,33 @@
   </Token>
   <Token>
     <TokenIdentifier>
+      <Name>SHARDCACHE_CLIENT_ERROR_PROTOCOL</Name>
+      <APILanguage>unknown</APILanguage>
+      <Type>macro</Type>
+    </TokenIdentifier>
+    <Path>shardcache__client_8h.html</Path>
+    <Anchor>a77c04ed77e75685a194435203bc54e5b</Anchor>
+    <DeclaredIn>shardcache_client.h</DeclaredIn>
+  </Token>
+  <Token>
+    <TokenIdentifier>
+      <Name>SHARDCACHE_CLIENT_ERROR_INTERNAL</Name>
+      <APILanguage>unknown</APILanguage>
+      <Type>macro</Type>
+    </TokenIdentifier>
+    <Path>shardcache__client_8h.html</Path>
+    <Anchor>a8681dba288f18fd32a70a042581a2f70</Anchor>
+    <DeclaredIn>shardcache_client.h</DeclaredIn>
+  </Token>
+  <Token>
+    <TokenIdentifier>
       <Name>shardcache_client_t</Name>
       <APILanguage>c</APILanguage>
       <Type>tdef</Type>
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a8a2a09a207bf5c4bb3270a144422c6bc</Anchor>
-    <Abstract>Opaque structure representing the shardcache client.</Abstract>
+    <Abstract>Opaque structure representing the shardcache client. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -576,7 +636,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>ad8da911ec4f76fe333c18f05d09ab921</Anchor>
-    <Abstract>Callback passed to shardcache_client_get_async() to retrieve the data asynchronously.</Abstract>
+    <Abstract>Callback passed to shardcache_client_get_async() to retrieve the data asynchronously. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -587,7 +647,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a483867140a804fdf07314be9491054e1</Anchor>
-    <Abstract>Create a new shardcache client.</Abstract>
+    <Abstract>Create a new shardcache client. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -598,7 +658,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>abb6dc70a7a72c83abdf5c9e477de0415</Anchor>
-    <Abstract>Get and/or set the timeout used when establishing new tcp connections or reading/writing from/to exis...</Abstract>
+    <Abstract>Get and/or set the timeout (in milliseconds) used when establishing new tcp connections or reading/wr...</Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -642,7 +702,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a1da6fcc4f68b20579326008aaa1455e4</Anchor>
-    <Abstract>Get and/or set the maximum number of requests that can be pipelined on a single connection.</Abstract>
+    <Abstract>Get and/or set the maximum number of requests that can be pipelined on a single connection. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -653,7 +713,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>ab2726441e78cf6acc0a7a02c8588c65d</Anchor>
-    <Abstract>Get the value for a key.</Abstract>
+    <Abstract>Get the value for a key. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -664,7 +724,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>ace8520f114acd08eba2408dfa1b6b9aa</Anchor>
-    <Abstract>Get part of the value for a key.</Abstract>
+    <Abstract>Get part of the value for a key. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -675,7 +735,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>af6017e6ed41d61157413aa94e72a4ddf</Anchor>
-    <Abstract>Get the value for a key asynchronously.</Abstract>
+    <Abstract>Get the value for a key asynchronously. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -686,7 +746,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>af990f59d4d3ba864042b5552a16348e0</Anchor>
-    <Abstract>Check if a specific key exists on the node responsible for it.</Abstract>
+    <Abstract>Check if a specific key exists on the node responsible for it. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -708,7 +768,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>ae7fa3b07937e4886394db885b0d120f8</Anchor>
-    <Abstract>Set the value for a key if it doesn&amp;#39;t exist already.</Abstract>
+    <Abstract>Set the value for a key if it doesn&amp;#39;t exist already. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -719,7 +779,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a2c983186e3265e6aacc1c387ef68faa4</Anchor>
-    <Abstract>Set the value for a key.</Abstract>
+    <Abstract>Set the value for a key. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -730,7 +790,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>ae7af65679cd37cdb5d821f60a4c07378</Anchor>
-    <Abstract>Remove the value for a key.</Abstract>
+    <Abstract>Remove the value for a key. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -741,7 +801,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>aabd6d9ca94722c30a55c711212b6a424</Anchor>
-    <Abstract>Evict (remove from the cache) the value for a key.</Abstract>
+    <Abstract>Evict (remove from the cache) the value for a key. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -752,7 +812,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a28b99e0ba482cbeb29ca18be7e91485b</Anchor>
-    <Abstract>Get the stats from a shardcache node.</Abstract>
+    <Abstract>Get the stats from a shardcache node. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -763,7 +823,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>adc7bc694f1f9504c88655abda10973e1</Anchor>
-    <Abstract>Check the status of a shardcache node.</Abstract>
+    <Abstract>Check the status of a shardcache node. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -774,7 +834,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a7520db6467ddf5ccc7adc126333c3110</Anchor>
-    <Abstract>Start a migration.</Abstract>
+    <Abstract>Start a migration. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -785,7 +845,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a165b44c42b84aece07c5f28193f35424</Anchor>
-    <Abstract>Abort the current migration (if any)</Abstract>
+    <Abstract>Abort the current migration (if any) </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -796,7 +856,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a5bbe3ff7a05cdf73d25eff5d2ad90737</Anchor>
-    <Abstract>Get the index from a shardcache node.</Abstract>
+    <Abstract>Get the index from a shardcache node. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -807,7 +867,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a9017579f462e76f482f93b61dd80afc5</Anchor>
-    <Abstract>Return the error code for the last operation performed by the shardcache client.</Abstract>
+    <Abstract>Return the error code for the last operation performed by the shardcache client. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -818,7 +878,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a9af4a5d4b40f51b43947a9d5a1160661</Anchor>
-    <Abstract>Return the error string for the last operation performed by the shardcache client.</Abstract>
+    <Abstract>Return the error string for the last operation performed by the shardcache client. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -829,7 +889,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a1e1d79558d46f7fbe4abd4287641c0ae</Anchor>
-    <Abstract>Release all the resources used by the shardcache client instance.</Abstract>
+    <Abstract>Release all the resources used by the shardcache client instance. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -851,7 +911,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>aa2ce54dd57a9a3c8b51880207fdd1730</Anchor>
-    <Abstract>Release all the resources allocad for the shc_multi_item_t structure.</Abstract>
+    <Abstract>Release all the resources allocad for the shc_multi_item_t structure. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -862,7 +922,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>ade1a0a0eb900b3a9a71bedc43d5c7473</Anchor>
-    <Abstract>get multiple keys at once</Abstract>
+    <Abstract>Get multiple keys at once. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -873,7 +933,7 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>ad6920148b74ab68c472b9b73614fd2a0</Anchor>
-    <Abstract>get multiple keys at once</Abstract>
+    <Abstract>Get multiple keys at once. </Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -884,7 +944,29 @@
     </TokenIdentifier>
     <Path>shardcache__client_8h.html</Path>
     <Anchor>a9780342da47b282fe8ada4bf5962df62</Anchor>
-    <Abstract>get the node used to fulfil last request</Abstract>
+    <Abstract>Get the node used to fulfil last request. </Abstract>
+    <DeclaredIn>shardcache_client.h</DeclaredIn>
+  </Token>
+  <Token>
+    <TokenIdentifier>
+      <Name>shardcache_client_getf</Name>
+      <APILanguage>c</APILanguage>
+      <Type>func</Type>
+    </TokenIdentifier>
+    <Path>shardcache__client_8h.html</Path>
+    <Anchor>a7a796486f2c3d3ccba02421203f1c9d4</Anchor>
+    <Abstract>Get the value for a key asynchronously using a filedescriptor to retrieve the data. </Abstract>
+    <DeclaredIn>shardcache_client.h</DeclaredIn>
+  </Token>
+  <Token>
+    <TokenIdentifier>
+      <Name>shardcache_client_get_multif</Name>
+      <APILanguage>c</APILanguage>
+      <Type>func</Type>
+    </TokenIdentifier>
+    <Path>shardcache__client_8h.html</Path>
+    <Anchor>a2429ce6e52b901415bd3d586ab998fc3</Anchor>
+    <Abstract>Get the values for multiple keys asynchronously using a filedescriptor to retrieve the data...</Abstract>
     <DeclaredIn>shardcache_client.h</DeclaredIn>
   </Token>
   <Token>
@@ -1219,46 +1301,6 @@
   </Token>
   <Token>
     <TokenIdentifier>
-      <Name>SHARDCACHE_COUNTER_CACHE_MRU_SIZE</Name>
-      <APILanguage>unknown</APILanguage>
-      <Type>macro</Type>
-    </TokenIdentifier>
-    <Path>shardcache__internal_8h.html</Path>
-    <Anchor>a4e01e05177ebab4e5550c4f4908efe22</Anchor>
-    <DeclaredIn>shardcache_internal.h</DeclaredIn>
-  </Token>
-  <Token>
-    <TokenIdentifier>
-      <Name>SHARDCACHE_COUNTER_CACHE_MFU_SIZE</Name>
-      <APILanguage>unknown</APILanguage>
-      <Type>macro</Type>
-    </TokenIdentifier>
-    <Path>shardcache__internal_8h.html</Path>
-    <Anchor>af829e44d505fca8b7bc9318fa4a61a2e</Anchor>
-    <DeclaredIn>shardcache_internal.h</DeclaredIn>
-  </Token>
-  <Token>
-    <TokenIdentifier>
-      <Name>SHARDCACHE_COUNTER_CACHE_MRUG_SIZE</Name>
-      <APILanguage>unknown</APILanguage>
-      <Type>macro</Type>
-    </TokenIdentifier>
-    <Path>shardcache__internal_8h.html</Path>
-    <Anchor>ad2eaeabd4eddfe66a5bf4c6684e091f6</Anchor>
-    <DeclaredIn>shardcache_internal.h</DeclaredIn>
-  </Token>
-  <Token>
-    <TokenIdentifier>
-      <Name>SHARDCACHE_COUNTER_CACHE_MFUG_SIZE</Name>
-      <APILanguage>unknown</APILanguage>
-      <Type>macro</Type>
-    </TokenIdentifier>
-    <Path>shardcache__internal_8h.html</Path>
-    <Anchor>ad51a3e29eefee5f9979d31e670f3f13f</Anchor>
-    <DeclaredIn>shardcache_internal.h</DeclaredIn>
-  </Token>
-  <Token>
-    <TokenIdentifier>
       <Name>SHARDCACHE_COUNTER_CACHED_ITEMS</Name>
       <APILanguage>unknown</APILanguage>
       <Type>macro</Type>
@@ -1525,7 +1567,7 @@
     </TokenIdentifier>
     <Path>shardcache__log_8h.html</Path>
     <Anchor>a83daa5cadcd1c2217f3d65bc8fbb8e77</Anchor>
-    <Abstract>Initialize the internal log subsystem.</Abstract>
+    <Abstract>Initialize the internal log subsystem. </Abstract>
     <DeclaredIn>shardcache_log.h</DeclaredIn>
   </Token>
   <Token>
@@ -1536,7 +1578,7 @@
     </TokenIdentifier>
     <Path>shardcache__log_8h.html</Path>
     <Anchor>a578341075b54f9426cc8e8c595f58b03</Anchor>
-    <Abstract>Returns the actually configured log lovel.</Abstract>
+    <Abstract>Returns the actually configured log lovel. </Abstract>
     <DeclaredIn>shardcache_log.h</DeclaredIn>
   </Token>
   <Token>
@@ -1547,7 +1589,7 @@
     </TokenIdentifier>
     <Path>shardcache__log_8h.html</Path>
     <Anchor>a7a1581a607007a0b51d1d53e018d20a9</Anchor>
-    <Abstract>Log a message at the specified prio and for the specified loglevel.</Abstract>
+    <Abstract>Log a message at the specified prio and for the specified loglevel. </Abstract>
     <DeclaredIn>shardcache_log.h</DeclaredIn>
   </Token>
   <Token>
@@ -1558,7 +1600,7 @@
     </TokenIdentifier>
     <Path>shardcache__log_8h.html</Path>
     <Anchor>aaf94c169ad4df64a0927555b5811a9fa</Anchor>
-    <Abstract>Convert a binary buffer to an hexstring.</Abstract>
+    <Abstract>Convert a binary buffer to an hexstring. </Abstract>
     <DeclaredIn>shardcache_log.h</DeclaredIn>
   </Token>
   <Token>
@@ -1569,7 +1611,7 @@
     </TokenIdentifier>
     <Path>shardcache__log_8h.html</Path>
     <Anchor>aea1443844e55163940ecc71e2138b25d</Anchor>
-    <Abstract>Escape all occurences of a specific byte using the provided escape character.</Abstract>
+    <Abstract>Escape all occurences of a specific byte using the provided escape character. </Abstract>
     <DeclaredIn>shardcache_log.h</DeclaredIn>
   </Token>
   <Token>
@@ -1580,7 +1622,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a860894af5414a0540d590e28afe950c7</Anchor>
-    <Abstract>Structure representing a node taking part in the shard cache.</Abstract>
+    <Abstract>Structure representing a node taking part in the shard cache. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1591,7 +1633,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a2badea72b53f16926b5b1149a41abf2c</Anchor>
-    <Abstract>Create a new shardcache_node_t structure.</Abstract>
+    <Abstract>Create a new shardcache_node_t structure. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1602,7 +1644,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a17d43616aea15b1f2bab1c27d1d3193a</Anchor>
-    <Abstract>Create a new shardcache_node_t structure by parsing a full node string.</Abstract>
+    <Abstract>Create a new shardcache_node_t structure by parsing a full node string. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1613,7 +1655,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a8fd1dab4ef239e3ee7d6f481d2e34634</Anchor>
-    <Abstract>Create a copy of an existing shardcache_node_t structure.</Abstract>
+    <Abstract>Create a copy of an existing shardcache_node_t structure. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1624,7 +1666,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>adfe43d081702ba86967e950a460a4540</Anchor>
-    <Abstract>Release all the resources used by a shardcache_node_t structure.</Abstract>
+    <Abstract>Release all the resources used by a shardcache_node_t structure. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1635,7 +1677,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a394b31103821ffa12117d3d30d746229</Anchor>
-    <Abstract>Get the label for a given node.</Abstract>
+    <Abstract>Get the label for a given node. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1646,7 +1688,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a68ee36b423681d7e544b244ebbeda0b0</Anchor>
-    <Abstract>Get the node-string representing a given node.</Abstract>
+    <Abstract>Get the node-string representing a given node. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1657,7 +1699,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a84a7fdea9acbf7a93023fc0335e9a9d7</Anchor>
-    <Abstract>Get a valid address for a given node (from any of the replicas)</Abstract>
+    <Abstract>Get a valid address for a given node (from any of the replicas) </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1668,7 +1710,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a148c09f6438efaaabc99f4af18464126</Anchor>
-    <Abstract>Get the number of addresses (replicas) configured for a given node.</Abstract>
+    <Abstract>Get the number of addresses (replicas) configured for a given node. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1679,7 +1721,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a3a6c2d58ea00be742db98646ac09da44</Anchor>
-    <Abstract>Get all the addresses (up to num_addresses) configured for a given node.</Abstract>
+    <Abstract>Get all the addresses (up to num_addresses) configured for a given node. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1690,7 +1732,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>aeade88e9dd7e780fae0fee834079bb81</Anchor>
-    <Abstract>Get one of the addresses (at a specific index) configured for a given node.</Abstract>
+    <Abstract>Get one of the addresses (at a specific index) configured for a given node. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1701,7 +1743,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a2957f331a54d0db05fdeebb30c5b92bb</Anchor>
-    <Abstract>Select a node by its label.</Abstract>
+    <Abstract>Select a node by its label. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1723,7 +1765,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>a44a8e1154d11daf9799f77573f8d6115</Anchor>
-    <Abstract>Release resources for a list of nodes.</Abstract>
+    <Abstract>Release resources for a list of nodes. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1745,7 +1787,7 @@
     </TokenIdentifier>
     <Path>shardcache__node_8h.html</Path>
     <Anchor>aaeb94d38a51d419acb3f4de87b81da0f</Anchor>
-    <Abstract>Release resources for a list of labels.</Abstract>
+    <Abstract>Release resources for a list of labels. </Abstract>
     <DeclaredIn>shardcache_node.h</DeclaredIn>
   </Token>
   <Token>
@@ -1896,7 +1938,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>a48b235496cb8b8cd4d057c9d09548372</Anchor>
-    <Abstract>Callback to provide the value for a given key.</Abstract>
+    <Abstract>Callback to provide the value for a given key. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>
@@ -1907,7 +1949,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>a148bc006e02d3baffd2e8e632b632634</Anchor>
-    <Abstract>Callback to provide values for multiple keys at once.</Abstract>
+    <Abstract>Callback to provide values for multiple keys at once. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>
@@ -1918,7 +1960,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>ae8af181c4715d81e26360ddf8ed54a8c</Anchor>
-    <Abstract>Callback to store a new value for a given key.</Abstract>
+    <Abstract>Callback to store a new value for a given key. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>
@@ -1929,7 +1971,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>affdba97437b5cee4324163c52f79fb69</Anchor>
-    <Abstract>Callback to remove an existing value for a given key.</Abstract>
+    <Abstract>Callback to remove an existing value for a given key. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>
@@ -1940,7 +1982,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>aa44062df197ddbe2edf1b7863262e9ac</Anchor>
-    <Abstract>Callback to check if a specific key exists on the storage.</Abstract>
+    <Abstract>Callback to check if a specific key exists on the storage. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>
@@ -1951,7 +1993,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>a217a191654966ca5097eac275cfac2bb</Anchor>
-    <Abstract>Callback returning the number of items in the index.</Abstract>
+    <Abstract>Callback returning the number of items in the index. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>
@@ -1962,7 +2004,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>a4e19cc72e3ba05cce02b21d548127c1d</Anchor>
-    <Abstract>Callback to fetch the index of stored keys.</Abstract>
+    <Abstract>Callback to fetch the index of stored keys. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>
@@ -1984,7 +2026,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>a6046fe1c1c1eab5c53435b17b9dc0b77</Anchor>
-    <Abstract>Callback returning the number of items in the index.</Abstract>
+    <Abstract>Callback returning the number of items in the index. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>
@@ -2025,7 +2067,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>a242de502e390a032a605c1c12ce1ffc2</Anchor>
-    <Abstract>Callback used to create a new instance of a storage module.</Abstract>
+    <Abstract>Callback used to create a new instance of a storage module. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>
@@ -2047,7 +2089,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>a075b1863d2be9c8ab1a863ea860112e2</Anchor>
-    <Abstract>Returns the list of registered counters with their actual value.</Abstract>
+    <Abstract>Returns the list of registered counters with their actual value. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>
@@ -2058,7 +2100,7 @@
     </TokenIdentifier>
     <Path>shardcache__storage_8h.html</Path>
     <Anchor>aa56ead41f7f61d7b88417fc9dc6937f8</Anchor>
-    <Abstract>Resets all the counters to 0.</Abstract>
+    <Abstract>Resets all the counters to 0. </Abstract>
     <DeclaredIn>shardcache_storage.h</DeclaredIn>
   </Token>
   <Token>

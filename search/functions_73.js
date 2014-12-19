@@ -2,7 +2,9 @@ var searchData=
 [
   ['shardcache_5fadd',['shardcache_add',['../shardcache_8h.html#a95760527edef026e88565106effe88b0',1,'shardcache.h']]],
   ['shardcache_5fadd_5fvolatile',['shardcache_add_volatile',['../shardcache_8h.html#aa7c9051ef937c4b4ae02b0017d513274',1,'shardcache.h']]],
+  ['shardcache_5farc_5fmode',['shardcache_arc_mode',['../shardcache_8h.html#ac9dfadde24e74bb0425400d37723ff1f',1,'shardcache.h']]],
   ['shardcache_5fbyte_5fescape',['shardcache_byte_escape',['../shardcache__log_8h.html#aea1443844e55163940ecc71e2138b25d',1,'shardcache_log.h']]],
+  ['shardcache_5fcache_5fon_5fset',['shardcache_cache_on_set',['../shardcache_8h.html#a1e9c84fbf55c44d0be33608b2021a976',1,'shardcache.h']]],
   ['shardcache_5fclear_5fcounters',['shardcache_clear_counters',['../shardcache__storage_8h.html#aa56ead41f7f61d7b88417fc9dc6937f8',1,'shardcache_storage.h']]],
   ['shardcache_5fclient_5fadd',['shardcache_client_add',['../shardcache__client_8h.html#ae7fa3b07937e4886394db885b0d120f8',1,'shardcache_client.h']]],
   ['shardcache_5fclient_5fcheck',['shardcache_client_check',['../shardcache__client_8h.html#adc7bc694f1f9504c88655abda10973e1',1,'shardcache_client.h']]],
@@ -18,6 +20,8 @@ var searchData=
   ['shardcache_5fclient_5fget',['shardcache_client_get',['../shardcache__client_8h.html#ab2726441e78cf6acc0a7a02c8588c65d',1,'shardcache_client.h']]],
   ['shardcache_5fclient_5fget_5fasync',['shardcache_client_get_async',['../shardcache__client_8h.html#af6017e6ed41d61157413aa94e72a4ddf',1,'shardcache_client.h']]],
   ['shardcache_5fclient_5fget_5fmulti',['shardcache_client_get_multi',['../shardcache__client_8h.html#ade1a0a0eb900b3a9a71bedc43d5c7473',1,'shardcache_client.h']]],
+  ['shardcache_5fclient_5fget_5fmultif',['shardcache_client_get_multif',['../shardcache__client_8h.html#a2429ce6e52b901415bd3d586ab998fc3',1,'shardcache_client.h']]],
+  ['shardcache_5fclient_5fgetf',['shardcache_client_getf',['../shardcache__client_8h.html#a7a796486f2c3d3ccba02421203f1c9d4',1,'shardcache_client.h']]],
   ['shardcache_5fclient_5findex',['shardcache_client_index',['../shardcache__client_8h.html#a5bbe3ff7a05cdf73d25eff5d2ad90737',1,'shardcache_client.h']]],
   ['shardcache_5fclient_5fmigration_5fabort',['shardcache_client_migration_abort',['../shardcache__client_8h.html#a165b44c42b84aece07c5f28193f35424',1,'shardcache_client.h']]],
   ['shardcache_5fclient_5fmigration_5fbegin',['shardcache_client_migration_begin',['../shardcache__client_8h.html#a7520db6467ddf5ccc7adc126333c3110',1,'shardcache_client.h']]],

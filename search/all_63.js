@@ -1,5 +1,6 @@
 var searchData=
 [
+  ['cache_5fon_5fset',['cache_on_set',['../shardcache__internal_8h.html#a570bba463dc62e6549d0dd26dbf04945',1,'__shardcache_s']]],
   ['cache_5ftimeouts',['cache_timeouts',['../shardcache__internal_8h.html#ac6bca2e97e51ab860fea810070940c0c',1,'__shardcache_s']]],
   ['chash',['chash',['../shardcache__internal_8h.html#ab202c79546259553ee39e5e4586447ff',1,'__shardcache_s']]],
   ['chash_5ft',['chash_t',['../shardcache__internal_8h.html#a1ce0d303d201c97f16732e53ea98877a',1,'shardcache_internal.h']]],

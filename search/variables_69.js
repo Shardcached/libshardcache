@@ -1,5 +1,6 @@
 var searchData=
 [
+  ['idx',['idx',['../shardcache__client_8h.html#adc3596a0fbaac029aa923b2c38a54a06',1,'shc_multi_item_t']]],
   ['index',['index',['../shardcache__storage_8h.html#a2f958de4182b95ef054e9dff32c3c8f4',1,'__shardcache_storage_s']]],
   ['internal',['internal',['../shardcache__storage_8h.html#a75d98c178ac9f6b6d65acee75b576b0c',1,'__shardcache_storage_s']]],
   ['io_5fth',['io_th',['../shardcache__internal_8h.html#a7794dd594611275fd820c475dd1e79a9',1,'shardcache_async_io_context_t']]],
