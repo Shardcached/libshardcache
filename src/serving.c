@@ -186,8 +186,137 @@ send_data(shardcache_request_t *req, fbuf_t *data)
 #define WRITE_STATUS_MODE_SIMPLE  0x00
 #define WRITE_STATUS_MODE_BOOLEAN 0x01
 #define WRITE_STATUS_MODE_EXISTS  0x02
+
+static inline uint32_t
+dump_records(int num_items, fbuf_t **items, fbuf_t *out)
+{
+    uint32_t wrote = 0;
+    int i;
+    for (i = 0; i < num_items; i++) { 
+        if (items[i]) {
+            uint32_t isize = fbuf_used(items[i]);
+            uint32_t isize_nbo = htonl(isize);
+            fbuf_add_binary(out, (char *)&isize_nbo, sizeof(isize_nbo)); 
+            fbuf_concat(out, items[i]);
+            wrote += isize + sizeof(isize_nbo);
+        } else {
+            uint32_t nullsize = 0;
+            fbuf_add_binary(out, (char *)&nullsize, sizeof(nullsize));
+            wrote += sizeof(nullsize);
+        }
+    }
+    return wrote;
+}
+
+static inline void
+array_to_record(int num_items, fbuf_t **items, fbuf_t *out)
+{
+    uint32_t num_items_nbo = htonl(num_items);
+
+    int to_write = sizeof(num_items_nbo);
+
+    int count_wrote = 0;
+
+    int idx, last_idx = 0;
+    for (idx = 0; idx < num_items; idx++) {
+        if (!items[idx]) {
+            to_write += 4;
+            continue;
+        }
+        int current_size = fbuf_used(items[idx]);
+        // flush one chunk if we need to
+        if (to_write + current_size + 4 > 65535) {
+            // the size of the chunk
+            uint16_t cs = htons(to_write);
+            fbuf_add_binary(out, (char *)&cs, sizeof(to_write));
+
+            if (!count_wrote) {
+                fbuf_add_binary(out, (char *)&num_items_nbo, sizeof(num_items_nbo));
+                count_wrote = 1;
+                to_write -= sizeof(num_items_nbo);
+            }
+
+            uint32_t wrote = dump_records(idx - last_idx, &items[last_idx], out);
+            if (wrote != to_write) {
+                // TODO - Error messages
+            }
+
+            last_idx = idx;
+            to_write = 0;
+        }
+        to_write += 4 + current_size;
+    }
+
+    // size of last chunk
+    uint16_t cs = htons(to_write);
+    fbuf_add_binary(out, (char *)&cs, sizeof(cs));
+
+    if (!count_wrote)
+        fbuf_add_binary(out, (char *)&num_items_nbo, sizeof(num_items_nbo));
+
+    uint32_t wrote = dump_records(idx - last_idx + 1, &items[last_idx], out);
+    if (wrote != to_write) {
+        // TODO - Error messages
+    }
+
+    // end-of-record
+    cs = 0;
+    fbuf_add_binary(out, (char *)&cs, sizeof(cs));
+}
+
+static inline char
+rc_to_status(int rc, char *mode)
+{
+    char out;
+    if (rc == -1) {
+        out = SHC_RES_ERR;
+    } else {
+        if (mode == WRITE_STATUS_MODE_BOOLEAN) {
+            if (rc == 1)
+                out = SHC_RES_YES;
+            else if (rc == 0)
+                out = SHC_RES_NO;
+            else
+                out = SHC_RES_ERR;
+        } else if (mode == WRITE_STATUS_MODE_EXISTS && rc == 1) {
+            out = SHC_RES_EXISTS;
+        }
+        else if (rc == 0) {
+            out = SHC_RES_OK;
+        } else {
+            out = SHC_RES_ERR;
+        }
+    }
+    return out;
+}
+
 static void
-write_status(shardcache_request_t *req, int rc, char mode)
+write_statuses(shardcache_request_t *req, char mode, int num_items, ...)
+{
+    fbuf_t out = FBUF_STATIC_INITIALIZER;
+
+    fbuf_t **items = malloc(sizeof(fbuf_t *) * num_items);
+    va_list arg;
+    va_start(arg, num_items);
+    int i;
+    for (i = 0; i < num_items; i++) {
+        int rc = va_arg(arg, int);
+        items[i] = fbuf_create(0);
+        char st = rc_to_status(rc, mode); 
+        fbuf_add_binary(items[i], &st, 1);
+    }
+    va_end(arg);
+
+    array_to_record(num_items, items, &out);
+
+    for (i = 0; i < num_items; i++)
+        fbuf_free(items[i]);
+
+    free(items);
+}
+
+static void
+write_status(shardcache_request_t *req, char mode, int rc)
 {
     // we are ensured that req exists until done is set to 1 and that
     // both req->output and req->ctx will never change, so we don't need a lock here
@@ -201,25 +330,7 @@ write_status(shardcache_request_t *req, int rc, char mode)
         out[1] = 0;
         no_data = 1;
     } else {
-        if (rc == -1) {
-            out[2] = SHC_RES_ERR;
-        } else {
-            if (mode == WRITE_STATUS_MODE_BOOLEAN) {
-                if (rc == 1)
-                    out[2] = SHC_RES_YES;
-                else if (rc == 0)
-                    out[2] = SHC_RES_NO;
-                else
-                    out[2] = SHC_RES_ERR;
-            } else if (mode == WRITE_STATUS_MODE_EXISTS && rc == 1) {
-                out[2] = SHC_RES_EXISTS;
-            }
-            else if (rc == 0) {
-                out[2] = SHC_RES_OK;
-            } else {
-                out[2] = SHC_RES_ERR;
-            }
-        }
+        out[2] = rc_to_status(rc, mode);
     }
 
     // NOTE: we will respond using the same protocol version used by the client
@@ -609,11 +720,13 @@ shardcache_async_command_response(void *key, size_t klen, int ret, void *priv)
 {
     shardcache_request_t *req = (shardcache_request_t *)priv;
 
-    write_status(req, ret, (req->hdr == SHC_HDR_ADD)
-                           ? WRITE_STATUS_MODE_EXISTS
-                           : (req->hdr == SHC_HDR_EXISTS)
-                             ? WRITE_STATUS_MODE_BOOLEAN
-                             : WRITE_STATUS_MODE_SIMPLE);
+    int mode = (req->hdr == SHC_HDR_ADD)
+             ? WRITE_STATUS_MODE_EXISTS
+             : (req->hdr == SHC_HDR_EXISTS)
+                ? WRITE_STATUS_MODE_BOOLEAN
+                : WRITE_STATUS_MODE_SIMPLE;
+
+    write_status(req, mode, ret);
 }
 
 static void
@@ -634,13 +747,13 @@ process_request(shardcache_request_t *req)
             if (req->hdr == SHC_HDR_GET_OFFSET) {
                 if (fbuf_used(&req->records[1]) != 4) {
                     SHC_WARNING("Bad record (1) format for message GET_OFFSET");
-                    write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                    write_status(req, WRITE_STATUS_MODE_SIMPLE, -1);
                     break;
                 }
 
                 if (fbuf_used(&req->records[2]) != 4) {
                     SHC_WARNING("Bad record (1) format for message GET_OFFSET");
-                    write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                    write_status(req, WRITE_STATUS_MODE_SIMPLE, -1);
                     break;
                 }
             }
@@ -679,7 +792,7 @@ process_request(shardcache_request_t *req)
         case SHC_HDR_TOUCH:
         {
             rc = shardcache_touch(cache, key, klen);
-            write_status(req, rc, WRITE_STATUS_MODE_SIMPLE);
+            write_status(req, WRITE_STATUS_MODE_SIMPLE, rc);
             break;
         }
         case SHC_HDR_DELETE:
@@ -690,7 +803,7 @@ process_request(shardcache_request_t *req)
         case SHC_HDR_EVICT:
         {
             shardcache_evict(cache, key, klen);
-            write_status(req, 0, WRITE_STATUS_MODE_SIMPLE);
+            write_status(req, WRITE_STATUS_MODE_SIMPLE, 0);
             break;
         }
         case SHC_HDR_EVICT_MULTI:
@@ -702,20 +815,32 @@ process_request(shardcache_request_t *req)
                 p += ks;
                 shardcache_evict(cache, (void *)p, ks);
             }
-            write_status(req, 0, WRITE_STATUS_MODE_SIMPLE);
+            write_status(req, WRITE_STATUS_MODE_SIMPLE, 0);
             break;
         }
         case SHC_HDR_CAS:
         {
+            // TODO - IMPLEMENT
+            write_statuses(req, WRITE_STATUS_MODE_SIMPLE, 1, -1);
+            break;
         }
         case SHC_HDR_GET_MULTI:
         {
+            // TODO - IMPLEMENT
+            write_statuses(req, WRITE_STATUS_MODE_SIMPLE, 1, -1);
+            break;
         }
         case SHC_HDR_SET_MULTI:
         {
+            // TODO - IMPLEMENT
+            write_statuses(req, WRITE_STATUS_MODE_SIMPLE, 1, -1);
+            break;
         }
         case SHC_HDR_DELETE_MULTI:
         {
+            // TODO - IMPLEMENT
+            write_statuses(req, 1, WRITE_STATUS_MODE_SIMPLE, -1);
+            break;
         }
         case SHC_HDR_MIGRATION_BEGIN:
         {
@@ -740,7 +865,7 @@ process_request(shardcache_request_t *req)
             for (i = 0; i < num_shards; i++)
                 shardcache_node_destroy(nodes[i]);
             free(nodes);
-            write_status(req, 0, WRITE_STATUS_MODE_SIMPLE);
+            write_status(req, WRITE_STATUS_MODE_SIMPLE, 0);
             break;
         }
         case SHC_HDR_MIGRATION_ABORT:
@@ -748,7 +873,7 @@ process_request(shardcache_request_t *req)
             rc = shardcache_migration_abort(cache);
             if (rc != 0)
                 SHC_WARNING("Can't abort the migration");
-            write_status(req, rc, WRITE_STATUS_MODE_SIMPLE);
+            write_status(req, WRITE_STATUS_MODE_SIMPLE, rc);
             break;
         }
         case SHC_HDR_MIGRATION_END:
@@ -756,13 +881,13 @@ process_request(shardcache_request_t *req)
             rc = shardcache_migration_end(cache);
             if (rc != 0)
                 SHC_WARNING("Can't end the migration");
-            write_status(req, rc, WRITE_STATUS_MODE_SIMPLE);
+            write_status(req, WRITE_STATUS_MODE_SIMPLE, rc);
             break;
         }
         case SHC_HDR_CHECK:
         {
             // TODO - HEALTH CHECK
-            write_status(req, 0, WRITE_STATUS_MODE_SIMPLE);
+            write_status(req, WRITE_STATUS_MODE_SIMPLE, 0);
             break;
         }
         case SHC_HDR_STATS:
@@ -808,7 +933,7 @@ process_request(shardcache_request_t *req)
                     ATOMIC_INCREMENT(req->done);
                 } else {
                     SHC_ERROR("Can't build the STATS response");
-                    write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                    write_status(req, WRITE_STATUS_MODE_SIMPLE, -1);
                 }
                 fbuf_destroy(&out);
                 free(counters);
@@ -857,7 +982,7 @@ process_request(shardcache_request_t *req)
                 send_data(req, &out);
                 ATOMIC_INCREMENT(req->done);
             } else {
-                write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                write_status(req, WRITE_STATUS_MODE_SIMPLE, -1);
                 SHC_ERROR("Can't build the index response");
             }
             fbuf_destroy(&out);
@@ -870,7 +995,7 @@ process_request(shardcache_request_t *req)
             void *response = NULL;
             size_t response_len = 0;
             if (!cache->replica) {
-                write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                write_status(req, WRITE_STATUS_MODE_SIMPLE, -1);
                 break;
             }
 
@@ -899,17 +1024,17 @@ process_request(shardcache_request_t *req)
                 } else {
                     free(response);
                     SHC_ERROR("Can't build the REPLICA command response");
-                    write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+                    write_status(req, WRITE_STATUS_MODE_SIMPLE, -1);
                 }
                 fbuf_destroy(&out);
             } else {
-                write_status(req, rc, WRITE_STATUS_MODE_SIMPLE);
+                write_status(req, WRITE_STATUS_MODE_SIMPLE, rc);
             }
             break;
         }
         default:
             fprintf(stderr, "Unsupported command: 0x%02x\n", (char)req->hdr);
-            write_status(req, -1, WRITE_STATUS_MODE_SIMPLE);
+            write_status(req, WRITE_STATUS_MODE_SIMPLE, -1);
             break;
     }
 }
