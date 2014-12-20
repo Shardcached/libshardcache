@@ -98,7 +98,7 @@ DOUBLE_WORD_LOW      : <DOUBLE_WORD>
 LENGTH               : <RECORD[LONG_SIZE]>
 REMAINING_BYTES      : <RECORD[LONG_SIZE]>
 ARRAY                : <NUM_ITEMS><ITEM_SIZE><ITEM_DATA>[<ITEM_SIZE><ITEM_DATA>]<EOR>
-NUM_ITEMS            : <LENGTH>
+NUM_ITEMS            : <LONG_SIZE>
 ITEM_SIZE            : <LONG_SIZE>
 ITEM_DATA            : <DATA>
 KEYS                 : <RECORD[KEYS_ARRAY]>
