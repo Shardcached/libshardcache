@@ -265,7 +265,7 @@ array_to_record(int num_items, fbuf_t **items, fbuf_t *out)
 }
 
 static inline char
-rc_to_status(int rc, char *mode)
+rc_to_status(int rc, char mode)
 {
     char out;
     if (rc == -1) {
