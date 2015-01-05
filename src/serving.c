@@ -81,7 +81,23 @@ typedef struct _shardcache_request_s {
     TAILQ_ENTRY(_shardcache_request_s) next;
 } shardcache_request_t;
 
-struct _shardcache_connection_context_s {
+typedef struct {
+    shardcache_request_t *req;
+    int is_multi;
+    union {
+        struct {
+            void *key;
+            size_t klen;
+        } single;
+        struct {
+            void **keys;
+            size_t *klens;
+            int num_keys;
+        } multi;
+    };
+} shardcache_get_async_ctx_t;
+
+struct __shardcache_connection_context_s {
     shardcache_hdr_t hdr;
     shardcache_hdr_t sig_hdr;
 
@@ -208,12 +224,55 @@ dump_records(int num_items, fbuf_t **items, fbuf_t *out)
     return wrote;
 }
 
+// convert a (de-chunkized) record to an array of vaules
+// NOTE: the record MUST be complete and without the chunk-size headers
+static inline uint32_t
+record_to_array(fbuf_t *record, char ***items, size_t **lens)
+{
+    char *data = fbuf_data(record);
+    int data_len = fbuf_used(record);
+
+    if (data_len < sizeof(uint32_t))
+        return -1;
+
+    uint32_t num_items = ntohl(*((uint32_t *)data));
+    data += sizeof(uint32_t);
+
+    int i;
+    for (i = 0; i < num_items; i++) {
+        uint32_t item_size = ntohl(*((uint32_t *)data));
+        data += sizeof(uint32_t);
+        *items = realloc(*items, (sizeof(char *) * num_items) + 1);
+        if (items) {
+            if (item_size) {
+                (*items)[i] = malloc(item_size);
+                memcpy((*items)[i], data, item_size);
+                data += item_size;
+            } else {
+                data = NULL;
+            }
+        } else {
+            data += item_size;
+        }
+
+        if (lens) {
+            *lens = realloc(*lens, (sizeof(size_t) * num_items) + 1);
+            (*lens)[i] = item_size;
+        }
+    }
+
+    return 0;
+}
+
+// convert an array of items to a (chunkized) record ready to be sent on the wire
+// NOTE: the produced record will be chunkized if necessary and will include
+// the chunk-size headers
 static inline void
 array_to_record(int num_items, fbuf_t **items, fbuf_t *out)
 {
     uint32_t num_items_nbo = htonl(num_items);
 
-    int to_write = sizeof(num_items_nbo);
+    uint32_t to_write = sizeof(num_items_nbo);
 
     int count_wrote = 0;
 
@@ -251,10 +310,15 @@ array_to_record(int num_items, fbuf_t **items, fbuf_t *out)
     uint16_t cs = htons(to_write);
     fbuf_add_binary(out, (char *)&cs, sizeof(cs));
 
-    if (!count_wrote)
+    uint32_t wrote = 0;
+    if (!count_wrote) {
         fbuf_add_binary(out, (char *)&num_items_nbo, sizeof(num_items_nbo));
+        wrote += 4;
+    }
 
-    uint32_t wrote = dump_records(idx - last_idx + 1, &items[last_idx], out);
+    if (num_items && items)
+        wrote += dump_records(idx - last_idx, &items[last_idx], out);
+
     if (wrote != to_write) {
         // TODO - Error messages
     }
@@ -455,7 +519,7 @@ send_async_data_response_preamble(shardcache_request_t *req, uint32_t total_size
 }
 
 static inline int
-send_async_data_response_epilogue(shardcache_request_t *req)
+send_async_data_response_epilogue(shardcache_request_t *req, char status)
 {
     uint16_t eor = 0;
     char eom = SHARDCACHE_EOM;
@@ -486,7 +550,6 @@ send_async_data_response_epilogue(shardcache_request_t *req)
         } else {
             SHC_ERROR("Can't compute the siphash digest!\n");
             fbuf_destroy(&output);
-            ATOMIC_INCREMENT(req->error);
             return -1;
         }
     }
@@ -495,7 +558,6 @@ send_async_data_response_epilogue(shardcache_request_t *req)
     // introduced from protocol version 2
     if (version > 1) {
         uint16_t status_size = htons(1);
-        char status = req->error ? -1 : 0;
         fbuf_add_binary(&output, (void *)&status_size, 2);
         fbuf_add_binary(&output, (void *)&status, 1);
         fbuf_add_binary(&output, (void *)&eor, 2);
@@ -511,7 +573,6 @@ send_async_data_response_epilogue(shardcache_request_t *req)
             } else {
                 SHC_ERROR("Can't compute the siphash digest!\n");
                 fbuf_destroy(&output);
-                ATOMIC_INCREMENT(req->error);
                 return -1;
             }
             sip_hash_free(req->fetch_shash);
@@ -530,6 +591,21 @@ send_async_data_response_epilogue(shardcache_request_t *req)
     return 0;
 }
 
+static inline void
+get_async_ctx_destroy(shardcache_get_async_ctx_t *ctx)
+{
+    if (ctx->is_multi) {
+        int i;
+        for (i = 0; i < ctx->multi.num_keys; i++) {
+            if (ctx->multi.keys[i])
+                free(ctx->multi.keys[i]);
+        }
+        free(ctx->multi.keys);
+        free(ctx->multi.klens);
+    }
+    free(ctx);
+}
+
 static int
 get_async_data_handler(void *key,
                        size_t klen,
@@ -540,32 +616,34 @@ get_async_data_handler(void *key,
                        void *priv)
 {
 
-    shardcache_request_t *req =
-        (shardcache_request_t *)priv;
+    shardcache_get_async_ctx_t *ctx = (shardcache_get_async_ctx_t *)priv;
+
+    shardcache_request_t *req = (shardcache_request_t *)ctx->req;
 
     if (req->skipped == 0 && req->copied == 0) {
         if (send_async_data_response_preamble(req, total_size) != 0) {
             ATOMIC_INCREMENT(req->error);
+            get_async_ctx_destroy(ctx);
             return -1;
         }
     }
 
     if (dlen == 0 && total_size == 0) {
+        char status = SHC_RES_OK;
         if (!timestamp && (req->skipped || req->copied)) {
             // if there is no timestamp here it means there was an
             // error (and not just an empty item)
             SHC_ERROR("Error notified to the get_async_data callback");
-            // XXX - at the moment the protocol doesn't allow to distinguish
-            //       between an empty value and an error, so for now we choose
-            //       to return a valid response for an empty value instead of
-            //       silently shutdown the connection.
-            //ATOMIC_INCREMENT(req->error);
-            //return -1;
+            status = SHC_RES_ERR;
         }
-        if (send_async_data_response_epilogue(req) != 0) {
+
+        get_async_ctx_destroy(ctx);
+
+        if (send_async_data_response_epilogue(req, status) != 0) {
             ATOMIC_INCREMENT(req->error);
             return -1;
-        } 
+        }
+
         return !timestamp ? -1 : 0;
     }
 
@@ -623,6 +701,7 @@ get_async_data_handler(void *key,
                 req->fetch_shash = NULL;
                 fbuf_destroy(&output);
                 ATOMIC_INCREMENT(req->error);
+                get_async_ctx_destroy(ctx);
                 return -1;
             }
             fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
@@ -663,6 +742,7 @@ get_async_data_handler(void *key,
                         sip_hash_free(req->fetch_shash);
                         req->fetch_shash = NULL;
                         ATOMIC_INCREMENT(req->error);
+                        get_async_ctx_destroy(ctx);
                         return -1;
                     }
                     fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
@@ -674,10 +754,12 @@ get_async_data_handler(void *key,
             send_data(req, &output);
             fbuf_destroy(&output);
         }
-        if (send_async_data_response_epilogue(req) != 0) {
+        if (send_async_data_response_epilogue(req, SHC_RES_OK) != 0) {
             ATOMIC_INCREMENT(req->error);
+            get_async_ctx_destroy(ctx);
             return -1;
         }
+
         ATOMIC_INCREMENT(req->done);
     }
 
@@ -694,6 +776,13 @@ get_async_data(shardcache_t *cache,
     int rc;
     req->copied = 0;
     req->skipped = 0;
+
+    shardcache_get_async_ctx_t *ctx = malloc(sizeof(shardcache_get_async_ctx_t));
+    ctx->req = req;
+    ctx->is_multi = 0;
+    ctx->single.key = key;
+    ctx->single.klen = klen;
+
     if (req->hdr == SHC_HDR_GET_OFFSET) {
         uint32_t offset = ntohl(*((uint32_t *)fbuf_data(&req->records[1])));
         uint32_t length = ntohl(*((uint32_t *)fbuf_data(&req->records[2])));
@@ -708,8 +797,12 @@ get_async_data(shardcache_t *cache,
         //       to return a valid response for an empty value instead of
         //       silently shutdown the connection.
         //ATOMIC_INCREMENT(req->error);
+        get_async_ctx_destroy(ctx);
         send_async_data_response_preamble(req, 0);
-        send_async_data_response_epilogue(req);
+        if (send_async_data_response_epilogue(req, SHC_RES_ERR) != 0) {
+            ATOMIC_INCREMENT(req->error);
+            return -1;
+        }
     }
 
     return rc;
@@ -745,15 +838,14 @@ process_request(shardcache_request_t *req)
         case SHC_HDR_GET_OFFSET:
         {
             if (req->hdr == SHC_HDR_GET_OFFSET) {
-                if (fbuf_used(&req->records[1]) != 4) {
-                    SHC_WARNING("Bad record (1) format for message GET_OFFSET");
-                    write_status(req, WRITE_STATUS_MODE_SIMPLE, -1);
-                    break;
-                }
+                if (fbuf_used(&req->records[1]) != 4 ||
+                    fbuf_used(&req->records[2]) != 4)
+                {
+                    SHC_WARNING("Bad record format for message GET_OFFSET");
+                    send_async_data_response_preamble(req, 0);
+                    if (send_async_data_response_epilogue(req, SHC_RES_ERR) != 0)
+                        ATOMIC_INCREMENT(req->error);
 
-                if (fbuf_used(&req->records[2]) != 4) {
-                    SHC_WARNING("Bad record (1) format for message GET_OFFSET");
-                    write_status(req, WRITE_STATUS_MODE_SIMPLE, -1);
                     break;
                 }
             }
@@ -827,7 +919,31 @@ process_request(shardcache_request_t *req)
         case SHC_HDR_GET_MULTI:
         {
             // TODO - IMPLEMENT
-            write_statuses(req, WRITE_STATUS_MODE_SIMPLE, 1, -1);
+            char **keys = NULL;
+            size_t *lens = NULL;
+            uint32_t num_keys = record_to_array(&req->records[0], &keys, &lens);
+            
+
+            shardcache_get_async_ctx_t *ctx = malloc(sizeof(shardcache_get_async_ctx_t));
+            ctx->req = req;
+            ctx->is_multi = 0;
+            ctx->multi.keys = (void **)keys;
+            ctx->multi.klens = lens;
+            ctx->multi.num_keys = num_keys;
+            ctx->is_multi = 1;
+            int rc = shardcache_get_multi(cache,
+                                          (void **)keys,
+                                          lens,
+                                          num_keys,
+                                          get_async_data_handler,
+                                          ctx);
+
+            if (rc != 0) {
+                get_async_ctx_destroy(ctx);
+                fbuf_t out = FBUF_STATIC_INITIALIZER;
+                array_to_record(0, NULL, &out);
+                write_statuses(req, WRITE_STATUS_MODE_SIMPLE, 1, -1);
+            }
             break;
         }
         case SHC_HDR_SET_MULTI:
