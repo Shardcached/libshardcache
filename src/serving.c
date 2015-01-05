@@ -786,9 +786,9 @@ get_async_data(shardcache_t *cache,
     if (req->hdr == SHC_HDR_GET_OFFSET) {
         uint32_t offset = ntohl(*((uint32_t *)fbuf_data(&req->records[1])));
         uint32_t length = ntohl(*((uint32_t *)fbuf_data(&req->records[2])));
-        rc = shardcache_get_offset(cache, key, klen, offset, length, cb, req);
+        rc = shardcache_get_offset(cache, key, klen, offset, length, cb, ctx);
     } else {
-        rc = shardcache_get(cache, key, klen, cb, req);
+        rc = shardcache_get(cache, key, klen, cb, ctx);
     }
     if (rc != 0) {
         SHC_ERROR("shardcache_get_async returned error");
