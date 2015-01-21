@@ -21,7 +21,7 @@
 #include "messaging.h"
 #include "shardcache_replica.h"
 
-const char *LIBSHARDCACHE_VERSION = "1.0";
+const char *LIBSHARDCACHE_VERSION = "1.1";
 
 extern int shardcache_log_initialized;
 extern unsigned int shardcache_loglevel;
