@@ -1012,8 +1012,11 @@ shardcache_client_multi_send_requests(shardcache_client_t *c,
         int fd = connections_pool_get(c->connections, addr);
         if (fd < 0) {
             // 1 retry
+            char *failed_addr = addr;
             addr = select_other_node(c, addr);
             fd = connections_pool_get(c->connections, addr);
+            SHC_WARNING("Can't connect to node at address %s, falling back to %s",
+                        failed_addr, addr);
         }
 
         if (fd < 0) {
