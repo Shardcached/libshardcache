@@ -1952,7 +1952,7 @@ shardcache_cas_internal(shardcache_t *cache,
             SHC_WARNING("CAS command can't be executed because the storage doesn't implement it");
         }
     } else {
-
+        // TODO - implement forwarding to responsible node
     }
     return rc;
 }

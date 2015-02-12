@@ -1,16 +1,3 @@
- * allow to change the cache size and the number of workers at runtime
-
- * take advantage of pipelining in the inter-node communication.
-   When new asyncrhonous requests are queued, instead of requesting a new filedescriptor to forward the
-   request to a peer, if an aysnc request is already being running to that peer, just push the new request
-   to the same connection.
-
- * create a new abstraction layer by introducing a shardcache_resource_t opaque structure and an API to access it.
-   Such structure should be returned by any shardcache_* operation and encapsulates the result of the operation.
-   If it's a get, the object returned by the arc subsystem will be retained, avoiding any copy.
-   If the object is being fetched from a peer, the filedescriptor of the async operation will be available
-   so that the operation itself can be safely cenceled
-
  * protocol V2 :
     - a new response header to distinguish between not-found and errors as response to
       GET/SET/OFFSET/HEAD commands
@@ -47,6 +34,19 @@
     NOTE: V2 implementation must ensure compatibility with V1 clients which, as long as the
           changes are the ones described above, means using the old response header when
           answering to a failing GET/SET/OFFSET/HEAD command.
+
+ * allow to change the cache size and the number of workers at runtime
+
+ * take advantage of pipelining in the inter-node communication.
+   When new asyncrhonous requests are queued, instead of requesting a new filedescriptor to forward the
+   request to a peer, if an aysnc request is already being running to that peer, just push the new request
+   to the same connection.
+
+ * create a new abstraction layer by introducing a shardcache_resource_t opaque structure and an API to access it.
+   Such structure should be returned by any shardcache_* operation and encapsulates the result of the operation.
+   If it's a get, the object returned by the arc subsystem will be retained, avoiding any copy.
+   If the object is being fetched from a peer, the filedescriptor of the async operation will be available
+   so that the operation itself can be safely cenceled
 
  * complete and test the replica support
 

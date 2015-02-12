@@ -58,7 +58,7 @@ struct _shardcache_serving_s {
 
 typedef struct _shardcache_connection_context_s shardcache_connection_context_t;
 
-#define SHARDCACHE_REQUEST_RECORDS_MAX 4
+#define SHARDCACHE_REQUEST_RECORDS_MAX 5
 
 typedef struct _shardcache_request_s {
     fbuf_t records[SHARDCACHE_REQUEST_RECORDS_MAX];
@@ -279,12 +279,12 @@ array_to_record(int num_items, fbuf_t **items, fbuf_t *out)
     int idx, last_idx = 0;
     for (idx = 0; idx < num_items; idx++) {
         if (!items[idx]) {
-            to_write += 4;
+            to_write += sizeof(uint32_t);
             continue;
         }
         int current_size = fbuf_used(items[idx]);
         // flush one chunk if we need to
-        if (to_write + current_size + 4 > 65535) {
+        if (to_write + current_size + sizeof(uint32_t) > 65535) {
             // the size of the chunk
             uint16_t cs = htons(to_write);
             fbuf_add_binary(out, (char *)&cs, sizeof(to_write));
@@ -297,13 +297,14 @@ array_to_record(int num_items, fbuf_t **items, fbuf_t *out)
 
             uint32_t wrote = dump_records(idx - last_idx, &items[last_idx], out);
             if (wrote != to_write) {
-                // TODO - Error messages
+                SHC_ERROR("%s (%s:%s) - Can't dump the complete message, it will be truncated!",
+                          __FUNCTION__, __LINE__, __FILE__);
             }
 
             last_idx = idx;
             to_write = 0;
         }
-        to_write += 4 + current_size;
+        to_write += sizeof(uint32_t) + current_size;
     }
 
     // size of last chunk
@@ -313,14 +314,15 @@ array_to_record(int num_items, fbuf_t **items, fbuf_t *out)
     uint32_t wrote = 0;
     if (!count_wrote) {
         fbuf_add_binary(out, (char *)&num_items_nbo, sizeof(num_items_nbo));
-        wrote += 4;
+        wrote += sizeof(uint32_t);
     }
 
     if (num_items && items)
         wrote += dump_records(idx - last_idx, &items[last_idx], out);
 
     if (wrote != to_write) {
-        // TODO - Error messages
+        SHC_ERROR("%s (%s:%s) - Can't dump the complete message, it will be truncated!",
+                  __FUNCTION__, __LINE__, __FILE__);
     }
 
     // end-of-record
@@ -485,17 +487,17 @@ send_async_data_response_preamble(shardcache_request_t *req, uint32_t total_size
     //       In protocol version 1 the data was returned immediately
     //       in the first record
     if (version > 1) {
-        uint16_t chunk_size = htons(4);
+        uint16_t chunk_size = htons(sizeof(uint32_t));
         uint16_t chunk_term = 0;
         char rsep = SHARDCACHE_RSEP;
         uint32_t size = htonl(total_size);
         fbuf_add_binary(&output, (char *)&chunk_size, 2);
-        fbuf_add_binary(&output, (char *)&size, 4);
+        fbuf_add_binary(&output, (char *)&size, sizeof(uint32_t));
         fbuf_add_binary(&output, (char *)&chunk_term, 2);
         fbuf_add_binary(&output, (char *)&rsep, 1);
         if (req->ctx->serv->cache->auth && req->fetch_shash) {
-            sip_hash_update(req->fetch_shash, (uint8_t *)&chunk_size, 2);
-            sip_hash_update(req->fetch_shash, (uint8_t *)&size, 4);
+            sip_hash_update(req->fetch_shash, (uint8_t *)&chunk_size, sizeof(uint16_t));
+            sip_hash_update(req->fetch_shash, (uint8_t *)&size, sizeof(uint32_t));
             sip_hash_update(req->fetch_shash, (uint8_t *)&chunk_term, 2);
             sip_hash_update(req->fetch_shash, (uint8_t *)&rsep, 1);
             if (req->sig_hdr&0x01) {
@@ -838,8 +840,8 @@ process_request(shardcache_request_t *req)
         case SHC_HDR_GET_OFFSET:
         {
             if (req->hdr == SHC_HDR_GET_OFFSET) {
-                if (fbuf_used(&req->records[1]) != 4 ||
-                    fbuf_used(&req->records[2]) != 4)
+                if (fbuf_used(&req->records[1]) != sizeof(uint32_t) ||
+                    fbuf_used(&req->records[2]) != sizeof(uint32_t))
                 {
                     SHC_WARNING("Bad record format for message GET_OFFSET");
                     send_async_data_response_preamble(req, 0);
@@ -858,11 +860,11 @@ process_request(shardcache_request_t *req)
         {
             uint32_t expire = 0;
             uint32_t cexpire = 0;
-            if (fbuf_used(&req->records[2]) == 4) {
+            if (fbuf_used(&req->records[2]) == sizeof(uint32_t)) {
                 memcpy(&expire, fbuf_data(&req->records[2]), sizeof(uint32_t));
                 expire = ntohl(expire);
             }
-            if (fbuf_used(&req->records[3]) == 4) {
+            if (fbuf_used(&req->records[3]) == sizeof(uint32_t)) {
                 memcpy(&cexpire, fbuf_data(&req->records[2]), sizeof(uint32_t));
                 cexpire = ntohl(cexpire);
             }
@@ -912,8 +914,32 @@ process_request(shardcache_request_t *req)
         }
         case SHC_HDR_CAS:
         {
-            // TODO - IMPLEMENT
-            write_statuses(req, WRITE_STATUS_MODE_SIMPLE, 1, -1);
+            if (!fbuf_used(&req->records[2])) {
+                // CAS command requires at least 3 arguments (key, old_value, new_value)
+                // TODO - Error messages
+            }
+            uint32_t expire = 0;
+            uint32_t cexpire = 0;
+            if (fbuf_used(&req->records[3]) == sizeof(uint32_t)) {
+                memcpy(&expire, fbuf_data(&req->records[2]), sizeof(uint32_t));
+                expire = ntohl(expire);
+            }
+            if (fbuf_used(&req->records[4]) == sizeof(uint32_t)) {
+                memcpy(&cexpire, fbuf_data(&req->records[2]), sizeof(uint32_t));
+                cexpire = ntohl(cexpire);
+            }
+ 
+            int rc = shardcache_cas(cache, key, klen,
+                                    fbuf_data(&req->records[1]),
+                                    fbuf_used(&req->records[1]),
+                                    fbuf_data(&req->records[2]),
+                                    fbuf_used(&req->records[2]),
+                                    expire,
+                                    cexpire,
+                                    shardcache_async_command_response,
+                                    req);
+ 
+            write_status(req, WRITE_STATUS_MODE_EXISTS, rc);
             break;
         }
         case SHC_HDR_GET_MULTI:
