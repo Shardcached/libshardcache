@@ -99,7 +99,7 @@ typedef int (*shardcache_store_item_callback_t)
  * @param new_len   The length of the new value
  * @param priv  The 'priv' pointer previously stored in the shardcache_storage_t
  *              structure at initialization time
- * @return 0 if success, -1 otherwise
+ * @return 0 if success, -1 in case of error, 1 if the old_value didn't match so no update happened
  */
 typedef int (*shardcache_cas_item_callback_t)
     (void *key, size_t klen, void *old_value, size_t old_len, void *new_value, size_t new_len, void *priv);
@@ -256,6 +256,7 @@ struct _shardcache_storage_s {
     //! The store callback (optional if the storage is indended to be read-only)
     shardcache_store_item_callback_t       store;
 
+    //! The CAS callback (optional if the storage intends to expose the CAS functionality)
     shardcache_cas_item_callback_t         cas;
 
     //! The remove callback (optional if the storage is intended to be read-only)
