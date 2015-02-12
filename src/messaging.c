@@ -774,10 +774,12 @@ _send_to_peer_internal(char *peer,
                        unsigned char sig_hdr,
                        void *key,
                        size_t klen,
+                       void *old_value,
+                       size_t old_vlen,
                        void *value,
                        size_t vlen,
                        uint32_t expire,
-                       int add,
+                       int mode, // 0 == SET, 1 == ADD, 2 == CAS
                        int fd,
                        int expect_response)
 {
@@ -789,7 +791,7 @@ _send_to_peer_internal(char *peer,
 
     int rc = -1;
     if (fd >= 0) {
-        shardcache_record_t record[3] = {
+        shardcache_record_t record[4] = {
             {
                 .v = key,
                 .l = klen
@@ -799,16 +801,41 @@ _send_to_peer_internal(char *peer,
                 .l = vlen
             }
         };
+        int num_records = 2;
+
+        unsigned char hdr;
+        switch(mode) {
+            case 0:
+                hdr = SHC_HDR_SET;
+                break;
+            case 1:
+                hdr = SHC_HDR_ADD;
+                break;
+            case 2:
+                hdr = SHC_HDR_CAS;
+                record[1].v = old_value;
+                record[1].l = old_vlen;
+                record[2].v = value;
+                record[2].l = vlen;
+                num_records = 3;
+                break;
+            default:
+                // TODO - Error message for unsupported mode
+                SHC_ERROR("Unknown mode %d in %s (%s:%s)", mode, __FUNCTION__, __FILE__, __LINE__);
+                return -1;
+        }
 
         uint32_t expire_nbo = 0;
         if (expire) {
             expire_nbo = htonl(expire);
-            record[2].v = &expire_nbo;
-            record[2].l = sizeof(expire);
+            record[num_records].v = &expire_nbo;
+            record[num_records].l = sizeof(expire);
+            num_records++;
         }
-        rc = write_message(fd, auth, sig_hdr,
-                               add ? SHC_HDR_ADD : SHC_HDR_SET,
-                               record, expire ? 3 : 2);
+
+        // TODO - support cexpire (which can be provided as extra argument to set/add/cas commands)
+
+        rc = write_message(fd, auth, sig_hdr, hdr, record, num_records);
         if (rc != 0) {
             if (should_close)
                 close(fd);
@@ -873,7 +900,7 @@ send_to_peer(char *peer,
              int expect_response)
 {
     return _send_to_peer_internal(peer,
-            auth, sig, key, klen, value, vlen, expire, 0, fd, expect_response);
+            auth, sig, key, klen, NULL, 0, value, vlen, expire, 0, fd, expect_response);
 }
 
 int
@@ -888,9 +915,28 @@ add_to_peer(char *peer,
             int fd,
             int expect_response)
 {
-    return _send_to_peer_internal(peer, auth, sig, key, klen,
+    return _send_to_peer_internal(peer, auth, sig, key, klen, NULL, 0,
                                   value, vlen, expire, 1, fd, expect_response);
 }
+
+int
+cas_on_peer(char *peer,
+            char *auth,
+            unsigned char sig,
+            void *key,
+            size_t klen,
+            void *old_value,
+            size_t old_vlen,
+            void *value,
+            size_t vlen,
+            uint32_t expire,
+            int fd,
+            int expect_response)
+{
+    return _send_to_peer_internal(peer, auth, sig, key, klen, old_value, old_vlen,
+                                  value, vlen, expire, 0, fd, expect_response);
+}
+
 
 int
 fetch_from_peer(char *peer,
