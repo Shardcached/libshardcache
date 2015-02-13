@@ -813,16 +813,16 @@ shardcache_get_async_helper(void *key,
 
     arc_t *arc = arg->cache->arc;
 
-
     if (ATOMIC_READ(arg->cache->async_quit)) {
         arc_release_resource(arc, arg->res);
         free(arg);
         return -1;
     }
 
-
-    int rc = -1;
-    if ((arg->dlen + dlen) > arg->offset) {
+    int rc = 0;
+    if (!dlen) {
+        rc = arg->cb(key, klen, NULL, 0, total_size, timestamp, arg->priv);
+    } else if ((arg->dlen + dlen) > arg->offset) {
         if (arg->dlen < arg->offset) {
             int diff = arg->offset - arg->dlen;
             rc = arg->cb(key, klen, data + diff, dlen - diff, total_size, timestamp, arg->priv);
@@ -837,15 +837,10 @@ shardcache_get_async_helper(void *key,
                 arg->sent += dlen;
             }
         }
-    } else if (!dlen) {
-        rc = arg->cb(key, klen, NULL, 0, total_size, timestamp, arg->priv);
-    }
+    } 
 
-    int error = (!dlen && !total_size);
-    if (rc != 0 || error) { // error
+    if (rc != 0) { // the callback raised an error
         ATOMIC_SET(arg->stat, -1);
-        if (error)
-            arg->cb(key, klen, NULL, 0, 0, timestamp, arg->priv);
         arc_release_resource(arc, arg->res);
         free(arg);
         return -1;
@@ -853,7 +848,7 @@ shardcache_get_async_helper(void *key,
 
     arg->dlen += dlen;
 
-    if (!dlen && total_size && timestamp) {
+    if (!dlen) {
         // we are done
         arc_release_resource(arc, arg->res);
         free(arg);

@@ -261,13 +261,7 @@ async_read_context_update(async_read_ctx_t *ctx)
                     ctx->state = SHC_STATE_READING_AUTH;
                 else
                     ctx->state = SHC_STATE_READING_DONE;
-                if (ctx->cb && ctx->cb(NULL, 0, -1, ctx->cb_priv) != 0)
-                {
-                    ctx->state = SHC_STATE_READING_ERR;
-                    if (ctx->cb)
-                        ctx->cb(NULL, 0, -2, ctx->cb_priv);
-                    return ctx->state;
-                }
+                
                 break;
             } else {
                 ctx->state = SHC_STATE_READING_ERR;
@@ -318,6 +312,15 @@ async_read_context_update(async_read_ctx_t *ctx)
             ctx->shash = NULL;
         }
         ctx->state = SHC_STATE_READING_DONE;
+    }
+
+    if (ctx->state == SHC_STATE_READING_DONE) {
+        if (ctx->cb && ctx->cb(NULL, 0, -1, ctx->cb_priv) != 0) {
+            ctx->state = SHC_STATE_READING_ERR;
+            if (ctx->cb)
+                ctx->cb(NULL, 0, -2, ctx->cb_priv);
+            return ctx->state;
+        }
     }
     return ctx->state;
 }

@@ -93,6 +93,9 @@ typedef struct {
             void **keys;
             size_t *klens;
             int num_keys;
+            void **values;
+            size_t *vlens;
+            int num_values;
         } multi;
     };
 } shardcache_get_async_ctx_t;
@@ -593,6 +596,29 @@ send_async_data_response_epilogue(shardcache_request_t *req, char status)
     return 0;
 }
 
+static inline shardcache_get_async_ctx_t *
+get_async_ctx_create(shardcache_request_t *req, void **keys, size_t *klens, int num_keys)
+{
+    shardcache_get_async_ctx_t *ctx = malloc(sizeof(shardcache_get_async_ctx_t));
+    ctx->req = req;
+
+    if (num_keys > 1) {
+        ctx->is_multi = 1;
+        ctx->multi.keys = (void **)keys;
+        ctx->multi.klens = klens;
+        ctx->multi.num_keys = num_keys;
+        ctx->multi.values = malloc(sizeof(void *) * num_keys);
+        ctx->multi.vlens = malloc(sizeof(size_t) * num_keys);
+        ctx->multi.num_values = 0;
+    } else {
+        ctx->is_multi = 0;
+        ctx->single.key = malloc(klens[0]);
+        memcpy(ctx->single.key, keys[0], klens[0]);
+        ctx->single.klen = klens[0];
+    }
+    return ctx;
+}
+
 static inline void
 get_async_ctx_destroy(shardcache_get_async_ctx_t *ctx)
 {
@@ -604,6 +630,14 @@ get_async_ctx_destroy(shardcache_get_async_ctx_t *ctx)
         }
         free(ctx->multi.keys);
         free(ctx->multi.klens);
+        for (i = 0; i < ctx->multi.num_values; i++) {
+            if (ctx->multi.values[i])
+                free(ctx->multi.values[i]);
+        }
+        free(ctx->multi.values);
+        free(ctx->multi.vlens);
+    } else {
+        free(ctx->single.key);
     }
     free(ctx);
 }
@@ -639,11 +673,21 @@ get_async_data_handler(void *key,
             status = SHC_RES_ERR;
         }
 
-        get_async_ctx_destroy(ctx);
+        if (!ctx->is_multi) {
+            get_async_ctx_destroy(ctx);
 
-        if (send_async_data_response_epilogue(req, status) != 0) {
-            ATOMIC_INCREMENT(req->error);
-            return -1;
+            if (send_async_data_response_epilogue(req, status) != 0) {
+                ATOMIC_INCREMENT(req->error);
+                return -1;
+            }
+        } else if (ctx->multi.num_values == ctx->multi.num_keys) {
+            /* XXX
+            if (send_async_multi_data_response(ctx) != 0) {
+                ATOMIC_INCREMENT(req->error);
+                get_async_ctx_destroy(ctx);
+                return -1;
+            }*/
+            get_async_ctx_destroy(ctx);
         }
 
         return !timestamp ? -1 : 0;
@@ -779,11 +823,7 @@ get_async_data(shardcache_t *cache,
     req->copied = 0;
     req->skipped = 0;
 
-    shardcache_get_async_ctx_t *ctx = malloc(sizeof(shardcache_get_async_ctx_t));
-    ctx->req = req;
-    ctx->is_multi = 0;
-    ctx->single.key = key;
-    ctx->single.klen = klen;
+    shardcache_get_async_ctx_t *ctx = get_async_ctx_create(req, &key, &klen, 1);
 
     if (req->hdr == SHC_HDR_GET_OFFSET) {
         uint32_t offset = ntohl(*((uint32_t *)fbuf_data(&req->records[1])));
@@ -950,13 +990,8 @@ process_request(shardcache_request_t *req)
             uint32_t num_keys = record_to_array(&req->records[0], &keys, &lens);
             
 
-            shardcache_get_async_ctx_t *ctx = malloc(sizeof(shardcache_get_async_ctx_t));
-            ctx->req = req;
-            ctx->is_multi = 0;
-            ctx->multi.keys = (void **)keys;
-            ctx->multi.klens = lens;
-            ctx->multi.num_keys = num_keys;
-            ctx->is_multi = 1;
+            shardcache_get_async_ctx_t *ctx = get_async_ctx_create(req, (void **)keys, lens, num_keys);
+                
             int rc = shardcache_get_multi(cache,
                                           (void **)keys,
                                           lens,

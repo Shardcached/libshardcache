@@ -177,15 +177,18 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             } else {
                 obj->data = obj->dbuf;
             }
-            if (len)
+
+            if (len) {
                 memcpy(obj->data + olen, data, len);
-            shardcache_fetch_from_peer_notify_arg notify_arg = {
-                .obj = obj,
-                .data = data,
-                .len = len,
-                .total_size = arg->total_size
-            };
-            list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &notify_arg);
+
+                shardcache_fetch_from_peer_notify_arg notify_arg = {
+                    .obj = obj,
+                    .data = data,
+                    .len = len,
+                    .total_size = arg->total_size
+                };
+                list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &notify_arg);
+            }
             break;
         }
         case 2:
