@@ -245,7 +245,7 @@ fetch_from_peer_async(char *peer,
     return rc;
 }
 
-static int
+static inline int
 read_and_check_siphash_signature(int fd, sip_hash *shash)
 {
     uint64_t digest, received_digest;
@@ -666,7 +666,7 @@ write_message(int fd,
 }
 
 
-static int
+static inline int
 _delete_from_peer_internal(char *peer,
                            char *auth,
                            unsigned char sig_hdr,
@@ -757,7 +757,7 @@ evict_from_peer(char *peer,
 
 
 
-int
+static inline int
 _send_to_peer_internal(char *peer,
                        char *auth,
                        unsigned char sig_hdr,
