@@ -1610,15 +1610,21 @@ shardcache_store(shardcache_t *cache,
     return rc;
 }
 
+// TODO - cleanup
+// this routine should be splitted in at least 2 or 3 different
+// functions, depending if we are the owner, if we need to forward to a peer
+// if we fallback to a global storage because the peer is not available
 int
 shardcache_set_internal(shardcache_t *cache,
                         void *key,
                         size_t klen,
+                        void *old_value,
+                        size_t old_vlen,
                         void *value,
                         size_t vlen,
                         time_t expire,
                         time_t cexpire,
-                        int inx,
+                        int mode, // 0 = SET, 1 == ADD, 2 == CAS
                         int replica,
                         shardcache_async_response_callback_t cb,
                         void *priv)
@@ -1659,11 +1665,21 @@ shardcache_set_internal(shardcache_t *cache,
             if (cache->use_persistent_storage && cache->storage.remove)
                 cache->storage.remove(key, klen, cache->storage.priv);
 
-            if (inx && ht_exists(cache->volatile_storage, key, klen)) {
+            if (mode == 1 && ht_exists(cache->volatile_storage, key, klen)) {
                 SHC_DEBUG("A volatile value already exists for key %s", keystr);
                 if (cb)
                     cb(key, klen, 1, priv);
                 return 1;
+            } else if (mode == 2) {
+                rc = ht_set_if_equals(cache->volatile_storage,
+                                      key, klen,
+                                      value, vlen,
+                                      old_value, old_vlen,
+                                      NULL, NULL);
+                if (cb)
+                    cb(key, klen, rc, priv);
+
+                return rc;
             }
 
             volatile_object_t *obj = malloc(sizeof(volatile_object_t));
@@ -1678,10 +1694,10 @@ shardcache_set_internal(shardcache_t *cache,
                 keystr, obj->expire, (int)now);
 
             void *prev_ptr = NULL;
-            if (inx) {
+            if (mode == 1) {
                 rc = ht_set(cache->volatile_storage, key, klen,
                              obj, sizeof(volatile_object_t));
-            } else {
+            } else { // here mode can only be 0 (2 is handled above)
                 rc = ht_get_and_set(cache->volatile_storage, key, klen,
                                      obj, sizeof(volatile_object_t),
                                      &prev_ptr, NULL);
@@ -1714,7 +1730,24 @@ shardcache_set_internal(shardcache_t *cache,
         }
         else if (cache->use_persistent_storage)
         {
-            rc = shardcache_store(cache, key, klen, value, vlen, inx, replica);
+            if (mode == 2) {
+                if (cache->storage.cas) {
+                    rc = cache->storage.cas(key,
+                                            klen,
+                                            old_value,
+                                            old_vlen,
+                                            value,
+                                            vlen,
+                                            cache->storage.priv);
+                    if (rc == 0 && !replica)
+                        shardcache_commence_eviction(cache, key, klen);
+                } else {
+                    SHC_WARNING("CAS command can't be executed because the storage doesn't implement it");
+                    return -1;
+                }
+            } else {
+                rc = shardcache_store(cache, key, klen, value, vlen, mode == 1 ? 1 : 0, replica);
+            }
         }
     }
     else if (node_len)
@@ -1728,57 +1761,55 @@ shardcache_set_internal(shardcache_t *cache,
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
         if (!peer) {
             SHC_ERROR("Can't find address for node %s", peer);
-            if (cache->use_persistent_storage && cache->storage.global)
-                rc = shardcache_store(cache, key, klen, value, vlen, inx, replica);
+            if (cache->use_persistent_storage && cache->storage.global) {
+                if (mode == 2) {
+                    if (cache->storage.cas) {
+                        rc = cache->storage.cas(key,
+                                                klen,
+                                                old_value,
+                                                old_vlen,
+                                                value,
+                                                vlen,
+                                                cache->storage.priv);
+                        if (rc == 0 && !replica)
+                            shardcache_commence_eviction(cache, key, klen);
+                    } else {
+                        SHC_WARNING("CAS command can't be executed because the storage doesn't implement it");
+                        return -1;
+                    }
+                } else {
+                    rc = shardcache_store(cache, key, klen, value, vlen, mode == 1 ? 1 : 0, replica);
+                }
+            }
             
             if (cb)
                 cb(key, klen, rc, priv);
 
             return rc;
         }
+
         char *addr = shardcache_node_get_address(peer);
-
         int fd = shardcache_get_connection_for_peer(cache, addr);
+        unsigned char hdr;
+        switch(mode) {
+            case 0:
+                hdr = SHC_HDR_SET;
+                rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, cb ? 0 : 1);
+                break;
+            case 1:
+                hdr = SHC_HDR_ADD;
+                rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, cb ? 0 : 1);
+                break;
+            case 2:
+                hdr = SHC_HDR_CAS;
+                rc = cas_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, old_value, old_vlen, value, vlen, expire, fd, cb ? 0 : 1);
+                break;
+            default:
+                // TODO - Error Messages
+                return -1;
+        }
 
-        if (inx) {
-            if (cb) {
-                rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 0);
-                if (rc == 0) {
-                    shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
-                    arg->key = malloc(klen);
-                    memcpy(arg->key, key, klen);
-                    arg->klen = klen;
-                    arg->cb = cb;
-                    arg->priv = priv;
-                    arg->cache = cache;
-                    arg->addr = addr;
-                    arg->fd = fd;
-                    arg->hdr = SHC_HDR_SET;
-                    async_read_wrk_t *wrk = NULL;
-                    rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
-                    if (rc == 0 && wrk) {
-                        shardcache_queue_async_read_wrk(cache, wrk);
-                        async = 1;
-                    } else {
-                        free(arg->key);
-                        free(arg);
-                    }
-                } else {
-                    if (cache->use_persistent_storage && cache->storage.global)
-                        rc = shardcache_store(cache, key, klen, value, vlen, inx, replica);
-                }
-            } else {
-                rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 1);
-                if (rc == 0) {
-                    shardcache_release_connection_for_peer(cache, addr, fd);
-                } else {
-                    close(fd);
-                    if (cache->use_persistent_storage && cache->storage.global)
-                        rc = shardcache_store(cache, key, klen, value, vlen, inx, replica);
-                }
-            }
-        } else if (cb) {
-            rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 0);
+        if (cb) {
             if (rc == 0) {
                 shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
                 arg->key = malloc(klen);
@@ -1789,7 +1820,7 @@ shardcache_set_internal(shardcache_t *cache,
                 arg->cache = cache;
                 arg->addr = addr;
                 arg->fd = fd;
-                arg->hdr = SHC_HDR_SET;
+                arg->hdr = hdr;
                 async_read_wrk_t *wrk = NULL;
                 rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
                 if (rc == 0 && wrk) {
@@ -1799,17 +1830,18 @@ shardcache_set_internal(shardcache_t *cache,
                     free(arg->key);
                     free(arg);
                 }
-            } else if (cache->use_persistent_storage && cache->storage.global) {
-                rc = shardcache_store(cache, key, klen, value, vlen, inx, replica);
+            } else {
+                close(fd);
+                if (cache->use_persistent_storage && cache->storage.global)
+                    rc = shardcache_store(cache, key, klen, value, vlen, mode == 1 ? 1 : 0, replica);
             }
         } else {
-            rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, 1);
             if (rc == 0) {
                 shardcache_release_connection_for_peer(cache, addr, fd);
             } else {
                 close(fd);
                 if (cache->use_persistent_storage && cache->storage.global)
-                    rc = shardcache_store(cache, key, klen, value, vlen, inx, replica);
+                    rc = shardcache_store(cache, key, klen, value, vlen, mode == 1 ? 1 : 0, replica);
             }
         }
 
@@ -1848,7 +1880,7 @@ shardcache_add(shardcache_t *cache,
             cb(key, klen, rc, priv);
     }
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, expire, cexpire, 1, 0, cb, priv);
+    return shardcache_set_internal(cache, key, klen, NULL, 0, value, vlen, expire, cexpire, 1, 0, cb, priv);
 }
 
 int shardcache_set(shardcache_t *cache,
@@ -1872,7 +1904,7 @@ int shardcache_set(shardcache_t *cache,
         return rc;
     }
 
-    return shardcache_set_internal(cache, key, klen, value, vlen, expire, cexpire, if_not_exists, 0, cb, priv);
+    return shardcache_set_internal(cache, key, klen, NULL, 0, value, vlen, expire, cexpire, if_not_exists ? 1 : 0, 0, cb, priv);
 }
 
 int
@@ -1913,52 +1945,6 @@ shardcache_set_multi(shardcache_t *cache,
 }
 
 int
-shardcache_cas_internal(shardcache_t *cache,
-                        void *key,
-                        size_t klen,
-                        void *prev_value,
-                        size_t prev_len,
-                        void *new_value,
-                        size_t new_len,
-                        time_t expire,
-                        time_t cexpire,
-                        int replica,
-                        shardcache_async_response_callback_t cb,
-                        void *priv)
-{
-    int rc = -1;
-
-    char node_name[1024];
-    size_t node_len = sizeof(node_name);
-    memset(node_name, 0, node_len);
-
-    int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
-    if (is_mine == -1)
-        is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
-
-    if (is_mine == 1) {
-        if (cache->storage.cas) {
-            rc = cache->storage.cas(key,
-                                    klen,
-                                    prev_value,
-                                    prev_len,
-                                    new_value,
-                                    new_len,
-                                    cache->storage.priv);
-            if (rc == 0 && !replica)
-                shardcache_commence_eviction(cache, key, klen);
-            
-        } else {
-            SHC_WARNING("CAS command can't be executed because the storage doesn't implement it");
-            return -1;
-        }
-    } else {
-        // TODO - implement forwarding to responsible node
-    }
-    return rc;
-}
-
-int
 shardcache_cas(shardcache_t *cache,
                void *key,
                size_t klen,
@@ -1972,14 +1958,14 @@ shardcache_cas(shardcache_t *cache,
                void *priv)
 {
     if (cache->replica) {
-        int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_CAS, key, klen, NULL, 0, NULL, 0, 0, 0);
+        int rc = shardcache_replica_dispatch(cache->replica, SHARDCACHE_REPLICA_OP_CAS, key, klen, prev_value, prev_len, new_value, new_len, expire, cexpire);
         if (cb)
             cb(key, klen, rc, priv);
         return rc;
     }
 
 
-    return shardcache_cas_internal(cache, key, klen, prev_value, prev_len, new_value, new_len, expire, cexpire, 0, cb, priv);
+    return shardcache_set_internal(cache, key, klen, prev_value, prev_len, new_value, new_len, expire, cexpire, 2, 0, cb, priv);
 }
 
 

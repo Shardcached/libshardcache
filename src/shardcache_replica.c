@@ -254,19 +254,35 @@ kepaxos_commit(unsigned char type,
             rc = shardcache_set_internal(replica->shc,
                                          key,
                                          klen,
+                                         NULL,
+                                         0,
                                          &kdata->data,
                                          kdata->len,
                                          kdata->expire,
                                          kdata->cexpire,
+                                         0, // mode
+                                         leader ? 0 : 1, // replica
+                                         NULL, NULL);
+            break;
+        case SHARDCACHE_REPLICA_OP_ADD:
+           rc = shardcache_set_internal(replica->shc,
+                                         key,
+                                         klen,
+                                         NULL,
                                          0,
-                                         leader ? 0 : 1,
+                                         &kdata->data,
+                                         kdata->len,
+                                         kdata->expire,
+                                         kdata->cexpire,
+                                         1, // mode
+                                         leader ? 0 : 1, // replica
                                          NULL, NULL);
             break;
         case SHARDCACHE_REPLICA_OP_CAS:
         {
             void *new_data = (void *)(kdata->data + kdata->len);
             size_t new_len = kdata->len2;
-            rc = shardcache_cas_internal(replica->shc,
+            rc = shardcache_set_internal(replica->shc,
                                          key,
                                          klen,
                                          &kdata->data,
@@ -275,7 +291,8 @@ kepaxos_commit(unsigned char type,
                                          new_len,
                                          kdata->expire,
                                          kdata->cexpire,
-                                         leader ? 0 : 1,
+                                         2, // mode
+                                         leader ? 0 : 1, // replica
                                          NULL, NULL);
             break;
         }
@@ -564,6 +581,8 @@ shardcache_replica_recover(void *priv)
                     rc = shardcache_set_internal(replica->shc,
                                                  item->key,
                                                  item->klen,
+                                                 NULL,
+                                                 0,
                                                  fbuf_data(&data),
                                                  fbuf_used(&data),
                                                  0, 0, 0, 0, NULL, NULL);
