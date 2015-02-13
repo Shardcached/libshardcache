@@ -25,6 +25,20 @@
 
 #define DEBUG_DUMP_MAXSIZE 128
 
+static char hdr_check[256] = {
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // 0x00 - 0x0F
+    1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x10 - 0x1F
+    0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x20 - 0x2F
+    0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x30 - 0x3F
+    0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x40 - 0x4F
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x50 - 0x5F
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x60 - 0x6F
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x70 - 0x7F
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x80 - 0x8F
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, // 0x90 - 0x9F
+    1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xA0 - 0xAF
+};
+
 static int _tcp_timeout = SHARDCACHE_TCP_TIMEOUT_DEFAULT;
 
 int
@@ -348,38 +362,13 @@ read_message(int fd,
                 continue;
             }
 
-            if (hdr != SHC_HDR_GET &&
-                hdr != SHC_HDR_GET &&
-                hdr != SHC_HDR_DELETE &&
-                hdr != SHC_HDR_EVICT &&
-                hdr != SHC_HDR_GET_ASYNC &&
-                hdr != SHC_HDR_GET_OFFSET &&
-                hdr != SHC_HDR_ADD &&
-                hdr != SHC_HDR_EXISTS &&
-                hdr != SHC_HDR_TOUCH &&
-                hdr != SHC_HDR_CAS &&
-                hdr != SHC_HDR_GET_MULTI &&
-                hdr != SHC_HDR_SET_MULTI &&
-                hdr != SHC_HDR_DELETE_MULTI &&
-                hdr != SHC_HDR_EVICT_MULTI &&
-                hdr != SHC_HDR_MIGRATION_BEGIN &&
-                hdr != SHC_HDR_MIGRATION_ABORT &&
-                hdr != SHC_HDR_MIGRATION_END &&
-                hdr != SHC_HDR_CHECK &&
-                hdr != SHC_HDR_STATS &&
-                hdr != SHC_HDR_GET_INDEX &&
-                hdr != SHC_HDR_INDEX_RESPONSE &&
-                hdr != SHC_HDR_REPLICA_COMMAND &&
-                hdr != SHC_HDR_REPLICA_RESPONSE &&
-                hdr != SHC_HDR_REPLICA_PING &&
-                hdr != SHC_HDR_REPLICA_ACK &&
-                hdr != SHC_HDR_RESPONSE)
-            {
+            if (!hdr_check[hdr]) {
                 if (shash)
                     sip_hash_free(shash);
                 fprintf(stderr, "Unknown message type %02x in read_message()\n", hdr);
                 return -1;
             }
+
             if (shash) {
                 sip_hash_update(shash, &hdr, 1);
                 if (csig) {
