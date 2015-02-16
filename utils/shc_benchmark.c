@@ -38,7 +38,6 @@ static int verbose = 0;
 static int wrate = 0;
 static int wmode = 0;
 static int key_expire_time = 0;
-static char *secret = NULL;
 static uint64_t num_gets = 0;
 static uint64_t num_sets = 0;
 static uint64_t num_responses = 0;
@@ -142,7 +141,6 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
         };
         int num_records = 1;
         unsigned char hdr = SHC_HDR_GET;
-        unsigned char sig_hdr = secret ? SHC_HDR_SIGNATURE_SIP : 0;
 
         if (wrate && random()%100 > wrate) {
             switch(wmode) {
@@ -165,7 +163,7 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
             }
         }
 
-        if (build_message(secret, sig_hdr, hdr, record, num_records, output_buffer) == 0)  {
+        if (build_message(hdr, record, num_records, output_buffer) == 0)  {
             if (hdr == SHC_HDR_GET)
                 __sync_add_and_fetch(&num_gets, 1);
             else
@@ -210,7 +208,7 @@ discard_response(iomux_t *iomux, int fd, unsigned char *data, int len, void *pri
         }
 
         client_ctx *newctx = calloc(1, sizeof(client_ctx));
-        newctx->reader = async_read_context_create(secret, NULL, NULL);
+        newctx->reader = async_read_context_create(NULL, NULL);
         newctx->output = fbuf_create(0);
         newctx->node = ctx->node;
         iomux_callbacks_t cbs = {
@@ -269,7 +267,7 @@ static void
             }
 
             client_ctx *ctx = calloc(1, sizeof(client_ctx));
-            ctx->reader = async_read_context_create(secret, NULL, NULL);
+            ctx->reader = async_read_context_create(NULL, NULL);
             ctx->output = fbuf_create(0);
             ctx->node = addr;
             iomux_callbacks_t cbs = {

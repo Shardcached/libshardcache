@@ -64,7 +64,6 @@ typedef struct _shardcache_request_s {
     fbuf_t records[SHARDCACHE_REQUEST_RECORDS_MAX];
     int fd;
     shardcache_hdr_t hdr;
-    shardcache_hdr_t sig_hdr;
     shardcache_connection_context_t *ctx;
 #ifdef __MACH__
     OSSpinLock output_lock;
@@ -72,7 +71,6 @@ typedef struct _shardcache_request_s {
     pthread_spinlock_t output_lock;
 #endif
     fbuf_t output;
-    sip_hash *fetch_shash;
     int error;
     int skipped;
     int copied;
@@ -102,7 +100,6 @@ typedef struct {
 
 struct __shardcache_connection_context_s {
     shardcache_hdr_t hdr;
-    shardcache_hdr_t sig_hdr;
 
     TAILQ_HEAD (, _shardcache_request_s) requests;
     int num_requests;
@@ -167,8 +164,6 @@ shardcache_request_destroy(shardcache_request_t *req)
     }
     SPIN_DESTROY(req->output_lock);
     fbuf_destroy(&req->output);
-    if (req->fetch_shash)
-        sip_hash_free(req->fetch_shash);
     fbuf_destroy(&req->fetch_accumulator);
     free(req);
 }
@@ -482,20 +477,6 @@ send_async_data_response_epilogue(shardcache_request_t *req, char status)
 
     fbuf_add_binary(&output, &rsep, 1);
 
-    if (req->fetch_shash) {
-        uint64_t digest;
-        sip_hash_update(req->fetch_shash, (void *)&eor, 2);
-        sip_hash_update(req->fetch_shash, (uint8_t *)&rsep, 1);
-
-        if (sip_hash_final_integer(req->fetch_shash, &digest)) {
-            fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-        } else {
-            SHC_ERROR("Can't compute the siphash digest!\n");
-            fbuf_destroy(&output);
-            return -1;
-        }
-    }
-
     // read above about the third record in get/offset responses
     // introduced from protocol version 2
     if (version > 1) {
@@ -504,27 +485,7 @@ send_async_data_response_epilogue(shardcache_request_t *req, char status)
         fbuf_add_binary(&output, (void *)&status, 1);
         fbuf_add_binary(&output, (void *)&eor, 2);
         fbuf_add_binary(&output, &eom, 1);
-        if (req->fetch_shash) {
-            uint64_t digest;
-            sip_hash_update(req->fetch_shash, (void *)&status_size, 2);
-            sip_hash_update(req->fetch_shash, (void *)&status, 1);
-            sip_hash_update(req->fetch_shash, (void *)&eor, 2);
-            sip_hash_update(req->fetch_shash, (uint8_t *)&eom, 1);
-            if (sip_hash_final_integer(req->fetch_shash, &digest)) {
-                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-            } else {
-                SHC_ERROR("Can't compute the siphash digest!\n");
-                fbuf_destroy(&output);
-                return -1;
-            }
-            sip_hash_free(req->fetch_shash);
-            req->fetch_shash = NULL;
-        }
-    } else if (req->fetch_shash) {
-        sip_hash_free(req->fetch_shash);
-        req->fetch_shash = NULL;
     }
-
 
     send_data(req, &output);
     fbuf_destroy(&output);
@@ -730,36 +691,16 @@ get_async_data_handler(void *key,
 
         fbuf_add_binary(&output, (void *)&clen, sizeof(clen));
 
-        if (req->fetch_shash)
-            sip_hash_update(req->fetch_shash, (void *)&clen, sizeof(clen));
-
         if (accumulated_size) {
             int copied = fbuf_concat(&output, &req->fetch_accumulator);
-            if (req->fetch_shash)
-                sip_hash_update(req->fetch_shash, fbuf_data(&req->fetch_accumulator), copied);
             copy_size -= copied;
             accumulated_size -= copied;
             fbuf_remove(&req->fetch_accumulator, copied);
         }
         if (dlen - data_offset >= copy_size) {
             fbuf_add_binary(&output, data + data_offset, copy_size);
-            if (req->fetch_shash)
-                sip_hash_update(req->fetch_shash, data + data_offset, copy_size);
             data_offset += copy_size;
             req->copied += copy_size;
-        }
-        if (req->fetch_shash && (req->sig_hdr&0x01)) {
-            uint64_t digest;
-            if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
-                SHC_ERROR("Can't compute the siphash digest!\n");
-                sip_hash_free(req->fetch_shash);
-                req->fetch_shash = NULL;
-                fbuf_destroy(&output);
-                ATOMIC_INCREMENT(req->error);
-                get_async_ctx_destroy(ctx);
-                return -1;
-            }
-            fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
         }
 
         if (fbuf_used(&output))
@@ -784,25 +725,7 @@ get_async_data_handler(void *key,
             // flush what we have left in the accumulator
             uint16_t clen = htons(accumulated_size);
             fbuf_add_binary(&output, (void *)&clen, sizeof(clen));
-            if (req->fetch_shash)
-                sip_hash_update(req->fetch_shash, (void *)&clen, sizeof(clen));
             int copied = fbuf_concat(&output, &req->fetch_accumulator);
-            if (req->fetch_shash) {
-                sip_hash_update(req->fetch_shash, fbuf_data(&req->fetch_accumulator), copied);
-                if (req->sig_hdr&0x01) {
-                    uint64_t digest;
-                    if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
-                        fbuf_destroy(&output);
-                        SHC_ERROR("Can't compute the siphash digest!\n");
-                        sip_hash_free(req->fetch_shash);
-                        req->fetch_shash = NULL;
-                        ATOMIC_INCREMENT(req->error);
-                        get_async_ctx_destroy(ctx);
-                        return -1;
-                    }
-                    fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-                }
-            }
             if (copied)
                 fbuf_remove(&req->fetch_accumulator, copied);
 
