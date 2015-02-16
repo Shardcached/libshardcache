@@ -148,8 +148,7 @@ kepaxos_connection_input(iomux_t *iomux, int fd, unsigned char *data, int len, v
 
     int read_state = async_read_context_input_data(connection->ctx, data, len, &processed);
     if (read_state == SHC_STATE_READING_DONE ||
-        read_state == SHC_STATE_READING_ERR  ||
-        read_state == SHC_STATE_AUTH_ERR)
+        read_state == SHC_STATE_READING_ERR)
     {
         shardcache_hdr_t hdr = async_read_context_hdr(connection->ctx);
         if (hdr == SHC_HDR_REPLICA_RESPONSE || hdr == SHC_HDR_REPLICA_ACK)
@@ -363,14 +362,13 @@ kepaxos_send(char **recipients,
         connection->replica = replica;
         connection->peer = recipients[i];
         connection->fd = fd;
-        connection->ctx = async_read_context_create((char *)replica->shc->auth,
-                                                    kepaxos_connection_append_input_data,
+        connection->ctx = async_read_context_create(kepaxos_connection_append_input_data,
                                                     connection);
         shardcache_record_t record = {
             .v = cmd,
             .l = cmd_len
         };
-        int rc = build_message((char *)replica->shc->auth, 0, SHC_HDR_REPLICA_COMMAND, &record, 1, &connection->output);
+        int rc = build_message(SHC_HDR_REPLICA_COMMAND, &record, 1, &connection->output);
         if (rc == 0) {
 
             iomux_callbacks_t callbacks = {
@@ -457,8 +455,7 @@ shardcache_replica_ping(shardcache_replica_t *replica)
             connection->replica = replica;
             connection->peer = peers[i];
             connection->fd = fd;
-            connection->ctx = async_read_context_create((char *)replica->shc->auth,
-                                                        kepaxos_connection_append_input_data,
+            connection->ctx = async_read_context_create(kepaxos_connection_append_input_data,
                                                         connection);
 
             uint64_t ballot = kepaxos_ballot(replica->kepaxos);
@@ -475,7 +472,7 @@ shardcache_replica_ping(shardcache_replica_t *replica)
                 .v = msg,
                 .l = msg_len
             };
-            int rc = build_message((char *)replica->shc->auth, 0, SHC_HDR_REPLICA_PING, &record, 1, &connection->output);
+            int rc = build_message(SHC_HDR_REPLICA_PING, &record, 1, &connection->output);
             if (rc == 0) {
 
                 iomux_callbacks_t callbacks = {
@@ -562,7 +559,7 @@ shardcache_replica_recover(void *priv)
         fbuf_t data = FBUF_STATIC_INITIALIZER;
         // TODO - use fetch_from_peer_async() so that the download
         //        can be stopped earlier if the recovery is aborted
-        rc = fetch_from_peer(item->peer, (char *)replica->shc->auth, 0, item->key, item->klen, &data, fd);
+        rc = fetch_from_peer(item->peer, item->key, item->klen, &data, fd);
         if (rc == 0) {
             void *check = NULL;
             rc = ht_delete(replica->recovery, item->key, item->klen, &check, NULL);

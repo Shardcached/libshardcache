@@ -257,7 +257,7 @@ evictor(void *priv)
                         break;
                     }
 
-                    int rc = evict_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, job->key, job->klen, fd, 0);
+                    int rc = evict_from_peer(addr, job->key, job->klen, fd, 0);
                     if (rc == 0) {
                         connections_pool_add(connections, addr, fd);
                     } else {
@@ -575,6 +575,7 @@ shardcache_create(char *me,
     if (sa.sa_handler == NULL)
         signal(SIGPIPE, shardcache_do_nothing);
 
+#if 0
     if (secret && *secret) {
         cache->auth = calloc(1, 16);
         strncpy((char *)cache->auth, secret, 16);
@@ -584,6 +585,7 @@ shardcache_create(char *me,
         SHC_DEBUG("AUTH KEY (secret: %s) : %s", secret,
                   shardcache_hex_escape((char *)cache->auth, SHARDCACHE_MSG_SIG_LEN, DEBUG_DUMP_MAXSIZE, 0));
     }
+#endif
 
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] = SHARDCACHE_COUNTER_LABELS_ARRAY;
 
@@ -747,7 +749,10 @@ shardcache_destroy(shardcache_t *cache)
     if (cache->volatile_storage)
         ht_destroy(cache->volatile_storage);
 
-    free((void *)cache->auth);
+#if 0
+    if (cache->auth)
+        free((void *)cache->auth);
+#endif
 
     if (cache->arc)
         arc_destroy(cache->arc);
@@ -1286,7 +1291,8 @@ int shardcache_get_multi(shardcache_t *cache,
                 arc_release_resource(cache->arc, res);
             } else {
                 // send what we have so far
-                cb(obj->key, obj->klen, obj->data, obj->dlen, 0, NULL, priv);
+                if (obj->dlen)
+                    cb(obj->key, obj->klen, obj->data, obj->dlen, 0, NULL, priv);
 
                 // and then register the listener
                 shardcache_get_async_helper_arg_t *arg = calloc(1, sizeof(shardcache_get_async_helper_arg_t));
@@ -1433,7 +1439,7 @@ shardcache_exists(shardcache_t *cache,
         char *addr = shardcache_node_get_address(peer);
         int fd = shardcache_get_connection_for_peer(cache, addr);
         if (cb) {
-            rc = exists_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 0);
+            rc = exists_on_peer(addr, key, klen, fd, 0);
             if (rc == 0) {
                 shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
                 arg->key = malloc(klen);
@@ -1446,7 +1452,7 @@ shardcache_exists(shardcache_t *cache,
                 arg->fd = fd;
                 arg->hdr = SHC_HDR_EXISTS;
                 async_read_wrk_t *wrk = NULL;
-                rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
+                rc = read_message_async(fd, shardcache_async_command_helper, arg, &wrk);
                 if (rc == 0 && wrk) {
                     shardcache_queue_async_read_wrk(cache, wrk);
                 }
@@ -1454,7 +1460,7 @@ shardcache_exists(shardcache_t *cache,
                 cb(key, klen, -1, priv);
             }
         } else {
-            rc = exists_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
+            rc = exists_on_peer(addr, key, klen, fd, 1);
             shardcache_release_connection_for_peer(cache, addr, fd);
         }
     }
@@ -1497,7 +1503,7 @@ shardcache_touch(shardcache_t *cache, void *key, size_t klen)
         }
         char *addr = shardcache_node_get_address(peer);
         int fd = shardcache_get_connection_for_peer(cache, addr);
-        int rc = touch_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
+        int rc = touch_on_peer(addr, key, klen, fd);
         shardcache_release_connection_for_peer(cache, addr, fd);
         return rc;
     }
@@ -1789,15 +1795,15 @@ shardcache_set_internal(shardcache_t *cache,
         switch(mode) {
             case 0:
                 hdr = SHC_HDR_SET;
-                rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, cb ? 0 : 1);
+                rc = send_to_peer(addr, key, klen, value, vlen, expire, fd, cb ? 0 : 1);
                 break;
             case 1:
                 hdr = SHC_HDR_ADD;
-                rc = add_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, expire, fd, cb ? 0 : 1);
+                rc = add_to_peer(addr, key, klen, value, vlen, expire, fd, cb ? 0 : 1);
                 break;
             case 2:
                 hdr = SHC_HDR_CAS;
-                rc = cas_on_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, old_value, old_vlen, value, vlen, expire, fd, cb ? 0 : 1);
+                rc = cas_on_peer(addr, key, klen, old_value, old_vlen, value, vlen, expire, fd, cb ? 0 : 1);
                 break;
             default:
                 // TODO - Error Messages
@@ -1817,7 +1823,7 @@ shardcache_set_internal(shardcache_t *cache,
                 arg->fd = fd;
                 arg->hdr = hdr;
                 async_read_wrk_t *wrk = NULL;
-                rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
+                rc = read_message_async(fd, shardcache_async_command_helper, arg, &wrk);
                 if (rc == 0 && wrk) {
                     shardcache_queue_async_read_wrk(cache, wrk);
                     async = 1;
@@ -2040,7 +2046,7 @@ shardcache_del_internal(shardcache_t *cache,
         int fd = shardcache_get_connection_for_peer(cache, addr);
         int rc = -1;
         if (cb) {
-            rc = delete_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 0);
+            rc = delete_from_peer(addr, key, klen, fd, 0);
             if (rc == 0) {
                 shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
                 arg->key = malloc(klen);
@@ -2053,7 +2059,7 @@ shardcache_del_internal(shardcache_t *cache,
                 arg->fd = fd;
                 arg->hdr = SHC_HDR_DELETE;
                 async_read_wrk_t *wrk = NULL;
-                rc = read_message_async(fd, (char *)cache->auth, shardcache_async_command_helper, arg, &wrk);
+                rc = read_message_async(fd, shardcache_async_command_helper, arg, &wrk);
                 if (rc == 0 && wrk) {
                     shardcache_queue_async_read_wrk(cache, wrk);
                 } else {
@@ -2065,7 +2071,7 @@ shardcache_del_internal(shardcache_t *cache,
                 cb(key, klen, -1, priv);
             }
         } else {
-            rc = delete_from_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
+            rc = delete_from_peer(addr, key, klen, fd, 1);
             if (rc == 0)
                 shardcache_release_connection_for_peer(cache, addr, fd);
             else
@@ -2328,7 +2334,7 @@ migrate(void *priv)
                         char *addr = shardcache_node_get_address(peer);
                         SHC_DEBUG("Migrator copying %s to peer %s (%s)", keystr, node_name, addr);
                         int fd = shardcache_get_connection_for_peer(cache, addr);
-                        rc = send_to_peer(addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, key, klen, value, vlen, 0, fd, 1);
+                        rc = send_to_peer(addr, key, klen, value, vlen, 0, fd, 1);
                         if (rc == 0) {
                             shardcache_release_connection_for_peer(cache, addr, fd);
                             ATOMIC_INCREMENT(migrated_items);
@@ -2505,8 +2511,6 @@ shardcache_migration_begin_internal(shardcache_t *cache,
                 char *addr = shardcache_node_get_address_at_index(nodes[i], rindex);
                 int fd = shardcache_get_connection_for_peer(cache, addr);
                 int rc = migrate_peer(addr,
-                                      (char *)cache->auth,
-                                      SHC_HDR_SIGNATURE_SIP,
                                       fbuf_data(&mgb_message),
                                       fbuf_used(&mgb_message), fd);
                 shardcache_release_connection_for_peer(cache, addr, fd);

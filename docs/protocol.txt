@@ -1,6 +1,6 @@
 The internal communication protocol may described by the following grammar:
 
-MESSAGE              : <NOOP> | <MSG> | <SIG> | <RESPONSE> | <EMPTY_RESPONSE>
+MESSAGE              : <NOOP> | <MSG> | <RESPONSE> | <EMPTY_RESPONSE>
 NOOP                 : <MSG_NOOP>
 MSG_NOOP             : 0x90
 MSG                  : <MAGIC><HDR><RECORD>[<RSEP><RECORD>...]<EOM>
@@ -195,48 +195,6 @@ NOTE: The index record contained in the MSG_INDEX_RESPONSE is encoded using
 
 -------------------------------------------------------------------------------
 
-Protocol extensions for signature/crc:
-
-SIG              : <SIG_MSG> | <CSIG_MSG>
-SIG_MSG          : <MAGIC><SIG_HDR><MESSAGE><SIG>
-CSIG_MSG         : <MAGIC><CSIG_HDR><HDR><CSIG><CSIG_RECORD>[<RSEP><CSIG><CSIG_RECORD>...]<EOM><CSIG>
-SIG_HDR          : <HDR_SIG_SIPHASH>
-CSIG_HDR         : <HDR_CSIG_SIPHASH>
-HDR_SIG_SIPHASH  : 0xF0
-HDR_CSIG_SIPHASH : 0xF1
-CSIG_RECORD      : <SIZE><DATA><SIG>[<SIZE><DATA><SIG>...]<EOR>
-SIG              : <BYTE>[8]
-CSIG             : <BYTE>[8]
-
--------------------------------------------------------------------------------
-
-The signature header SIG_HDR defines the signature algorithm applied and 
-if chunk-signing has been used instead of  simple-signing.
-The least significative bit in the SIG_HDR byte determines if chunk-signing is
-enabled
-
-- simple-signing : There is only one signature applied at the end of the message
-                   and which signs the entire message as a whole.
-
-                    <SIG_HDR><HDR><SIZE><CHUNK>[<SIZE><CHUNK>...]<EOR><EOM><SIG>
-                      0xF0   |---------------------S----------------------|
-
-
-- chunk-signing  : Each chunk of the message has been signed independently
-                   (which allows asynchronous read/flush of big messages without
-                   the need of accumulating them in-memory)
-
-    <CSIG_HDR><HDR><SIG><SIZE><CHUNK><SIG>[<SIZE><CHUNK><SIG>...]<EOR><EOM><SIG>
-       0xF1   |-S-|     |-----S-----|      |-----S-----|         |----S---|
-
-
-NOTE: The actual protocol implementation supports only SIPHASH signatures.
-      The SIG_HDR defined for SIPHASH is 0xF0 (0xF1 if chunk-signing).
-      The SIPHASH context is unique per message also when using chunk-signing
-
--------------------------------------------------------------------------------
-
-
 The layout for an empty (but still valid) message would be :
 
 ===============================================================================
@@ -359,7 +317,7 @@ NOTE: The protocol allows for an unlimited amount of records, even though
       all other request types require only one record to be provided)
 
 
-More Examples (The signature header and postfix are omitted for simplicity)
+More Examples
 
 A GET message for the key FOO (hex sequence: 0x46 0x4f 0x4f) would look like:
 
@@ -395,15 +353,6 @@ A RES with an empty value (for instance if querying a not-existing key):
 <99><00><00><00>
 
 -------------------------------------------------------------------------------
-
-NOTES:
-
-
-A signed message MUST be wrapped with a SIG_HDR prefix and a SIG postfix.
-The SIG postfix is a siphash digest computed using a shared secret and the
-complete message (obviously excluding the signature itself)
-
-The signature is optional and can be omitted.
 
 Responses to 'GET' requests will return the value for the requested key
 if found, an empty value otherwise

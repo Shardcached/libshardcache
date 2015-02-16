@@ -16,27 +16,22 @@ typedef int (*async_read_callback_t)(void *data,
 
 typedef struct __async_read_ctx_s async_read_ctx_t;
 
-async_read_ctx_t *async_read_context_create(char *auth,
-                                            async_read_callback_t cb,
+async_read_ctx_t *async_read_context_create(async_read_callback_t cb,
                                             void *priv);
 void async_read_context_destroy(async_read_ctx_t *ctx);
 
 typedef enum {
     SHC_STATE_READING_NONE    = 0x00,
     SHC_STATE_READING_MAGIC   = 0x01,
-    SHC_STATE_READING_SIG_HDR = 0x02,
     SHC_STATE_READING_HDR     = 0x03,
     SHC_STATE_READING_RECORD  = 0x04,
     SHC_STATE_READING_RSEP    = 0x05,
-    SHC_STATE_READING_AUTH    = 0x06,
-    SHC_STATE_READING_DONE    = 0x07,
-    SHC_STATE_READING_ERR     = 0x08,
-    SHC_STATE_AUTH_ERR        = 0x09
+    SHC_STATE_READING_DONE    = 0x06,
+    SHC_STATE_READING_ERR     = 0x07,
 } async_read_context_state_t;
 
 int async_read_context_state(async_read_ctx_t *ctx);
 shardcache_hdr_t async_read_context_hdr(async_read_ctx_t *ctx);
-shardcache_hdr_t async_read_context_sig_hdr(async_read_ctx_t *ctx);
 char async_read_context_protocol_version(async_read_ctx_t *ctx);
 
 async_read_context_state_t async_read_context_consume_data(async_read_ctx_t *ctx, rbuf_t *input);

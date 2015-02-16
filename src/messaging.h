@@ -15,7 +15,6 @@ int global_tcp_timeout(int tcp_timeout);
 
 // synchronously read a message (blocking)
 int read_message(int fd,
-                 char *auth,
                  fbuf_t **out,
                  int expected_records,
                  shardcache_hdr_t *hdr,
@@ -23,7 +22,6 @@ int read_message(int fd,
 
 // asynchronously read a message (callback-based)
 int read_message_async(int fd,
-                   char *auth,
                    async_read_callback_t cb,
                    void *priv,
                    async_read_wrk_t **worker);
@@ -31,24 +29,18 @@ int read_message_async(int fd,
 
 // synchronously write a message (blocking)
 int write_message(int fd,
-                  char *auth,
-                  unsigned char sig_hdr,
                   unsigned char hdr,
                   shardcache_record_t *records,
                   int num_records);
 
 // build a valid shardcache message containing the provided records
-int build_message(char *auth,
-                  unsigned char sig_hdr,
-                  unsigned char hdr,
+int build_message(unsigned char hdr,
                   shardcache_record_t *records,
                   int num_records,
                   fbuf_t *out);
 
 // delete a key from a peer
 int delete_from_peer(char *peer,
-                     char *auth,
-                     unsigned char sig_hdr,
                      void *key,
                      size_t klen,
                      int fd,
@@ -57,8 +49,6 @@ int delete_from_peer(char *peer,
 // evict a key from a peer
 int
 evict_from_peer(char *peer,
-                char *auth,
-                unsigned char sig,
                 void *key,
                 size_t klen,
                 int fd,
@@ -67,8 +57,6 @@ evict_from_peer(char *peer,
 
 // send a new value for a given key to a peer
 int send_to_peer(char *peer,
-                 char *auth,
-                 unsigned char sig_hdr,
                  void *key,
                  size_t klen,
                  void *value,
@@ -79,8 +67,6 @@ int send_to_peer(char *peer,
 
 // cas operation for a given key on a peer
 int cas_on_peer(char *peer,
-                char *auth,
-                unsigned char sig_hdr,
                 void *key,
                 size_t klen,
                 void *old_value,
@@ -94,8 +80,6 @@ int cas_on_peer(char *peer,
 // add a new value (set if not exists) for a given key to a peer 
 int
 add_to_peer(char *peer,
-            char *auth,
-            unsigned char sig,
             void *key,
             size_t klen,
             void *value,
@@ -106,8 +90,6 @@ add_to_peer(char *peer,
 
 // fetch the value for a given key from a peer
 int fetch_from_peer(char *peer,
-                    char *auth,
-                    unsigned char sig_hdr,
                     void *key,
                     size_t len,
                     fbuf_t *out,
@@ -115,8 +97,6 @@ int fetch_from_peer(char *peer,
 
 // fetch part of the value for a given key from a peer
 int offset_from_peer(char *peer,
-                     char *auth,
-                     unsigned char sig_hdr,
                      void *key,
                      size_t len,
                      uint32_t offset,
@@ -126,8 +106,6 @@ int offset_from_peer(char *peer,
 
 // check if a key exists on a peer
 int exists_on_peer(char *peer,
-                   char *auth,
-                   unsigned char sig_hdr,
                    void *key,
                    size_t len,
                    int fd,
@@ -136,36 +114,28 @@ int exists_on_peer(char *peer,
 // touch a key on a peer (loads into cache if responsible and timestamp is updated)
 int
 touch_on_peer(char *peer,
-              char *auth,
-              unsigned char sig_hdr,
               void *key,
               size_t klen,
               int fd);
 
 // retrieve all the stats counters from a peer
 int stats_from_peer(char *peer,
-                    char *auth,
-                    unsigned char sig_hdr,
                     char **out,
                     size_t *len,
                     int fd);
 
 // check if a peer is alive (using the CHK command)
 int check_peer(char *peer,
-               char *auth,
-               unsigned char sig_hdr,
                int fd);
 
 // start migration
 int migrate_peer(char *peer,
-                 char *auth,
-                 unsigned char sig_hdr,
                  void *msgdata,
                  size_t len,
                  int fd);
 
 // abort migration
-int abort_migrate_peer(char *peer, char *auth, unsigned char sig_hdr, int fd);
+int abort_migrate_peer(char *peer, int fd);
 
 
 // connect to a given peer and return the opened filedescriptor
@@ -175,8 +145,6 @@ int connect_to_peer(char *address_string, unsigned int timeout);
 // NOTE: caller must use shardcache_free_index() to release memory used
 //       by the returned shardcache_storage_index_t pointer
 shardcache_storage_index_t *index_from_peer(char *peer,
-                                            char *auth,
-                                            unsigned char sig_hdr,
                                             int fd);
 
 typedef int (*fetch_from_peer_async_cb)(char *peer,
@@ -188,8 +156,6 @@ typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         void *priv);
 
 int fetch_from_peer_async(char *peer,
-                          char *auth,
-                          unsigned char sig_hdr,
                           void *key,
                           size_t klen,
                           size_t offset,

@@ -106,10 +106,13 @@ shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth)
 
     c->chash = chash_create((const char **)shard_names, shard_lens, c->num_shards, 200);
 
+#if 0
     if (auth && *auth) {
         c->auth = calloc(1, 16);
         strncpy((char *)c->auth, auth, 16);
     }
+#endif
+
     struct timeval tv;
     gettimeofday(&tv, NULL);
     srandom((unsigned)tv.tv_usec);
@@ -200,7 +203,7 @@ shardcache_client_get(shardcache_client_t *c, void *key, size_t klen, void **dat
     }
 
     fbuf_t value = FBUF_STATIC_INITIALIZER;
-    int rc = fetch_from_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, &value, fd);
+    int rc = fetch_from_peer(addr, key, klen, &value, fd);
     if (rc == 0) {
         size_t size = fbuf_used(&value);
         if (data)
@@ -234,7 +237,7 @@ shardcache_client_offset(shardcache_client_t *c, void *key, size_t klen, uint32_
     }
 
     fbuf_t value = FBUF_STATIC_INITIALIZER;
-    int rc = offset_from_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, offset, dlen, &value, fd);
+    int rc = offset_from_peer(addr, key, klen, offset, dlen, &value, fd);
     if (rc == 0) {
         uint32_t to_copy = dlen > fbuf_used(&value) ? fbuf_used(&value) : dlen;
         if (data)
@@ -265,7 +268,7 @@ shardcache_client_exists(shardcache_client_t *c, void *key, size_t klen)
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
         return -1;
     }
-    int rc = exists_on_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
+    int rc = exists_on_peer(addr, key, klen, fd, 1);
     if (rc == -1) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -289,7 +292,7 @@ shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen)
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
         return -1;
     }
-    int rc = touch_on_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd);
+    int rc = touch_on_peer(addr, key, klen, fd);
     if (rc == -1) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -316,9 +319,9 @@ shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, v
 
     int rc = -1;
     if (inx)
-        rc = add_to_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd, 1);
+        rc = add_to_peer(addr, key, klen, data, dlen, expire, fd, 1);
     else
-        rc = send_to_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, data, dlen, expire, fd, 1);
+        rc = send_to_peer(addr, key, klen, data, dlen, expire, fd, 1);
 
     if (rc == -1) {
         close(fd);
@@ -354,7 +357,7 @@ shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)
         snprintf(c->errstr, sizeof(c->errstr), "Can't connect to '%s'", addr);
         return -1;
     }
-    int rc = delete_from_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
+    int rc = delete_from_peer(addr, key, klen, fd, 1);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -378,7 +381,7 @@ shardcache_client_evict(shardcache_client_t *c, void *key, size_t klen)
         return -1;
     }
 
-    int rc = evict_from_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, key, klen, fd, 1);
+    int rc = evict_from_peer(addr, key, klen, fd, 1);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -430,7 +433,7 @@ shardcache_client_stats(shardcache_client_t *c, char *node_name, char **buf, siz
         return -1;
     }
 
-    int rc = stats_from_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, buf, len, fd);
+    int rc = stats_from_peer(addr, buf, len, fd);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -459,7 +462,7 @@ shardcache_client_check(shardcache_client_t *c, char *node_name) {
         return -1;
     }
 
-    int rc = check_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, fd);
+    int rc = check_peer(addr, fd);
     if (rc != 0) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -486,7 +489,10 @@ shardcache_client_destroy(shardcache_client_t *c)
     queue_destroy(c->async_jobs);
     chash_free(c->chash);
     shardcache_free_nodes(c->shards, c->num_shards);
-    free((void *)c->auth);
+#if 0
+    if (c->auth)
+        free((void *)c->auth);
+#endif
     connections_pool_destroy(c->connections);
     free(c);
 }
@@ -518,7 +524,7 @@ shardcache_client_index(shardcache_client_t *c, char *node_name)
         return NULL;
     }
 
-    shardcache_storage_index_t *index = index_from_peer(addr, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, fd);
+    shardcache_storage_index_t *index = index_from_peer(addr, fd);
     if (!index) {
         close(fd);
         c->errno = SHARDCACHE_CLIENT_ERROR_NODE;
@@ -556,8 +562,6 @@ shardcache_client_migration_begin(shardcache_client_t *c, shardcache_node_t **no
         }
 
         int rc = migrate_peer(addr,
-                              (char *)c->auth,
-                              SHC_HDR_SIGNATURE_SIP,
                               fbuf_data(&mgb_message),
                               fbuf_used(&mgb_message), fd);
         if (rc != 0) {
@@ -594,7 +598,7 @@ shardcache_client_migration_abort(shardcache_client_t *c)
             return -1;
         }
 
-        int rc =  abort_migrate_peer(label, (char *)c->auth, SHC_HDR_SIGNATURE_SIP, fd);
+        int rc =  abort_migrate_peer(label, fd);
 
         if (rc != 0) {
             close(fd);
@@ -672,8 +676,6 @@ shardcache_client_get_async(shardcache_client_t *c,
     arg->cb = data_cb;
     arg->priv = priv;
     return fetch_from_peer_async(addr,
-                                 (char *)c->auth,
-                                 SHC_HDR_CSIGNATURE_SIP,
                                  key,
                                  klen,
                                  0,
@@ -814,7 +816,6 @@ static inline shc_multi_ctx_t *
 shc_multi_context_create(shardcache_client_t *c,
                          shardcache_hdr_t cmd,
                          char *peer,
-                         char *secret,
                          linked_list_t *items,
                          uint32_t *total_count,
                          int (*cb)(shc_multi_ctx_t *, int ),
@@ -825,7 +826,7 @@ shc_multi_context_create(shardcache_client_t *c,
     ctx->commands = fbuf_create(0);
     ctx->num_requests = list_count(items);
     ctx->items = calloc(1, sizeof(shc_multi_item_t *) * (ctx->num_requests+1));
-    ctx->reader = async_read_context_create(secret, shc_multi_collect_data, ctx);
+    ctx->reader = async_read_context_create(shc_multi_collect_data, ctx);
     ctx->cmd = cmd;
     ctx->peer = peer;
     ctx->total_count = total_count;
@@ -851,7 +852,6 @@ shc_multi_context_create(shardcache_client_t *c,
             }
         };
         int num_records = 1;
-        unsigned char sig_hdr = secret ? SHC_HDR_SIGNATURE_SIP : 0;
 
         if (cmd == SHC_HDR_SET) {
             record[1].v = item->data;
@@ -865,7 +865,7 @@ shc_multi_context_create(shardcache_client_t *c,
             }
         }
 
-        if (build_message(secret, sig_hdr, cmd, record, num_records, ctx->commands) != 0) {
+        if (build_message(cmd, record, num_records, ctx->commands) != 0) {
             c->errno = SHARDCACHE_CLIENT_ERROR_INTERNAL;
             snprintf(c->errstr, sizeof(c->errstr), "Can't create new command!");
             fbuf_free(ctx->commands);
@@ -1034,7 +1034,7 @@ shardcache_client_multi_send_requests(shardcache_client_t *c,
             return NULL;
         }
 
-        shc_multi_ctx_t *ctx = shc_multi_context_create(c, cmd, addr, (char *)c->auth, items, total_count, cb, priv);
+        shc_multi_ctx_t *ctx = shc_multi_context_create(c, cmd, addr, items, total_count, cb, priv);
         if (!ctx) {
             while ((ctx = list_shift_value(contexts))) {
                 iomux_remove(iomux, ctx->fd);
@@ -1379,8 +1379,6 @@ async_thread(void *priv)
                     }
 
                     int rc = fetch_from_peer_async(addr,
-                                                   (char *)c->auth,
-                                                   SHC_HDR_CSIGNATURE_SIP,
                                                    job->arg.single.key,
                                                    job->arg.single.klen,
                                                    0,

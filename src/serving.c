@@ -145,9 +145,7 @@ shardcache_connection_context_create(shardcache_serving_t *serv, int fd)
 
     ctx->serv = serv;
     ctx->fd = fd;
-    ctx->reader_ctx = async_read_context_create((char *)serv->cache->auth,
-                                                    async_read_handler,
-                                                    ctx);
+    ctx->reader_ctx = async_read_context_create(async_read_handler, ctx);
     TAILQ_INIT(&ctx->requests);
 
     int i;
@@ -412,31 +410,11 @@ write_status(shardcache_request_t *req, char mode, int rc)
 
     fbuf_add_binary(&output, (char *)&magic, sizeof(magic));
 
-    sip_hash *shash = NULL;
-    if (req->ctx->serv->cache->auth) {
-        unsigned char hdr_sig = SHC_HDR_SIGNATURE_SIP;
-        fbuf_add_binary(&output, (char *)&hdr_sig, 1);
-        shash = sip_hash_new((uint8_t *)req->ctx->serv->cache->auth, 2, 4);
-    }
-
-    uint16_t initial_offset = fbuf_used(&output);
-
     unsigned char hdr = SHC_HDR_RESPONSE;
 
     fbuf_add_binary(&output, (char *)&hdr, 1);
 
     fbuf_add_binary(&output, out, sizeof(out) - (no_data ? 3 : 0));
-
-    if (req->ctx->serv->cache->auth) {
-        uint64_t digest;
-        sip_hash_digest_integer(shash,
-                                (uint8_t *)fbuf_data(&output) + initial_offset,
-                                fbuf_used(&output) - initial_offset, &digest);
-        fbuf_add_binary(&output, (char *)&digest, sizeof(digest));
-    }
-
-    if (shash)
-        sip_hash_free(shash);
 
     send_data(req, &output);
     fbuf_destroy(&output);
@@ -458,35 +436,11 @@ send_async_data_response_preamble(shardcache_request_t *req, uint32_t total_size
     fbuf_slowgrowsize(&output, 512);
     fbuf_add_binary(&output, (char *)&magic, sizeof(magic));
 
-    if (req->ctx->serv->cache->auth) {
-        if (req->fetch_shash) {
-            sip_hash_free(req->fetch_shash);
-            req->fetch_shash = NULL;
-        }
-        req->fetch_shash = sip_hash_new((uint8_t *)req->ctx->serv->cache->auth, 2, 4);
-        fbuf_add_binary(&output, (void *)&req->sig_hdr, 1);
-    }
-
     fbuf_add_binary(&output, (void *)&hdr, 1);
 
-    if (req->ctx->serv->cache->auth && req->fetch_shash) {
-        sip_hash_update(req->fetch_shash, (uint8_t *)&hdr, 1);
-        if (req->sig_hdr&0x01) {
-            uint64_t digest;
-            if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
-                ATOMIC_INCREMENT(req->error);
-                SHC_ERROR("Can't compute the siphash digest!\n");
-                fbuf_destroy(&output);
-                return -1;
-            }
-            fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-        }
-
-    }
-
     // NOTE: From protocol version 2 responses to get/offset commands 
-    //       prefix the first record contains the size of the data and then
-    //       a second record eventually holds the data.
+    //       will send a first record containing the size of the data
+    //       and eventually a second record which holds the actual data.
     //       In protocol version 1 the data was returned immediately
     //       in the first record
     if (version > 1) {
@@ -498,23 +452,6 @@ send_async_data_response_preamble(shardcache_request_t *req, uint32_t total_size
         fbuf_add_binary(&output, (char *)&size, sizeof(uint32_t));
         fbuf_add_binary(&output, (char *)&chunk_term, 2);
         fbuf_add_binary(&output, (char *)&rsep, 1);
-        if (req->ctx->serv->cache->auth && req->fetch_shash) {
-            sip_hash_update(req->fetch_shash, (uint8_t *)&chunk_size, sizeof(uint16_t));
-            sip_hash_update(req->fetch_shash, (uint8_t *)&size, sizeof(uint32_t));
-            sip_hash_update(req->fetch_shash, (uint8_t *)&chunk_term, 2);
-            sip_hash_update(req->fetch_shash, (uint8_t *)&rsep, 1);
-            if (req->sig_hdr&0x01) {
-                uint64_t digest;
-                if (!sip_hash_final_integer(req->fetch_shash, &digest)) {
-                    ATOMIC_INCREMENT(req->error);
-                    SHC_ERROR("Can't compute the siphash digest!\n");
-                    fbuf_destroy(&output);
-                    return -1;
-                }
-                fbuf_add_binary(&output, (void *)&digest, sizeof(digest));
-            }
-
-        }
     }
 
     send_data(req, &output);
@@ -596,6 +533,25 @@ send_async_data_response_epilogue(shardcache_request_t *req, char status)
     return 0;
 }
 
+static int
+send_async_multi_data_response(shardcache_get_async_ctx_t *ctx)
+{
+    int i;
+    fbuf_t *items[ctx->multi.num_keys];
+
+    for (i = 0; i < ctx->multi.num_keys; i++) {
+        items[i] = fbuf_create(0);
+        fbuf_attach(items[i], ctx->multi.values[i], ctx->multi.vlens[i], ctx->multi.vlens[i]);
+    }
+
+    fbuf_t out = FBUF_STATIC_INITIALIZER;
+
+    array_to_record(ctx->multi.num_keys, items, &out);
+
+    return 0;
+}
+
+
 static inline shardcache_get_async_ctx_t *
 get_async_ctx_create(shardcache_request_t *req, void **keys, size_t *klens, int num_keys)
 {
@@ -630,7 +586,7 @@ get_async_ctx_destroy(shardcache_get_async_ctx_t *ctx)
         }
         free(ctx->multi.keys);
         free(ctx->multi.klens);
-        for (i = 0; i < ctx->multi.num_values; i++) {
+        for (i = 0; i < ctx->multi.num_keys; i++) {
             if (ctx->multi.values[i])
                 free(ctx->multi.values[i]);
         }
@@ -640,6 +596,57 @@ get_async_ctx_destroy(shardcache_get_async_ctx_t *ctx)
         free(ctx->single.key);
     }
     free(ctx);
+}
+
+static int
+get_async_multi_data_handler(void *key,
+                             size_t klen,
+                             void *data,
+                             size_t dlen,
+                             size_t total_size,
+                             struct timeval *timestamp,
+                             void *priv)
+{
+    shardcache_get_async_ctx_t *ctx = (shardcache_get_async_ctx_t *)priv;
+
+    shardcache_request_t *req = (shardcache_request_t *)ctx->req;
+
+    if (dlen == 0 && total_size == 0) {
+        if (!timestamp) { // Error
+            ATOMIC_INCREMENT(req->error);
+            get_async_ctx_destroy(ctx);
+            return -1;
+        }
+
+        ctx->multi.num_values++;
+
+        if (ctx->multi.num_values == ctx->multi.num_keys) {
+            if (send_async_multi_data_response(ctx) != 0) {
+                ATOMIC_INCREMENT(req->error);
+                get_async_ctx_destroy(ctx);
+                return -1;
+            }
+            get_async_ctx_destroy(ctx);
+        }
+    }
+
+    int i;
+    for (i = 0; i < ctx->multi.num_keys; i++) {
+        if (klen == ctx->multi.klens[i] &&
+            memcmp(key, ctx->multi.keys[i], klen) == 0)
+        {
+            if (ctx->multi.values[i]) {
+                ctx->multi.values[i] = realloc(ctx->multi.values[i], ctx->multi.vlens[i] + dlen);
+                memcpy(ctx->multi.values[i] + ctx->multi.vlens[i], data, dlen);
+            } else {
+                ctx->multi.values[i] = malloc(dlen);
+                memcpy(ctx->multi.values[i], data, dlen);
+            }
+        }
+    }
+
+    return 0;
+
 }
 
 static int
@@ -673,22 +680,24 @@ get_async_data_handler(void *key,
             status = SHC_RES_ERR;
         }
 
-        if (!ctx->is_multi) {
+        //if (!ctx->is_multi) {
             get_async_ctx_destroy(ctx);
 
             if (send_async_data_response_epilogue(req, status) != 0) {
                 ATOMIC_INCREMENT(req->error);
                 return -1;
             }
-        } else if (ctx->multi.num_values == ctx->multi.num_keys) {
-            /* XXX
+        //}
+        /*
+        else if (ctx->multi.num_values == ctx->multi.num_keys) {
             if (send_async_multi_data_response(ctx) != 0) {
                 ATOMIC_INCREMENT(req->error);
                 get_async_ctx_destroy(ctx);
                 return -1;
-            }*/
+            }
             get_async_ctx_destroy(ctx);
         }
+        */
 
         return !timestamp ? -1 : 0;
     }
@@ -984,7 +993,6 @@ process_request(shardcache_request_t *req)
         }
         case SHC_HDR_GET_MULTI:
         {
-            // TODO - IMPLEMENT
             char **keys = NULL;
             size_t *lens = NULL;
             uint32_t num_keys = record_to_array(&req->records[0], &keys, &lens);
@@ -996,7 +1004,7 @@ process_request(shardcache_request_t *req)
                                           (void **)keys,
                                           lens,
                                           num_keys,
-                                          get_async_data_handler,
+                                          get_async_multi_data_handler,
                                           ctx);
 
             if (rc != 0) {
@@ -1101,9 +1109,7 @@ process_request(shardcache_request_t *req)
                     .v = fbuf_data(&buf),
                     .l = fbuf_used(&buf)
                 };
-                if (build_message((char *)req->ctx->serv->cache->auth,
-                                  req->sig_hdr,
-                                  SHC_HDR_RESPONSE,
+                if (build_message(SHC_HDR_RESPONSE,
                                   &record, 1, &out) == 0)
                 {
                     send_data(req, &out);
@@ -1149,10 +1155,7 @@ process_request(shardcache_request_t *req)
                 .v = fbuf_data(&buf),
                 .l = fbuf_used(&buf)
             };
-            if (build_message((char *)req->ctx->serv->cache->auth,
-                              req->sig_hdr,
-                              SHC_HDR_INDEX_RESPONSE,
-                              &record, 1, &out) == 0)
+            if (build_message(SHC_HDR_INDEX_RESPONSE, &record, 1, &out) == 0)
             {
                 // destroy it early ... since we still need one more copy
                 SHC_DEBUG("Index response sent (%d)", fbuf_used(&out));
@@ -1190,9 +1193,7 @@ process_request(shardcache_request_t *req)
                     .v = response,
                     .l = response_len
                 };
-                if (build_message((char *)req->ctx->serv->cache->auth,
-                                  req->sig_hdr, rhdr,
-                                  &record, 1, &out) == 0)
+                if (build_message(rhdr, &record, 1, &out) == 0)
                 {
                     // destroy it early ... since we still need one more copy
                     free(response);
@@ -1236,7 +1237,6 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
 {
     shardcache_request_t *req = calloc(1, sizeof(shardcache_request_t));
     req->hdr = async_read_context_hdr(ctx->reader_ctx);
-    req->sig_hdr = async_read_context_sig_hdr(ctx->reader_ctx);
     req->ctx = ctx;
     SPIN_INIT(req->output_lock);
 
@@ -1273,7 +1273,7 @@ shardcache_check_context_state(iomux_t *iomux,
         process_request(req);
         iomux_set_output_callback(iomux, fd, shardcache_output_handler);
     }
-    else if (UNLIKELY(state == SHC_STATE_READING_ERR || state == SHC_STATE_AUTH_ERR))
+    else if (UNLIKELY(state == SHC_STATE_READING_ERR))
     {
         // if the asynchronous reader is in error state we want
         // to close the connection, probably an unauthorized or a

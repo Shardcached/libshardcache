@@ -233,8 +233,6 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
         async_read_wrk_t *wrk = NULL;
         arc_retain_resource(cache->arc, obj->res);
         rc = fetch_from_peer_async(peer_addr,
-                                   (char *)cache->auth,
-                                   SHC_HDR_CSIGNATURE_SIP,
                                    obj->key,
                                    obj->klen,
                                    0,
@@ -272,7 +270,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
         }
     } else { 
         fbuf_t value = FBUF_STATIC_INITIALIZER;
-        rc = fetch_from_peer(peer_addr, (char *)cache->auth, SHC_HDR_SIGNATURE_SIP, obj->key, obj->klen, &value, fd);
+        rc = fetch_from_peer(peer_addr, obj->key, obj->klen, &value, fd);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         if (rc == 0) {
             shardcache_release_connection_for_peer(cache, peer_addr, fd);
