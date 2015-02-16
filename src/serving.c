@@ -24,11 +24,6 @@
 
 #include "shardcache_internal.h" // for the replica memeber
 
-#ifndef HAVE_UINT64_T
-#define HAVE_UINT64_T
-#endif
-#include <siphash.h>
-
 #pragma pack(push, 1)
 typedef struct {
     pthread_t thread;

@@ -1,10 +1,6 @@
-#ifndef HAVE_UINT64_T
-#define HAVE_UINT64_T
-#endif
 #include <stdlib.h>
 #include <strings.h>
 #include <stdio.h>
-#include <siphash.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "shardcache.h"
