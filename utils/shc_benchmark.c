@@ -444,7 +444,7 @@ main (int argc, char **argv)
     if (parse_hosts_string(hosts_string) <= 0)
         usage(argv[0], -1, "Can't parse the provided hosts string");
 
-    shardcache_client_t *client = shardcache_client_create(hosts, num_hosts, secret);
+    shardcache_client_t *client = shardcache_client_create(hosts, num_hosts, NULL);
     if (!client) {
         fprintf(stderr, "Can't create the shardcache client");
         exit(-1);
