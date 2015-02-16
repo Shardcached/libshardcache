@@ -39,6 +39,25 @@ int build_message(unsigned char hdr,
                   int num_records,
                   fbuf_t *out);
 
+
+// convert an array of items to a (chunkized) record ready to be sent on the wire
+// NOTE: the produced record will be chunkized if necessary and will include
+// the chunk-size headers
+void array_to_record(int num_items, fbuf_t **items, fbuf_t *out);
+
+
+typedef enum {
+    WRITE_STATUS_MODE_SIMPLE = 0,
+    WRITE_STATUS_MODE_BOOLEAN = 1,
+    WRITE_STATUS_MODE_EXISTS = 2
+} rc_to_status_mode_t;
+// convert a return code to a protocol-encoded status byte
+char rc_to_status(int rc, rc_to_status_mode_t mode);
+
+// convert a (de-chunkized) record to an array of vaules
+// NOTE: the record MUST be complete and without the chunk-size headers
+uint32_t record_to_array(fbuf_t *record, char ***items, size_t **lens);
+
 // delete a key from a peer
 int delete_from_peer(char *peer,
                      void *key,

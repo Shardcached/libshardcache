@@ -403,6 +403,161 @@ _chunkize_buffer(void *buf,
     return -1;
 }
 
+// convert a (de-chunkized) record to an array of vaules
+// NOTE: the record MUST be complete and without the chunk-size headers
+uint32_t
+record_to_array(fbuf_t *record, char ***items, size_t **lens)
+{
+    char *data = fbuf_data(record);
+    int data_len = fbuf_used(record);
+
+    if (data_len < sizeof(uint32_t))
+        return -1;
+
+    uint32_t num_items = ntohl(*((uint32_t *)data));
+    data += sizeof(uint32_t);
+
+    int i;
+    for (i = 0; i < num_items; i++) {
+        uint32_t item_size = ntohl(*((uint32_t *)data));
+        data += sizeof(uint32_t);
+        *items = realloc(*items, (sizeof(char *) * num_items) + 1);
+        if (items) {
+            if (item_size) {
+                (*items)[i] = malloc(item_size);
+                memcpy((*items)[i], data, item_size);
+                data += item_size;
+            } else {
+                data = NULL;
+            }
+        } else {
+            data += item_size;
+        }
+
+        if (lens) {
+            *lens = realloc(*lens, (sizeof(size_t) * num_items) + 1);
+            (*lens)[i] = item_size;
+        }
+    }
+
+    return 0;
+}
+
+static inline uint32_t
+_dump_records(int num_items, fbuf_t **items, fbuf_t *out)
+{
+    uint32_t wrote = 0;
+    int i;
+    for (i = 0; i < num_items; i++) { 
+        if (items[i]) {
+            uint32_t isize = fbuf_used(items[i]);
+            uint32_t isize_nbo = htonl(isize);
+            fbuf_add_binary(out, (char *)&isize_nbo, sizeof(isize_nbo)); 
+            fbuf_concat(out, items[i]);
+            wrote += isize + sizeof(isize_nbo);
+        } else {
+            uint32_t nullsize = 0;
+            fbuf_add_binary(out, (char *)&nullsize, sizeof(nullsize));
+            wrote += sizeof(nullsize);
+        }
+    }
+    return wrote;
+}
+
+
+// convert an array of items to a (chunkized) record ready to be sent on the wire
+// NOTE: the produced record will be chunkized if necessary and will include
+// the chunk-size headers
+void
+array_to_record(int num_items, fbuf_t **items, fbuf_t *out)
+{
+    uint32_t num_items_nbo = htonl(num_items);
+
+    uint32_t to_write = sizeof(num_items_nbo);
+
+    int count_wrote = 0;
+
+    int idx, last_idx = 0;
+    for (idx = 0; idx < num_items; idx++) {
+        if (!items[idx]) {
+            to_write += sizeof(uint32_t);
+            continue;
+        }
+        int current_size = fbuf_used(items[idx]);
+        // flush one chunk if we need to
+        if (to_write + current_size + sizeof(uint32_t) > 65535) {
+            // the size of the chunk
+            uint16_t cs = htons(to_write);
+            fbuf_add_binary(out, (char *)&cs, sizeof(to_write));
+
+            if (!count_wrote) {
+                fbuf_add_binary(out, (char *)&num_items_nbo, sizeof(num_items_nbo));
+                count_wrote = 1;
+                to_write -= sizeof(num_items_nbo);
+            }
+
+            uint32_t wrote = _dump_records(idx - last_idx, &items[last_idx], out);
+            if (wrote != to_write) {
+                SHC_ERROR("%s (%s:%s) - Can't dump the complete message, it will be truncated!",
+                          __FUNCTION__, __LINE__, __FILE__);
+            }
+
+            last_idx = idx;
+            to_write = 0;
+        }
+        to_write += sizeof(uint32_t) + current_size;
+    }
+
+    // size of last chunk
+    uint16_t cs = htons(to_write);
+    fbuf_add_binary(out, (char *)&cs, sizeof(cs));
+
+    uint32_t wrote = 0;
+    if (!count_wrote) {
+        fbuf_add_binary(out, (char *)&num_items_nbo, sizeof(num_items_nbo));
+        wrote += sizeof(uint32_t);
+    }
+
+    if (num_items && items)
+        wrote += _dump_records(idx - last_idx, &items[last_idx], out);
+
+    if (wrote != to_write) {
+        SHC_ERROR("%s (%s:%s) - Can't dump the complete message, it will be truncated!",
+                  __FUNCTION__, __LINE__, __FILE__);
+    }
+
+    // end-of-record
+    cs = 0;
+    fbuf_add_binary(out, (char *)&cs, sizeof(cs));
+}
+
+char
+rc_to_status(int rc, rc_to_status_mode_t mode)
+{
+    char out;
+    if (rc == -1) {
+        out = SHC_RES_ERR;
+    } else {
+        if (mode == WRITE_STATUS_MODE_BOOLEAN) {
+            if (rc == 1)
+                out = SHC_RES_YES;
+            else if (rc == 0)
+                out = SHC_RES_NO;
+            else
+                out = SHC_RES_ERR;
+        } else if (mode == WRITE_STATUS_MODE_EXISTS && rc == 1) {
+            out = SHC_RES_EXISTS;
+        }
+        else if (rc == 0) {
+            out = SHC_RES_OK;
+        } else {
+            out = SHC_RES_ERR;
+        }
+    }
+    return out;
+}
+
+
 int build_message(unsigned char hdr,
                   shardcache_record_t *records,
                   int num_records,
