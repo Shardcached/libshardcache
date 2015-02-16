@@ -192,7 +192,7 @@ connections_pool_get(connections_pool_t *cc, char *addr)
         if (!ATOMIC_READ(cc->check))
             return fd;
 
-        // XXX - this is a blocking write
+        // NOTE - this is a blocking write which will honor the configured tcp timeout
         if (is_connection_time_valid(cc, &last_access) || write_noop(cc, fd, flags) == 1)
             return fd;
         else
