@@ -82,14 +82,13 @@ int main (int argc, char **argv) {
         fprintf(stderr, "SHC_HOSTS environment variable not found!\n");
         exit(-1);
     }
-    char *secret = getenv("SHC_SECRET");
 
     if (parse_nodes_string(shc_hosts) != 0) {
         fprintf(stderr, "Can't parse the nodes string : %s!\n", shc_hosts);
         exit(-1);
     }
 
-    shardcache_client_t *client = shardcache_client_create(nodes, num_nodes, secret);
+    shardcache_client_t *client = shardcache_client_create(nodes, num_nodes);
 
     int rc = 0;
     int is_boolean = 0;
