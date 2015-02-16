@@ -465,7 +465,6 @@ shardcache_create(char *me,
                   shardcache_node_t **nodes,
                   int nnodes,
                   shardcache_storage_t *st,
-                  char *secret,
                   int num_workers,
                   int num_async,
                   size_t cache_size)
@@ -574,18 +573,6 @@ shardcache_create(char *me,
     // if not we need to register one to handle writes/reads to disconnected sockets
     if (sa.sa_handler == NULL)
         signal(SIGPIPE, shardcache_do_nothing);
-
-#if 0
-    if (secret && *secret) {
-        cache->auth = calloc(1, 16);
-        strncpy((char *)cache->auth, secret, 16);
-    } 
-
-    if (secret && *secret) {
-        SHC_DEBUG("AUTH KEY (secret: %s) : %s", secret,
-                  shardcache_hex_escape((char *)cache->auth, SHARDCACHE_MSG_SIG_LEN, DEBUG_DUMP_MAXSIZE, 0));
-    }
-#endif
 
     const char *counters_names[SHARDCACHE_NUM_COUNTERS] = SHARDCACHE_COUNTER_LABELS_ARRAY;
 
@@ -748,11 +735,6 @@ shardcache_destroy(shardcache_t *cache)
 
     if (cache->volatile_storage)
         ht_destroy(cache->volatile_storage);
-
-#if 0
-    if (cache->auth)
-        free((void *)cache->auth);
-#endif
 
     if (cache->arc)
         arc_destroy(cache->arc);

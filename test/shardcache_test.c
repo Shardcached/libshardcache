@@ -35,7 +35,6 @@ int main(int argc, char **argv)
                                        nodes,
                                        num_nodes,
                                        NULL,
-                                       NULL,
                                        5,
                                        0,
                                        1<<29);
@@ -50,8 +49,8 @@ int main(int argc, char **argv)
     sleep(1); // let the servers complete their startup
 
     // now create a client to communicate with the servers
-    ut_testing("shardcache_client_create(nodes, num_nodes, NULL)");
-    shardcache_client_t *client = shardcache_client_create(nodes, num_nodes, NULL);
+    ut_testing("shardcache_client_create(nodes, num_nodes");
+    shardcache_client_t *client = shardcache_client_create(nodes, num_nodes);
     ut_validate_int((client != NULL), 1);
 
     char key[32];
@@ -127,8 +126,8 @@ int main(int argc, char **argv)
 
     // create now two clients each knowing exclusively about 1 server
     // (different among the two clients)
-    shardcache_client_t *client1 = shardcache_client_create(&nodes[0], 1, NULL);
-    shardcache_client_t *client2 = shardcache_client_create(&nodes[1], 1, NULL);
+    shardcache_client_t *client1 = shardcache_client_create(&nodes[0], 1);
+    shardcache_client_t *client2 = shardcache_client_create(&nodes[1], 1);
 
     // the following tests communication among peers
     // (sets 100 keys using one node and reads them using the other node,

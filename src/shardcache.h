@@ -76,8 +76,6 @@ int shardcache_storage_reset(shardcache_storage_t *st);
  *                        storage callbacks\n If NULL the internal (memory-only)
  *                        volatile storage will be used for all the keys (and not
  *                        only the ones being set with an expiration time)
- * @param secret          A null-terminated string containing the shared secret used to
- *                        authenticate incoming messages
  * @param num_workers     The number of worker threads taking care of serving input connections
  * @param num_async       The number of async i/o threads handling the inter-node communication\n
  *                        If greater than 0 it will indicate the actual number of async-i/o
@@ -99,7 +97,6 @@ shardcache_t *shardcache_create(char *me,
                         shardcache_node_t **nodes,
                         int num_nodes,
                         shardcache_storage_t *storage,
-                        char *secret,
                         int num_workers,
                         int num_async,
                         size_t cache_size);

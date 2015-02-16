@@ -168,9 +168,6 @@ struct _shardcache_s {
 
     shardcache_serving_t *serv; // the serving-subsystem instance
 
-    const char *auth;     // the secret to use for signing messages
-                          // (NULL if messages are expected to be unsigned)
-
     pthread_t migrate_th; // the migration thread
 
     pthread_t evictor_th; // the evictor thread

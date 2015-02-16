@@ -29,7 +29,6 @@ struct shardcache_client_s {
     shardcache_node_t **shards;
     connections_pool_t *connections;
     int num_shards;
-    const char *auth;
     int use_random_node;
     shardcache_node_t *current_node;
     int pipeline_max;
@@ -80,7 +79,7 @@ shardcache_client_pipeline_max(shardcache_client_t *c, int new_value)
 }
 
 shardcache_client_t *
-shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth)
+shardcache_client_create(shardcache_node_t **nodes, int num_nodes)
 {
     int i;
     if (!num_nodes) {
@@ -105,13 +104,6 @@ shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth)
     c->num_shards = num_nodes;
 
     c->chash = chash_create((const char **)shard_names, shard_lens, c->num_shards, 200);
-
-#if 0
-    if (auth && *auth) {
-        c->auth = calloc(1, 16);
-        strncpy((char *)c->auth, auth, 16);
-    }
-#endif
 
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -489,10 +481,6 @@ shardcache_client_destroy(shardcache_client_t *c)
     queue_destroy(c->async_jobs);
     chash_free(c->chash);
     shardcache_free_nodes(c->shards, c->num_shards);
-#if 0
-    if (c->auth)
-        free((void *)c->auth);
-#endif
     connections_pool_destroy(c->connections);
     free(c);
 }

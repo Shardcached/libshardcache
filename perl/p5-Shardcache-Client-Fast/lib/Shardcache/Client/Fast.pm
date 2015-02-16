@@ -38,7 +38,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 
 our @EXPORT;
 
-our $VERSION = '0.20';
+our $VERSION = '0.21';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -61,11 +61,10 @@ use XSLoader;
 XSLoader::load('Shardcache::Client::Fast', $VERSION);
 
 sub new {
-    my ($class, $nodes, $secret, $log_level) = @_;
+    my ($class, $nodes, $log_level) = @_;
 
     my $self = {
         _nodes  => [],
-        (defined $secret ? (_secret => $secret) : ()),
     };
 
     if (ref($nodes) && ref($nodes) eq "ARRAY") {
@@ -101,7 +100,7 @@ sub new {
         push(@{$self->{_nodes}}, [ $label, $addr ]);
     }
 
-    $self->{_client} = shardcache_client_create($self->{_nodes}, $secret // '', $log_level // 0);
+    $self->{_client} = shardcache_client_create($self->{_nodes}, $log_level // 0);
 
     return undef unless ($self->{_client});
 
@@ -310,8 +309,7 @@ Shardcache::Client::Fast - Perl extension for the client part of libshardcache
 
   use Shardcache::Client::Fast;
   @hosts = ("peer1:localhost:4444", "peer2:localhost:4445", "peer3:localhost:4446" );
-  $secret = "some_secret";
-  $c = Shardcache::Client::Fast->new(\@hosts, $secret, $log_level);
+  $c = Shardcache::Client::Fast->new(\@hosts, $log_level);
 
   # Set a new value for key "key"
   $rc = $c->set("key", "value");
@@ -357,7 +355,7 @@ None by default.
 
 =over 4
 
-=item * new ( @$hosts, [ $secret, $log_level ] )
+=item * new ( @$hosts, [ $log_level ] )
 
 =back
 
@@ -374,11 +372,6 @@ None by default.
 =head3 OPTIONAL PARAMS
 
 =over
-
-=item $secret
-
-    A secret used to compute the signature used for internal communication.
-    If not specified the string 'default' will be used 
 
 =item $log_level
 

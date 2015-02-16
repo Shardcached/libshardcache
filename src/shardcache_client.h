@@ -21,11 +21,10 @@ typedef struct shardcache_client_s shardcache_client_t;
  * @param nodes           A list of <address:port> strings representing the nodes
  *                        taking part to the shardcache 'cloud'
  * @param num_nodes       The number of nodes present in the nodes list
- * @param auth            A null-terminated string containing the shared secret used to
  * @return A newly initialized shardcache client descriptor
  * @note The returned shardcache_client_t structure MUST be disposed using shardcache_client_destroy()
  */
-shardcache_client_t *shardcache_client_create(shardcache_node_t **nodes, int num_nodes, char *auth);
+shardcache_client_t *shardcache_client_create(shardcache_node_t **nodes, int num_nodes);
 
 /**
  * @brief Get and/or set the timeout (in milliseconds) used when establishing new tcp connections or
