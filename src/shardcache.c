@@ -623,14 +623,8 @@ shardcache_create(char *me,
         }
     }
 
-
-    cache->serv = start_serving(cache, num_workers); 
-
-    if (!cache->serv) {
-        SHC_ERROR("Can't start the communication engine");
-        shardcache_destroy(cache);
-        return NULL;
-    }
+    if (!shardcache_log_initialized)
+        shardcache_log_init("libshardcache", LOG_WARNING);
 
     cache->cache_timeouts = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)free);
     cache->volatile_timeouts = ht_create(1<<16, 1<<20, (ht_free_item_callback_t)free);
@@ -638,15 +632,21 @@ shardcache_create(char *me,
     cache->expirer_queue = queue_create();
     pthread_create(&cache->expirer_th, NULL, shardcache_expire_keys, cache);
 
-    if (!shardcache_log_initialized)
-        shardcache_log_init("libshardcache", LOG_WARNING);
-
     // start the replica subsystem now
     // NOTE: this needs to happen after the cache has been fully initialized
     for (i = 0; i < nnodes; i++) {
         if (shardcache_node_num_addresses(nodes[i]) > 1 && my_index >= 0)
             cache->replica = shardcache_replica_create(cache, cache->shards[i], my_index, NULL);
     }
+
+    cache->serv = start_serving(cache, num_workers);
+
+    if (!cache->serv) {
+        SHC_ERROR("Can't start the communication engine");
+        shardcache_destroy(cache);
+        return NULL;
+    }
+
     return cache;
 }
 
