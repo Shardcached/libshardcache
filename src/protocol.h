@@ -60,9 +60,6 @@ typedef enum {
     SHC_HDR_REPLICA_PING     = 0xA2,
     SHC_HDR_REPLICA_ACK      = 0xA3,
 
-    // signature headers
-    SHC_HDR_SIGNATURE_SIP    = 0xF0,
-    SHC_HDR_CSIGNATURE_SIP   = 0xF1
 
 } shardcache_hdr_t;
 
