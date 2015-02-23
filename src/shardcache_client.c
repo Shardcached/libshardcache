@@ -311,9 +311,9 @@ shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, v
 
     int rc = -1;
     if (inx)
-        rc = add_to_peer(addr, key, klen, data, dlen, expire, fd, 1);
+        rc = add_to_peer(addr, key, klen, data, dlen, expire, 0, fd, 1);
     else
-        rc = send_to_peer(addr, key, klen, data, dlen, expire, fd, 1);
+        rc = send_to_peer(addr, key, klen, data, dlen, expire, 0, fd, 1);
 
     if (rc == -1) {
         close(fd);

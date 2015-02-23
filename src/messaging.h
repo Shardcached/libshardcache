@@ -80,7 +80,8 @@ int send_to_peer(char *peer,
                  size_t klen,
                  void *value,
                  size_t vlen,
-                 uint32_t expire,
+                 uint32_t ttl,
+                 uint32_t cttl,
                  int fd,
                  int expect_response);
 
@@ -92,7 +93,8 @@ int cas_on_peer(char *peer,
                 size_t old_vlen,
                 void *new_value,
                 size_t new_vlen,
-                uint32_t expire,
+                uint32_t ttl,
+                uint32_t cttl,
                 int fd,
                 int expect_response);
 

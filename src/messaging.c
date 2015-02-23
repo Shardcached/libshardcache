@@ -728,7 +728,8 @@ _send_to_peer_internal(char *peer,
                        size_t old_vlen,
                        void *value,
                        size_t vlen,
-                       uint32_t expire,
+                       uint32_t ttl,
+                       uint32_t cttl,
                        int mode, // 0 == SET, 1 == ADD, 2 == CAS
                        int fd,
                        int expect_response)
@@ -741,7 +742,8 @@ _send_to_peer_internal(char *peer,
 
     int rc = -1;
     if (fd >= 0) {
-        shardcache_record_t record[4] = {
+        // NOTE : the biggest command involves 5 reords
+        shardcache_record_t record[5] = {
             {
                 .v = key,
                 .l = klen
@@ -775,15 +777,23 @@ _send_to_peer_internal(char *peer,
                 return -1;
         }
 
-        uint32_t expire_nbo = 0;
-        if (expire) {
-            expire_nbo = htonl(expire);
-            record[num_records].v = &expire_nbo;
-            record[num_records].l = sizeof(expire);
+        uint32_t ttl_nbo = 0;
+        if (ttl) {
+            ttl_nbo = htonl(ttl);
+            record[num_records].v = &ttl_nbo;
+            record[num_records].l = sizeof(ttl);
             num_records++;
         }
 
-        // TODO - support cexpire (which can be provided as extra argument to set/add/cas commands)
+        uint32_t cttl_nbo = 0;
+        if (cttl) {
+            cttl_nbo = htonl(cttl);
+            record[num_records].v = &cttl_nbo;
+            record[num_records].l = sizeof(cttl);
+            num_records++;
+        }
+
+        // TODO - support cttl (which can be provided as extra argument to set/add/cas commands)
 
         rc = write_message(fd, hdr, record, num_records);
         if (rc != 0) {
@@ -843,12 +853,13 @@ send_to_peer(char *peer,
              size_t klen,
              void *value,
              size_t vlen,
-             uint32_t expire,
+             uint32_t ttl,
+             uint32_t cttl,
              int fd,
              int expect_response)
 {
     return _send_to_peer_internal(peer,
-            key, klen, NULL, 0, value, vlen, expire, 0, fd, expect_response);
+            key, klen, NULL, 0, value, vlen, ttl, cttl, 0, fd, expect_response);
 }
 
 int
@@ -857,12 +868,13 @@ add_to_peer(char *peer,
             size_t klen,
             void *value,
             size_t vlen,
-            uint32_t expire,
+            uint32_t ttl,
+            uint32_t cttl,
             int fd,
             int expect_response)
 {
     return _send_to_peer_internal(peer, key, klen, NULL, 0,
-                                  value, vlen, expire, 1, fd, expect_response);
+                                  value, vlen, ttl, cttl, 1, fd, expect_response);
 }
 
 int

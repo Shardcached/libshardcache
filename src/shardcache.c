@@ -2300,7 +2300,7 @@ migrate(void *priv)
                         char *addr = shardcache_node_get_address(peer);
                         SHC_DEBUG("Migrator copying %.*s to peer %s (%s)", klen, key, node_name, addr);
                         int fd = shardcache_get_connection_for_peer(cache, addr);
-                        rc = send_to_peer(addr, key, klen, value, vlen, 0, fd, 1);
+                        rc = send_to_peer(addr, key, klen, value, vlen, 0, cache->expire_time, fd, 1);
                         if (rc == 0) {
                             shardcache_release_connection_for_peer(cache, addr, fd);
                             ATOMIC_INCREMENT(migrated_items);
