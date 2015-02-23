@@ -724,13 +724,13 @@ static inline int
 _send_to_peer_internal(char *peer,
                        void *key,
                        size_t klen,
-                       void *old_value,
-                       size_t old_vlen,
-                       void *value,
-                       size_t vlen,
+                       void *value1,
+                       size_t vlen1,
+                       void *value2,
+                       size_t vlen2,
                        uint32_t ttl,
                        uint32_t cttl,
-                       int mode, // 0 == SET, 1 == ADD, 2 == CAS
+                       int mode, // 0 == SET, 1 == ADD, 2 == CAS, 3 == INCR, 4 == DECR
                        int fd,
                        int expect_response)
 {
@@ -749,8 +749,8 @@ _send_to_peer_internal(char *peer,
                 .l = klen
             },
             {
-                .v = value,
-                .l = vlen
+                .v = value1,
+                .l = vlen1
             }
         };
         int num_records = 2;
@@ -764,11 +764,21 @@ _send_to_peer_internal(char *peer,
                 hdr = SHC_HDR_ADD;
                 break;
             case 2:
-                hdr = SHC_HDR_CAS;
-                record[1].v = old_value;
-                record[1].l = old_vlen;
-                record[2].v = value;
-                record[2].l = vlen;
+            case 3:
+            case 4:
+                switch(mode) {
+                    case 2:
+                        hdr = SHC_HDR_CAS;
+                        break;
+                    case 3:
+                        hdr = SHC_HDR_INCREMENT;
+                        break;
+                    case 4:
+                        hdr = SHC_HDR_DECREMENT;
+                        break;
+                }
+                record[2].v = value2;
+                record[2].l = vlen2;
                 num_records = 3;
                 break;
             default:
@@ -859,7 +869,7 @@ send_to_peer(char *peer,
              int expect_response)
 {
     return _send_to_peer_internal(peer,
-            key, klen, NULL, 0, value, vlen, ttl, cttl, 0, fd, expect_response);
+            key, klen, value, vlen, NULL, 0, ttl, cttl, 0, fd, expect_response);
 }
 
 int
@@ -873,8 +883,8 @@ add_to_peer(char *peer,
             int fd,
             int expect_response)
 {
-    return _send_to_peer_internal(peer, key, klen, NULL, 0,
-                                  value, vlen, ttl, cttl, 1, fd, expect_response);
+    return _send_to_peer_internal(peer, key, klen, value, vlen, NULL, 0,
+                                  ttl, cttl, 1, fd, expect_response);
 }
 
 int
@@ -891,7 +901,7 @@ cas_on_peer(char *peer,
             int expect_response)
 {
     return _send_to_peer_internal(peer, key, klen, old_value, old_vlen,
-                                  value, vlen, ttl, cttl, 0, fd, expect_response);
+                                  value, vlen, ttl, cttl, 2, fd, expect_response);
 }
 
 int
@@ -899,12 +909,21 @@ increment_on_peer(char *peer,
                   void *key,
                   size_t klen,
                   int64_t amount,
+                  int64_t initial,
                   time_t ttl,
                   time_t cttl,
                   int fd,
                   int expect_response)
 {
-    return 0;
+    fbuf_t amount_data = FBUF_STATIC_INITIALIZER;
+    fbuf_t initial_data = FBUF_STATIC_INITIALIZER;
+    fbuf_printf(&amount_data, "%lld", amount);
+    fbuf_printf(&initial_data, "%lld", initial);
+    int rc = _send_to_peer_internal(peer, key, klen, fbuf_data(&initial_data), fbuf_used(&initial_data),
+                                     fbuf_data(&amount_data), fbuf_used(&amount_data), ttl, cttl, 3, fd, expect_response);
+    fbuf_destroy(&amount_data);
+    fbuf_destroy(&initial_data);
+    return rc;
 }
 
 int
@@ -912,12 +931,21 @@ decrement_on_peer(char *peer,
                   void *key,
                   size_t klen,
                   int64_t amount,
+                  int64_t initial,
                   time_t ttl,
                   time_t cttl,
                   int fd,
                   int expect_response)
 {
-    return 0;
+    fbuf_t amount_data = FBUF_STATIC_INITIALIZER;
+    fbuf_t initial_data = FBUF_STATIC_INITIALIZER;
+    fbuf_printf(&amount_data, "%lld", amount);
+    fbuf_printf(&initial_data, "%lld", initial);
+    int rc = _send_to_peer_internal(peer, key, klen, fbuf_data(&initial_data), fbuf_used(&initial_data),
+                                     fbuf_data(&amount_data), fbuf_used(&amount_data), ttl, cttl, 4, fd, expect_response);
+    fbuf_destroy(&amount_data);
+    fbuf_destroy(&initial_data);
+    return rc;
 }
 
 int

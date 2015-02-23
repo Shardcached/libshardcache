@@ -2074,7 +2074,7 @@ shardcache_increment_internal(shardcache_t *cache,
             if (cache->use_persistent_storage && !expire) {
                 int64_t real_amount;
                 int64_t (*real_function)(void *, size_t, int64_t, int64_t, void *);
-                if (amount > 0) {
+                if (amount >= 0) {
                     if (cache->storage.increment) {
                         real_function = cache->storage.increment;
                         real_amount = amount;
@@ -2126,7 +2126,7 @@ shardcache_increment_internal(shardcache_t *cache,
             if (cache->use_persistent_storage && cache->storage.global) {
                 int64_t real_amount;
                 int64_t (*real_function)(void *, size_t, int64_t, int64_t, void *);
-                if (amount > 0) {
+                if (amount >= 0) {
                     if (cache->storage.increment) {
                         real_function = cache->storage.increment;
                         real_amount = amount;
@@ -2177,11 +2177,16 @@ shardcache_increment_internal(shardcache_t *cache,
 
         char *addr = shardcache_node_get_address(peer);
         int fd = shardcache_get_connection_for_peer(cache, addr);
-        rc = increment_on_peer(addr, key, klen, amount, expire, cexpire, fd, cb ? 0 : 1);
+        if (amount >= 0)
+            rc = increment_on_peer(addr, key, klen, amount, initial, expire, cexpire, fd, cb ? 0 : 1);
+        else
+            rc = decrement_on_peer(addr, key, klen, -amount, initial, expire, cexpire, fd, cb ? 0 : 1);
 
         if (cb) {
             if (rc == 0) {
-                rc = shardcache_fetch_async_response(cache, key, klen, SHC_HDR_INCREMENT, addr, fd, cb, priv);
+                rc = shardcache_fetch_async_response(cache, key, klen,
+                                                     amount >= 0 ? SHC_HDR_INCREMENT : SHC_HDR_DECREMENT,
+                                                     addr, fd, cb, priv);
             } else {
                 close(fd);
                 cb(key, klen, -1, priv);
