@@ -115,6 +115,9 @@ PORT                 : <STRING>
 ,                    : 0x2C
 :                    : 0x3A
 STRING               : <DATA>
+AMOUNT               : <NUMERIC_STRING>
+NUMERIC_STRING       : <STRING>
+INITIAL_AMOUNT       : <AMOUNT>
 
 
 The implemented messages in libshardcache are the following:
@@ -164,11 +167,11 @@ EVICT_MULTI       : <MSG_EVICT_MULTI><KEYS><EOM>
 CAS               : <MSG_CAS><KEY><VALUE><VALUE><EOM>
                     RESPONSE: <MSG_RESPONSE><RESPONSE_STATUS><EOM>
 
-INCREMENT         : <MSG_INCREMENT><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUS><EOM>
+INCREMENT         : <MSG_INCREMENT><KEY><AMOUNT>[<INITIAL_AMOUNT>]<EOM>
+                    RESPONSE: <MSG_RESPONSE><AMOUNT><EOM>
 
-DECREMENT         : <MSG_DECREMENT><KEY><EOM>
-                    RESPONSE: <MSG_RESPONSE><RESPONSE_STATUS><EOM>
+DECREMENT         : <MSG_DECREMENT><KEY><AMOUNT>[<INITIAL_AMOUNT>]<EOM>
+                    RESPONSE: <MSG_RESPONSE><AMOUNT><EOM>
 
 MGB               : <MSG_MIGRATION_BEGIN><NODES_LIST><EOM>
 RESPONSE          : <MSG_RESPONSE><RESPONSE_STATUS><EOM>
