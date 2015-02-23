@@ -755,6 +755,55 @@ process_request(shardcache_request_t *req)
             write_status(req, WRITE_STATUS_MODE_EXISTS, rc);
             break;
         }
+        case SHC_HDR_INCREMENT:
+        case SHC_HDR_DECREMENT:
+        {
+            // convert the amounts from the decimal string representation to the int64_t used internally
+            int64_t amount = 0;
+            int64_t initial = 0;
+            if (fbuf_used(&req->records[1]))
+                amount = strtoll(fbuf_data(&req->records[1]), NULL, 10);
+            if (fbuf_used(&req->records[2]))
+                initial = strtoll(fbuf_data(&req->records[2]), NULL, 10);
+
+            uint32_t expire = 0;
+            uint32_t cexpire = 0;
+            if (fbuf_used(&req->records[3]) == sizeof(uint32_t)) {
+                memcpy(&expire, fbuf_data(&req->records[2]), sizeof(uint32_t));
+                expire = ntohl(expire);
+            }
+            if (fbuf_used(&req->records[4]) == sizeof(uint32_t)) {
+                memcpy(&cexpire, fbuf_data(&req->records[2]), sizeof(uint32_t));
+                cexpire = ntohl(cexpire);
+            }
+
+            int64_t value;
+            if (req->hdr == SHC_HDR_INCREMENT)
+                value = shardcache_increment(cache, key, klen, amount, initial, expire, cexpire, shardcache_async_command_response, req);
+            else
+                value = shardcache_decrement(cache, key, klen, amount, initial, expire, cexpire, shardcache_async_command_response, req);
+
+            // build the response to the increment/decrement command
+
+            fbuf_t buf = FBUF_STATIC_INITIALIZER;
+            fbuf_printf(&buf, "%lld", value);
+            fbuf_t out = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
+            shardcache_record_t record = {
+                .v = fbuf_data(&buf),
+                .l = fbuf_used(&buf)
+            };
+            if (build_message(SHC_HDR_RESPONSE,
+                              &record, 1, &out) == 0)
+            {
+                send_data(req, &out);
+                ATOMIC_INCREMENT(req->done);
+            } else {
+                SHC_ERROR("Can't build the INCR/DECR response");
+                write_status(req, WRITE_STATUS_MODE_SIMPLE, 0);
+            }
+            fbuf_destroy(&buf);
+            fbuf_destroy(&out);
+        }
         case SHC_HDR_GET_MULTI:
         {
             char **keys = NULL;
