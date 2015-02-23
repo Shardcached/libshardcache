@@ -585,6 +585,28 @@ int shardcache_cas(shardcache_t *cache,
                    shardcache_async_response_callback_t cb,
                    void *priv);
 
+int64_t
+shardcache_increment(shardcache_t *cache,
+                     void *key,
+                     size_t klen,
+                     int64_t amount,
+                     int64_t initial,
+                     time_t expire,
+                     time_t cexpire,
+                     shardcache_async_response_callback_t cb,
+                     void *priv);
+
+int64_t
+shardcache_decrement(shardcache_t *cache,
+                     void *key,
+                     size_t klen,
+                     int64_t amount,
+                     int64_t initial,
+                     time_t expire,
+                     time_t cexpire,
+                     shardcache_async_response_callback_t cb,
+                     void *priv);
+
 int shardcache_del_multi(shardcache_t *cache,
                          void **keys,
                          size_t *klens,

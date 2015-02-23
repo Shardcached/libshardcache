@@ -2041,15 +2041,15 @@ shardcache_increment_volatile_cb(void *ptr, size_t len, void *user)
 }
 
 int64_t
-shardcache_increment(shardcache_t *cache,
-                     void *key,
-                     size_t klen,
-                     int64_t amount,
-                     int64_t initial,
-                     time_t expire,
-                     time_t cexpire,
-                     shardcache_async_response_callback_t cb,
-                     void *priv)
+shardcache_increment_internal(shardcache_t *cache,
+                              void *key,
+                              size_t klen,
+                              int64_t amount,
+                              int64_t initial,
+                              time_t expire,
+                              time_t cexpire,
+                              shardcache_async_response_callback_t cb,
+                              void *priv)
 {
     int rc = -1;
 
@@ -2071,20 +2071,41 @@ shardcache_increment(shardcache_t *cache,
                                   shardcache_increment_volatile_cb,
                                   &amount);
         if (!v) {
-            if (cache->use_persistent_storage && cache->storage.increment && !expire) {
-                return cache->storage.increment(key, klen, amount, initial, cache->storage.priv);
-            } else {
-                char data[32];
-                size_t dsize = snprintf(data, sizeof(data), "%lld", initial + amount);
-                rc = shardcache_store_volatile(cache, key, klen, data, dsize, NULL, 0, expire, cexpire, 1, 0);
-                if (rc == 1) {
-                    v = ht_get_deep_copy(cache->volatile_storage,
-                                         key,
-                                         klen,
-                                         NULL,
-                                         shardcache_increment_volatile_cb,
-                                         &amount);
+            if (cache->use_persistent_storage && !expire) {
+                int64_t real_amount;
+                int64_t (*real_function)(void *, size_t, int64_t, int64_t, void *);
+                if (amount > 0) {
+                    if (cache->storage.increment) {
+                        real_function = cache->storage.increment;
+                        real_amount = amount;
+                    } else {
+                        real_function = cache->storage.decrement;
+                        real_amount = -amount;
+                    }
+                } else {
+                    if (cache->storage.decrement) {
+                        real_function = cache->storage.decrement;
+                        real_amount = amount;
+                    } else {
+                        real_function = cache->storage.increment;
+                        real_amount = -amount;
+                    }
                 }
+
+                if (real_function)
+                    return real_function(key, klen, real_amount, initial, cache->storage.priv);
+            }
+            // if we are here .... there is no persistent storage support for increment/decrement
+            char data[32];
+            size_t dsize = snprintf(data, sizeof(data), "%lld", initial + amount);
+            rc = shardcache_store_volatile(cache, key, klen, data, dsize, NULL, 0, expire, cexpire, 1, 0);
+            if (rc == 1) {
+                v = ht_get_deep_copy(cache->volatile_storage,
+                                     key,
+                                     klen,
+                                     NULL,
+                                     shardcache_increment_volatile_cb,
+                                     &amount);
             }
         }
 
@@ -2103,17 +2124,48 @@ shardcache_increment(shardcache_t *cache,
         if (!peer) {
             SHC_ERROR("Can't find address for node %s", peer);
             if (cache->use_persistent_storage && cache->storage.global) {
-                if (cache->storage.increment) {
-                    rc = cache->storage.increment(key,
-                                                      klen,
-                                                      amount,
-                                                      initial,
-                                                      cache->storage.priv);
+                int64_t real_amount;
+                int64_t (*real_function)(void *, size_t, int64_t, int64_t, void *);
+                if (amount > 0) {
+                    if (cache->storage.increment) {
+                        real_function = cache->storage.increment;
+                        real_amount = amount;
+                    } else {
+                        real_function = cache->storage.decrement;
+                        real_amount = -amount;
+                    }
+                } else {
+                    if (cache->storage.decrement) {
+                        real_function = cache->storage.decrement;
+                        real_amount = amount;
+                    } else {
+                        real_function = cache->storage.increment;
+                        real_amount = -amount;
+                    }
+                }
+
+                if (real_function) {
+                    rc = real_function(key, klen, real_amount, initial, cache->storage.priv);
                     if (rc != 0 )//&& !replica)
                         shardcache_commence_eviction(cache, key, klen);
                 } else {
-                    SHC_WARNING("INCREMENT command can't be executed because the storage doesn't implement it");
-                    return -1;
+                    char data[32];
+                    size_t dsize = snprintf(data, sizeof(data), "%lld", initial + amount);
+                    rc = shardcache_store_volatile(cache, key, klen, data, dsize, NULL, 0, expire, cexpire, 1, 0);
+                    if (rc == 1) {
+                        void *v = ht_get_deep_copy(cache->volatile_storage,
+                                                   key,
+                                                   klen,
+                                                   NULL,
+                                                   shardcache_increment_volatile_cb,
+                                                   &amount);
+                        if (v) {
+                            rc = *((int *)v);
+                            free(v);
+                        } else {
+                            rc = 0;
+                        }
+                    }
                 }
             }
             
@@ -2149,43 +2201,6 @@ shardcache_increment(shardcache_t *cache,
 
     return rc;
 }
-
-int
-shardcache_decrement(shardcache_t *cache, void *key, size_t klen, int amount)
-{
-    // if we are not the owner try propagating the command to the responsible peer
-    char node_name[1024];
-    size_t node_len = sizeof(node_name);
-    memset(node_name, 0, node_len);
-
-    int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
-    if (is_mine == -1)
-        is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
-
-    if (is_mine == 1)
-    {
-        int neg_amount = -amount;
-        void *v = ht_get_deep_copy(cache->volatile_storage,
-                                  key,
-                                  klen,
-                                  NULL,
-                                  shardcache_increment_volatile_cb,
-                                  &neg_amount);
-
-        if (v) {
-            int value = *((int *)v);
-            free(v);
-            return value;
-        }
-
-        if (cache->storage.decrement)
-            return cache->storage.decrement(key, klen, amount, 0, cache->storage.priv);
-
-    }
-
-    return 0;
-}
-
 
 int
 shardcache_del_internal(shardcache_t *cache,
