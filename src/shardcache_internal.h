@@ -25,15 +25,8 @@
 
 #define DEBUG_DUMP_MAXSIZE 128
 
-#define KEY2STR(_k, _l, _o, _ol) \
-{ \
-    size_t _s = (_l < _ol) ? _l : _ol; \
-    memcpy(_o, _k, _s); \
-    _o[_s] = 0; \
-}
-
-#define LIKELY(_e) __builtin_expect((_e), 1)
-#define UNLIKELY(_e) __builtin_expect((_e), 0)
+#define LIKELY(__e) __builtin_expect((__e), 1)
+#define UNLIKELY(__e) __builtin_expect((__e), 0)
 
 #define MUTEX_INIT_RECURSIVE(_mutex) {\
     pthread_mutexattr_t _attr; \

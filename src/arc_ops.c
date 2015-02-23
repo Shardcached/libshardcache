@@ -208,11 +208,7 @@ static int
 arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
 {
     int rc = -1;
-    if (shardcache_log_level() >= LOG_DEBUG) {
-        char keystr[1024];
-        KEY2STR(obj->key, obj->klen, keystr, sizeof(keystr));
-        SHC_DEBUG2("Fetching data for key %s from peer %s", keystr, peer); 
-    }
+    SHC_DEBUG2("Fetching data for key %.*s from peer %s", obj->klen, obj->key, peer); 
 
     shardcache_node_t *node = shardcache_node_select(cache, peer);
     if (!peer) {
@@ -398,10 +394,6 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         }
     }
 
-    char keystr[1024];
-    if (shardcache_log_level() >= LOG_DEBUG)
-        KEY2STR(obj->key, obj->klen, keystr, sizeof(keystr));
-
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_FETCH_LOCAL].value);
 
     // we are responsible for this item ... 
@@ -414,9 +406,9 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                      arc_ops_fetch_copy_volatile_object_cb,
                      obj);
     if (obj->data && obj->dlen) {
-        SHC_DEBUG3("Found volatile value %s (%lu) for key %s",
+        SHC_DEBUG3("Found volatile value %s (%lu) for key %.*s",
                shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE, 0),
-               (unsigned long)obj->dlen, keystr);
+               (unsigned long)obj->dlen, obj->klen, obj->key);
     } else if (cache->use_persistent_storage && cache->storage.fetch) {
         int rc = cache->storage.fetch(obj->key, obj->klen, &obj->data, &obj->dlen, cache->storage.priv);
         if (rc == -1) {
@@ -430,11 +422,11 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             return -1;
         }
         if (obj->data && obj->dlen) {
-            SHC_DEBUG3("Fetch storage callback returned value %s (%lu) for key %s",
+            SHC_DEBUG3("Fetch storage callback returned value %s (%lu) for key %.*s",
                    shardcache_hex_escape(obj->data, obj->dlen, DEBUG_DUMP_MAXSIZE, 0),
-                   (unsigned long)obj->dlen, keystr);
+                   (unsigned long)obj->dlen, obj->klen, obj->key);
         } else {
-            SHC_DEBUG3("Fetch storage callback returned an empty value for key %s", keystr);
+            SHC_DEBUG3("Fetch storage callback returned an empty value for key %.*s", obj->klen, obj->key);
         }
     }
 
@@ -447,8 +439,8 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC) && obj->listeners)
             list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
 
-        MUTEX_UNLOCK(obj->lock);
-        SHC_DEBUG("Item not found for key %s", keystr);
+        MUTEX_UNLOCK(&obj->lock);
+        SHC_DEBUG("Item not found for key %.*s", obj->klen, obj->key);
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value);
         return 1;
     }

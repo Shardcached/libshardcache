@@ -206,12 +206,8 @@ evictor(void *priv)
         shardcache_evictor_job_t *job = NULL;
         ht_foreach_value(jobs, evict_key, &job);
         if (job) {
-            char keystr[1024] = { 0 };
 
-            if (shardcache_loglevel >= LOG_DEBUG)
-                KEY2STR(job->key, job->klen, keystr, sizeof(keystr));
-
-            SHC_DEBUG2("Eviction job for key '%s' started", keystr);
+            SHC_DEBUG2("Eviction job for key '%.*s' started", job->klen, job->key);
 
             int i;
             for (i = 0; i < cache->num_shards; i++) {
@@ -267,7 +263,7 @@ evictor(void *priv)
                 }
             }
 
-            SHC_DEBUG2("Eviction job for key '%s' completed", keystr);
+            SHC_DEBUG2("Eviction job for key '%.*s' completed", job->klen, job->key);
             destroy_evictor_job(job);
         }
 
@@ -1011,11 +1007,7 @@ shardcache_get(shardcache_t *cache,
 
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_GETS].value);
 
-    if (UNLIKELY(shardcache_loglevel > LOG_DEBUG+3)) {
-        char keystr[1024];
-        KEY2STR(key, klen, keystr, sizeof(keystr));
-        SHC_DEBUG4("Getting value for key: %s", keystr);
-    }
+    SHC_DEBUG4("Getting value for key: %.*s", klen, key);
 
     void *obj_ptr = NULL;
     arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 1);
@@ -1161,9 +1153,6 @@ shardcache_get_sync(shardcache_t *cache,
     memset(&arg->data, 0, sizeof(arg->data));
     arg->complete = 0;
 
-    char keystr[1024];
-    KEY2STR(key, klen, keystr, sizeof(keystr));
-
     int rc = shardcache_get(cache, key, klen, shardcache_get_helper, arg);
 
     if (rc == 0) {
@@ -1194,8 +1183,9 @@ shardcache_get_sync(shardcache_t *cache,
         free(arg);
 
         if (stat != 0 && !ATOMIC_READ(cache->async_quit)) {
-            SHC_ERROR("Error trying to get key: %s", keystr);
-            free(data);
+            SHC_ERROR("Error trying to get key: %.*s", klen, key);
+            if (data)
+                free(data);
             return -1;
         }
 
@@ -1203,7 +1193,7 @@ shardcache_get_sync(shardcache_t *cache,
             *vlen = len;
 
         if (!data)
-            SHC_DEBUG("No value for key: %s", keystr);
+            SHC_DEBUG("No value for key: %.*s", klen, key);
 
         if (value)
             *value = data;
@@ -1498,9 +1488,7 @@ shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
 {
     shardcache_evictor_job_t *job = create_evictor_job(key, klen);
 
-    char keystr[1024];
-    KEY2STR(key, klen, keystr, sizeof(keystr));
-    SHC_DEBUG2("Adding evictor job for key %s", keystr);
+    SHC_DEBUG2("Adding evictor job for key %.*s", klen, key);
 
     int rc = ht_set_if_not_exists(cache->evictor_jobs, key, klen, job, sizeof(shardcache_evictor_job_t));
 
@@ -1621,8 +1609,6 @@ shardcache_set_internal(shardcache_t *cache,
         return rc;
     }
 
-    char keystr[1024];
-    KEY2STR(key, klen, keystr, sizeof(keystr));
     ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_SETS].value);
 
     char node_name[1024];
@@ -1636,7 +1622,7 @@ shardcache_set_internal(shardcache_t *cache,
 
     if (is_mine == 1)
     {
-        SHC_DEBUG2("Storing value %s (%d) for key %s",
+        SHC_DEBUG2("Storing value %s (%d) for key %.*s",
                    shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE, 0),
                    (int)vlen, keystr);
 
@@ -1737,8 +1723,8 @@ shardcache_set_internal(shardcache_t *cache,
     {
         // if we are not the owner try propagating the command to the responsible peer
     
-        SHC_DEBUG2("Forwarding set command %s => %s (%d) to %s",
-                keystr, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE, 0),
+        SHC_DEBUG2("Forwarding set command %.*s => %s (%d) to %s",
+                klen, key, shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE, 0),
                 (int)vlen, node_name);
 
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
@@ -2238,9 +2224,7 @@ expire_migrated(hashtable_t *table, void *key, size_t klen, void *value, size_t 
         SHC_WARNING("expire_migrated running while no migration continuum present ... aborting");
         return 0;
     } else if (!is_mine) {
-        char keystr[1024];
-        KEY2STR(key, klen, keystr, sizeof(keystr));
-        SHC_DEBUG("Forcing Key %s to expire because not owned anymore", keystr);
+        SHC_DEBUG("Forcing Key %.*s to expire because not owned anymore", klen, key);
 
         v->expire = 0;
     }
@@ -2283,10 +2267,7 @@ migrate(void *priv)
             size_t node_len = sizeof(node_name);
             memset(node_name, 0, node_len);
 
-            char keystr[1024];
-            KEY2STR(key, klen, keystr, sizeof(keystr));
-
-            SHC_DEBUG("Migrator processign key %s", keystr);
+            SHC_DEBUG("Migrator processign key %.*s", klen, key);
 
             int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
 
@@ -2314,7 +2295,7 @@ migrate(void *priv)
                     shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
                     if (peer) {
                         char *addr = shardcache_node_get_address(peer);
-                        SHC_DEBUG("Migrator copying %s to peer %s (%s)", keystr, node_name, addr);
+                        SHC_DEBUG("Migrator copying %.*s to peer %s (%s)", klen, key, node_name, addr);
                         int fd = shardcache_get_connection_for_peer(cache, addr);
                         rc = send_to_peer(addr, key, klen, value, vlen, 0, fd, 1);
                         if (rc == 0) {
@@ -2323,7 +2304,7 @@ migrate(void *priv)
                             list_push_value(to_delete, &index->items[i]);
                         } else {
                             close(fd);
-                            SHC_WARNING("Errors copying %s to peer %s (%s)", keystr, node_name, addr);
+                            SHC_WARNING("Errors copying %.*s to peer %s (%s)", klen, key, node_name, addr);
                             ATOMIC_INCREMENT(errors);
                         }
                     } else {
@@ -2348,9 +2329,7 @@ migrate(void *priv)
             if (cache->storage.remove)
                 cache->storage.remove(item->key, item->klen, cache->storage.priv);
 
-            char ikeystr[1024];
-            KEY2STR(item->key, item->klen, ikeystr, sizeof(ikeystr));
-            SHC_DEBUG2("removed item %s", ikeystr);
+            SHC_DEBUG2("removed item %.*s", item->klen, item->key);
 
             item = list_shift_value(to_delete);
         }

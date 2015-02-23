@@ -342,12 +342,9 @@ kepaxos_send_preaccept(kepaxos_t *ke, uint64_t ballot, void *key, size_t klen, u
                                           0, ballot, key, klen, NULL, 0, seq, 0);
     int rc = ke->callbacks.send(receivers, ke->num_peers-1, (void *)msg, msglen, ke->callbacks.priv);
     free(msg);
-    if (shardcache_log_level() >= LOG_DEBUG) {
-        char keystr[1024];
-        KEY2STR(key, klen, keystr, sizeof(keystr));
-        SHC_DEBUG("pre_accept sent to %d peers for key %s (cmd: %02x, seq: %lu, ballot: %lu)",
-                  n, keystr, seq, ballot);
-    }
+
+    SHC_DEBUG("pre_accept sent to %d peers for key %.*s (cmd: %02x, seq: %lu, ballot: %lu)",
+              n, klen, key, seq, ballot);
 
     return rc;
 }
@@ -416,12 +413,8 @@ kepaxos_run_command(kepaxos_t *ke,
     uint64_t ballot = cmd->ballot;
     MUTEX_UNLOCK(ke->lock);
 
-    if (shardcache_log_level() >= LOG_DEBUG) {
-        char keystr[1024];
-        KEY2STR(key, klen, keystr, sizeof(keystr));
-        SHC_DEBUG("New kepaxos command for key %s (cmd: %02x, seq: %lu, ballot: %lu)",
-                  keystr, type, seq, ballot);
-    }
+    SHC_DEBUG("New kepaxos command for key %.*s (cmd: %02x, seq: %lu, ballot: %lu)",
+              klen, key, type, seq, ballot);
 
     int rc = kepaxos_send_preaccept(ke, ballot, key, klen, seq);
 
@@ -747,13 +740,9 @@ kepaxos_handle_accept(kepaxos_t *ke, kepaxos_msg_t *msg, void *response, size_t 
     }
     // inform the sender if we have already committed this seq
     int committed = (accepted_seq == local_seq);
-    MUTEX_UNLOCK(ke->lock);
-    if (shardcache_log_level() >= LOG_DEBUG && msg->key) {
-        char keystr[1024];
-        KEY2STR(msg->key, msg->klen, keystr, sizeof(keystr));
-        SHC_DEBUG("%s accepted %llu (%d) ballot: %llu for key %s to peer %s\n",
-                  ke->peers[ke->my_index], accepted_seq, committed, accepted_ballot, keystr, msg->peer);
-    }
+    MUTEX_UNLOCK(&ke->lock);
+    SHC_DEBUG("%s accepted %llu (%d) ballot: %llu for key %.*s to peer %s\n",
+              ke->peers[ke->my_index], accepted_seq, committed, accepted_ballot, msg->klen, msg->key, msg->peer);
     *response_len = kepaxos_build_message((char **)response, ke->peers[ke->my_index], KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE,
                                           0, accepted_ballot, msg->key, msg->klen, NULL, 0, accepted_seq, committed);
     return 0;
@@ -762,12 +751,8 @@ kepaxos_handle_accept(kepaxos_t *ke, kepaxos_msg_t *msg, void *response, size_t 
 static inline int
 kepaxos_handle_accept_response(kepaxos_t *ke, kepaxos_msg_t *msg)
 {
-    if (shardcache_log_level() >= LOG_DEBUG && msg->key) {
-        char keystr[1024];
-        KEY2STR(msg->key, msg->klen, keystr, sizeof(keystr));
-        SHC_DEBUG("pre_accept response received for key %s (seq: %lu, ballot: %lu)",
-                  keystr, msg->seq, msg->ballot);
-    }
+    SHC_DEBUG("pre_accept response received for key %.*s (seq: %lu, ballot: %lu)",
+              msg->klen, msg->key, msg->seq, msg->ballot);
 
     MUTEX_LOCK(ke->lock);
     kepaxos_cmd_t *cmd = (kepaxos_cmd_t *)ht_get(ke->commands, msg->key, msg->klen, NULL);
@@ -869,22 +854,14 @@ kepaxos_handle_commit(kepaxos_t *ke, kepaxos_msg_t *msg)
     uint64_t last_recorded_seq = kepaxos_last_seq_for_key(ke->log, msg->key, msg->klen, NULL);
     if (msg->seq < last_recorded_seq) {
         // ignore this commit message (it's too old)
-        if (shardcache_log_level() >= LOG_DEBUG && msg->key) {
-            char keystr[1024];
-            KEY2STR(msg->key, msg->klen, keystr, sizeof(keystr));
-            SHC_DEBUG("Ignoring commit message, seq too old for key %s: (%lld -- %lld)",
-                      keystr, msg->seq, last_recorded_seq);
-        }
-        MUTEX_UNLOCK(ke->lock);
+        SHC_DEBUG("Ignoring commit message, seq too old for key %.*s: (%lld -- %lld)",
+                  msg->klen, msg->key, msg->seq, last_recorded_seq);
+        MUTEX_UNLOCK(&ke->lock);
         return 0;
     }
 
-    if (shardcache_log_level() >= LOG_DEBUG && msg->key) {
-        char keystr[1024];
-        KEY2STR(msg->key, msg->klen, keystr, sizeof(keystr));
-        SHC_DEBUG("Committing key %s (seq: %llu, ballot: %llu)\n",
-                  keystr, msg->seq, msg->ballot);
-    }
+    SHC_DEBUG("Committing key %.*s (seq: %llu, ballot: %llu)\n",
+              msg->klen, msg->key, msg->seq, msg->ballot);
 
     ke->callbacks.commit(msg->ctype, msg->key, msg->klen,
                          msg->data, msg->dlen, 0, ke->callbacks.priv);
