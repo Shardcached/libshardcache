@@ -105,6 +105,34 @@ typedef int (*shardcache_cas_item_callback_t)
     (void *key, size_t klen, void *old_value, size_t old_len, void *new_value, size_t new_len, void *priv);
 
 /**
+ * @brief Callback to atomically increment the value for a given key
+ * @note  The value is assumed to be numerical, safe conversion must be handled if necessary
+ *
+ * @param key    A valid pointer to the key
+ * @param klen   The length of the key
+ * @param amount The numerical amount to increment
+ * @param priv   The 'priv' pointer previously stored in the shardcache_storage_t
+ *              structure at initialization time
+ * @return The new value after the increment
+ */
+typedef int64_t (*shardcache_increment_item_callback_t)
+    (void *key, size_t klen, int64_t amount, int64_t initial_value, void *priv);
+
+/**
+ * @brief Callback to atomically increment the value for a given key
+ * @note  The value is assumed to be numerical, safe conversion must be handled if necessary
+ *
+ * @param key    A valid pointer to the key
+ * @param klen   The length of the key
+ * @param amount The numerical amount to increment
+ * @param priv   The 'priv' pointer previously stored in the shardcache_storage_t
+ *              structure at initialization time
+ * @return The new value after the decrement
+ */
+typedef int64_t (*shardcache_decrement_item_callback_t)
+    (void *key, size_t klen, int64_t amount, int64_t initial_value, void *priv);
+
+/**
  * @brief Callback to remove an existing value for a given key.
  *
  *        The shardcache instance will call this callback
@@ -258,6 +286,12 @@ struct _shardcache_storage_s {
 
     //! The CAS callback (optional if the storage intends to expose the CAS functionality)
     shardcache_cas_item_callback_t         cas;
+
+    //! The increment callback (optional)
+    shardcache_increment_item_callback_t   increment;
+
+    //! The increment callback (optional)
+    shardcache_decrement_item_callback_t   decrement;
 
     //! The remove callback (optional if the storage is intended to be read-only)
     shardcache_remove_item_callback_t      remove;

@@ -885,14 +885,40 @@ cas_on_peer(char *peer,
             size_t old_vlen,
             void *value,
             size_t vlen,
-            uint32_t expire,
+            uint32_t ttl,
+            uint32_t cttl,
             int fd,
             int expect_response)
 {
     return _send_to_peer_internal(peer, key, klen, old_value, old_vlen,
-                                  value, vlen, expire, 0, fd, expect_response);
+                                  value, vlen, ttl, cttl, 0, fd, expect_response);
 }
 
+int
+increment_on_peer(char *peer,
+                  void *key,
+                  size_t klen,
+                  int64_t amount,
+                  time_t ttl,
+                  time_t cttl,
+                  int fd,
+                  int expect_response)
+{
+    return 0;
+}
+
+int
+decrement_on_peer(char *peer,
+                  void *key,
+                  size_t klen,
+                  int64_t amount,
+                  time_t ttl,
+                  time_t cttl,
+                  int fd,
+                  int expect_response)
+{
+    return 0;
+}
 
 int
 fetch_from_peer(char *peer,

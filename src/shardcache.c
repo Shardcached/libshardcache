@@ -1362,6 +1362,38 @@ static int shardcache_async_command_helper(void *data,
     return 0;
 }
 
+static inline int
+shardcache_fetch_async_response(shardcache_t *cache,
+                                void *key,
+                                size_t klen,
+                                shardcache_hdr_t hdr,
+                                char *addr,
+                                int fd,
+                                shardcache_async_response_callback_t cb,
+                                void *priv)
+{
+    shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
+    arg->key = malloc(klen);
+    memcpy(arg->key, key, klen);
+    arg->klen = klen;
+    arg->cb = cb;
+    arg->priv = priv;
+    arg->cache = cache;
+    arg->addr = addr;
+    arg->fd = fd;
+    arg->hdr = hdr;
+    async_read_wrk_t *wrk = NULL;
+    int rc = read_message_async(fd, shardcache_async_command_helper, arg, &wrk);
+    if (rc == 0 && wrk) {
+        shardcache_queue_async_read_wrk(cache, wrk);
+    } else {
+        free(arg->key);
+        free(arg);
+        cb(key, klen, -1, priv);
+    }
+    return rc;
+}
+
 int
 shardcache_exists(shardcache_t *cache,
                   void *key,
@@ -1415,25 +1447,8 @@ shardcache_exists(shardcache_t *cache,
         int fd = shardcache_get_connection_for_peer(cache, addr);
         if (cb) {
             rc = exists_on_peer(addr, key, klen, fd, 0);
-            if (rc == 0) {
-                shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
-                arg->key = malloc(klen);
-                memcpy(arg->key, key, klen);
-                arg->klen = klen;
-                arg->cb = cb;
-                arg->priv = priv;
-                arg->cache = cache;
-                arg->addr = addr;
-                arg->fd = fd;
-                arg->hdr = SHC_HDR_EXISTS;
-                async_read_wrk_t *wrk = NULL;
-                rc = read_message_async(fd, shardcache_async_command_helper, arg, &wrk);
-                if (rc == 0 && wrk) {
-                    shardcache_queue_async_read_wrk(cache, wrk);
-                }
-            } else {
-                cb(key, klen, -1, priv);
-            }
+            if (rc = 0)
+                rc = shardcache_fetch_async_response(cache, key, klen, SHC_HDR_EXISTS, addr, fd, cb, priv);
         } else {
             rc = exists_on_peer(addr, key, klen, fd, 1);
             shardcache_release_connection_for_peer(cache, addr, fd);
@@ -1543,35 +1558,181 @@ shardcache_schedule_expiration(shardcache_t *cache,
     return shardcache_queue_expiration_job(cache, key, klen, expire, is_volatile, SHARDACHE_EXPIRE_SCHEDULE);
 }
 
+typedef struct {
+    void *new_value;
+    size_t new_len;
+    void *prev_value;
+    size_t prev_len;
+    int matched;
+} shardcache_cas_volatile_cb_arg_t;
+
+static void *
+shardcache_cas_volatile_cb(void *ptr, size_t len, void *user)
+{
+    shardcache_cas_volatile_cb_arg_t *arg = (shardcache_cas_volatile_cb_arg_t *)user;
+    volatile_object_t *item = (volatile_object_t *)ptr;
+    if (item->dlen == arg->prev_len && memcmp(item->data, arg->prev_value, item->dlen) == 0) {
+        item->data = realloc(item->data, arg->new_len);
+        memcpy(item->data, arg->new_value, arg->new_len);
+        arg->matched = 1;
+    }
+
+    return item;
+}
+
+static inline int
+shardcache_store_volatile(shardcache_t *cache,
+                          void *key,
+                          size_t klen,
+                          void *value,
+                          size_t vlen,
+                          void *prev_value,
+                          size_t prev_len,
+                          time_t expire,
+                          time_t cexpire,
+                          int mode, // 0 = SET, 1 == ADD, 2 == CAS
+                          int replica)
+{
+    volatile_object_t *obj = NULL;
+    volatile_object_t *prev = NULL;
+    // ensure removing this key from the persistent storage (if present)
+    // since it's now going to be a volatile item
+    if (cache->use_persistent_storage && cache->storage.remove)
+        cache->storage.remove(key, klen, cache->storage.priv);
+
+    if (mode == 2 && prev_value == NULL) // if CAS and prev_value is NULL we really want ADD
+        mode = 1;
+
+    if (mode == 1 && ht_exists(cache->volatile_storage, key, klen)) {
+        SHC_DEBUG("A volatile value already exists for key %.*s", klen, key);
+        return 1;
+    } else if (mode == 2) {
+        shardcache_cas_volatile_cb_arg_t arg = {
+            .new_value = value,
+            .new_len = vlen,
+            .prev_value = prev_value,
+            .prev_len = prev_len,
+            .matched = 0
+        };
+        obj = (volatile_object_t *)ht_get_deep_copy(cache->volatile_storage,
+                                                    key,
+                                                    klen,
+                                                    NULL,
+                                                    shardcache_cas_volatile_cb,
+                                                    &arg);
+        if (obj)
+            return !arg.matched;
+    }
+
+    obj = malloc(sizeof(volatile_object_t));
+    obj->data = malloc(vlen);
+    memcpy(obj->data, value, vlen);
+    obj->dlen = vlen;
+    time_t now = time(NULL);
+    time_t real_expire = expire ? time(NULL) + expire : 0;
+    obj->expire = real_expire;
+
+    SHC_DEBUG2("Setting volatile item %.*s to expire %d (now: %d)", 
+        klen, key, obj->expire, (int)now);
+
+    void *prev_ptr = NULL;
+    if (mode == 1) {
+        int rc = ht_set_if_not_exists(cache->volatile_storage, key, klen,
+                                  obj, sizeof(volatile_object_t));
+        if (rc == 0) {
+            ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, obj->dlen);
+        } else {
+            prev_ptr = obj;
+            obj = NULL;
+        }
+
+    } else { // mode == 2 (CAS) is already handled above
+        ht_get_and_set(cache->volatile_storage, key, klen,
+                       obj, sizeof(volatile_object_t),
+                       &prev_ptr, NULL);
+    }
+
+    if (prev_ptr) {
+        prev = (volatile_object_t *)prev_ptr;
+        if (vlen > prev->dlen) {
+            ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
+                            vlen - prev->dlen);
+        } else {
+            ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
+                            prev->dlen - vlen);
+        }
+        destroy_volatile(prev); 
+        if (cache->cache_on_set)
+            arc_load(cache->arc, (const void *)key, klen, value, vlen, cexpire);
+        else
+            arc_remove(cache->arc, (const void *)key, klen);
+
+        if (!replica)
+            shardcache_commence_eviction(cache, key, klen);
+
+    } else {
+        ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, vlen);
+    }
+
+    if (obj && obj->expire)
+        shardcache_schedule_expiration(cache, key, klen, expire, 1);
+
+    return 0;
+}
+
 static inline int
 shardcache_store(shardcache_t *cache,
                  void *key,
                  size_t klen,
                  void *value,
                  size_t vlen,
-                 int inx,
+                 void *prev_value,
+                 size_t prev_vlen,
+                 time_t expire,
+                 time_t cexpire,
+                 int mode, // 0 = SET, 1 == ADD, 2 == CAS
                  int replica)
 
 {
-    void *prev_ptr = NULL;
-    
-    int rc = 0;
-
-    if (!cache->use_persistent_storage || !cache->storage.store) { // the storage is readonly
-        if (inx) {
-            rc = ht_set_if_not_exists(cache->volatile_storage, key, klen, value, vlen);
-        } else {
-            rc = ht_get_and_set(cache->volatile_storage, key, klen, value, vlen, &prev_ptr, NULL);
-            if (prev_ptr) {
-                volatile_object_t *prev = (volatile_object_t *)prev_ptr;
-                ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, prev->dlen);
-                destroy_volatile(prev);
+    int rc = -1;
+    if (mode == 2) {
+        if (prev_value == NULL) {
+            // if CAS and prev_value is NULL we really want ADD
+            mode = 1;
+        } else if (cache->use_persistent_storage) {
+            if (cache->storage.cas) {
+                rc = cache->storage.cas(key,
+                                        klen,
+                                        prev_value,
+                                        prev_vlen,
+                                        value,
+                                        vlen,
+                                        cache->storage.priv);
+                if (rc == 0 && !replica)
+                    shardcache_commence_eviction(cache, key, klen);
+            } else {
+                SHC_WARNING("CAS command not supported from the underlying storage");
+                return -1;
             }
+            return rc;
         }
-        return rc;
     }
 
-    rc = cache->storage.store(key, klen, value, vlen, inx, cache->storage.priv);
+    // if the storage is readonly we will store a volatile object instead
+    if (!cache->use_persistent_storage || !cache->storage.store || expire)
+        return shardcache_store_volatile(cache,
+                                         key,
+                                         klen,
+                                         value,
+                                         vlen,
+                                         prev_value,
+                                         prev_vlen,
+                                         expire,
+                                         cexpire,
+                                         mode,
+                                         replica);
+
+    rc = cache->storage.store(key, klen, value, vlen, mode, cache->storage.priv);
 
     if (cache->cache_on_set)
         arc_load(cache->arc, (const void *)key, klen, value, vlen, cexpire);
@@ -1592,8 +1753,8 @@ int
 shardcache_set_internal(shardcache_t *cache,
                         void *key,
                         size_t klen,
-                        void *old_value,
-                        size_t old_vlen,
+                        void *prev_value,
+                        size_t prev_vlen,
                         void *value,
                         size_t vlen,
                         time_t expire,
@@ -1627,100 +1788,9 @@ shardcache_set_internal(shardcache_t *cache,
     {
         SHC_DEBUG2("Storing value %s (%d) for key %.*s",
                    shardcache_hex_escape(value, vlen, DEBUG_DUMP_MAXSIZE, 0),
-                   (int)vlen, keystr);
+                   (int)vlen, klen, key);
 
-        if (!cache->use_persistent_storage || expire)
-        {
-            volatile_object_t *prev = NULL;
-            // ensure removing this key from the persistent storage (if present)
-            // since it's now going to be a volatile item
-            if (cache->use_persistent_storage && cache->storage.remove)
-                cache->storage.remove(key, klen, cache->storage.priv);
-
-            if (mode == 1 && ht_exists(cache->volatile_storage, key, klen)) {
-                SHC_DEBUG("A volatile value already exists for key %s", keystr);
-                if (cb)
-                    cb(key, klen, 1, priv);
-                return 1;
-            } else if (mode == 2) {
-                rc = ht_set_if_equals(cache->volatile_storage,
-                                      key, klen,
-                                      value, vlen,
-                                      old_value, old_vlen,
-                                      NULL, NULL);
-                if (cb)
-                    cb(key, klen, rc, priv);
-
-                return rc;
-            }
-
-            volatile_object_t *obj = malloc(sizeof(volatile_object_t));
-            obj->data = malloc(vlen);
-            memcpy(obj->data, value, vlen);
-            obj->dlen = vlen;
-            time_t now = time(NULL);
-            time_t real_expire = expire ? time(NULL) + expire : 0;
-            obj->expire = real_expire;
-
-            SHC_DEBUG2("Setting volatile item %s to expire %d (now: %d)", 
-                keystr, obj->expire, (int)now);
-
-            void *prev_ptr = NULL;
-            if (mode == 1) {
-                rc = ht_set(cache->volatile_storage, key, klen,
-                             obj, sizeof(volatile_object_t));
-            } else { // here mode can only be 0 (2 is handled above)
-                rc = ht_get_and_set(cache->volatile_storage, key, klen,
-                                     obj, sizeof(volatile_object_t),
-                                     &prev_ptr, NULL);
-            }
-
-            if (prev_ptr) {
-                prev = (volatile_object_t *)prev_ptr;
-                if (vlen > prev->dlen) {
-                    ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
-                                    vlen - prev->dlen);
-                } else {
-                    ATOMIC_DECREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value,
-                                    prev->dlen - vlen);
-                }
-                destroy_volatile(prev); 
-                if (cache->cache_on_set)
-                    arc_load(cache->arc, (const void *)key, klen, value, vlen);
-                else
-                    arc_remove(cache->arc, (const void *)key, klen);
-
-                if (!replica)
-                    shardcache_commence_eviction(cache, key, klen);
-
-            } else {
-                ATOMIC_INCREASE(cache->cnt[SHARDCACHE_COUNTER_TABLE_SIZE].value, vlen);
-            }
-
-            if (obj->expire)
-                shardcache_schedule_expiration(cache, key, klen, expire, 1);
-        }
-        else if (cache->use_persistent_storage)
-        {
-            if (mode == 2) {
-                if (cache->storage.cas) {
-                    rc = cache->storage.cas(key,
-                                            klen,
-                                            old_value,
-                                            old_vlen,
-                                            value,
-                                            vlen,
-                                            cache->storage.priv);
-                    if (rc == 0 && !replica)
-                        shardcache_commence_eviction(cache, key, klen);
-                } else {
-                    SHC_WARNING("CAS command can't be executed because the storage doesn't implement it");
-                    return -1;
-                }
-            } else {
-                rc = shardcache_store(cache, key, klen, value, vlen, mode == 1 ? 1 : 0, replica);
-            }
-        }
+        rc = shardcache_store(cache, key, klen, value, vlen, prev_value, prev_vlen, expire, cexpire, mode == 1 ? 1 : 0, replica);
     }
     else if (node_len)
     {
@@ -1733,26 +1803,8 @@ shardcache_set_internal(shardcache_t *cache,
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
         if (!peer) {
             SHC_ERROR("Can't find address for node %s", peer);
-            if (cache->use_persistent_storage && cache->storage.global) {
-                if (mode == 2) {
-                    if (cache->storage.cas) {
-                        rc = cache->storage.cas(key,
-                                                klen,
-                                                old_value,
-                                                old_vlen,
-                                                value,
-                                                vlen,
-                                                cache->storage.priv);
-                        if (rc == 0 && !replica)
-                            shardcache_commence_eviction(cache, key, klen);
-                    } else {
-                        SHC_WARNING("CAS command can't be executed because the storage doesn't implement it");
-                        return -1;
-                    }
-                } else {
-                    rc = shardcache_store(cache, key, klen, value, vlen, mode == 1 ? 1 : 0, replica);
-                }
-            }
+            if (cache->use_persistent_storage && cache->storage.global)
+                rc = shardcache_store(cache, key, klen, value, vlen, prev_value, prev_vlen, expire, cexpire, mode == 1 ? 1 : 0, replica);
             
             if (cb)
                 cb(key, klen, rc, priv);
@@ -1766,15 +1818,15 @@ shardcache_set_internal(shardcache_t *cache,
         switch(mode) {
             case 0:
                 hdr = SHC_HDR_SET;
-                rc = send_to_peer(addr, key, klen, value, vlen, expire, fd, cb ? 0 : 1);
+                rc = send_to_peer(addr, key, klen, value, vlen, expire, cexpire, fd, cb ? 0 : 1);
                 break;
             case 1:
                 hdr = SHC_HDR_ADD;
-                rc = add_to_peer(addr, key, klen, value, vlen, expire, fd, cb ? 0 : 1);
+                rc = add_to_peer(addr, key, klen, value, vlen, expire, cexpire, fd, cb ? 0 : 1);
                 break;
             case 2:
                 hdr = SHC_HDR_CAS;
-                rc = cas_on_peer(addr, key, klen, old_value, old_vlen, value, vlen, expire, fd, cb ? 0 : 1);
+                rc = cas_on_peer(addr, key, klen, prev_value, prev_vlen, value, vlen, expire, cexpire, fd, cb ? 0 : 1);
                 break;
             default:
                 // TODO - Error Messages
@@ -1783,29 +1835,12 @@ shardcache_set_internal(shardcache_t *cache,
 
         if (cb) {
             if (rc == 0) {
-                shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
-                arg->key = malloc(klen);
-                memcpy(arg->key, key, klen);
-                arg->klen = klen;
-                arg->cb = cb;
-                arg->priv = priv;
-                arg->cache = cache;
-                arg->addr = addr;
-                arg->fd = fd;
-                arg->hdr = hdr;
-                async_read_wrk_t *wrk = NULL;
-                rc = read_message_async(fd, shardcache_async_command_helper, arg, &wrk);
-                if (rc == 0 && wrk) {
-                    shardcache_queue_async_read_wrk(cache, wrk);
-                    async = 1;
-                } else {
-                    free(arg->key);
-                    free(arg);
-                }
+                rc = shardcache_fetch_async_response(cache, key, klen, hdr, addr, fd, cb, priv);
+                async = 1;
             } else {
                 close(fd);
                 if (cache->use_persistent_storage && cache->storage.global)
-                    rc = shardcache_store(cache, key, klen, value, vlen, mode == 1 ? 1 : 0, replica);
+                    rc = shardcache_store(cache, key, klen, value, vlen, prev_value, prev_vlen, expire, cexpire, mode == 1 ? 1 : 0, replica);
             }
         } else {
             if (rc == 0) {
@@ -1813,7 +1848,7 @@ shardcache_set_internal(shardcache_t *cache,
             } else {
                 close(fd);
                 if (cache->use_persistent_storage && cache->storage.global)
-                    rc = shardcache_store(cache, key, klen, value, vlen, mode == 1 ? 1 : 0, replica);
+                    rc = shardcache_store(cache, key, klen, value, vlen, prev_value, prev_vlen, expire, cexpire, mode == 1 ? 1 : 0, replica);
             }
         }
 
@@ -1828,6 +1863,9 @@ shardcache_set_internal(shardcache_t *cache,
 
     if (cb && !async)
         cb(key, klen, rc, priv);
+
+    if (rc == 0 && cexpire) {
+    }
 
     return rc;
 }
@@ -1940,6 +1978,214 @@ shardcache_cas(shardcache_t *cache,
     return shardcache_set_internal(cache, key, klen, prev_value, prev_len, new_value, new_len, expire, cexpire, 2, 0, cb, priv);
 }
 
+#define xisspace(c) isspace((unsigned char)c)
+
+static int safe_strtoll(char *str, size_t len, int64_t *out) {
+    static __thread char buf[1024];
+
+    errno = 0;
+    *out = 0;
+    char *endptr;
+
+    char *check = str + len;
+    while (check != str) {
+        if (*check-- == 0)
+            break;
+    }
+
+    if (check == str) {
+        if (len >= sizeof(buf)) {
+            // TODO - Error Messages
+            return -1;
+        }
+        memcpy(buf, str, len);
+        buf[len] = 0;
+        str = buf;
+    }
+
+    long long ll = strtoll(str, &endptr, 10);
+    if ((errno == ERANGE) || (str == endptr)) {
+        return false;
+    }
+
+    if (xisspace(*endptr) || (*endptr == '\0' && endptr != str)) {
+        *out = ll;
+        return 1;
+    }
+    return 0;
+}
+
+static void *
+shardcache_increment_volatile_cb(void *ptr, size_t len, void *user)
+{
+    static __thread int64_t ret = 0;
+
+//    cached_object_t *obj = (cached_object_t *)user;
+    int64_t *amount = (int64_t *)user;
+    volatile_object_t *item = (volatile_object_t *)ptr;
+    /*
+    if (item->dlen == sizeof(int64_t)) {
+        ATOMIC_INCREASE(*((int64_t *)item->data), *amount);
+        ret = ATOMIC_READ(*((int64_t *)item->data));
+    } else */if (!safe_strtoll((char *)item->data, item->dlen, &ret))
+        SHC_ERROR("Volatile object was expected to be an integer in shardcache_increment_volatile_cb()");
+        return NULL;
+    //}
+    ret += *amount;
+    fbuf_t new = FBUF_STATIC_INITIALIZER;
+    fbuf_printf(&new, "%lld", ret);
+    free(item->data);
+    fbuf_detach(&new, (char **)&item->data, (int *)&item->dlen);
+
+    return &ret;
+}
+
+int64_t
+shardcache_increment(shardcache_t *cache,
+                     void *key,
+                     size_t klen,
+                     int64_t amount,
+                     int64_t initial,
+                     time_t expire,
+                     time_t cexpire,
+                     shardcache_async_response_callback_t cb,
+                     void *priv)
+{
+    int rc = -1;
+
+    // if we are not the owner try propagating the command to the responsible peer
+    char node_name[1024];
+    size_t node_len = sizeof(node_name);
+    memset(node_name, 0, node_len);
+
+    int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+    if (is_mine == -1)
+        is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
+
+    if (is_mine == 1)
+    {
+        void *v = ht_get_deep_copy(cache->volatile_storage,
+                                  key,
+                                  klen,
+                                  NULL,
+                                  shardcache_increment_volatile_cb,
+                                  &amount);
+        if (!v) {
+            if (cache->use_persistent_storage && cache->storage.increment && !expire) {
+                return cache->storage.increment(key, klen, amount, initial, cache->storage.priv);
+            } else {
+                char data[32];
+                size_t dsize = snprintf(data, sizeof(data), "%lld", initial + amount);
+                rc = shardcache_store_volatile(cache, key, klen, data, dsize, NULL, 0, expire, cexpire, 1, 0);
+                if (rc == 1) {
+                    v = ht_get_deep_copy(cache->volatile_storage,
+                                         key,
+                                         klen,
+                                         NULL,
+                                         shardcache_increment_volatile_cb,
+                                         &amount);
+                }
+            }
+        }
+
+        if (v) {
+            int value = *((int *)v);
+            free(v);
+            if (cb)
+                cb(key, klen, value, priv);
+            return value;
+        }
+    } else {
+        SHC_DEBUG2("Forwarding increment command %.*s => %lld  to %s",
+                klen, key, amount, node_name);
+
+        shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
+        if (!peer) {
+            SHC_ERROR("Can't find address for node %s", peer);
+            if (cache->use_persistent_storage && cache->storage.global) {
+                if (cache->storage.increment) {
+                    rc = cache->storage.increment(key,
+                                                      klen,
+                                                      amount,
+                                                      initial,
+                                                      cache->storage.priv);
+                    if (rc != 0 )//&& !replica)
+                        shardcache_commence_eviction(cache, key, klen);
+                } else {
+                    SHC_WARNING("INCREMENT command can't be executed because the storage doesn't implement it");
+                    return -1;
+                }
+            }
+            
+            if (cb)
+                cb(key, klen, rc, priv);
+
+            return rc;
+        }
+
+        char *addr = shardcache_node_get_address(peer);
+        int fd = shardcache_get_connection_for_peer(cache, addr);
+        rc = increment_on_peer(addr, key, klen, amount, expire, cexpire, fd, cb ? 0 : 1);
+
+        if (cb) {
+            if (rc == 0) {
+                rc = shardcache_fetch_async_response(cache, key, klen, SHC_HDR_INCREMENT, addr, fd, cb, priv);
+            } else {
+                close(fd);
+                cb(key, klen, -1, priv);
+            }
+        } else {
+            if (rc == 0) {
+                shardcache_release_connection_for_peer(cache, addr, fd);
+            } else {
+                close(fd);
+            }
+        }
+
+        if (rc == 0) {
+            arc_remove(cache->arc, (const void *)key, klen);
+        }
+    }
+
+    return rc;
+}
+
+int
+shardcache_decrement(shardcache_t *cache, void *key, size_t klen, int amount)
+{
+    // if we are not the owner try propagating the command to the responsible peer
+    char node_name[1024];
+    size_t node_len = sizeof(node_name);
+    memset(node_name, 0, node_len);
+
+    int is_mine = shardcache_test_migration_ownership(cache, key, klen, node_name, &node_len);
+    if (is_mine == -1)
+        is_mine = shardcache_test_ownership(cache, key, klen, node_name, &node_len);
+
+    if (is_mine == 1)
+    {
+        int neg_amount = -amount;
+        void *v = ht_get_deep_copy(cache->volatile_storage,
+                                  key,
+                                  klen,
+                                  NULL,
+                                  shardcache_increment_volatile_cb,
+                                  &neg_amount);
+
+        if (v) {
+            int value = *((int *)v);
+            free(v);
+            return value;
+        }
+
+        if (cache->storage.decrement)
+            return cache->storage.decrement(key, klen, amount, 0, cache->storage.priv);
+
+    }
+
+    return 0;
+}
+
 
 int
 shardcache_del_internal(shardcache_t *cache,
@@ -2019,25 +2265,7 @@ shardcache_del_internal(shardcache_t *cache,
         if (cb) {
             rc = delete_from_peer(addr, key, klen, fd, 0);
             if (rc == 0) {
-                shardcache_async_command_helper_arg_t *arg = calloc(1, sizeof(shardcache_async_command_helper_arg_t));
-                arg->key = malloc(klen);
-                memcpy(arg->key, key, klen);
-                arg->klen = klen;
-                arg->cb = cb;
-                arg->priv = priv;
-                arg->cache = cache;
-                arg->addr = addr;
-                arg->fd = fd;
-                arg->hdr = SHC_HDR_DELETE;
-                async_read_wrk_t *wrk = NULL;
-                rc = read_message_async(fd, shardcache_async_command_helper, arg, &wrk);
-                if (rc == 0 && wrk) {
-                    shardcache_queue_async_read_wrk(cache, wrk);
-                } else {
-                    free(arg->key);
-                    free(arg);
-                    cb(key, klen, -1, priv);
-                }
+                rc = shardcache_fetch_async_response(cache, key, klen, SHC_HDR_DELETE, addr, fd, cb, priv);
             } else {
                 cb(key, klen, -1, priv);
             }

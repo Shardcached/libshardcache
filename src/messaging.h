@@ -105,9 +105,31 @@ add_to_peer(char *peer,
             size_t klen,
             void *value,
             size_t vlen,
-            uint32_t expire,
+            uint32_t ttl,
+            uint32_t cttl,
             int fd,
             int expect_response);
+
+int
+increment_on_peer(char *peer,
+                  void *key,
+                  size_t klen,
+                  int64_t amount,
+                  time_t ttl,
+                  time_t cttl,
+                  int fd,
+                  int expect_response);
+
+int
+decrement_on_peer(char *peer,
+                  void *key,
+                  size_t klen,
+                  int64_t amount,
+                  time_t ttl,
+                  time_t cttl,
+                  int fd,
+                  int expect_response);
+
 
 // fetch the value for a given key from a peer
 int fetch_from_peer(char *peer,
