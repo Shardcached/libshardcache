@@ -291,7 +291,7 @@ arc_ops_fetch_from_peer(shardcache_t *cache, cached_object_t *obj, char *peer)
 }
 
 void
-arc_ops_init(const void *key, size_t len, int async, arc_resource_t res, void *ptr, void *priv)
+arc_ops_init(const void *key, size_t len, int async, time_t ttl, arc_resource_t res, void *ptr, void *priv)
 {
     // NOTE: the arc subsystem already allocates for us the memory where the
     // cached object needs to be stored. Such size was specified at creation time
@@ -312,7 +312,8 @@ arc_ops_init(const void *key, size_t len, int async, arc_resource_t res, void *p
         obj->listeners = list_create();
         list_set_free_value_callback(obj->listeners, free);
     }
-    MUTEX_INIT(obj->lock);
+    obj->ttl = ttl;
+    MUTEX_INIT(&obj->lock);
 }
 
 static void *

@@ -22,7 +22,7 @@ typedef struct _arc_ops {
      * ptr will point to a prealloc'd memory where the cached object is stored
      * and needs to be initialized by this callback
      */
-    void (*init) (const void *key, size_t klen, int async, arc_resource_t res, void *ptr, void *priv);
+    void (*init) (const void *key, size_t klen, int async, time_t ttl, arc_resource_t res, void *ptr, void *priv);
     
     /**
      * @brief Fetch the data associated with the object.
@@ -82,7 +82,7 @@ void arc_destroy(arc_t *cache);
  *       a cached object (which is contained in an ARC resource) it will be retained until
  *       the caller releases it using the arc_release_resource() function
  */
-arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t klen, void **valuep, int async);
+arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t klen, void **valuep, time_t ttl, int async);
 
 arc_resource_t arc_lookup_nofetch(arc_t *cache, const void *key, size_t len, void **valuep);
 
@@ -90,9 +90,10 @@ int arc_lookup_multi(arc_t *cache,
                      void **keys,
                      size_t *klens,
                      arc_resource_t *resources,
-                     int num_keys);
+                     int num_keys,
+                     time_t ttl);
 
-int arc_load(arc_t *cache, const void *key, size_t klen, void *valuep, size_t vlen);
+int arc_load(arc_t *cache, const void *key, size_t klen, void *valuep, size_t vlen, time_t ttl);
 
 /**
  * @brief Release the resource previously alloc'd by arc_lookup()

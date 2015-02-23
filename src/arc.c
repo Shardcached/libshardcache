@@ -493,7 +493,7 @@ arc_object_create(arc_t *cache, const void *key, size_t len)
 
 // the returned object is retained, the caller must call arc_release_resource(obj) to release it
 static inline arc_resource_t 
-arc_lookup_internal(arc_t *cache, const void *key, size_t len, void **valuep, int async, int nofetch)
+arc_lookup_internal(arc_t *cache, const void *key, size_t len, void **valuep, int async, time_t ttl, int fetch)
 {
     // NOTE: this is an atomic operation ensured by the hashtable implementation,
     //       we don't do any real copy in our callback but we just increase the refcount
@@ -514,7 +514,7 @@ arc_lookup_internal(arc_t *cache, const void *key, size_t len, void **valuep, in
         return obj;
     }
 
-    if (nofetch)
+    if (!fetch)
         return NULL;
 
     obj = arc_object_create(cache, key, len);
@@ -522,7 +522,7 @@ arc_lookup_internal(arc_t *cache, const void *key, size_t len, void **valuep, in
         return NULL;
 
     // let our cache user initialize the underlying object
-    cache->ops->init(key, len, async, (arc_resource_t)obj, obj->ptr, cache->ops->priv);
+    cache->ops->init(key, len, async, ttl, (arc_resource_t)obj, obj->ptr, cache->ops->priv);
     obj->async = async;
 
     retain_ref(cache->refcnt, obj->node);
@@ -538,7 +538,7 @@ arc_lookup_internal(arc_t *cache, const void *key, size_t len, void **valuep, in
             release_ref(cache->refcnt, obj->node);
             // XXX - yes, we have to release it twice
             release_ref(cache->refcnt, obj->node);
-            return arc_lookup(cache, key, len, valuep, async);
+            return arc_lookup(cache, key, len, valuep, async, ttl);
         case 0:
             /* New objects are always moved to the MRU list. */
             rc  = arc_move(cache, obj, &cache->mru);
@@ -561,22 +561,23 @@ arc_lookup_internal(arc_t *cache, const void *key, size_t len, void **valuep, in
 arc_resource_t 
 arc_lookup_nofetch(arc_t *cache, const void *key, size_t len, void **valuep)
 {
-    return arc_lookup_internal(cache, key, len, valuep, 0, 1);
+    return arc_lookup_internal(cache, key, len, valuep, 0, 0, 0);
 }
 
 
 // the returned object is retained, the caller must call arc_release_resource(obj) to release it
 arc_resource_t 
-arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async)
+arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, time_t ttl, int async)
 {
-    return arc_lookup_internal(cache, key, len, valuep, async, 0);
+    return arc_lookup_internal(cache, key, len, valuep, async, ttl, 1);
 }
 
 int arc_lookup_multi(arc_t *cache,
                      void **keys,
                      size_t *klens,
                      arc_resource_t *resources,
-                     int num_keys)
+                     int num_keys,
+                     time_t ttl)
 {
     int i;
     int *missing = NULL;
@@ -608,7 +609,7 @@ int arc_lookup_multi(arc_t *cache,
                 }
 
                 // let our cache user initialize the underlying object
-                cache->ops->init(key, klen, 1, (arc_resource_t)obj, obj->ptr, cache->ops->priv);
+                cache->ops->init(key, klen, 1, ttl, (arc_resource_t)obj, obj->ptr, cache->ops->priv);
                 obj->async = 1;
                 obj->locked = 1;
 
@@ -625,7 +626,7 @@ int arc_lookup_multi(arc_t *cache,
                         release_ref(cache->refcnt, obj->node);
                         // XXX - yes, we have to release it twice
                         release_ref(cache->refcnt, obj->node);
-                        resources[missing[i]] = arc_lookup(cache, key, klen, NULL, 1);
+                        resources[missing[i]] = arc_lookup(cache, key, klen, NULL, 1, ttl);
                         break;
                     case 0:
                         missing_objects[to_fetch++] = obj;
@@ -662,26 +663,42 @@ int arc_lookup_multi(arc_t *cache,
         }
     } else {
         for (i = 0; i < num_keys; i++) {
-            resources[i] = arc_lookup(cache, keys[i], klens[i], NULL, 1);
+            resources[i] = arc_lookup(cache, keys[i], klens[i], NULL, 1, ttl);
         }
     }
     return 0;
 }
 
+typedef struct {
+    arc_t *cache;
+    time_t ttl;
+    void *data;
+    size_t dlen;
+ } upload_obj_cb_arg_t;
+
 static void *
 update_obj_cb(void *data, size_t dlen, void *user)
 {
+    upload_obj_cb_arg_t *arg = (upload_obj_cb_arg_t *)user;
     arc_object_t *obj = (arc_object_t *)data;
-    arc_t *cache = (arc_t *)user;
-    cache->ops->store(obj->ptr, data, dlen, cache->ops->priv);
+    arc_t *cache = (arc_t *)arg->cache;
+    cache->ops->store(obj->ptr, arg->data, arg->dlen, cache->ops->priv);
+    if (arg->ttl) {
+    }
     //retain_ref(cache->refcnt, obj->node);
-    return data;
+    return arg->data;
 }
 
 int
-arc_load(arc_t *cache, const void *key, size_t klen, void *valuep, size_t vlen)
+arc_load(arc_t *cache, const void *key, size_t klen, void *valuep, size_t vlen, time_t ttl)
 {
-    arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, klen, NULL, update_obj_cb, cache);
+    upload_obj_cb_arg_t arg = {
+        .cache = cache,
+        .ttl = ttl,
+        .data = valuep,
+        .dlen = vlen
+    };
+    arc_object_t *obj = ht_get_deep_copy(cache->hash, (void *)key, klen, NULL, update_obj_cb, &arg);
     if (obj) {
         //release_ref(cache->refcnt, obj->node);
         return 1;
@@ -692,7 +709,7 @@ arc_load(arc_t *cache, const void *key, size_t klen, void *valuep, size_t vlen)
         return -1;
 
     // let our cache user initialize the underlying object
-    cache->ops->init(key, klen, 0, (arc_resource_t)obj, obj->ptr, cache->ops->priv);
+    cache->ops->init(key, klen, 0, ttl, (arc_resource_t)obj, obj->ptr, cache->ops->priv);
     cache->ops->store(obj->ptr, valuep, vlen, cache->ops->priv);
 
     retain_ref(cache->refcnt, obj->node);
@@ -708,7 +725,7 @@ arc_load(arc_t *cache, const void *key, size_t klen, void *valuep, size_t vlen)
             release_ref(cache->refcnt, obj->node);
             // XXX - yes, we have to release it twice
             release_ref(cache->refcnt, obj->node);
-            return arc_load(cache, key, klen, valuep, vlen);
+            return arc_load(cache, key, klen, valuep, vlen, ttl);
         case 0:
             break;
         default:

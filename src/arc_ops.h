@@ -24,6 +24,8 @@ typedef struct {
 
     struct timeval ts; // the timestamp of when the object has been loaded
                        // into the cache
+    
+    time_t ttl;
 
     linked_list_t *listeners; // list of listeners which will be notified
                               // while the object data is being retreived
@@ -52,7 +54,7 @@ typedef struct {
     void *priv;
 } shardcache_get_listener_t;
 
-void arc_ops_init(const void *key, size_t len, int async, arc_resource_t res, void *ptr, void *priv);
+void arc_ops_init(const void *key, size_t len, int async, time_t ttl, arc_resource_t res, void *ptr, void *priv);
 int arc_ops_fetch(void *item, size_t *size, void * priv);
 void arc_ops_evict(void *item, void *priv);
 void arc_ops_store(void *item, void *data, size_t size, void *priv);
