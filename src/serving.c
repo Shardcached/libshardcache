@@ -14,6 +14,8 @@
 #include <linklist.h>
 #include <bsd_queue.h>
 #include <hashtable.h>
+#include <atomic_defs.h>
+#include <inttypes.h>
 
 #include "messaging.h"
 #include "connections.h"
@@ -621,17 +623,40 @@ get_async_data(shardcache_t *cache,
 }
 
 static void
-shardcache_async_command_response(void *key, size_t klen, int ret, void *priv)
+shardcache_async_command_response(void *key, size_t klen, int64_t ret, void *priv)
 {
     shardcache_request_t *req = (shardcache_request_t *)priv;
 
-    int mode = (req->hdr == SHC_HDR_ADD)
-             ? WRITE_STATUS_MODE_EXISTS
-             : (req->hdr == SHC_HDR_EXISTS)
-                ? WRITE_STATUS_MODE_BOOLEAN
-                : WRITE_STATUS_MODE_SIMPLE;
+    if (req->hdr == SHC_HDR_INCREMENT || req->hdr == SHC_HDR_DECREMENT) {
+        // build the response to the increment/decrement command
 
-    write_status(req, mode, ret);
+        fbuf_t buf = FBUF_STATIC_INITIALIZER;
+        fbuf_printf(&buf, "%"PRIi64, ret);
+        fbuf_t out = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
+        shardcache_record_t record = {
+            .v = fbuf_data(&buf),
+            .l = fbuf_used(&buf)
+        };
+        if (build_message(SHC_HDR_RESPONSE,
+                          &record, 1, &out) == 0)
+        {
+            send_data(req, &out);
+            ATOMIC_INCREMENT(req->done);
+        } else {
+            SHC_ERROR("Can't build the INCR/DECR response");
+            write_status(req, WRITE_STATUS_MODE_SIMPLE, 0);
+        }
+        fbuf_destroy(&buf);
+        fbuf_destroy(&out);
+    } else {
+        int mode = (req->hdr == SHC_HDR_ADD)
+                 ? WRITE_STATUS_MODE_EXISTS
+                 : (req->hdr == SHC_HDR_EXISTS)
+                    ? WRITE_STATUS_MODE_BOOLEAN
+                    : WRITE_STATUS_MODE_SIMPLE;
+
+        write_status(req, mode, ret);
+    }
 }
 
 static void
@@ -783,26 +808,6 @@ process_request(shardcache_request_t *req)
             else
                 value = shardcache_decrement(cache, key, klen, amount, initial, expire, cexpire, shardcache_async_command_response, req);
 
-            // build the response to the increment/decrement command
-
-            fbuf_t buf = FBUF_STATIC_INITIALIZER;
-            fbuf_printf(&buf, "%lld", value);
-            fbuf_t out = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
-            shardcache_record_t record = {
-                .v = fbuf_data(&buf),
-                .l = fbuf_used(&buf)
-            };
-            if (build_message(SHC_HDR_RESPONSE,
-                              &record, 1, &out) == 0)
-            {
-                send_data(req, &out);
-                ATOMIC_INCREMENT(req->done);
-            } else {
-                SHC_ERROR("Can't build the INCR/DECR response");
-                write_status(req, WRITE_STATUS_MODE_SIMPLE, 0);
-            }
-            fbuf_destroy(&buf);
-            fbuf_destroy(&out);
             break;
         }
         case SHC_HDR_GET_MULTI:
