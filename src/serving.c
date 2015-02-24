@@ -803,6 +803,7 @@ process_request(shardcache_request_t *req)
             }
             fbuf_destroy(&buf);
             fbuf_destroy(&out);
+            break;
         }
         case SHC_HDR_GET_MULTI:
         {
