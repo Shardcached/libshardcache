@@ -803,8 +803,6 @@ _send_to_peer_internal(char *peer,
             num_records++;
         }
 
-        // TODO - support cttl (which can be provided as extra argument to set/add/cas commands)
-
         rc = write_message(fd, hdr, record, num_records);
         if (rc != 0) {
             if (should_close)
