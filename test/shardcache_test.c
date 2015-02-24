@@ -341,7 +341,6 @@ int main(int argc, char **argv)
     ut_testing("fetching the counter again: shardcache_get_sync(servers[1], counter, 7, &v. &vlen, NULL)");
     v = NULL;
     vlen = 0;
-    sleep(1);
     shardcache_get_sync(servers[1], "counter", 7, &v, &vlen, NULL);
     ut_validate_buffer(v, vlen, "4", 1);
 
