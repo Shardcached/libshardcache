@@ -57,15 +57,17 @@ NULL_BYTE            : 0x00
 NULL_RECORD          : <EOR>
 RSEP                 : 0x80
 EOM                  : <NULL_BYTE>
-RESPONSE             : <MSG_RESPONSE><1-SIZE><RESPONSE_BYTE><EOR><EOM>
+RESPONSE             : <MSG_RESPONSE><RECORD[RESPONSE_BYTE]><EOM> | <MSG_ERROR><RECORD[ERROR_CODE]><RECORD[ERROR_MESSAGE]><EOM>
 MSG_RESPONSE         : 0x99
-<1-SIZE>             : <0x00><0x01>
 RESPONSE_BYTE        : <OK> | <ERR> | <YES> | <NO> | <EXISTS>
 OK                   : 0x00
 ERR                  : 0xff
 YES                  : 0x01
 NO                   : 0xfe
 EXISTS               : 0x02
+ERROR_CODE           : <BYTE>
+ERROR_MESSAGE        : <STRING>
+STRING               : <DATA>
 RESPONSE_STATUS      : <RECORD[STATUS]>
 RESPONSE_BSTATUS     : <RECORD[BSTATUS]>
 RESPONSE_CSTATUS     : <RECORD[CSTATUS]>
@@ -73,11 +75,6 @@ STATUS               : <OK> | <ERR>
 BSTATUS              : <YES> | <NO>
 CSTATUS              : <OK> | <ERR> | <EXISTS>
 EMPTY_RESPONSE       : <MSG_RESPONSE><NULL_RECORD><EOM>
-
--------------------------------------------------------------------------------
-
-Extra definitions:
-
 KEY                  : <RECORD>
 VALUE                : <RECORD>
 TTL                  : <RECORD>
@@ -114,7 +111,6 @@ ADDRESS              : <STRING>
 PORT                 : <STRING>
 ,                    : 0x2C
 :                    : 0x3A
-STRING               : <DATA>
 AMOUNT               : <NUMERIC_STRING>
 NUMERIC_STRING       : <STRING>
 INITIAL_AMOUNT       : <AMOUNT>

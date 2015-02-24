@@ -53,6 +53,7 @@ typedef enum {
     SHC_HDR_NOOP             = 0x90,
 
     // generic response header
+    SHC_HDR_ERROR            = 0x98,
     SHC_HDR_RESPONSE         = 0x99,
 
     SHC_HDR_REPLICA_COMMAND  = 0xA0,
