@@ -1996,7 +1996,7 @@ static int safe_strtoll(char *str, size_t len, int64_t *out) {
     if (check == str) {
         if (len >= sizeof(buf)) {
             // TODO - Error Messages
-            return -1;
+            return 0;
         }
         memcpy(buf, str, len);
         buf[len] = 0;
@@ -2005,7 +2005,7 @@ static int safe_strtoll(char *str, size_t len, int64_t *out) {
 
     long long ll = strtoll(str, &endptr, 10);
     if ((errno == ERANGE) || (str == endptr)) {
-        return false;
+        return 0;
     }
 
     if (xisspace(*endptr) || (*endptr == '\0' && endptr != str)) {
@@ -2020,22 +2020,18 @@ shardcache_increment_volatile_cb(void *ptr, size_t len, void *user)
 {
     static __thread int64_t ret = 0;
 
-//    cached_object_t *obj = (cached_object_t *)user;
     int64_t *amount = (int64_t *)user;
     volatile_object_t *item = (volatile_object_t *)ptr;
-    /*
-    if (item->dlen == sizeof(int64_t)) {
-        ATOMIC_INCREASE(*((int64_t *)item->data), *amount);
-        ret = ATOMIC_READ(*((int64_t *)item->data));
-    } else */if (!safe_strtoll((char *)item->data, item->dlen, &ret))
+    if (!safe_strtoll((char *)item->data, item->dlen, &ret)) {
         SHC_ERROR("Volatile object was expected to be an integer in shardcache_increment_volatile_cb()");
         return NULL;
-    //}
+    }
     ret += *amount;
-    fbuf_t new = FBUF_STATIC_INITIALIZER;
-    fbuf_printf(&new, "%lld", ret);
+    fbuf_t new = FBUF_STATIC_INITIALIZER_PARAMS(0, 10, 10, 1);
+    fbuf_nprintf(&new, 20, "%lld", ret);
     free(item->data);
-    fbuf_detach(&new, (char **)&item->data, (int *)&item->dlen);
+    int blen = 0;
+    item->dlen = fbuf_detach(&new, (char **)&item->data, &blen);
 
     return &ret;
 }
@@ -2112,8 +2108,9 @@ shardcache_increment_internal(shardcache_t *cache,
         }
 
         if (v) {
+            arc_remove(cache->arc, (const void *)key, klen);
+            shardcache_commence_eviction(cache, key, klen);
             int value = *((int *)v);
-            free(v);
             if (cb)
                 cb(key, klen, value, priv);
             return value;
