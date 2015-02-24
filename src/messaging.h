@@ -110,7 +110,7 @@ add_to_peer(char *peer,
             int fd,
             int expect_response);
 
-int
+int64_t
 increment_on_peer(char *peer,
                   void *key,
                   size_t klen,
@@ -121,7 +121,7 @@ increment_on_peer(char *peer,
                   int fd,
                   int expect_response);
 
-int
+int64_t
 decrement_on_peer(char *peer,
                   void *key,
                   size_t klen,

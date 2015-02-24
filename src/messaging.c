@@ -15,6 +15,7 @@
 #include "shardcache_internal.h"
 
 #include <iomux.h>
+#include <inttypes.h>
 
 #include "async_reader.h"
 
@@ -30,7 +31,7 @@ static char hdr_check[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x60 - 0x6F
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x70 - 0x7F
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x80 - 0x8F
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, // 0x90 - 0x9F
+    1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, // 0x90 - 0x9F
     1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xA0 - 0xAF
 };
 
@@ -720,7 +721,7 @@ evict_from_peer(char *peer,
 
 
 
-static inline int
+static inline int64_t
 _send_to_peer_internal(char *peer,
                        void *key,
                        size_t klen,
@@ -737,92 +738,105 @@ _send_to_peer_internal(char *peer,
     int should_close = 0;
     if (fd < 0) {
         fd = connect_to_peer(peer, ATOMIC_READ(_tcp_timeout));
+        if (fd < 0)
+            return -1;
         should_close = 1;
     }
 
-    int rc = -1;
-    if (fd >= 0) {
-        // NOTE : the biggest command involves 5 reords
-        shardcache_record_t record[5] = {
-            {
-                .v = key,
-                .l = klen
-            },
-            {
-                .v = value1,
-                .l = vlen1
+    int64_t rc = -1;
+    // NOTE : the biggest command involves 5 reords
+    shardcache_record_t record[5] = {
+        {
+            .v = key,
+            .l = klen
+        },
+        {
+            .v = value1,
+            .l = vlen1
+        }
+    };
+    int num_records = 2;
+
+    unsigned char hdr;
+    switch(mode) {
+        case 0:
+            hdr = SHC_HDR_SET;
+            break;
+        case 1:
+            hdr = SHC_HDR_ADD;
+            break;
+        case 2:
+        case 3:
+        case 4:
+            switch(mode) {
+                case 2:
+                    hdr = SHC_HDR_CAS;
+                    break;
+                case 3:
+                    hdr = SHC_HDR_INCREMENT;
+                    break;
+                case 4:
+                    hdr = SHC_HDR_DECREMENT;
+                    break;
             }
-        };
-        int num_records = 2;
-
-        unsigned char hdr;
-        switch(mode) {
-            case 0:
-                hdr = SHC_HDR_SET;
-                break;
-            case 1:
-                hdr = SHC_HDR_ADD;
-                break;
-            case 2:
-            case 3:
-            case 4:
-                switch(mode) {
-                    case 2:
-                        hdr = SHC_HDR_CAS;
-                        break;
-                    case 3:
-                        hdr = SHC_HDR_INCREMENT;
-                        break;
-                    case 4:
-                        hdr = SHC_HDR_DECREMENT;
-                        break;
-                }
-                record[2].v = value2;
-                record[2].l = vlen2;
-                num_records = 3;
-                break;
-            default:
-                // TODO - Error message for unsupported mode
-                SHC_ERROR("Unknown mode %d in %s (%s:%s)", mode, __FUNCTION__, __FILE__, __LINE__);
-                return -1;
-        }
-
-        uint32_t ttl_nbo = 0;
-        if (ttl) {
-            ttl_nbo = htonl(ttl);
-            record[num_records].v = &ttl_nbo;
-            record[num_records].l = sizeof(ttl);
-            num_records++;
-        }
-
-        uint32_t cttl_nbo = 0;
-        if (cttl) {
-            cttl_nbo = htonl(cttl);
-            record[num_records].v = &cttl_nbo;
-            record[num_records].l = sizeof(cttl);
-            num_records++;
-        }
-
-        rc = write_message(fd, hdr, record, num_records);
-        if (rc != 0) {
-            if (should_close)
-                close(fd);
+            record[2].v = value2;
+            record[2].l = vlen2;
+            num_records = 3;
+            break;
+        default:
+            // TODO - Error message for unsupported mode
+            SHC_ERROR("Unknown mode %d in %s (%s:%s)", mode, __FUNCTION__, __FILE__, __LINE__);
             return -1;
-        }
+    }
 
-        if (rc == 0 && expect_response) {
-            shardcache_hdr_t hdr = 0;
-            fbuf_t resp = FBUF_STATIC_INITIALIZER;
-            fbuf_t *respp = &resp;
-            errno = 0;
-            int num_records = read_message(fd, &respp, 1, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && num_records == 1) {
-                SHC_DEBUG2("Got (set) response from peer %s : %s\n",
-                          peer, fbuf_data(&resp));
-                if (should_close)
-                    close(fd);
+    uint32_t ttl_nbo = 0;
+    if (ttl) {
+        ttl_nbo = htonl(ttl);
+        record[num_records].v = &ttl_nbo;
+        record[num_records].l = sizeof(ttl);
+        num_records++;
+    }
 
-                char *res = fbuf_data(&resp);
+    uint32_t cttl_nbo = 0;
+    if (cttl) {
+        cttl_nbo = htonl(cttl);
+        record[num_records].v = &cttl_nbo;
+        record[num_records].l = sizeof(cttl);
+        num_records++;
+    }
+
+    rc = write_message(fd, hdr, record, num_records);
+    if (rc != 0) {
+        if (should_close)
+            close(fd);
+        return -1;
+    }
+
+    if (rc == 0 && expect_response) {
+        shardcache_hdr_t hdr = 0;
+        fbuf_t resp[2];
+        fbuf_t *respp[2] = { &resp[0], &resp[1] };
+
+        FBUF_STATIC_INITIALIZER_POINTER(&resp[0], 0, 10, 10, 1);
+        FBUF_STATIC_INITIALIZER_POINTER(&resp[1], 0, 64, 256, 1);
+
+        errno = 0;
+
+        int num_records = read_message(fd, respp, 2, &hdr, 0);
+
+        SHC_DEBUG2("%s: Got response for command %02x from peer %s : %s\n",
+                  __FUNCTION__, hdr, peer, fbuf_data(&resp[0]));
+
+        if (hdr == SHC_HDR_ERROR && num_records == 2) {
+            char *error_code = fbuf_data(&resp[0]);
+            SHC_ERROR("%s : %.*s (%d)", __FUNCTION__, fbuf_used(&resp[1]), fbuf_data(&resp[1]), *error_code);
+            rc = *error_code;
+        } else if (hdr != SHC_HDR_RESPONSE && num_records == 1) {
+            SHC_ERROR("Bad response (%02x) from %s : %s\n", hdr, peer, strerror(errno));
+            rc = -1;
+        } else {
+            if (mode < 3) { // anything but INCR and DECR
+                char *res = fbuf_data(&resp[0]);
                 if (res) {
                     switch(*res) {
                         case SHC_RES_EXISTS:
@@ -838,20 +852,21 @@ _send_to_peer_internal(char *peer,
                 } else {
                     rc = -1;
                 }
-                fbuf_destroy(&resp);
-                return rc;
-            } else {
-                fprintf(stderr, "Bad response (%02x) from %s : %s\n",
-                        hdr, peer, strerror(errno));
+            } else { // INCR AND DECR responses differ from other set-related responses
+                char *decimal_string = fbuf_data(&resp[0]);
+                rc = strtoll(decimal_string, NULL, 10);
             }
-            fbuf_destroy(&resp);
-        } else if (rc != 0) {
-            fprintf(stderr, "Error reading from socket %d (%s) : %s\n",
-                    fd, peer, strerror(errno));
         }
-        if (should_close)
-            close(fd);
+        fbuf_destroy(&resp[0]);
+        fbuf_destroy(&resp[1]);
+    } else if (rc != 0) {
+        fprintf(stderr, "Error reading from socket %d (%s) : %s\n",
+                fd, peer, strerror(errno));
     }
+
+    if (should_close)
+        close(fd);
+
     return rc;
 }
 
@@ -866,8 +881,18 @@ send_to_peer(char *peer,
              int fd,
              int expect_response)
 {
-    return _send_to_peer_internal(peer,
-            key, klen, value, vlen, NULL, 0, ttl, cttl, 0, fd, expect_response);
+    return (int)_send_to_peer_internal(peer,
+                                       key,
+                                       klen,
+                                       value,
+                                       vlen,
+                                       NULL,
+                                       0,
+                                       ttl,
+                                       cttl,
+                                       0,
+                                       fd,
+                                       expect_response);
 }
 
 int
@@ -881,8 +906,18 @@ add_to_peer(char *peer,
             int fd,
             int expect_response)
 {
-    return _send_to_peer_internal(peer, key, klen, value, vlen, NULL, 0,
-                                  ttl, cttl, 1, fd, expect_response);
+    return (int)_send_to_peer_internal(peer,
+                                       key,
+                                       klen,
+                                       value,
+                                       vlen,
+                                       NULL,
+                                       0,
+                                       ttl,
+                                       cttl,
+                                       1,
+                                       fd,
+                                       expect_response);
 }
 
 int
@@ -898,11 +933,21 @@ cas_on_peer(char *peer,
             int fd,
             int expect_response)
 {
-    return _send_to_peer_internal(peer, key, klen, old_value, old_vlen,
-                                  value, vlen, ttl, cttl, 2, fd, expect_response);
+    return (int)_send_to_peer_internal(peer,
+                                       key,
+                                       klen,
+                                       old_value,
+                                       old_vlen,
+                                       value,
+                                       vlen,
+                                       ttl,
+                                       cttl,
+                                       2,
+                                       fd,
+                                       expect_response);
 }
 
-int
+int64_t
 increment_on_peer(char *peer,
                   void *key,
                   size_t klen,
@@ -915,16 +960,26 @@ increment_on_peer(char *peer,
 {
     fbuf_t amount_data = FBUF_STATIC_INITIALIZER;
     fbuf_t initial_data = FBUF_STATIC_INITIALIZER;
-    fbuf_printf(&amount_data, "%lld", amount);
-    fbuf_printf(&initial_data, "%lld", initial);
-    int rc = _send_to_peer_internal(peer, key, klen, fbuf_data(&initial_data), fbuf_used(&initial_data),
-                                     fbuf_data(&amount_data), fbuf_used(&amount_data), ttl, cttl, 3, fd, expect_response);
+    fbuf_printf(&amount_data, "%"PRIi64, amount);
+    fbuf_printf(&initial_data, "%"PRIi64, initial);
+    int64_t rc = _send_to_peer_internal(peer,
+                                         key,
+                                         klen,
+                                         fbuf_data(&amount_data),
+                                         fbuf_used(&amount_data),
+                                         fbuf_data(&initial_data),
+                                         fbuf_used(&initial_data),
+                                         ttl,
+                                         cttl,
+                                         3,
+                                         fd,
+                                         expect_response);
     fbuf_destroy(&amount_data);
     fbuf_destroy(&initial_data);
     return rc;
 }
 
-int
+int64_t
 decrement_on_peer(char *peer,
                   void *key,
                   size_t klen,
@@ -937,10 +992,20 @@ decrement_on_peer(char *peer,
 {
     fbuf_t amount_data = FBUF_STATIC_INITIALIZER;
     fbuf_t initial_data = FBUF_STATIC_INITIALIZER;
-    fbuf_printf(&amount_data, "%lld", amount);
-    fbuf_printf(&initial_data, "%lld", initial);
-    int rc = _send_to_peer_internal(peer, key, klen, fbuf_data(&initial_data), fbuf_used(&initial_data),
-                                     fbuf_data(&amount_data), fbuf_used(&amount_data), ttl, cttl, 4, fd, expect_response);
+    fbuf_printf(&amount_data, "%"PRIi64, amount);
+    fbuf_printf(&initial_data, "%"PRIi64, initial);
+    int64_t rc = _send_to_peer_internal(peer,
+                                        key,
+                                        klen,
+                                        fbuf_data(&amount_data),
+                                        fbuf_used(&amount_data),
+                                        fbuf_data(&initial_data),
+                                        fbuf_used(&initial_data),
+                                        ttl,
+                                        cttl,
+                                        4,
+                                        fd,
+                                        expect_response);
     fbuf_destroy(&amount_data);
     fbuf_destroy(&initial_data);
     return rc;
