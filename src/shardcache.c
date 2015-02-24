@@ -2099,7 +2099,9 @@ shardcache_increment_internal(shardcache_t *cache,
             char data[32];
             size_t dsize = snprintf(data, sizeof(data), "%lld", initial + amount);
             rc = shardcache_store_volatile(cache, key, klen, data, dsize, NULL, 0, expire, cexpire, 1, 0);
-            if (rc == 1) {
+            if (rc == 0) {
+                return initial + amount;
+            } else if (rc == 1) {
                 v = ht_get_deep_copy(cache->volatile_storage,
                                      key,
                                      klen,
