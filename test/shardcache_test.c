@@ -17,7 +17,6 @@ int main(int argc, char **argv)
 
     ut_init(basename(argv[0]));
 
-
     nodes = malloc(sizeof(shardcache_node_t *) * num_nodes);
     for (i = 0; i < num_nodes; i++) {
         char label[32];
@@ -356,7 +355,12 @@ int main(int argc, char **argv)
     shardcache_get_sync(servers[1], "counter", 7, &v, &vlen, NULL);
     ut_validate_buffer(v, vlen, "3", 1);
 
-
+    ut_testing("shardcache_client_increment(client, counter, 7, 1, 0, 0) == 4");
+    int64_t k = shardcache_client_increment(client, "counter", 7, 1, 0, 0);
+    ut_validate_int(k, 4);
+    ut_testing("shardcache_client_decrement(client, counter, 7, 1, 0, 0) == 3");
+    k = shardcache_client_decrement(client, "counter", 7, 1, 0, 0);
+    ut_validate_int(k, 3);
 
     ut_testing("destroying all clients");
     shardcache_client_destroy(client);
