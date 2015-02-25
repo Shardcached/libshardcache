@@ -298,8 +298,16 @@ shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen)
     return rc;
 }
 
-static inline int
-shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire, int inx)
+static inline int64_t
+shardcache_client_set_internal(shardcache_client_t *c,
+                               void *key,
+                               size_t klen,
+                               void *data,
+                               size_t dlen,
+                               void *data2,
+                               size_t dlen2,
+                               uint32_t expire,
+                               int mode) // 0 == SET, 1 == ADD, 2 == CAS, 3 == INCR, 4 == DECR
 {
     int fd = -1;
     char *addr = select_node(c, key, klen, &fd);
@@ -309,11 +317,27 @@ shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, v
         return -1;
     }
 
-    int rc = -1;
-    if (inx)
-        rc = add_to_peer(addr, key, klen, data, dlen, expire, 0, fd, 1);
-    else
-        rc = send_to_peer(addr, key, klen, data, dlen, expire, 0, fd, 1);
+    int64_t rc = -1;
+    switch(mode) {
+        case 0:
+            rc = send_to_peer(addr, key, klen, data, dlen, expire, 0, fd, 1);
+            break;
+        case 1:
+            rc = add_to_peer(addr, key, klen, data, dlen, expire, 0, fd, 1);
+            break;
+        case 2:
+            rc = cas_on_peer(addr, key, klen, data, dlen, data2, dlen2, expire, 0, fd, 1);
+            break;
+        case 3:
+            rc = increment_on_peer(addr, key, klen, *((int64_t *)data), *((int64_t *)data2), expire, 0, fd, 1);
+            break;
+        case 4:
+            rc = decrement_on_peer(addr, key, klen, *((int64_t *)data), *((int64_t *)data2), expire, 0, fd, 1);
+            break;
+        default:
+            // TODO - Error messages
+            return -1;
+    }
 
     if (rc == -1) {
         close(fd);
@@ -330,14 +354,48 @@ shardcache_client_set_internal(shardcache_client_t *c, void *key, size_t klen, v
 int
 shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
 {
-     return shardcache_client_set_internal(c, key, klen, data, dlen, expire, 0);
+     return shardcache_client_set_internal(c, key, klen, data, dlen, NULL, 0, expire, 0);
 }
 
 int
 shardcache_client_add(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire)
 {
-     return shardcache_client_set_internal(c, key, klen, data, dlen, expire, 1);
+     return shardcache_client_set_internal(c, key, klen, data, dlen, NULL, 0, expire, 1);
 }
+
+int64_t
+shardcache_client_increment(shardcache_client_t *c,
+                            void *key,
+                            size_t klen,
+                            int64_t amount,
+                            int64_t initial,
+                            uint32_t expire)
+{
+    return shardcache_client_set_internal(c,
+                                          key, klen,
+                                          (void *)&amount, sizeof(amount),
+                                          (void *)&initial, sizeof(initial),
+                                          expire,
+                                          3);
+}
+
+int64_t
+shardcache_client_decrement(shardcache_client_t *c,
+                            void *key,
+                            size_t klen,
+                            int64_t amount,
+                            int64_t initial,
+                            uint32_t expire)
+{
+    return shardcache_client_set_internal(c,
+                                          key, klen,
+                                          (void *)&amount, sizeof(amount),
+                                          (void *)&initial, sizeof(initial),
+                                          expire,
+                                          4);
+}
+
+
 
 int
 shardcache_client_del(shardcache_client_t *c, void *key, size_t klen)

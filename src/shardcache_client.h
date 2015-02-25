@@ -209,7 +209,12 @@ int shardcache_client_touch(shardcache_client_t *c, void *key, size_t klen);
  * @see shardcache_client_errno()
  * @see shardcache_client_errstr()
  */
-int shardcache_client_add(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire);
+int shardcache_client_add(shardcache_client_t *c,
+                          void *key,
+                          size_t klen,
+                          void *data,
+                          size_t dlen,
+                          uint32_t expire);
 
 /**
  * @brief Set the value for a key
@@ -225,7 +230,26 @@ int shardcache_client_add(shardcache_client_t *c, void *key, size_t klen, void *
  * @see shardcache_client_errno()
  * @see shardcache_client_errstr()
  */
-int shardcache_client_set(shardcache_client_t *c, void *key, size_t klen, void *data, size_t dlen, uint32_t expire);
+int shardcache_client_set(shardcache_client_t *c,
+                          void *key,
+                          size_t klen,
+                          void *data,
+                          size_t dlen,
+                          uint32_t expire);
+
+int64_t shardcache_client_increment(shardcache_client_t *c,
+                                    void *key,
+                                    size_t klen,
+                                    int64_t amount,
+                                    int64_t initial,
+                                    uint32_t expire);
+
+int64_t shardcache_client_decrement(shardcache_client_t *c,
+                                    void *key,
+                                    size_t klen,
+                                    int64_t amount,
+                                    int64_t initial,
+                                    uint32_t expire);
 
 /**
  * @brief Remove the value for a key
