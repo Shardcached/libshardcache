@@ -434,7 +434,7 @@ int shardcache_get_multi(shardcache_t *cache,
  * @param priv    The 'priv' pointer previously passed to the called function
  * 
  */
-typedef void (*shardcache_async_response_callback_t)(void *key, size_t klen, int res, void *priv);
+typedef void (*shardcache_async_response_callback_t)(void *key, size_t klen, int64_t res, void *priv);
 
 /**
  * @brief Check if a specific key exists on the node responsible for it

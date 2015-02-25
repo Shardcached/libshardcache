@@ -14,6 +14,7 @@
 #include <limits.h>
 #include <dlfcn.h>
 #include <ctype.h>
+#include <inttypes.h>
 
 #include "shardcache.h"
 #include "shardcache_internal.h"
@@ -586,9 +587,9 @@ shardcache_create(char *me,
     shardcache_counter_add(cache->counters, "mfug_size", (uint64_t *)cache->arc_lists_size[3]);
 
     if (ATOMIC_READ(cache->evict_on_delete)) {
-        MUTEX_INIT(cache->evictor_lock);
-        CONDITION_INIT(cache->evictor_cond);
-        cache->evictor_jobs = ht_create(128, 256, NULL);
+        MUTEX_INIT(&cache->evictor_lock);
+        CONDITION_INIT(&cache->evictor_cond);
+        cache->evictor_jobs = ht_create(128, 8192, NULL);
         pthread_create(&cache->evictor_th, NULL, evictor, cache);
     }
 
@@ -2028,7 +2029,7 @@ shardcache_increment_volatile_cb(void *ptr, size_t len, void *user)
     }
     ret += *amount;
     fbuf_t new = FBUF_STATIC_INITIALIZER_PARAMS(0, 10, 10, 1);
-    fbuf_nprintf(&new, 20, "%lld", ret);
+    fbuf_nprintf(&new, 20, "%"PRIi64, ret);
     free(item->data);
     int blen = 0;
     item->dlen = fbuf_detach(&new, (char **)&item->data, &blen);
@@ -2093,7 +2094,7 @@ shardcache_increment_internal(shardcache_t *cache,
             }
             // if we are here .... there is no persistent storage support for increment/decrement
             char data[32];
-            size_t dsize = snprintf(data, sizeof(data), "%lld", initial + amount);
+            size_t dsize = snprintf(data, sizeof(data), "%"PRIi64, initial + amount);
             rc = shardcache_store_volatile(cache, key, klen, data, dsize, NULL, 0, expire, cexpire, 1, 0);
             if (rc == 0) {
                 return initial + amount;
@@ -2116,7 +2117,7 @@ shardcache_increment_internal(shardcache_t *cache,
             return value;
         }
     } else {
-        SHC_DEBUG2("Forwarding increment command %.*s => %lld  to %s",
+        SHC_DEBUG2("Forwarding increment command %.*s => %"PRIi64" to %s",
                 klen, key, amount, node_name);
 
         shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
@@ -2149,7 +2150,7 @@ shardcache_increment_internal(shardcache_t *cache,
                         shardcache_commence_eviction(cache, key, klen);
                 } else {
                     char data[32];
-                    size_t dsize = snprintf(data, sizeof(data), "%lld", initial + amount);
+                    size_t dsize = snprintf(data, sizeof(data), "%"PRIi64, initial + amount);
                     rc = shardcache_store_volatile(cache, key, klen, data, dsize, NULL, 0, expire, cexpire, 1, 0);
                     if (rc == 1) {
                         void *v = ht_get_deep_copy(cache->volatile_storage,
