@@ -388,7 +388,7 @@ arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, uint64_t *lists_
 
     cache->ops = ops;
 
-    cache->hash = ht_create(1<<16, 1<<22, NULL);
+    cache->hash = ht_create(1<<16, 1<<25, NULL);
 
     cache->c = c >> 1;
     cache->p = cache->c >> 1;
