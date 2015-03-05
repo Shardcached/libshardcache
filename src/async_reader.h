@@ -11,6 +11,7 @@
 typedef int (*async_read_callback_t)(void *data,
                                      size_t len,
                                      int  idx,
+                                     size_t total_len,
                                      void *priv);
 
 

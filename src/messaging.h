@@ -37,7 +37,8 @@ int write_message(int fd,
 int build_message(unsigned char hdr,
                   shardcache_record_t *records,
                   int num_records,
-                  fbuf_t *out);
+                  fbuf_t *out,
+                  char version);
 
 
 // convert an array of items to a (chunkized) record ready to be sent on the wire
@@ -198,6 +199,7 @@ typedef int (*fetch_from_peer_async_cb)(char *peer,
                                         void *data,
                                         size_t len,
                                         int idx,
+                                        size_t total_len,
                                         void *priv);
 
 int fetch_from_peer_async(char *peer,

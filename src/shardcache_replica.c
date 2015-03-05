@@ -129,6 +129,7 @@ static int
 kepaxos_connection_append_input_data(void *data,
                                      size_t len,
                                      int  idx,
+                                     size_t total_len,
                                      void *priv)
 {
     kepaxos_connection_t *connection = (kepaxos_connection_t *)priv;
@@ -368,7 +369,7 @@ kepaxos_send(char **recipients,
             .v = cmd,
             .l = cmd_len
         };
-        int rc = build_message(SHC_HDR_REPLICA_COMMAND, &record, 1, &connection->output);
+        int rc = build_message(SHC_HDR_REPLICA_COMMAND, &record, 1, &connection->output, SHC_PROTOCOL_VERSION);
         if (rc == 0) {
 
             iomux_callbacks_t callbacks = {
@@ -472,7 +473,7 @@ shardcache_replica_ping(shardcache_replica_t *replica)
                 .v = msg,
                 .l = msg_len
             };
-            int rc = build_message(SHC_HDR_REPLICA_PING, &record, 1, &connection->output);
+            int rc = build_message(SHC_HDR_REPLICA_PING, &record, 1, &connection->output, SHC_PROTOCOL_VERSION);
             if (rc == 0) {
 
                 iomux_callbacks_t callbacks = {

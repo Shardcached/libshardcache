@@ -134,6 +134,7 @@ int
 fetch_from_peer_helper(void *data,
                        size_t len,
                        int idx,
+                       size_t total_len,
                        void *priv)
 {
     fetch_from_peer_helper_arg_t *arg = (fetch_from_peer_helper_arg_t *)priv;
@@ -146,11 +147,11 @@ fetch_from_peer_helper(void *data,
     int ret = 0;
     if (arg->cb) {
         if (idx >= 0)
-            ret = arg->cb(arg->peer, arg->key, arg->klen, data, len, idx, arg->priv);
+            ret = arg->cb(arg->peer, arg->key, arg->klen, data, len, idx , total_len, arg->priv);
         else if (idx == -1)
-            ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, -1, arg->priv);
+            ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, -1, total_len, arg->priv);
         else
-            ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx == -3) ? -3 : -2, arg->priv);
+            ret = arg->cb(arg->peer, arg->key, arg->klen, NULL, 0, (idx == -3) ? -3 : -2, total_len, arg->priv);
     }
 
     if (ret != 0) {
@@ -251,6 +252,7 @@ read_message(int fd,
     unsigned char hdr;
     char version = 0;
 
+
     // there is no point in reading the message
     // if we are not interested in any record
     if (expected_records < 1)
@@ -308,12 +310,114 @@ read_message(int fd,
             reading_message = 1;
         }
 
-        rb = read_socket(fd, (char *)&clen, 2, ignore_timeout);
-        // XXX - bug if read only one byte at this point
-        if (rb == 2) {
-            uint16_t chunk_len = ntohs(clen);
+        if (version < 2) {
+            rb = read_socket(fd, (char *)&clen, 2, ignore_timeout);
+            // XXX - bug if read only one byte at this point
+            if (rb == 2) {
+                uint16_t chunk_len = ntohs(clen);
 
-            if (chunk_len == 0) {
+                if (chunk_len == 0) {
+                    unsigned char rsep = 0;
+                    rb = read_socket(fd, (char *)&rsep, 1, ignore_timeout);
+                    if (rb != 1) {
+                        if (out)
+                            fbuf_set_used(out, initial_len);
+                        return -1;
+                    }
+
+                    if (rsep == SHARDCACHE_RSEP) {
+                        // go ahead fetching the next record
+                        record_index++;
+                        if (record_index == expected_records) {
+                            return record_index + 1;
+                        }
+                        out = records[record_index];
+                    } else if (rsep == 0) {
+                        return record_index + 1;
+                    } else {
+                        // BOGUS RESPONSE
+                        if (out)
+                            fbuf_set_used(out, initial_len);
+                        return -1;
+                    }
+                }
+
+                while (chunk_len != 0) {
+                    char buf[chunk_len];
+                    rb = read_socket(fd, buf, chunk_len, ignore_timeout);
+                    if (rb == -1) {
+                        if (errno != EINTR && errno != EAGAIN) {
+                            // ERROR
+                            if (out)
+                                fbuf_set_used(out, initial_len);
+
+                            return -1;
+                        }
+                        continue;
+                    } else if (rb == 0) {
+                        if (out)
+                            fbuf_set_used(out, initial_len);
+
+                        return -1;
+                    }
+                    chunk_len -= rb;
+                    if (out)
+                        fbuf_add_binary(out, buf, rb);
+
+                    if (out && fbuf_used(out) > SHARDCACHE_MSG_MAX_RECORD_LEN) {
+                        // we have exceeded the maximum size for a record
+                        // let's abort this request
+                        fprintf(stderr, "Maximum record size exceeded (%dMB)",
+                                SHARDCACHE_MSG_MAX_RECORD_LEN >> 20);
+                        fbuf_set_used(out, initial_len);
+
+                        return -1;
+                    }
+                }
+            } else if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                // ERROR
+                break;
+            }
+        } else {
+            uint32_t rlen = 0;
+            rb = read_socket(fd, (char *)&rlen, 4, ignore_timeout);
+            // XXX - bug if read only one byte at this point
+            if (rb == 4) {
+                uint32_t record_len = ntohl(rlen);
+
+                while (record_len != 0) {
+                    char buf[record_len];
+                    rb = read_socket(fd, buf, record_len, ignore_timeout);
+                    if (rb == -1) {
+                        if (errno != EINTR && errno != EAGAIN) {
+                            // ERROR
+                            if (out)
+                                fbuf_set_used(out, initial_len);
+
+                            return -1;
+                        }
+                        continue;
+                    } else if (rb == 0) {
+                        if (out)
+                            fbuf_set_used(out, initial_len);
+
+                        return -1;
+                    }
+                    record_len -= rb;
+                    if (out)
+                        fbuf_add_binary(out, buf, rb);
+
+                    if (out && fbuf_used(out) > SHARDCACHE_MSG_MAX_RECORD_LEN) {
+                        // we have exceeded the maximum size for a record
+                        // let's abort this request
+                        fprintf(stderr, "Maximum record size exceeded (%dMB)",
+                                SHARDCACHE_MSG_MAX_RECORD_LEN >> 20);
+                        fbuf_set_used(out, initial_len);
+
+                        return -1;
+                    }
+                }
+
                 unsigned char rsep = 0;
                 rb = read_socket(fd, (char *)&rsep, 1, ignore_timeout);
                 if (rb != 1) {
@@ -337,43 +441,10 @@ read_message(int fd,
                         fbuf_set_used(out, initial_len);
                     return -1;
                 }
+            } else if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
+                // ERROR
+                break;
             }
-
-            while (chunk_len != 0) {
-                char buf[chunk_len];
-                rb = read_socket(fd, buf, chunk_len, ignore_timeout);
-                if (rb == -1) {
-                    if (errno != EINTR && errno != EAGAIN) {
-                        // ERROR
-                        if (out)
-                            fbuf_set_used(out, initial_len);
-
-                        return -1;
-                    }
-                    continue;
-                } else if (rb == 0) {
-                    if (out)
-                        fbuf_set_used(out, initial_len);
-
-                    return -1;
-                }
-                chunk_len -= rb;
-                if (out)
-                    fbuf_add_binary(out, buf, rb);
-
-                if (out && fbuf_used(out) > SHARDCACHE_MSG_MAX_RECORD_LEN) {
-                    // we have exceeded the maximum size for a record
-                    // let's abort this request
-                    fprintf(stderr, "Maximum record size exceeded (%dMB)",
-                            SHARDCACHE_MSG_MAX_RECORD_LEN >> 20);
-                    fbuf_set_used(out, initial_len);
-
-                    return -1;
-                }
-            }
-        } else if (rb == 0 || (rb == -1 && errno != EINTR && errno != EAGAIN)) {
-            // ERROR
-            break;
         }
     }
 
@@ -562,7 +633,8 @@ rc_to_status(int rc, rc_to_status_mode_t mode)
 int build_message(unsigned char hdr,
                   shardcache_record_t *records,
                   int num_records,
-                  fbuf_t *out)
+                  fbuf_t *out,
+                  char version)
 {
     static char eom = 0;
     static char sep = SHARDCACHE_RSEP;
@@ -580,14 +652,20 @@ int build_message(unsigned char hdr,
                 fbuf_add_binary(out, &sep, 1);
             }
             if (records[i].v && records[i].l) {
-                if (_chunkize_buffer(records[i].v, records[i].l, out) != 0) {
-                    return -1;
+                if (version < 2) {
+                    if (_chunkize_buffer(records[i].v, records[i].l, out) != 0) {
+                        return -1;
+                    }
+                } else {
+                    uint32_t len_nbo = htonl(records[i].l);
+                    fbuf_add_binary(out, (char *)&len_nbo, sizeof(len_nbo));
+                    fbuf_add_binary(out, records[i].v, records[i].l);
                 }
-            } else {
+            } else if (version < 2) {
                 fbuf_add_binary(out, (char *)&eor, sizeof(eor));
             }
         }
-    } else {
+    } else if (version < 2) {
         fbuf_add_binary(out, (char *)&eor, sizeof(eor));
     }
 
@@ -605,7 +683,7 @@ write_message(int fd,
 
     fbuf_t msg = FBUF_STATIC_INITIALIZER;
 
-    if (build_message(hdr, records, num_records, &msg) != 0)
+    if (build_message(hdr, records, num_records, &msg, SHC_PROTOCOL_VERSION) != 0)
     {
         // TODO - Error Messages
         fbuf_destroy(&msg);
@@ -1032,9 +1110,9 @@ fetch_from_peer(char *peer,
         int rc = write_message(fd, SHC_HDR_GET, &record, 1);
         if (rc == 0) {
             shardcache_hdr_t hdr = 0;
-            fbuf_t *records[3] = { NULL, out, NULL };
-            int num_records = read_message(fd, records, 3, &hdr, 0);
-            if (hdr == SHC_HDR_RESPONSE && num_records == 3) {
+            fbuf_t *records[2] = { out, NULL };
+            int num_records = read_message(fd, records, 2, &hdr, 0);
+            if (hdr == SHC_HDR_RESPONSE && num_records == 2) {
                 if (fbuf_used(out)) {
                     char keystr[1024];
                     memcpy(keystr, key, len < 1024 ? len : 1024);

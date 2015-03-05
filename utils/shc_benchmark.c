@@ -163,7 +163,7 @@ send_command(iomux_t *iomux, int fd, unsigned char **data, int *len, void *priv)
             }
         }
 
-        if (build_message(hdr, record, num_records, output_buffer) == 0)  {
+        if (build_message(hdr, record, num_records, output_buffer, SHC_PROTOCOL_VERSION) == 0)  {
             if (hdr == SHC_HDR_GET)
                 __sync_add_and_fetch(&num_gets, 1);
             else

@@ -149,6 +149,7 @@ typedef int (*shardcache_client_get_aync_data_cb)(char *node,
                                                   size_t klen,
                                                   void *data,
                                                   size_t dlen,
+                                                  size_t total_len,
                                                   int error,
                                                   void *priv);
 

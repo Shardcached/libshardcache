@@ -59,6 +59,7 @@ int print_chunk(char *peer,
                  size_t klen,
                  void *data,
                  size_t len,
+                 size_t total_len,
                  int error,
                  void *priv)
 {
@@ -128,7 +129,7 @@ int main (int argc, char **argv) {
                     exit(-1);
                 }
             }
-            print_chunk(NULL, NULL, 0, out, len, 0, output_file);
+            print_chunk(NULL, NULL, 0, out, len, len, 0, output_file);
         }
     } else if (strcasecmp(cmd, "offset") == 0) {
         if (argc < 5)
@@ -148,7 +149,7 @@ int main (int argc, char **argv) {
         }
 
         if (len) {
-            print_chunk(NULL, NULL, 0, out, len, 0, output_file);
+            print_chunk(NULL, NULL, 0, out, len, len, 0, output_file);
         }
     } else if (strcasecmp(cmd, "geta") == 0 || strcasecmp(cmd, "get_async") == 0) {
         if (argc > 3) {
@@ -215,7 +216,7 @@ int main (int argc, char **argv) {
             else
                 printf("Value for key: %s\n", keystr);
 
-            print_chunk(NULL, NULL, 0, items[i]->data, items[i]->dlen, 0, out);
+            print_chunk(NULL, NULL, 0, items[i]->data, items[i]->dlen, items[i]->dlen, 0, out);
             printf("\n");
             shc_multi_item_destroy(items[i]);
             if (out)

@@ -676,16 +676,17 @@ shardcache_client_get_async_data_helper(char *node,
                                         void *data,
                                         size_t dlen,
                                         int idx,  // >= 0 OK, -1 DONE, -2 ERR -3 CLOSE
+                                        size_t total_len,
                                         void *priv)
 {
     shardcache_client_get_async_data_arg_t *arg = (shardcache_client_get_async_data_arg_t *)priv;
     int rc = 0;
     switch(idx) {
         case -1:
-            rc = arg->cb(node, key, klen, NULL, 0, 0, arg->priv);
+            rc = arg->cb(node, key, klen, NULL, 0, total_len, 0, arg->priv);
             break;
         case -2:
-            arg->cb(node, key, klen, data, dlen, 1, arg->priv);
+            arg->cb(node, key, klen, data, dlen, total_len, 1, arg->priv);
             close(arg->fd);
             rc = -1;
             break;
@@ -693,8 +694,8 @@ shardcache_client_get_async_data_helper(char *node,
             connections_pool_add(arg->connections, node, arg->fd);
             free(arg);
             break;
-        case 1: // in protocol v2 the record with index 1 holds the actual data
-            rc = arg->cb(node, key, klen, data, dlen, 0, arg->priv);
+        case 0:
+            rc = arg->cb(node, key, klen, data, dlen, total_len, 0, arg->priv);
             break;
     }
 
@@ -810,7 +811,7 @@ struct shc_multi_ctx_s {
 };
 
 static int
-shc_multi_collect_data(void *data, size_t len, int idx, void *priv)
+shc_multi_collect_data(void *data, size_t len, int idx, size_t total_len, void *priv)
 {
     if (idx != 1) // XXX - HC (should use the record 0 to check the total_size
                   //           and record 2 for the actual status)
@@ -911,7 +912,7 @@ shc_multi_context_create(shardcache_client_t *c,
             }
         }
 
-        if (build_message(cmd, record, num_records, ctx->commands) != 0) {
+        if (build_message(cmd, record, num_records, ctx->commands, SHC_PROTOCOL_VERSION) != 0) {
             c->errno = SHARDCACHE_CLIENT_ERROR_INTERNAL;
             snprintf(c->errstr, sizeof(c->errstr), "Can't create new command!");
             fbuf_free(ctx->commands);
@@ -1300,11 +1301,12 @@ async_thread_get(char *peer,
                  void *data,
                  size_t len,
                  int idx, // >= 0 OK, -1 DONE, -2 ERR -3 CLOSE
+                 size_t total_len,
                  void *priv)
 {
     async_job_t *job = (async_job_t *)priv;
     switch (idx) {
-        case 1:
+        case 0:
         {
             int pending = fbuf_used(&job->buf);
             if (pending) {

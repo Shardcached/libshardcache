@@ -116,10 +116,11 @@ struct __shardcache_connection_context_s {
 #pragma pack(pop)
 
 static int
-async_read_handler(void *data, size_t len, int idx, void *priv)
+async_read_handler(void *data, size_t len, int idx, size_t total_len, void *priv)
 {
     shardcache_connection_context_t *ctx =
         (shardcache_connection_context_t *)priv;
+
 
     if (idx >= 0 && idx < SHARDCACHE_REQUEST_RECORDS_MAX)
         fbuf_add_binary(&ctx->records[idx], data, len);
@@ -222,21 +223,33 @@ write_status(shardcache_request_t *req, char mode, int rc)
 {
     // we are ensured that req exists until done is set to 1 and that
     // both req->output and req->ctx will never change, so we don't need a lock here
-    char out[6] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x00 };
+    char out[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     int no_data = 0;
+
+    char version = async_read_context_protocol_version(req->ctx->reader_ctx);
+
+    if (version < 2)
+        out[1] = 1;
+    else
+        out[3] = 1;
 
     if (UNLIKELY(req->hdr == SHC_HDR_GET ||
                  req->hdr == SHC_HDR_GET_ASYNC ||
                  req->hdr == SHC_HDR_GET_OFFSET))
     {
-        out[1] = 0;
+        if (version < 2)
+            out[1] = 0;
+        else
+            out[3] = 0;
         no_data = 1;
     } else {
-        out[2] = rc_to_status(rc, mode);
+        if (version < 2)
+            out[2] = rc_to_status(rc, mode);
+        else
+            out[4] = rc_to_status(rc, mode);
     }
 
     // NOTE: we will respond using the same protocol version used by the client
-    char version = async_read_context_protocol_version(req->ctx->reader_ctx);
     uint32_t magic = htonl((SHC_MAGIC & 0xFFFFFF00) | version);
     fbuf_t output = FBUF_STATIC_INITIALIZER;
     fbuf_minlen(&output, 64);
@@ -249,7 +262,8 @@ write_status(shardcache_request_t *req, char mode, int rc)
 
     fbuf_add_binary(&output, (char *)&hdr, 1);
 
-    fbuf_add_binary(&output, out, sizeof(out) - (no_data ? 3 : 0));
+    int delta = (version < 1) ? 3 : 1;
+    fbuf_add_binary(&output, out, sizeof(out) - (no_data ? delta : 0));
 
     send_data(req, &output);
     fbuf_destroy(&output);
@@ -273,20 +287,9 @@ send_async_data_response_preamble(shardcache_request_t *req, uint32_t total_size
 
     fbuf_add_binary(&output, (void *)&hdr, 1);
 
-    // NOTE: From protocol version 2 responses to get/offset commands 
-    //       will send a first record containing the size of the data
-    //       and eventually a second record which holds the actual data.
-    //       In protocol version 1 the data was returned immediately
-    //       in the first record
     if (version > 1) {
-        uint16_t chunk_size = htons(sizeof(uint32_t));
-        uint16_t chunk_term = 0;
-        char rsep = SHARDCACHE_RSEP;
         uint32_t size = htonl(total_size);
-        fbuf_add_binary(&output, (char *)&chunk_size, 2);
         fbuf_add_binary(&output, (char *)&size, sizeof(uint32_t));
-        fbuf_add_binary(&output, (char *)&chunk_term, 2);
-        fbuf_add_binary(&output, (char *)&rsep, 1);
     }
 
     send_data(req, &output);
@@ -313,17 +316,17 @@ send_async_data_response_epilogue(shardcache_request_t *req, char status)
     fbuf_fastgrowsize(&output, 1024);
     fbuf_slowgrowsize(&output, 512);
 
-    fbuf_add_binary(&output, (void *)&eor, 2);
+    if (version < 2)
+        fbuf_add_binary(&output, (void *)&eor, 2);
 
     fbuf_add_binary(&output, &rsep, 1);
 
     // read above about the third record in get/offset responses
     // introduced from protocol version 2
     if (version > 1) {
-        uint16_t status_size = htons(1);
-        fbuf_add_binary(&output, (void *)&status_size, 2);
+        uint32_t status_size = htonl(1);
+        fbuf_add_binary(&output, (void *)&status_size, sizeof(status_size));
         fbuf_add_binary(&output, (void *)&status, 1);
-        fbuf_add_binary(&output, (void *)&eor, 2);
         fbuf_add_binary(&output, &eom, 1);
     }
 
@@ -518,45 +521,57 @@ get_async_data_handler(void *key,
         return 0;
     }
 
-    static int max_chunk_size = (1<<16)-1;
+    char version = async_read_context_protocol_version(req->ctx->reader_ctx);
 
     uint16_t accumulated_size = fbuf_used(&req->fetch_accumulator);
-    size_t to_process = accumulated_size + dlen;
-    size_t data_offset = 0;
-    while(to_process >= max_chunk_size) {
-        fbuf_t output = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
-        size_t copy_size = max_chunk_size;
 
-        uint16_t clen = htons((uint16_t)copy_size);
+    if (version < 2) {
+        static int max_chunk_size = (1<<16)-1;
 
-        fbuf_add_binary(&output, (void *)&clen, sizeof(clen));
+        size_t to_process = accumulated_size + dlen;
+        size_t data_offset = 0;
+        while(to_process >= max_chunk_size) {
+            fbuf_t output = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
+            size_t copy_size = max_chunk_size;
 
-        if (accumulated_size) {
-            int copied = fbuf_concat(&output, &req->fetch_accumulator);
-            copy_size -= copied;
-            accumulated_size -= copied;
-            fbuf_remove(&req->fetch_accumulator, copied);
+            uint16_t clen = htons((uint16_t)copy_size);
+
+            fbuf_add_binary(&output, (void *)&clen, sizeof(clen));
+
+            if (accumulated_size) {
+                int copied = fbuf_concat(&output, &req->fetch_accumulator);
+                copy_size -= copied;
+                accumulated_size -= copied;
+                fbuf_remove(&req->fetch_accumulator, copied);
+            }
+            if (dlen - data_offset >= copy_size) {
+                fbuf_add_binary(&output, data + data_offset, copy_size);
+                data_offset += copy_size;
+                req->copied += copy_size;
+            }
+
+            if (fbuf_used(&output))
+                send_data(req, &output);
+
+            fbuf_destroy(&output);
+            to_process = accumulated_size + (dlen - data_offset);
         }
-        if (dlen - data_offset >= copy_size) {
-            fbuf_add_binary(&output, data + data_offset, copy_size);
-            data_offset += copy_size;
-            req->copied += copy_size;
+
+        if (dlen > data_offset) {
+            int remainder = dlen - data_offset;
+            if (remainder) {
+                fbuf_add_binary(&req->fetch_accumulator, data + data_offset, remainder);
+                accumulated_size = remainder;
+                req->copied += remainder;
+            }
         }
-
-        if (fbuf_used(&output))
-            send_data(req, &output);
-
-        fbuf_destroy(&output);
-        to_process = accumulated_size + (dlen - data_offset);
-    }
-
-    if (dlen > data_offset) {
-        int remainder = dlen - data_offset;
-        if (remainder) {
-            fbuf_add_binary(&req->fetch_accumulator, data + data_offset, remainder);
-            accumulated_size = remainder;
-            req->copied += remainder;
-        }
+    } else {
+            fbuf_t output = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
+            fbuf_add_binary(&output, data, dlen);
+            if (fbuf_used(&output))
+                send_data(req, &output);
+            fbuf_destroy(&output);
+            req->copied += dlen;
     }
 
     if (total_size > 0 && timestamp) {
@@ -627,6 +642,7 @@ shardcache_async_command_response(void *key, size_t klen, int64_t ret, void *pri
 {
     shardcache_request_t *req = (shardcache_request_t *)priv;
 
+    char version = async_read_context_protocol_version(req->ctx->reader_ctx);
     if (req->hdr == SHC_HDR_INCREMENT || req->hdr == SHC_HDR_DECREMENT) {
         // build the response to the increment/decrement command
 
@@ -638,7 +654,7 @@ shardcache_async_command_response(void *key, size_t klen, int64_t ret, void *pri
             .l = fbuf_used(&buf)
         };
         if (build_message(SHC_HDR_RESPONSE,
-                          &record, 1, &out) == 0)
+                          &record, 1, &out, version) == 0)
         {
             send_data(req, &out);
             ATOMIC_INCREMENT(req->done);
@@ -668,6 +684,8 @@ process_request(shardcache_request_t *req)
     int rc = 0;
     void *key = fbuf_data(&req->records[0]);
     size_t klen = fbuf_used(&req->records[0]);
+
+    char version = async_read_context_protocol_version(req->ctx->reader_ctx);
 
     switch(req->hdr) {
         case SHC_HDR_GET:
@@ -929,7 +947,7 @@ process_request(shardcache_request_t *req)
                     .l = fbuf_used(&buf)
                 };
                 if (build_message(SHC_HDR_RESPONSE,
-                                  &record, 1, &out) == 0)
+                                  &record, 1, &out, version) == 0)
                 {
                     send_data(req, &out);
                     ATOMIC_INCREMENT(req->done);
@@ -974,7 +992,7 @@ process_request(shardcache_request_t *req)
                 .v = fbuf_data(&buf),
                 .l = fbuf_used(&buf)
             };
-            if (build_message(SHC_HDR_INDEX_RESPONSE, &record, 1, &out) == 0)
+            if (build_message(SHC_HDR_INDEX_RESPONSE, &record, 1, &out, version) == 0)
             {
                 // destroy it early ... since we still need one more copy
                 SHC_DEBUG("Index response sent (%d)", fbuf_used(&out));
@@ -1012,7 +1030,7 @@ process_request(shardcache_request_t *req)
                     .v = response,
                     .l = response_len
                 };
-                if (build_message(rhdr, &record, 1, &out) == 0)
+                if (build_message(rhdr, &record, 1, &out, version) == 0)
                 {
                     // destroy it early ... since we still need one more copy
                     free(response);

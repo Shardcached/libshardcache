@@ -45,6 +45,117 @@ async_read_context_protocol_version(async_read_ctx_t *ctx)
     return ctx->version;
 }
 
+static inline int
+async_read_move_to_next_record(async_read_ctx_t *ctx)
+{
+    if (rbuf_used(ctx->buf) < 1) {
+        // TRUNCATED - we need more data
+        ctx->state = SHC_STATE_READING_RSEP;
+        return 1;
+    }
+
+    u_char bsep = 0;
+    rbuf_read(ctx->buf, &bsep, 1);
+
+    if (bsep == SHARDCACHE_RSEP) {
+        ctx->state = SHC_STATE_READING_RECORD;
+        if (ctx->cb && ctx->cb(NULL, 0, ctx->rnum, ctx->rlen, ctx->cb_priv) != 0)
+        {
+            ctx->state = SHC_STATE_READING_ERR;
+            if (ctx->cb)
+                ctx->cb(NULL, 0, -2, ctx->rlen, ctx->cb_priv);
+            return -1;
+        }
+        ctx->rnum++;
+        ctx->rlen = 0;
+    } else if (bsep == 0) {
+        ctx->state = SHC_STATE_READING_DONE;
+        return 1;
+    } else {
+        ctx->state = SHC_STATE_READING_ERR;
+        if (ctx->cb)
+            ctx->cb(NULL, 0, -2, ctx->rlen, ctx->cb_priv);
+        return -1;
+    }
+    return 0;
+}
+
+static inline void
+async_read_parse_protocol_v1(async_read_ctx_t *ctx)
+{
+    for (;;) {
+
+        if (ctx->coff == ctx->clen && ctx->state == SHC_STATE_READING_RECORD) {
+            if (rbuf_used(ctx->buf) < 2)
+                break;
+
+            // let's call the read_async callback
+            if (ctx->clen > 0 && ctx->cb && ctx->cb(ctx->chunk, ctx->clen, ctx->rnum, ctx->clen, ctx->cb_priv) != 0)
+            {
+                ctx->state = SHC_STATE_READING_ERR;
+                if (ctx->cb)
+                    ctx->cb(NULL, 0, -2, ctx->clen, ctx->cb_priv);
+                return;
+            } 
+
+            uint16_t nlen = 0;
+            rbuf_read(ctx->buf, (u_char *)&nlen, 2);
+            ctx->clen = ntohs(nlen);
+            ctx->rlen += ctx->clen;
+            ctx->coff = 0;
+        }
+        if (ctx->clen > ctx->coff) {
+            int rb = rbuf_read(ctx->buf, (u_char *)ctx->chunk + ctx->coff, ctx->clen - ctx->coff);
+            ctx->coff += rb;
+            if (!rbuf_used(ctx->buf))
+                break; // TRUNCATED - we need more data
+        } else {
+            if (async_read_move_to_next_record(ctx) != 0)
+                break;
+
+        }
+    }
+}
+
+static inline void
+async_read_parse_protocol_v2(async_read_ctx_t *ctx)
+{
+    for (;;) {
+
+        if (ctx->coff == ctx->rlen && ctx->state == SHC_STATE_READING_RECORD) {
+            if (ctx->rlen > 0 && async_read_move_to_next_record(ctx) != 0)
+                break;
+
+            if (rbuf_used(ctx->buf) < 4)
+                break;
+
+            uint32_t rlen = 0;
+            rbuf_read(ctx->buf, (u_char *)&rlen, 4);
+            ctx->rlen = ntohl(rlen);
+            ctx->clen = (uint16_t)ctx->rlen; // XXX
+            ctx->coff = 0;
+
+        }
+        if (ctx->rlen > ctx->coff) {
+            int rb = rbuf_read(ctx->buf, (u_char *)ctx->chunk + ctx->coff, ctx->rlen - ctx->coff);
+            // let's call the read_async callback
+            if (ctx->cb && ctx->cb(ctx->chunk + ctx->coff, rb, ctx->rnum, ctx->rlen, ctx->cb_priv) != 0)
+            {
+                ctx->state = SHC_STATE_READING_ERR;
+                if (ctx->cb)
+                    ctx->cb(NULL, 0, -2, ctx->rlen, ctx->cb_priv);
+                break;
+            } 
+            ctx->coff += rb;
+
+            if (!rbuf_used(ctx->buf))
+                break; // TRUNCATED - we need more data
+        } else {
+
+        }
+    }
+}
+
 async_read_context_state_t
 async_read_context_update(async_read_ctx_t *ctx)
 {
@@ -92,7 +203,7 @@ async_read_context_update(async_read_ctx_t *ctx)
         if ((ntohl(rmagic)&0xFFFFFF00) != (SHC_MAGIC&0xFFFFFF00)) {
             ctx->state = SHC_STATE_READING_ERR;
             if (ctx->cb)
-                ctx->cb(NULL, 0, -2, ctx->cb_priv);
+                ctx->cb(NULL, 0, -2, ctx->clen, ctx->cb_priv);
             return ctx->state;
         }
         ctx->version = ctx->magic[3];
@@ -100,7 +211,7 @@ async_read_context_update(async_read_ctx_t *ctx)
             SHC_WARNING("Unsupported protocol version %02x", ctx->version);
             ctx->state = SHC_STATE_READING_ERR;
             if (ctx->cb)
-                ctx->cb(NULL, 0, -2, ctx->cb_priv);
+                ctx->cb(NULL, 0, -2, ctx->clen, ctx->cb_priv);
             return ctx->state;
         }
 
@@ -116,70 +227,19 @@ async_read_context_update(async_read_ctx_t *ctx)
         ctx->state = SHC_STATE_READING_RECORD;
     }
 
-    for (;;) {
-
-        if (ctx->coff == ctx->clen && ctx->state == SHC_STATE_READING_RECORD) {
-            if (rbuf_used(ctx->buf) < 2)
-                break;
-
-            // let's call the read_async callback
-            if (ctx->clen > 0 && ctx->cb && ctx->cb(ctx->chunk, ctx->clen, ctx->rnum, ctx->cb_priv) != 0) {
-                ctx->state = SHC_STATE_READING_ERR;
-                if (ctx->cb)
-                    ctx->cb(NULL, 0, -2, ctx->cb_priv);
-                return ctx->state;
-            } 
-
-            uint16_t nlen = 0;
-            rbuf_read(ctx->buf, (u_char *)&nlen, 2);
-            ctx->clen = ntohs(nlen);
-            ctx->rlen += ctx->clen;
-            ctx->coff = 0;
-        }
-        if (ctx->clen > ctx->coff) {
-            int rb = rbuf_read(ctx->buf, (u_char *)ctx->chunk + ctx->coff, ctx->clen - ctx->coff);
-            ctx->coff += rb;
-            if (!rbuf_used(ctx->buf))
-                break; // TRUNCATED - we need more data
-        } else {
-            if (rbuf_used(ctx->buf) < 1) {
-                // TRUNCATED - we need more data
-                ctx->state = SHC_STATE_READING_RSEP;
-                break;
-            }
-
-            u_char bsep = 0;
-            rbuf_read(ctx->buf, &bsep, 1);
-
-            if (bsep == SHARDCACHE_RSEP) {
-                ctx->state = SHC_STATE_READING_RECORD;
-                if (ctx->cb && ctx->cb(NULL, 0, ctx->rnum, ctx->cb_priv) != 0)
-                {
-                    ctx->state = SHC_STATE_READING_ERR;
-                    if (ctx->cb)
-                        ctx->cb(NULL, 0, -2, ctx->cb_priv);
-                    return ctx->state;
-                }
-                ctx->rnum++;
-                ctx->rlen = 0;
-            } else if (bsep == 0) {
-                ctx->state = SHC_STATE_READING_DONE;
-                
-                break;
-            } else {
-                ctx->state = SHC_STATE_READING_ERR;
-                if (ctx->cb)
-                    ctx->cb(NULL, 0, -2, ctx->cb_priv);
-                return ctx->state;
-            }
-        }
+    if (ctx->state == SHC_STATE_READING_RECORD) {
+        if (ctx->version < 2)
+            async_read_parse_protocol_v1(ctx);
+        else
+            async_read_parse_protocol_v2(ctx);
     }
 
+
     if (ctx->state == SHC_STATE_READING_DONE) {
-        if (ctx->cb && ctx->cb(NULL, 0, -1, ctx->cb_priv) != 0) {
+        if (ctx->cb && ctx->cb(NULL, 0, -1, ctx->clen, ctx->cb_priv) != 0) {
             ctx->state = SHC_STATE_READING_ERR;
             if (ctx->cb)
-                ctx->cb(NULL, 0, -2, ctx->cb_priv);
+                ctx->cb(NULL, 0, -2, ctx->clen, ctx->cb_priv);
             return ctx->state;
         }
     }
@@ -255,9 +315,9 @@ read_async_input_eof(iomux_t *iomux, int fd, void *priv)
     async_read_ctx_t *ctx = (async_read_ctx_t *)priv;
 
     if (ctx->state != SHC_STATE_READING_DONE)
-        ctx->cb(NULL, 0, -2, ctx->cb_priv);
+        ctx->cb(NULL, 0, -2, ctx->clen, ctx->cb_priv);
 
-    ctx->cb(NULL, 0, -3, ctx->cb_priv);
+    ctx->cb(NULL, 0, -3, ctx->clen, ctx->cb_priv);
 
     async_read_context_destroy(ctx);
 }

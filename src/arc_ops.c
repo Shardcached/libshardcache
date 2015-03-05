@@ -61,7 +61,6 @@ typedef struct
     shardcache_t *cache;
     char *peer_addr;
     int fd;
-    size_t total_size;
     char status;
 } shc_fetch_async_arg_t;
 
@@ -72,6 +71,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
                                  void *data,
                                  size_t len,
                                  int idx, // >= 0 OK, -1 DONE, -2 ERR -3 CLOSE
+                                 size_t total_len,
                                  void *priv)
 {
     shc_fetch_async_arg_t *arg = (shc_fetch_async_arg_t *)priv;
@@ -79,7 +79,6 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     shardcache_t *cache = arg->cache;
     char *peer_addr = arg->peer_addr;
     int fd = arg->fd;
-    int total_len = 0;
 
     MUTEX_LOCK(obj->lock);
 
@@ -108,19 +107,19 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
             COBJ_SET_FLAG(obj, COBJ_FLAG_COMPLETE);
             COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-            total_len = obj->dlen;
+            size_t total_dlen = obj->dlen;
 
             int evicted = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) ||
                           COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED);
 
-            if (total_len && !COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP)) {
-                arc_update_resource_size(cache->arc, obj->res, (obj->data == obj->dbuf) ? 0 : total_len);
+            if (total_dlen && !COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP)) {
+                arc_update_resource_size(cache->arc, obj->res, (obj->data == obj->dbuf) ? 0 : total_dlen);
 
                 if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
                     shardcache_schedule_expiration(cache, key, klen, cache->expire_time, 0);
 
             }
-            if (!total_len)
+            if (!total_dlen)
                 COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
 
             break;
@@ -157,13 +156,6 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         }
         case 0:
         {
-            // TODO - check if the size for data matches sizeof(uint32_t)
-            if (data)
-                arg->total_size = ntohl(*((uint32_t *)data));
-            break;
-        }
-        case 1:
-        {
             size_t olen = obj->dlen;
             obj->dlen += len;
             if (obj->dlen > sizeof(obj->dbuf)) {
@@ -185,7 +177,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
                     .obj = obj,
                     .data = data,
                     .len = len,
-                    .total_size = arg->total_size
+                    .total_size = total_len
                 };
                 list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &notify_arg);
             }

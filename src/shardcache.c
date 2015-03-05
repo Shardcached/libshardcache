@@ -1310,6 +1310,7 @@ typedef struct {
 static int shardcache_async_command_helper(void *data,
                                            size_t len,
                                            int  idx,
+                                           size_t total_len,
                                            void *priv)
 {
     shardcache_async_command_helper_arg_t *arg =
