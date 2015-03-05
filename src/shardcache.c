@@ -879,7 +879,7 @@ shardcache_get_offset(shardcache_t *cache,
         arc_release_resource(cache->arc, res);
         // but we will try to fetch it again
         SHC_DEBUG("The retreived object has been already evicted, try fetching it again (offset)");
-        return shardcache_get(cache, key, klen, cb, priv);
+        return shardcache_get_offset(cache, key, klen, offset, length, cb, priv);
     } else if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_COMPLETE)) {
         size_t dlen = obj->dlen;
         void *data = NULL;
@@ -912,8 +912,8 @@ shardcache_get_offset(shardcache_t *cache,
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
             return shardcache_get_offset(cache, key, klen, offset, length, cb, priv);
         } else {
-            cb(key, klen, data, dlen, dlen, &obj->ts, priv);
-            MUTEX_UNLOCK(obj->lock);
+            cb(key, klen, data, dlen, obj->dlen, &obj->ts, priv);
+            MUTEX_UNLOCK(&obj->lock);
             arc_release_resource(cache->arc, res);
             free(data);
             return 0;
@@ -933,8 +933,9 @@ shardcache_get_offset(shardcache_t *cache,
                     data = malloc(dlen);
                     memcpy(data, obj->data + offset, dlen);
                 }
-                cb(key, klen, data, dlen, 0, NULL, priv);
-                free(data);
+                cb(key, klen, data, dlen, obj->dlen, NULL, priv); // XXX - obj->dlen is not complete yet
+                if (data)
+                    free(data);
             }
         }
 
@@ -943,6 +944,8 @@ shardcache_get_offset(shardcache_t *cache,
         arg->priv = priv;
         arg->cache = cache;
         arg->res = res;
+        arg->offset = offset;
+        arg->len = length;
 
         shardcache_get_listener_t *listener = malloc(sizeof(shardcache_get_listener_t));
         listener->cb = shardcache_get_async_helper;

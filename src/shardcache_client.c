@@ -813,8 +813,7 @@ struct shc_multi_ctx_s {
 static int
 shc_multi_collect_data(void *data, size_t len, int idx, size_t total_len, void *priv)
 {
-    if (idx != 1) // XXX - HC (should use the record 0 to check the total_size
-                  //           and record 2 for the actual status)
+    if (idx != 0) // XXX - HC (should use the record 1 to check the actual status)
         return 0;
 
     shc_multi_ctx_t *ctx = (shc_multi_ctx_t *)priv;

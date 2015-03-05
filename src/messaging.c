@@ -1170,7 +1170,7 @@ offset_from_peer(char *peer,
 
         if (rc == 0) {
             shardcache_hdr_t hdr = 0;
-            fbuf_t *records[3] = { NULL, out, NULL };
+            fbuf_t *records[3] = { out, NULL, NULL };
             int num_records = read_message(fd, records, 3, &hdr, 0);
             if (hdr == SHC_HDR_RESPONSE && num_records == 3) {
                 if (fbuf_used(out)) {

@@ -468,7 +468,14 @@ get_async_data_handler(void *key,
     shardcache_request_t *req = (shardcache_request_t *)ctx->req;
 
     if (req->skipped == 0 && req->copied == 0) {
-        if (send_async_data_response_preamble(req, total_size) != 0) {
+        uint32_t record_size = total_size;
+        if (req->hdr == SHC_HDR_GET_OFFSET) {
+            memcpy(&record_size, fbuf_data(&req->records[2]), sizeof(uint32_t));
+            record_size = ntohl(record_size);
+        }
+
+
+        if (send_async_data_response_preamble(req, record_size) != 0) {
             ATOMIC_INCREMENT(req->error);
             get_async_ctx_destroy(ctx);
             return -1;
@@ -506,6 +513,7 @@ get_async_data_handler(void *key,
         return !timestamp ? -1 : 0;
     }
 
+    /*
     uint32_t offset = 0;
     uint32_t size = 0;
 
@@ -520,6 +528,7 @@ get_async_data_handler(void *key,
         req->skipped += dlen;
         return 0;
     }
+    */
 
     char version = async_read_context_protocol_version(req->ctx->reader_ctx);
 
@@ -575,7 +584,7 @@ get_async_data_handler(void *key,
     }
 
     if (total_size > 0 && timestamp) {
-        if (accumulated_size) {
+        if (accumulated_size) { // NOTE : if accumulated_size is positive we know it's protocol v1
             fbuf_t output = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
             // flush what we have left in the accumulator
             uint16_t clen = htons(accumulated_size);
@@ -587,6 +596,20 @@ get_async_data_handler(void *key,
             send_data(req, &output);
             fbuf_destroy(&output);
         }
+
+        if (req->hdr == SHC_HDR_GET_OFFSET) {
+            fbuf_t output = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 6, 6, 6);
+            // flush what we have left in the accumulator
+            char rsep = SHARDCACHE_RSEP;
+            fbuf_add_binary(&output, &rsep, 1);
+            uint32_t rsize = htonl(sizeof(uint32_t));
+            fbuf_add_binary(&output, (void *)&rsize, sizeof(rsize));
+            uint32_t rlen = htonl(total_size - req->copied);
+            fbuf_add_binary(&output, (void *)&rlen, sizeof(rlen));
+            send_data(req, &output);
+            fbuf_destroy(&output);
+        }
+
         if (send_async_data_response_epilogue(req, SHC_RES_OK) != 0) {
             ATOMIC_INCREMENT(req->error);
             get_async_ctx_destroy(ctx);
