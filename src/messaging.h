@@ -50,7 +50,8 @@ void array_to_record(int num_items, fbuf_t **items, fbuf_t *out);
 typedef enum {
     WRITE_STATUS_MODE_SIMPLE = 0,
     WRITE_STATUS_MODE_BOOLEAN = 1,
-    WRITE_STATUS_MODE_EXISTS = 2
+    WRITE_STATUS_MODE_EXISTS = 2,
+    WRITE_STATUS_MODE_NUMERIC = 3
 } rc_to_status_mode_t;
 // convert a return code to a protocol-encoded status byte
 char rc_to_status(int rc, rc_to_status_mode_t mode);

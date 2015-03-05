@@ -491,44 +491,15 @@ get_async_data_handler(void *key,
             status = SHC_RES_ERR;
         }
 
-        //if (!ctx->is_multi) {
-            get_async_ctx_destroy(ctx);
+        get_async_ctx_destroy(ctx);
 
-            if (send_async_data_response_epilogue(req, status) != 0) {
-                ATOMIC_INCREMENT(req->error);
-                return -1;
-            }
-        //}
-        /*
-        else if (ctx->multi.num_values == ctx->multi.num_keys) {
-            if (send_async_multi_data_response(ctx) != 0) {
-                ATOMIC_INCREMENT(req->error);
-                get_async_ctx_destroy(ctx);
-                return -1;
-            }
-            get_async_ctx_destroy(ctx);
+        if (send_async_data_response_epilogue(req, status) != 0) {
+            ATOMIC_INCREMENT(req->error);
+            return -1;
         }
-        */
 
         return !timestamp ? -1 : 0;
     }
-
-    /*
-    uint32_t offset = 0;
-    uint32_t size = 0;
-
-    if (req->hdr == SHC_HDR_GET_OFFSET) {
-        memcpy(&offset, fbuf_data(&req->records[1]), sizeof(uint32_t));
-        offset = ntohl(offset);
-        memcpy(&size, fbuf_data(&req->records[2]), sizeof(uint32_t));
-        size = ntohl(size);
-    }
-
-    if (offset && (req->skipped + dlen) < offset) {
-        req->skipped += dlen;
-        return 0;
-    }
-    */
 
     char version = async_read_context_protocol_version(req->ctx->reader_ctx);
 
@@ -843,11 +814,10 @@ process_request(shardcache_request_t *req)
                 cexpire = ntohl(cexpire);
             }
 
-            int64_t value;
             if (req->hdr == SHC_HDR_INCREMENT)
-                value = shardcache_increment(cache, key, klen, amount, initial, expire, cexpire, shardcache_async_command_response, req);
+                shardcache_increment(cache, key, klen, amount, initial, expire, cexpire, shardcache_async_command_response, req);
             else
-                value = shardcache_decrement(cache, key, klen, amount, initial, expire, cexpire, shardcache_async_command_response, req);
+                shardcache_decrement(cache, key, klen, amount, initial, expire, cexpire, shardcache_async_command_response, req);
 
             break;
         }
