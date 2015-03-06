@@ -357,10 +357,11 @@ int main(int argc, char **argv)
     ut_validate_buffer(v, vlen, "3", 1);
 
     ut_testing("shardcache_client_increment(client, counter, 7, 1, 0, 0) == 4");
-    int64_t k = shardcache_client_increment(client, "counter", 7, 1, 0, 0);
+    int64_t k = 0;
+    shardcache_client_increment(client, "counter", 7, 1, 0, &k, 0);
     ut_validate_int(k, 4);
     ut_testing("shardcache_client_decrement(client, counter, 7, 1, 0, 0) == 3");
-    k = shardcache_client_decrement(client, "counter", 7, 1, 0, 0);
+    shardcache_client_decrement(client, "counter", 7, 1, 0, &k, 0);
     ut_validate_int(k, 3);
 
     ut_testing("destroying all clients");
