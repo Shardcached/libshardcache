@@ -1452,7 +1452,7 @@ shardcache_exists(shardcache_t *cache,
         int fd = shardcache_get_connection_for_peer(cache, addr);
         if (cb) {
             rc = exists_on_peer(addr, key, klen, fd, 0);
-            if (rc = 0)
+            if (rc == 0)
                 rc = shardcache_fetch_async_response(cache, key, klen, SHC_HDR_EXISTS, addr, fd, cb, priv);
         } else {
             rc = exists_on_peer(addr, key, klen, fd, 1);
