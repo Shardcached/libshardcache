@@ -238,19 +238,21 @@ int shardcache_client_set(shardcache_client_t *c,
                           size_t dlen,
                           uint32_t expire);
 
-int64_t shardcache_client_increment(shardcache_client_t *c,
-                                    void *key,
-                                    size_t klen,
-                                    int64_t amount,
-                                    int64_t initial,
-                                    uint32_t expire);
+int shardcache_client_increment(shardcache_client_t *c,
+                                void *key,
+                                size_t klen,
+                                int64_t amount,
+                                int64_t initial,
+                                int64_t *computed_amount,
+                                uint32_t expire);
 
-int64_t shardcache_client_decrement(shardcache_client_t *c,
-                                    void *key,
-                                    size_t klen,
-                                    int64_t amount,
-                                    int64_t initial,
-                                    uint32_t expire);
+int shardcache_client_decrement(shardcache_client_t *c,
+                                void *key,
+                                size_t klen,
+                                int64_t amount,
+                                int64_t initial,
+                                int64_t *computed_amount,
+                                uint32_t expire);
 
 /**
  * @brief Remove the value for a key

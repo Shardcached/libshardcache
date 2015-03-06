@@ -2041,7 +2041,7 @@ shardcache_increment_volatile_cb(void *ptr, size_t len, void *user)
     return &ret;
 }
 
-int64_t
+int
 shardcache_increment_internal(shardcache_t *cache,
                               void *key,
                               size_t klen,
@@ -2049,10 +2049,12 @@ shardcache_increment_internal(shardcache_t *cache,
                               int64_t initial,
                               time_t expire,
                               time_t cexpire,
+                              int64_t *out,
                               shardcache_async_response_callback_t cb,
                               void *priv)
 {
-    int rc = -1;
+    int rc = 0;
+    int64_t value = 0;
 
     // if we are not the owner try propagating the command to the responsible peer
     char node_name[1024];
@@ -2074,62 +2076,7 @@ shardcache_increment_internal(shardcache_t *cache,
         if (!v) {
             if (cache->use_persistent_storage && !expire) {
                 int64_t real_amount;
-                int64_t (*real_function)(void *, size_t, int64_t, int64_t, void *);
-                if (amount >= 0) {
-                    if (cache->storage.increment) {
-                        real_function = cache->storage.increment;
-                        real_amount = amount;
-                    } else {
-                        real_function = cache->storage.decrement;
-                        real_amount = -amount;
-                    }
-                } else {
-                    if (cache->storage.decrement) {
-                        real_function = cache->storage.decrement;
-                        real_amount = amount;
-                    } else {
-                        real_function = cache->storage.increment;
-                        real_amount = -amount;
-                    }
-                }
-
-                if (real_function)
-                    return real_function(key, klen, real_amount, initial, cache->storage.priv);
-            }
-            // if we are here .... there is no persistent storage support for increment/decrement
-            char data[32];
-            size_t dsize = snprintf(data, sizeof(data), "%"PRIi64, initial + amount);
-            rc = shardcache_store_volatile(cache, key, klen, data, dsize, NULL, 0, expire, cexpire, 1, 0);
-            if (rc == 0) {
-                return initial + amount;
-            } else if (rc == 1) {
-                v = ht_get_deep_copy(cache->volatile_storage,
-                                     key,
-                                     klen,
-                                     NULL,
-                                     shardcache_increment_volatile_cb,
-                                     &amount);
-            }
-        }
-
-        if (v) {
-            arc_remove(cache->arc, (const void *)key, klen);
-            shardcache_commence_eviction(cache, key, klen);
-            int value = *((int *)v);
-            if (cb)
-                cb(key, klen, value, priv);
-            return value;
-        }
-    } else {
-        SHC_DEBUG2("Forwarding increment command %.*s => %"PRIi64" to %s",
-                klen, key, amount, node_name);
-
-        shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
-        if (!peer) {
-            SHC_ERROR("Can't find address for node %s", peer);
-            if (cache->use_persistent_storage && cache->storage.global) {
-                int64_t real_amount;
-                int64_t (*real_function)(void *, size_t, int64_t, int64_t, void *);
+                int (*real_function)(void *, size_t, int64_t, int64_t, int64_t *, void *);
                 if (amount >= 0) {
                     if (cache->storage.increment) {
                         real_function = cache->storage.increment;
@@ -2149,9 +2096,74 @@ shardcache_increment_internal(shardcache_t *cache,
                 }
 
                 if (real_function) {
-                    rc = real_function(key, klen, real_amount, initial, cache->storage.priv);
-                    if (rc != 0 )//&& !replica)
+                    rc = real_function(key, klen, real_amount, initial, &value, cache->storage.priv);
+                    v = (void *)&value;
+                }
+            }
+
+            if (!v) {
+                // if we are here .... there is no persistent storage support for increment/decrement
+                char data[32];
+                value = initial + amount;
+                size_t dsize = snprintf(data, sizeof(data), "%"PRIi64, value);
+                rc = shardcache_store_volatile(cache, key, klen, data, dsize, NULL, 0, expire, cexpire, 1, 0);
+                if (rc != 0) {
+                    v = ht_get_deep_copy(cache->volatile_storage,
+                                         key,
+                                         klen,
+                                         NULL,
+                                         shardcache_increment_volatile_cb,
+                                         &amount);
+                } else {
+                    v = (void *)&value;
+                }
+            }
+        }
+
+        if (v) {
+            arc_remove(cache->arc, (const void *)key, klen);
+            shardcache_commence_eviction(cache, key, klen);
+            int64_t output_value = *((int64_t *)v);
+            if (out)
+                *out = output_value;
+
+            if (cb)
+                cb(key, klen, output_value, priv);
+
+        }
+    } else {
+        SHC_DEBUG2("Forwarding increment command %.*s => %"PRIi64" to %s",
+                klen, key, amount, node_name);
+
+        shardcache_node_t *peer = shardcache_node_select(cache, (char *)node_name);
+        if (!peer) {
+            SHC_ERROR("Can't find address for node %s", peer);
+            if (cache->use_persistent_storage && cache->storage.global) {
+                int64_t real_amount;
+                int (*real_function)(void *, size_t, int64_t, int64_t, int64_t *, void *);
+                if (amount >= 0) {
+                    if (cache->storage.increment) {
+                        real_function = cache->storage.increment;
+                        real_amount = amount;
+                    } else {
+                        real_function = cache->storage.decrement;
+                        real_amount = -amount;
+                    }
+                } else {
+                    if (cache->storage.decrement) {
+                        real_function = cache->storage.decrement;
+                        real_amount = amount;
+                    } else {
+                        real_function = cache->storage.increment;
+                        real_amount = -amount;
+                    }
+                }
+
+                if (real_function) {
+                    rc = real_function(key, klen, real_amount, initial, &value, cache->storage.priv);
+                    if (rc == 0 )//&& !replica)
                         shardcache_commence_eviction(cache, key, klen);
+
                 } else {
                     char data[32];
                     size_t dsize = snprintf(data, sizeof(data), "%"PRIi64, initial + amount);
@@ -2164,54 +2176,58 @@ shardcache_increment_internal(shardcache_t *cache,
                                                    shardcache_increment_volatile_cb,
                                                    &amount);
                         if (v) {
-                            rc = *((int *)v);
+                            value = *((int *)v);
                             free(v);
                         } else {
-                            rc = 0;
+                            rc = -1;
                         }
                     }
                 }
             }
+
+            if (out)
+                *out = value;
             
             if (cb)
-                cb(key, klen, rc, priv);
+                cb(key, klen, value, priv);
 
-            return rc;
-        }
-
-        char *addr = shardcache_node_get_address(peer);
-        int fd = shardcache_get_connection_for_peer(cache, addr);
-        if (amount >= 0)
-            rc = increment_on_peer(addr, key, klen, amount, initial, expire, cexpire, fd, cb ? 0 : 1);
-        else
-            rc = decrement_on_peer(addr, key, klen, -amount, initial, expire, cexpire, fd, cb ? 0 : 1);
-
-        if (cb) {
-            if (rc == 0) {
-                rc = shardcache_fetch_async_response(cache, key, klen,
-                                                     amount >= 0 ? SHC_HDR_INCREMENT : SHC_HDR_DECREMENT,
-                                                     addr, fd, cb, priv);
-            } else {
-                close(fd);
-                cb(key, klen, -1, priv);
-            }
         } else {
-            if (rc == 0) {
-                shardcache_release_connection_for_peer(cache, addr, fd);
-            } else {
-                close(fd);
-            }
-        }
+            char *addr = shardcache_node_get_address(peer);
+            int fd = shardcache_get_connection_for_peer(cache, addr);
+            if (amount >= 0)
+                rc = increment_on_peer(addr, key, klen, amount, initial, expire, cexpire, &value, fd, cb ? 0 : 1);
+            else
+                rc = decrement_on_peer(addr, key, klen, -amount, initial, expire, cexpire, &value, fd, cb ? 0 : 1);
 
-        if (rc == 0) {
-            arc_remove(cache->arc, (const void *)key, klen);
+            if (cb) {
+                if (rc == 0) {
+                    rc = shardcache_fetch_async_response(cache, key, klen,
+                                                         amount >= 0 ? SHC_HDR_INCREMENT : SHC_HDR_DECREMENT,
+                                                         addr, fd, cb, priv);
+                } else {
+                    close(fd);
+                    cb(key, klen, 0, priv);
+                }
+            } else {
+                if (rc == 0) {
+                    shardcache_release_connection_for_peer(cache, addr, fd);
+                } else {
+                    close(fd);
+                }
+            }
+
+            if (rc == 0) {
+                if (out)
+                    *out = value;
+                arc_remove(cache->arc, (const void *)key, klen);
+            }
         }
     }
 
     return rc;
 }
 
-int64_t
+int
 shardcache_increment(shardcache_t *cache,
                      void *key,
                      size_t klen,
@@ -2219,14 +2235,15 @@ shardcache_increment(shardcache_t *cache,
                      int64_t initial,
                      time_t expire,
                      time_t cexpire,
+                     int64_t *out,
                      shardcache_async_response_callback_t cb,
                      void *priv)
 {
     return shardcache_increment_internal(cache, key, klen, amount, initial,
-                                         expire, cexpire, cb, priv);
+                                         expire, cexpire, out, cb, priv);
 }
 
-int64_t
+int
 shardcache_decrement(shardcache_t *cache,
                      void *key,
                      size_t klen,
@@ -2234,12 +2251,13 @@ shardcache_decrement(shardcache_t *cache,
                      int64_t initial,
                      time_t expire,
                      time_t cexpire,
+                     int64_t *out,
                      shardcache_async_response_callback_t cb,
                      void *priv)
 
 {
     return shardcache_increment_internal(cache, key, klen, -amount, initial,
-                                         expire, cexpire, cb, priv);
+                                         expire, cexpire, out, cb, priv);
 }
 
 int

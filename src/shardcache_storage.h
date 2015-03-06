@@ -111,12 +111,13 @@ typedef int (*shardcache_cas_item_callback_t)
  * @param key    A valid pointer to the key
  * @param klen   The length of the key
  * @param amount The numerical amount to increment
+ * @param out    A pointer to where to store the new amount after the increment
  * @param priv   The 'priv' pointer previously stored in the shardcache_storage_t
  *              structure at initialization time
- * @return The new value after the increment
+ * @return 0 on success; -1 otherwise
  */
-typedef int64_t (*shardcache_increment_item_callback_t)
-    (void *key, size_t klen, int64_t amount, int64_t initial_value, void *priv);
+typedef int (*shardcache_increment_item_callback_t)
+    (void *key, size_t klen, int64_t amount, int64_t initial_value, int64_t *out, void *priv);
 
 /**
  * @brief Callback to atomically increment the value for a given key
@@ -125,12 +126,13 @@ typedef int64_t (*shardcache_increment_item_callback_t)
  * @param key    A valid pointer to the key
  * @param klen   The length of the key
  * @param amount The numerical amount to increment
+ * @param out    A pointer to where to store the new amount after the decrement
  * @param priv   The 'priv' pointer previously stored in the shardcache_storage_t
  *              structure at initialization time
- * @return The new value after the decrement
+ * @return 0 on success; -1 otherwise
  */
-typedef int64_t (*shardcache_decrement_item_callback_t)
-    (void *key, size_t klen, int64_t amount, int64_t initial_value, void *priv);
+typedef int (*shardcache_decrement_item_callback_t)
+    (void *key, size_t klen, int64_t amount, int64_t initial_value, int64_t *out, void *priv);
 
 /**
  * @brief Callback to remove an existing value for a given key.

@@ -815,9 +815,9 @@ process_request(shardcache_request_t *req)
             }
 
             if (req->hdr == SHC_HDR_INCREMENT)
-                shardcache_increment(cache, key, klen, amount, initial, expire, cexpire, shardcache_async_command_response, req);
+                shardcache_increment(cache, key, klen, amount, initial, expire, cexpire, NULL, shardcache_async_command_response, req);
             else
-                shardcache_decrement(cache, key, klen, amount, initial, expire, cexpire, shardcache_async_command_response, req);
+                shardcache_decrement(cache, key, klen, amount, initial, expire, cexpire, NULL, shardcache_async_command_response, req);
 
             break;
         }

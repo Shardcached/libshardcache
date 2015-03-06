@@ -321,9 +321,10 @@ int main(int argc, char **argv)
     size = shardcache_client_get(client, volatile_key, strlen(volatile_key), (void **)&value);
     ut_validate_int(size, 0);
 
+    int64_t amount = 0; 
     // counter will start from 1 (if not present) and will be incremented of 2
     ut_testing("setting a counter: shardcache_increment(servers[0], counter, 7, 2, 1, 0, 0, NULL, NULL)");
-    int64_t amount = shardcache_increment(servers[0], "counter", 7, 2, 1, 0, 0, NULL, NULL);
+    shardcache_increment(servers[0], "counter", 7, 2, 1, 0, 0, &amount, NULL, NULL);
     ut_validate_int(amount, 3);
 
     ut_testing("fetching the counter: shardcache_get_sync(servers[1], counter, 7, &v. &vlen, NULL) == 3");
@@ -334,7 +335,7 @@ int main(int argc, char **argv)
 
     // counter will be incremented by 1 (counter++)
     ut_testing("incrementing the counter: shardcache_increment(servers[0], counter, 7, 1, 0, 0, 0, NULL, NULL)");
-    amount = shardcache_increment(servers[0], "counter", 7, 1, 0, 0, 0, NULL, NULL);
+    shardcache_increment(servers[0], "counter", 7, 1, 0, 0, 0, &amount, NULL, NULL);
     ut_validate_int(amount, 4);
 
     ut_testing("fetching the counter again: shardcache_get_sync(servers[1], counter, 7, &v. &vlen, NULL) == 4");
@@ -346,7 +347,7 @@ int main(int argc, char **argv)
 
     // counter will be decremented by 1 (counter--)
     ut_testing("decrementing the counter: shardcache_decrement(servers[0], counter, 7, 1, 0, 0, 0, NULL, NULL)");
-    amount = shardcache_decrement(servers[0], "counter", 7, 1, 0, 0, 0, NULL, NULL);
+    shardcache_decrement(servers[0], "counter", 7, 1, 0, 0, 0, &amount, NULL, NULL);
     ut_validate_int(amount, 3);
 
     ut_testing("fetching the counter again: shardcache_get_sync(servers[1], counter, 7, &v. &vlen, NULL) == 3");

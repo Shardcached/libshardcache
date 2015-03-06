@@ -799,7 +799,7 @@ evict_from_peer(char *peer,
 
 
 
-static inline int64_t
+static inline int
 _send_to_peer_internal(char *peer,
                        void *key,
                        size_t klen,
@@ -810,6 +810,7 @@ _send_to_peer_internal(char *peer,
                        uint32_t ttl,
                        uint32_t cttl,
                        int mode, // 0 == SET, 1 == ADD, 2 == CAS, 3 == INCR, 4 == DECR
+                       int64_t *computed_amount,
                        int fd,
                        int expect_response)
 {
@@ -932,7 +933,10 @@ _send_to_peer_internal(char *peer,
                 }
             } else { // INCR AND DECR responses differ from other set-related responses
                 char *decimal_string = fbuf_data(&resp[0]);
-                rc = strtoll(decimal_string, NULL, 10);
+                int64_t amount = strtoll(decimal_string, NULL, 10);
+                if (computed_amount)
+                    *computed_amount = amount;
+                rc =  (!amount && errno) ? -1 : 0;
             }
         }
         fbuf_destroy(&resp[0]);
@@ -959,18 +963,19 @@ send_to_peer(char *peer,
              int fd,
              int expect_response)
 {
-    return (int)_send_to_peer_internal(peer,
-                                       key,
-                                       klen,
-                                       value,
-                                       vlen,
-                                       NULL,
-                                       0,
-                                       ttl,
-                                       cttl,
-                                       0,
-                                       fd,
-                                       expect_response);
+    return _send_to_peer_internal(peer,
+                                  key,
+                                  klen,
+                                  value,
+                                  vlen,
+                                  NULL,
+                                  0,
+                                  ttl,
+                                  cttl,
+                                  0,
+                                  NULL,
+                                  fd,
+                                  expect_response);
 }
 
 int
@@ -984,18 +989,19 @@ add_to_peer(char *peer,
             int fd,
             int expect_response)
 {
-    return (int)_send_to_peer_internal(peer,
-                                       key,
-                                       klen,
-                                       value,
-                                       vlen,
-                                       NULL,
-                                       0,
-                                       ttl,
-                                       cttl,
-                                       1,
-                                       fd,
-                                       expect_response);
+    return _send_to_peer_internal(peer,
+                                  key,
+                                  klen,
+                                  value,
+                                  vlen,
+                                  NULL,
+                                  0,
+                                  ttl,
+                                  cttl,
+                                  1,
+                                  NULL,
+                                  fd,
+                                  expect_response);
 }
 
 int
@@ -1011,21 +1017,22 @@ cas_on_peer(char *peer,
             int fd,
             int expect_response)
 {
-    return (int)_send_to_peer_internal(peer,
-                                       key,
-                                       klen,
-                                       old_value,
-                                       old_vlen,
-                                       value,
-                                       vlen,
-                                       ttl,
-                                       cttl,
-                                       2,
-                                       fd,
-                                       expect_response);
+    return _send_to_peer_internal(peer,
+                                  key,
+                                  klen,
+                                  old_value,
+                                  old_vlen,
+                                  value,
+                                  vlen,
+                                  ttl,
+                                  cttl,
+                                  2,
+                                  NULL,
+                                  fd,
+                                  expect_response);
 }
 
-int64_t
+int
 increment_on_peer(char *peer,
                   void *key,
                   size_t klen,
@@ -1033,6 +1040,7 @@ increment_on_peer(char *peer,
                   int64_t initial,
                   time_t ttl,
                   time_t cttl,
+                  int64_t *computed_amount,
                   int fd,
                   int expect_response)
 {
@@ -1050,6 +1058,7 @@ increment_on_peer(char *peer,
                                          ttl,
                                          cttl,
                                          3,
+                                         computed_amount,
                                          fd,
                                          expect_response);
     fbuf_destroy(&amount_data);
@@ -1057,7 +1066,7 @@ increment_on_peer(char *peer,
     return rc;
 }
 
-int64_t
+int
 decrement_on_peer(char *peer,
                   void *key,
                   size_t klen,
@@ -1065,6 +1074,7 @@ decrement_on_peer(char *peer,
                   int64_t initial,
                   time_t ttl,
                   time_t cttl,
+                  int64_t *computed_amount,
                   int fd,
                   int expect_response)
 {
@@ -1082,6 +1092,7 @@ decrement_on_peer(char *peer,
                                         ttl,
                                         cttl,
                                         4,
+                                        computed_amount,
                                         fd,
                                         expect_response);
     fbuf_destroy(&amount_data);
