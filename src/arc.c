@@ -171,11 +171,11 @@ arc_balance(arc_t *cache)
 
     MUTEX_LOCK(cache->lock);
     /* First move objects from MRU/MFU to their respective ghost lists. */
-    while (cache->mru.size + cache->mfu.size > cache->c) {
+    while (cache->mru.size + cache->mfu.size > ATOMIC_READ(cache->c)) {
         if (cache->mru.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mru);
             arc_move(cache, obj, &cache->mrug);
-        } else if (cache->mfu.size > cache->c - cache->p) {
+        } else if (cache->mfu.size > ATOMIC_READ(cache->c) - cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mfu);
             arc_move(cache, obj, &cache->mfug);
         } else {
@@ -184,11 +184,11 @@ arc_balance(arc_t *cache)
     }
 
     /* Then start removing objects from the ghost lists. */
-    while (cache->mrug.size + cache->mfug.size > cache->c) {
+    while (cache->mrug.size + cache->mfug.size > ATOMIC_READ(cache->c)) {
         if (cache->mfug.size > cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mfug);
             arc_move(cache, obj, NULL);
-        } else if (cache->mrug.size > cache->c - cache->p) {
+        } else if (cache->mrug.size > ATOMIC_READ(cache->c) - cache->p) {
             arc_object_t *obj = arc_state_lru(&cache->mrug);
             arc_move(cache, obj, NULL);
         } else {
@@ -269,7 +269,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 size_t csize = cache->mrug.size
                              ? (cache->mfug.size / cache->mrug.size)
                              : cache->mfug.size / 2;
-                cache->p = MIN(cache->c, cache->p + MAX(csize, 1));
+                cache->p = MIN(ATOMIC_READ(cache->c), cache->p + MAX(csize, 1));
             } else if (obj_state == &cache->mfug) {
                 size_t csize = cache->mfug.size
                              ? (cache->mrug.size / cache->mfug.size)
@@ -289,7 +289,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     }
 
     if (state == NULL) {
-        if (ht_delete_if_equals(cache->hash, (void *)obj->key, obj->klen, obj, sizeof(arc_object_t)) == 0)
+        if (ht_delete_if_equals(ATOMIC_READ(cache->hash), (void *)obj->key, obj->klen, obj, sizeof(arc_object_t)) == 0)
             release_ref(cache->refcnt, obj->node);
     } else if (state == &cache->mrug || state == &cache->mfug) {
         obj->async = 0;
@@ -311,16 +311,16 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             case 1:
             case -1:
             {
-                if (ht_delete_if_equals(cache->hash, (void *)obj->key, obj->klen, obj, sizeof(arc_object_t)) == 0)
+                if (ht_delete_if_equals(ATOMIC_READ(cache->hash), (void *)obj->key, obj->klen, obj, sizeof(arc_object_t)) == 0)
                     release_ref(cache->refcnt, obj->node);
                 return rc;
             }
             default:
             {
-                if (size >= cache->c) {
+                if (size >= ATOMIC_READ(cache->c)) {
                     // the (single) object doesn't fit in the cache, let's return it
                     // to the getter without (re)adding it to the cache
-                    if (ht_delete_if_equals(cache->hash, (void *)obj->key, obj->klen, obj, sizeof(arc_object_t)) == 0)
+                    if (ht_delete_if_equals(ATOMIC_READ(cache->hash), (void *)obj->key, obj->klen, obj, sizeof(arc_object_t)) == 0)
                         release_ref(cache->refcnt, obj->node);
                     return 1;
                 }
@@ -422,6 +422,28 @@ arc_destroy(arc_t *cache)
     refcnt_destroy(cache->refcnt);
     MUTEX_DESTROY(cache->lock);
     free(cache);
+}
+
+void
+arc_clear(arc_t *cache)
+{
+    MUTEX_LOCK(&cache->lock);
+    hashtable_t *new_table = ht_create(1<<16, 1<<25, NULL);
+    hashtable_t *old_table = ATOMIC_READ(cache->hash);
+    if (ATOMIC_CAS(cache->hash, old_table, new_table)) {
+        arc_list_destroy(cache, &cache->mrug.head);
+        arc_list_destroy(cache, &cache->mfug.head);
+        arc_list_destroy(cache, &cache->mru.head);
+        arc_list_destroy(cache, &cache->mfu.head);
+        ht_destroy(old_table);
+    }
+    MUTEX_UNLOCK(&cache->lock);
+}
+
+void
+arc_set_size(arc_t *cache, size_t size)
+{
+    ATOMIC_SET(cache->c, size >> 1);
 }
 
 static void *

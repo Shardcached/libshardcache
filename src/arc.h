@@ -66,6 +66,19 @@ arc_t *arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, uint64_t 
 void arc_destroy(arc_t *cache);
 
 /**
+ * @brief Clear the content of the cache
+ * @param cache : A valid pointer to an initialized arc_t structure
+ */
+void arc_clear(arc_t *cache);
+
+/**
+ * @brief Set the size of the ARC cache (overriding the previous size)
+ * @param cache : A valid pointer to an initialized arc_t structure
+ * @param size : The new size
+ */
+void arc_set_size(arc_t *cache, size_t size);
+
+/**
  * @brief Lookup an object in the cache.
  *
  * The cache automatically allocates and fetches the object

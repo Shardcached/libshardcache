@@ -250,6 +250,20 @@ int shardcache_lazy_expiration(shardcache_t *cache, int new_value);
 void shardcache_destroy(shardcache_t *cache);
 
 /**
+ * @brief Clear the content of the underlying cache
+ * @param cache   the instance to release
+ */
+void shardcache_clear(shardcache_t *cache);
+
+/**
+ * @brief Set the size of the underlying cache
+ *        (overriding the initial size set at construction time)
+ * @param cache   the instance to release
+ * @param new_size the new size
+ */
+void shardcache_set_size(shardcache_t *cache, size_t new_size);
+
+/**
  * @brief Get partial value data value for a key
  * @param cache   A valid pointer to a shardcache_t structure
  * @param key     A valid pointer to the key

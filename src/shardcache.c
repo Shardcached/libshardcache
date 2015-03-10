@@ -773,6 +773,18 @@ shardcache_destroy(shardcache_t *cache)
     SHC_DEBUG("Shardcache node stopped");
 }
 
+void
+shardcache_clear(shardcache_t *cache)
+{
+    arc_clear(cache->arc);
+}
+
+void
+shardcache_set_size(shardcache_t *cache, size_t new_size)
+{
+    arc_set_size(cache->arc, new_size);
+}
+
 typedef struct {
     int stat;
     size_t dlen;
