@@ -265,7 +265,7 @@ typedef void (*shardcache_thread_exit_callback_t)(void *priv);
 typedef struct _shardcache_storage_s shardcache_storage_t;
 typedef int (*shardcache_storage_init_t)(shardcache_storage_t *, char **);
 typedef void (*shardcache_storage_destroy_t)(void *);
-typedef int (*shardcache_storage_reset_t)(void *);
+typedef int (*shardcache_storage_reset_t)(char **, void *);
 
 /**
  * @struct shardcache_storage_t

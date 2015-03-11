@@ -63,7 +63,7 @@ void shardcache_storage_dispose(shardcache_storage_t *st);
  * @param st A valid shardcache_storage_t structure
  * @return 0 on success, -1 otherwise
  */
-int shardcache_storage_reset(shardcache_storage_t *st);
+int shardcache_storage_reset(shardcache_storage_t *st, char **options);
 
 /**
  * @brief Create a new shardcache instance

@@ -3067,10 +3067,10 @@ shardcache_storage_dispose(shardcache_storage_t *st)
 }
 
 int
-shardcache_storage_reset(shardcache_storage_t *st)
+shardcache_storage_reset(shardcache_storage_t *st, char **options)
 {
     if (st->internal.reset)
-        return st->internal.reset(st->priv);
+        return st->internal.reset(options, st->priv);
     return -1;
 }
 
