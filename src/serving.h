@@ -7,7 +7,9 @@
 typedef struct _shardcache_serving_s shardcache_serving_t;
 
 void *accept_requests(void *priv);
-shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers);
+shardcache_serving_t *start_serving(shardcache_t *cache, unsigned int num_workers);
+
+void configure_serving_workers(shardcache_serving_t *s, unsigned int num_workers);
 
 void stop_serving(shardcache_serving_t *s);
 

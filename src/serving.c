@@ -37,6 +37,7 @@ typedef struct {
     iomux_t *iomux;
     linked_list_t *prune;
     uint64_t numfds;
+    int id;
     //uint64_t pruning;
 } shardcache_worker_context_t;
 
@@ -46,8 +47,8 @@ struct _shardcache_serving_s {
     pthread_t io_thread;
     iomux_t *io_mux;
     int leave;
-    int num_workers;
-    int next_worker_index;
+    unsigned int num_workers;
+    unsigned int next_worker_index;
     linked_list_t *workers;
     uint64_t num_connections;
     uint64_t total_workers;
@@ -1363,7 +1364,32 @@ serve_cache(void *priv)
     return NULL;
 }
 
-shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers)
+static inline void
+create_serving_worker(shardcache_serving_t *s, int id)
+{
+    shardcache_worker_context_t *wrk = calloc(1, sizeof(shardcache_worker_context_t));
+    wrk->id = id;
+    wrk->serv = s;
+    wrk->jobs = queue_create();
+    queue_set_free_value_callback(wrk->jobs,
+            (queue_free_value_callback_t)shardcache_connection_context_destroy);
+    wrk->prune = list_create();
+    list_set_free_value_callback(wrk->prune, (free_value_callback_t)shardcache_connection_context_destroy);
+
+    char label[64];
+    snprintf(label, sizeof(label), "worker[%d].numfds", id);
+    shardcache_counter_add(s->cache->counters, label, &wrk->numfds);
+
+    MUTEX_INIT(&wrk->wakeup_lock);
+    CONDITION_INIT(&wrk->wakeup_cond);
+    wrk->iomux = iomux_create(1<<13, 0);
+    pthread_create(&wrk->thread, NULL, worker, wrk);
+    list_push_value(s->workers, wrk);
+    ATOMIC_INCREMENT(s->total_workers);
+}
+
+shardcache_serving_t *
+start_serving(shardcache_t *cache, unsigned int num_workers)
 {
     shardcache_serving_t *s = calloc(1, sizeof(shardcache_serving_t));
     s->cache = cache;
@@ -1396,30 +1422,8 @@ shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers)
     }
 
     int i;
-    for (i = 0; i < ATOMIC_READ(num_workers); i++) {
-        shardcache_worker_context_t *wrk = calloc(1, sizeof(shardcache_worker_context_t));
-        wrk->serv = s;
-        wrk->jobs = queue_create();
-        queue_set_free_value_callback(wrk->jobs,
-                (queue_free_value_callback_t)shardcache_connection_context_destroy);
-        wrk->prune = list_create();
-        list_set_free_value_callback(wrk->prune, (free_value_callback_t)shardcache_connection_context_destroy);
-
-        char label[64];
-        snprintf(label, sizeof(label), "worker[%d].numfds", i);
-        shardcache_counter_add(cache->counters, label, &wrk->numfds);
-        /*
-        snprintf(label, sizeof(label), "worker[%d].pruning", i);
-        shardcache_counter_add(cache->counters, label, &wrk->pruning);
-        */
-
-        MUTEX_INIT(wrk->wakeup_lock);
-        CONDITION_INIT(wrk->wakeup_cond);
-        wrk->iomux = iomux_create(1<<13, 0);
-        pthread_create(&wrk->thread, NULL, worker, wrk);
-        list_push_value(s->workers, wrk);
-        ATOMIC_INCREMENT(s->total_workers);
-    }
+    for (i = 0; i < num_workers; i++)
+        create_serving_worker(s, i);
 
     s->io_mux = iomux_create(0, 0);
 
@@ -1434,55 +1438,83 @@ shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers)
     return s;
 }
 
+static inline void
+destroy_serving_worker(shardcache_worker_context_t *wrk)
+{
+    ATOMIC_INCREMENT(wrk->leave);
+
+    // wake up the worker if it is slacking
+    CONDITION_SIGNAL(&wrk->wakeup_cond, &wrk->wakeup_lock);
+
+    pthread_join(wrk->thread, NULL);
+
+    queue_destroy(wrk->jobs);
+
+    MUTEX_DESTROY(&wrk->wakeup_lock);
+    CONDITION_DESTROY(&wrk->wakeup_cond);
+    SHC_DEBUG3("Worker thread %p exited", wrk);
+
+    shardcache_connection_context_t *ctx = list_shift_value(wrk->prune);
+    while (ctx) {
+        shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
+        while (req) {
+            TAILQ_REMOVE(&ctx->requests, req, next);
+            ctx->num_requests--;
+            shardcache_request_destroy(req);
+            req = TAILQ_FIRST(&ctx->requests);
+        }
+        shardcache_connection_context_destroy(ctx);
+        ctx = list_shift_value(wrk->prune);
+    }
+
+    iomux_destroy(wrk->iomux);
+
+    list_destroy(wrk->prune);
+
+    char label[64];
+    snprintf(label, sizeof(label), "worker[%d].numfds", wrk->id);
+    shardcache_counter_remove(wrk->serv->cache->counters, label);
+
+    free(wrk);
+}
+
+void
+configure_serving_workers(shardcache_serving_t *s, unsigned int num_workers)
+{
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&lock);
+    if (s->num_workers == num_workers) {
+        pthread_mutex_unlock(&lock);
+        return;
+    }
+
+    if (num_workers > s->num_workers) {
+        int i;
+        for (i = s->num_workers; i < num_workers; i++)
+            create_serving_worker(s, i);
+    } else {
+        while (list_count(s->workers) > num_workers) {
+            shardcache_worker_context_t *wrk = list_shift_value(s->workers);
+            // NOTE : this will close all connections currently handled by the
+            // worker being destroyed
+            destroy_serving_worker(wrk);
+            ATOMIC_DECREMENT(s->total_workers);
+        }
+    }
+
+    s->num_workers = num_workers;
+
+    pthread_mutex_unlock(&lock);
+}
+
 static void
 clear_workers_list(linked_list_t *list)
 {
     shardcache_worker_context_t *wrk = list_shift_value(list);
-
-    int cnt = 0;
     while (wrk) {
-        ATOMIC_INCREMENT(wrk->leave);
-
-        // wake up the worker if slacking
-        CONDITION_SIGNAL(wrk->wakeup_cond, wrk->wakeup_lock);
-
-        pthread_join(wrk->thread, NULL);
-
-        queue_destroy(wrk->jobs);
-
-        MUTEX_DESTROY(wrk->wakeup_lock);
-        CONDITION_DESTROY(wrk->wakeup_cond);
-        SHC_DEBUG3("Worker thread %p exited", wrk);
-
-        shardcache_connection_context_t *ctx = list_shift_value(wrk->prune);
-        while (ctx) {
-            //ATOMIC_DECREMENT(wrk->pruning);
-            shardcache_request_t *req = TAILQ_FIRST(&ctx->requests);
-            while (req) {
-                TAILQ_REMOVE(&ctx->requests, req, next);
-                ctx->num_requests--;
-                shardcache_request_destroy(req);
-                req = TAILQ_FIRST(&ctx->requests);
-            }
-            shardcache_connection_context_destroy(ctx);
-            ctx = list_shift_value(wrk->prune);
-        }
-
-        char label[64];
-        snprintf(label, sizeof(label), "worker[%d].numfds", cnt);
-        shardcache_counter_remove(wrk->serv->cache->counters, label);
-        //snprintf(label, sizeof(label), "worker[%d].pruning", cnt);
-        //shardcache_counter_remove(wrk->serv->cache->counters, label);
-        cnt++;
-
-        iomux_destroy(wrk->iomux);
-
-        list_destroy(wrk->prune);
-
-        free(wrk);
+        destroy_serving_worker(wrk);
         wrk = list_shift_value(list);
     }
-
 }
 
 void
