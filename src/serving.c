@@ -1478,14 +1478,14 @@ destroy_serving_worker(shardcache_worker_context_t *wrk)
     free(wrk);
 }
 
-void
+int
 configure_serving_workers(shardcache_serving_t *s, unsigned int num_workers)
 {
     static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_lock(&lock);
     if (s->num_workers == num_workers) {
         pthread_mutex_unlock(&lock);
-        return;
+        return 0;
     }
 
     if (num_workers > s->num_workers) {
@@ -1502,9 +1502,11 @@ configure_serving_workers(shardcache_serving_t *s, unsigned int num_workers)
         }
     }
 
+    int ret = num_workers - s->num_workers;
     s->num_workers = num_workers;
 
     pthread_mutex_unlock(&lock);
+    return ret;
 }
 
 static void
