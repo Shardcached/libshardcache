@@ -263,6 +263,8 @@ void shardcache_clear(shardcache_t *cache);
  */
 void shardcache_set_size(shardcache_t *cache, size_t new_size);
 
+int shardcache_set_workers_num(shardcache_t *cache, unsigned int num_workers);
+
 /**
  * @brief Get partial value data value for a key
  * @param cache   A valid pointer to a shardcache_t structure

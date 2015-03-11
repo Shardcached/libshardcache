@@ -785,6 +785,12 @@ shardcache_set_size(shardcache_t *cache, size_t new_size)
     arc_set_size(cache->arc, new_size);
 }
 
+int
+shardcache_set_workers_num(shardcache_t *cache, unsigned int num_workers)
+{
+    return configure_serving_workers(cache->serv, num_workers);
+}
+
 typedef struct {
     int stat;
     size_t dlen;
