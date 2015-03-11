@@ -364,6 +364,12 @@ int main(int argc, char **argv)
     shardcache_client_decrement(client, "counter", 7, 1, 0, &k, 0);
     ut_validate_int(k, 3);
 
+
+    shardcache_set_size(servers[0], 1 << 10);
+    ut_testing("shardcache_set_workers_num(servers[0], 2) == -3");
+    ut_validate_int(shardcache_set_workers_num(servers[0], 2), -3);
+    shardcache_clear(servers[0]);
+
     ut_testing("destroying all clients");
     shardcache_client_destroy(client);
     shardcache_client_destroy(client1);
