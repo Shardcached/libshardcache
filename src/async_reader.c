@@ -131,10 +131,14 @@ async_read_parse_protocol_v2(async_read_ctx_t *ctx)
 
             uint32_t rlen = 0;
             rbuf_read(ctx->buf, (u_char *)&rlen, 4);
+
+            // if this is an empty record, move directly to the next
+            if (rlen == 0 && async_read_move_to_next_record(ctx) != 0)
+                break;
+
             ctx->rlen = ntohl(rlen);
             ctx->clen = (uint16_t)ctx->rlen; // XXX
             ctx->coff = 0;
-
         }
         if (ctx->rlen > ctx->coff) {
             int rb = rbuf_read(ctx->buf, (u_char *)ctx->chunk + ctx->coff, ctx->rlen - ctx->coff);
@@ -150,8 +154,6 @@ async_read_parse_protocol_v2(async_read_ctx_t *ctx)
 
             if (!rbuf_used(ctx->buf))
                 break; // TRUNCATED - we need more data
-        } else {
-
         }
     }
 }
