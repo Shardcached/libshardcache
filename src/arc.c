@@ -589,7 +589,7 @@ arc_lookup_nofetch(arc_t *cache, const void *key, size_t len, void **valuep)
 
 // the returned object is retained, the caller must call arc_release_resource(obj) to release it
 arc_resource_t 
-arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, time_t ttl, int async)
+arc_lookup(arc_t *cache, const void *key, size_t len, void **valuep, int async, time_t ttl)
 {
     return arc_lookup_internal(cache, key, len, valuep, async, ttl, 1);
 }

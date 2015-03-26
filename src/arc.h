@@ -95,7 +95,7 @@ void arc_set_size(arc_t *cache, size_t size);
  *       a cached object (which is contained in an ARC resource) it will be retained until
  *       the caller releases it using the arc_release_resource() function
  */
-arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t klen, void **valuep, time_t ttl, int async);
+arc_resource_t arc_lookup(arc_t *cache, const void *key, size_t klen, void **valuep, int async, time_t ttl);
 
 arc_resource_t arc_lookup_nofetch(arc_t *cache, const void *key, size_t len, void **valuep);
 
