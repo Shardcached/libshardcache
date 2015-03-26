@@ -19,7 +19,8 @@ all:
 	    fi;\
 	    export LIBDIR="$(shell pwd)/.libs"; \
 	    export INCDIR="$(shell pwd)/.incs"; \
-	    export CFLAGS="$(CFLAGS) -DHAVE_UINT64_T"; \
+	    export CFLAGS="$(CFLAGS) -fPIC -DHAVE_UINT64_T"; \
+	    make -eC $$name; \
 	    if [ $$? -ne 0 ] ; then exit $$?; fi; \
 	    if [ -f $$name/Makefile ]; then \
 		make -eC $$name; \
