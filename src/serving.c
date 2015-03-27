@@ -443,7 +443,7 @@ get_async_multi_data_handler(void *key,
             if (ctx->multi.values[i]) {
                 ctx->multi.values[i] = realloc(ctx->multi.values[i], ctx->multi.vlens[i] + dlen);
                 memcpy(ctx->multi.values[i] + ctx->multi.vlens[i], data, dlen);
-            } else {
+            } else if (dlen) {
                 ctx->multi.values[i] = malloc(dlen);
                 memcpy(ctx->multi.values[i], data, dlen);
             }
