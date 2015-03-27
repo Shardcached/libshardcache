@@ -566,7 +566,8 @@ arc_lookup_internal(arc_t *cache, const void *key, size_t len, void **valuep, in
             rc  = arc_move(cache, obj, &cache->mru);
             if (rc >= 0) {
                 arc_balance(cache);
-                *valuep = obj->ptr;
+                if (valuep)
+                    *valuep = obj->ptr;
                 return obj;
             }
             break;
