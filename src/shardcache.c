@@ -2352,7 +2352,6 @@ shardcache_del_internal(shardcache_t *cache,
         }
         char *addr = shardcache_node_get_address(peer);
         int fd = shardcache_get_connection_for_peer(cache, addr);
-        int rc = -1;
         if (cb) {
             rc = delete_from_peer(addr, key, klen, fd, 0);
             if (rc == 0) {
