@@ -603,10 +603,10 @@ int arc_lookup_multi(arc_t *cache,
                      time_t ttl)
 {
     int i;
-    int *missing = NULL;
-    int missing_count = 0;
 
     if (cache->ops->fetch_multi) {
+        int *missing = NULL;
+        int missing_count = 0;
         for (i = 0; i < num_keys; i++) {
             resources[i] = arc_lookup_nofetch(cache, keys[i], klens[i], NULL);
             if (!resources[i]) {
@@ -628,6 +628,7 @@ int arc_lookup_multi(arc_t *cache,
                 if (UNLIKELY(!obj)) {
                     //TODO - handle error and release resources
                     free(mem);
+                    free(missing);
                     return -1;
                 }
 
@@ -666,6 +667,7 @@ int arc_lookup_multi(arc_t *cache,
             {
                 // TODO - Handle error
                 free(mem);
+                free(missing);
                 return -1;
             }
             
@@ -683,6 +685,7 @@ int arc_lookup_multi(arc_t *cache,
             }
 
             free(mem);
+            free(missing);
         }
     } else {
         for (i = 0; i < num_keys; i++) {
