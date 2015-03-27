@@ -499,9 +499,7 @@ record_to_array(fbuf_t *record, char ***items, size_t **lens)
                 (*items)[i] = malloc(item_size);
                 memcpy((*items)[i], data, item_size);
                 data += item_size;
-            } else {
-                data = NULL;
-            }
+            } 
         } else {
             data += item_size;
         }
