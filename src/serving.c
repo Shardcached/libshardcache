@@ -662,6 +662,9 @@ process_request(shardcache_request_t *req)
         {
             fbuf_t buf = FBUF_STATIC_INITIALIZER_PARAMS(FBUF_MAXLEN_NONE, 64, 1024, 512);
 
+            fbuf_printf(&buf, "libshardcache_version;%s\r\n", LIBSHARDCACHE_VERSION);
+            fbuf_printf(&buf, "libshardcache_build_info;%s\r\n", LIBSHARDCACHE_BUILD_INFO);
+
             shardcache_counter_t *counters = NULL;
             int i, num_nodes;
 

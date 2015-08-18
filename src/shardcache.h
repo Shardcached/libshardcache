@@ -35,6 +35,7 @@ typedef struct __shardcache_s shardcache_t;
 #define SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT  1      // number of async i/o threads used
                                                      // for inter-node communication
 extern const char *LIBSHARDCACHE_VERSION;
+extern const char *LIBSHARDCACHE_BUILD_INFO;
 
 /*
  *******************************************************************************

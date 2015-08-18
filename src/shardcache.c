@@ -21,7 +21,15 @@
 #include "messaging.h"
 #include "shardcache_replica.h"
 
+#ifndef BUILD_INFO
+#define BUILD_INFO
+#endif
+
+#define STRINGIFY(x)   #x
+#define X_STRINGIFY(x) STRINGIFY(x)
+
 const char *LIBSHARDCACHE_VERSION = "1.1";
+const char *LIBSHARDCACHE_BUILD_INFO = X_STRINGIFY(BUILD_INFO);
 
 extern int shardcache_log_initialized;
 extern unsigned int shardcache_loglevel;
