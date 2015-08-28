@@ -20,7 +20,7 @@ typedef struct {
 } shardcache_fetch_from_peer_notify_arg;
 
 static int
-arc_ops_fetch_from_peer_notify_listener (void *item, uint32_t idx, void *user)
+arc_ops_fetch_from_peer_notify_listener (void *item, size_t idx, void *user)
 {
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
     shardcache_fetch_from_peer_notify_arg *arg = (shardcache_fetch_from_peer_notify_arg *)user;
@@ -34,7 +34,7 @@ arc_ops_fetch_from_peer_notify_listener (void *item, uint32_t idx, void *user)
 }
 
 static int
-arc_ops_fetch_from_peer_notify_listener_complete(void *item, uint32_t idx, void *user)
+arc_ops_fetch_from_peer_notify_listener_complete(void *item, size_t idx, void *user)
 {
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
     cached_object_t *obj = (cached_object_t *)user;
@@ -44,7 +44,7 @@ arc_ops_fetch_from_peer_notify_listener_complete(void *item, uint32_t idx, void 
 }
 
 static int
-arc_ops_fetch_from_peer_notify_listener_error(void *item, uint32_t idx, void *user)
+arc_ops_fetch_from_peer_notify_listener_error(void *item, size_t idx, void *user)
 {
     shardcache_get_listener_t *listener = (shardcache_get_listener_t *)item;
     cached_object_t *obj = (cached_object_t *)user;

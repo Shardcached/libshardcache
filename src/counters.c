@@ -30,7 +30,7 @@ shardcache_counter_add(shardcache_counters_t *c, const char *name, const uint64_
 }
 
 static int
-shardcache_counter_remove_helper(void *item, uint32_t idx, void *user)
+shardcache_counter_remove_helper(void *item, size_t idx, void *user)
 {
     char *name = (char *)user;
     tagged_value_t *tval = (tagged_value_t *)item;
