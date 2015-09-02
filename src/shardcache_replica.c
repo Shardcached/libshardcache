@@ -6,7 +6,6 @@
 #include <pqueue.h>
 #include <iomux.h>
 
-#include <atomic_defs.h>
 #include "kepaxos.h"
 #include "shardcache_internal.h"
 #include "counters.h"

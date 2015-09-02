@@ -14,7 +14,6 @@
 #include <linklist.h>
 #include <bsd_queue.h>
 #include <hashtable.h>
-#include <atomic_defs.h>
 
 #include "messaging.h"
 #include "connections.h"
@@ -149,7 +148,7 @@ shardcache_request_destroy(shardcache_request_t *req)
     for (i = 0; i < SHARDCACHE_REQUEST_RECORDS_MAX; i++) {
         fbuf_destroy(&req->records[i]);
     }
-    SPIN_DESTROY(&req->output_lock);
+    SPIN_DESTROY(req->output_lock);
     fbuf_destroy(&req->output);
     if (req->fetch_shash)
         sip_hash_free(req->fetch_shash);
@@ -179,9 +178,9 @@ shardcache_connection_context_destroy(shardcache_connection_context_t *ctx)
 static inline void
 send_data(shardcache_request_t *req, fbuf_t *data)
 {
-    SPIN_LOCK(&req->output_lock);
+    SPIN_LOCK(req->output_lock);
     fbuf_concat(&req->output, data);
-    SPIN_UNLOCK(&req->output_lock);
+    SPIN_UNLOCK(req->output_lock);
 }
 
 #define WRITE_STATUS_MODE_SIMPLE  0x00
@@ -829,7 +828,7 @@ shardcache_request_create(shardcache_connection_context_t *ctx)
     req->hdr = async_read_context_hdr(ctx->reader_ctx);
     req->sig_hdr = async_read_context_sig_hdr(ctx->reader_ctx);
     req->ctx = ctx;
-    SPIN_INIT(&req->output_lock);
+    SPIN_INIT(req->output_lock);
 
     int i;
     for (i = 0; i < SHARDCACHE_REQUEST_RECORDS_MAX; i++) {
@@ -903,10 +902,10 @@ shardcache_output_handler(iomux_t *iomux, int fd, unsigned char **out, int *len,
 
         int done = ATOMIC_READ(req->done);
 
-        SPIN_LOCK(&req->output_lock);
+        SPIN_LOCK(req->output_lock);
         if (fbuf_used(&req->output))
             *len = fbuf_detach(&req->output, (char **)out, NULL);
-        SPIN_UNLOCK(&req->output_lock);
+        SPIN_UNLOCK(req->output_lock);
 
         if (done) {
             TAILQ_REMOVE(&ctx->requests, req, next);
@@ -1074,8 +1073,8 @@ worker(void *priv)
                 timeradd(&now, &wait_time, &wait_time);
                 abstime.tv_sec = wait_time.tv_sec;
                 abstime.tv_nsec = (wait_time.tv_usec * 1000);
-                CONDITION_TIMEDWAIT(&wrkctx->wakeup_cond,
-                                    &wrkctx->wakeup_lock,
+                CONDITION_TIMEDWAIT(wrkctx->wakeup_cond,
+                                    wrkctx->wakeup_lock,
                                     &abstime);
 
             }
@@ -1174,8 +1173,8 @@ shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers)
         shardcache_counter_add(cache->counters, label, &wrk->pruning);
         */
 
-        MUTEX_INIT(&wrk->wakeup_lock);
-        CONDITION_INIT(&wrk->wakeup_cond);
+        MUTEX_INIT(wrk->wakeup_lock);
+        CONDITION_INIT(wrk->wakeup_cond);
         wrk->iomux = iomux_create(1<<13, 0);
         pthread_create(&wrk->thread, NULL, worker, wrk);
         list_push_value(s->workers, wrk);
@@ -1205,14 +1204,14 @@ clear_workers_list(linked_list_t *list)
         ATOMIC_INCREMENT(wrk->leave);
 
         // wake up the worker if slacking
-        CONDITION_SIGNAL(&wrk->wakeup_cond, &wrk->wakeup_lock);
+        CONDITION_SIGNAL(wrk->wakeup_cond, wrk->wakeup_lock);
 
         pthread_join(wrk->thread, NULL);
 
         queue_destroy(wrk->jobs);
 
-        MUTEX_DESTROY(&wrk->wakeup_lock);
-        CONDITION_DESTROY(&wrk->wakeup_cond);
+        MUTEX_DESTROY(wrk->wakeup_lock);
+        CONDITION_DESTROY(wrk->wakeup_cond);
         SHC_DEBUG3("Worker thread %p exited", wrk);
 
         shardcache_connection_context_t *ctx = list_shift_value(wrk->prune);

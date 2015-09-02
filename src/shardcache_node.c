@@ -153,7 +153,7 @@ shardcache_node_select(shardcache_t *cache, char *label)
             break;
         }
     }
-    SPIN_LOCK(&cache->migration_lock);
+    SPIN_LOCK(cache->migration_lock);
     if (cache->migration && !node) {
         for (i = 0; i < cache->num_migration_shards; i++) {
             if (strcmp(cache->migration_shards[i]->label, label) == 0) {
@@ -162,7 +162,7 @@ shardcache_node_select(shardcache_t *cache, char *label)
             }
         }
     }
-    SPIN_UNLOCK(&cache->migration_lock);
+    SPIN_UNLOCK(cache->migration_lock);
     return node;
 }
 

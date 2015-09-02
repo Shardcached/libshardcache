@@ -479,9 +479,9 @@ shardcache_client_destroy(shardcache_client_t *c)
     if (c->thread) {
         __sync_fetch_and_add(&c->quit, 1);
         pthread_join(c->thread, NULL);
-        CONDITION_SIGNAL(&c->wakeup_cond, &c->wakeup_lock);
-        CONDITION_DESTROY(&c->wakeup_cond);
-        MUTEX_DESTROY(&c->wakeup_lock);
+        CONDITION_SIGNAL(c->wakeup_cond, c->wakeup_lock);
+        CONDITION_DESTROY(c->wakeup_cond);
+        MUTEX_DESTROY(c->wakeup_lock);
     }
     queue_destroy(c->async_jobs);
     chash_free(c->chash);
@@ -1433,7 +1433,7 @@ async_thread(void *priv)
             gettimeofday(&now, NULL);
             timeradd(&now, &wait_time, &abs_wait_time);
             struct timespec ts = { abs_wait_time.tv_sec, abs_wait_time.tv_usec * 1000 };
-            CONDITION_TIMEDWAIT(&c->wakeup_cond, &c->wakeup_lock, &ts);
+            CONDITION_TIMEDWAIT(c->wakeup_cond, c->wakeup_lock, &ts);
         }
 
     }
@@ -1449,12 +1449,12 @@ shardcache_client_getf(shardcache_client_t *c, void *key, size_t klen)
 
     if (job) {
         if (!c->thread) {
-            MUTEX_INIT(&c->wakeup_lock);
-            CONDITION_INIT(&c->wakeup_cond);
+            MUTEX_INIT(c->wakeup_lock);
+            CONDITION_INIT(c->wakeup_cond);
             pthread_create(&c->thread, NULL, async_thread, c);
         }
         queue_push_left(c->async_jobs, job);
-        CONDITION_SIGNAL(&c->wakeup_cond, &c->wakeup_lock);
+        CONDITION_SIGNAL(c->wakeup_cond, c->wakeup_lock);
         return job->pipe[0];
     }
     return -1;
@@ -1467,13 +1467,13 @@ shardcache_client_get_multif(shardcache_client_t *c, shc_multi_item_t **items)
 
     if (job) {
         if (!c->thread) {
-            MUTEX_INIT(&c->wakeup_lock);
-            CONDITION_INIT(&c->wakeup_cond);
+            MUTEX_INIT(c->wakeup_lock);
+            CONDITION_INIT(c->wakeup_cond);
             pthread_create(&c->thread, NULL, async_thread, c);
         }
 
         queue_push_left(c->async_jobs, job);
-        CONDITION_SIGNAL(&c->wakeup_cond, &c->wakeup_lock);
+        CONDITION_SIGNAL(c->wakeup_cond, c->wakeup_lock);
         return job->pipe[0];
     }
     return -1;

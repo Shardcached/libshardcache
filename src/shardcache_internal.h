@@ -7,12 +7,14 @@
  * details, close this header file and forget you've ever seen it
  */
 
+#define THREAD_SAFE
+#include <atomic_defs.h>
+
 #include <linklist.h>
 #include <chash.h>
 #include <hashtable.h>
 #include <queue.h>
 #include <iomux.h>
-#include <atomic_defs.h>
 
 #include "connections_pool.h"
 #include "arc.h"
@@ -33,81 +35,41 @@
 #define LIKELY(__e) __builtin_expect((__e), 1)
 #define UNLIKELY(__e) __builtin_expect((__e), 0)
 
-#define __USE_UNIX98
-#include <pthread.h>
-
-#ifdef __MACH__
-#include <libkern/OSAtomic.h>
-#endif
-
-#ifndef __MACH__
-#define SPIN_INIT(__mutex) pthread_spin_init(__mutex, 0)
-#else
-#define SPIN_INIT(__mutex)
-#endif
-
-#ifndef __MACH__
-#define SPIN_DESTROY(__mutex) pthread_spin_destroy(__mutex)
-#else
-#define SPIN_DESTROY(__mutex)
-#endif
-
-#ifndef __MACH__
-#define SPIN_LOCK(__mutex) pthread_spin_lock(__mutex)
-#else
-#define SPIN_LOCK(__mutex) OSSpinLockLock(__mutex)
-#endif
-
-#ifndef __MACH__
-#define SPIN_UNLOCK(__mutex) pthread_spin_unlock(__mutex)
-#else
-#define SPIN_UNLOCK(__mutex) OSSpinLockUnlock(__mutex)
-#endif
-
-#define MUTEX_INIT(__mutex) pthread_mutex_init(__mutex, NULL)
-
 #define MUTEX_INIT_RECURSIVE(__mutex) {\
     pthread_mutexattr_t __attr; \
     pthread_mutexattr_init(&__attr); \
     pthread_mutexattr_settype(&__attr, PTHREAD_MUTEX_RECURSIVE); \
-    pthread_mutex_init(__mutex, &__attr); \
+    pthread_mutex_init(&(__mutex), &__attr); \
     pthread_mutexattr_destroy(&__attr); \
 }
 
-#define MUTEX_DESTROY(__mutex) pthread_mutex_destroy(__mutex)
+#define CONDITION_INIT(__cond) pthread_cond_init(&(__cond), NULL)
 
-#define MUTEX_LOCK(__mutex) pthread_mutex_lock(__mutex) 
-
-#define MUTEX_UNLOCK(__mutex) pthread_mutex_unlock(__mutex) 
-
-#define CONDITION_INIT(__cond) pthread_cond_init(__cond, NULL)
-
-#define CONDITION_DESTROY(__cond) pthread_cond_destroy(__cond)
+#define CONDITION_DESTROY(__cond) pthread_cond_destroy(&(__cond))
 
 #define CONDITION_WAIT(__c, __m) {\
     MUTEX_LOCK(__m); \
-    pthread_cond_wait(__c, __m); \
+    pthread_cond_wait(&(__c), &(__m)); \
     MUTEX_UNLOCK(__m); \
 }
 
-
 #define CONDITION_TIMEDWAIT(__c, __m, __t) {\
     MUTEX_LOCK(__m); \
-    pthread_cond_timedwait(__c, __m, __t); \
+    pthread_cond_timedwait(&(__c), &(__m), __t); \
     MUTEX_UNLOCK(__m); \
 }
 
 #define CONDITION_WAIT_IF(__c, __m, __e) {\
     MUTEX_LOCK(__m); \
     if ((__e)) \
-        pthread_cond_wait(__c, __m); \
+        pthread_cond_wait(&(__c), &(__m)); \
     MUTEX_UNLOCK(__m); \
 }
 
 #define CONDITION_SIGNAL(__c, __m) {\
-    pthread_mutex_lock(__m); \
-    pthread_cond_signal(__c); \
-    pthread_mutex_unlock(__m); \
+    MUTEX_LOCK(__m); \
+    pthread_cond_signal(&(__c)); \
+    MUTEX_UNLOCK(__m); \
 }
 
 

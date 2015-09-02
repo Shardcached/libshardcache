@@ -17,8 +17,8 @@
 #include "messaging.h"
 #include "connections.h"
 #include "shardcache.h"
+#include "shardcache_internal.h"
 
-#include <atomic_defs.h>
 #include <iomux.h>
 
 #define DEBUG_DUMP_MAXSIZE 128

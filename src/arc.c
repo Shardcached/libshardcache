@@ -8,8 +8,6 @@
 #include <hashtable.h>
 #include <refcnt.h>
 
-#include <atomic_defs.h>
-
 #include "shardcache_internal.h" // for MUTEX_* macros
 
 #include "arc.h"
@@ -171,7 +169,7 @@ arc_balance(arc_t *cache)
     if (!ATOMIC_READ(cache->needs_balance))
         return;
 
-    MUTEX_LOCK(&cache->lock);
+    MUTEX_LOCK(cache->lock);
     /* First move objects from MRU/MFU to their respective ghost lists. */
     while (cache->mru.size + cache->mfu.size > cache->c) {
         if (cache->mru.size > cache->p) {
@@ -199,7 +197,7 @@ arc_balance(arc_t *cache)
     }
 
     ATOMIC_SET(cache->needs_balance, 0);
-    MUTEX_UNLOCK(&cache->lock);
+    MUTEX_UNLOCK(cache->lock);
 }
 
 void
@@ -207,7 +205,7 @@ arc_update_resource_size(arc_t *cache, arc_resource_t res, size_t size)
 {
     arc_object_t *obj = (arc_object_t *)res;
     if (obj) {
-        MUTEX_LOCK(&cache->lock);
+        MUTEX_LOCK(cache->lock);
         arc_state_t *state = ATOMIC_READ(obj->state);
         if (LIKELY(state == &cache->mru || state == &cache->mfu)) {
             ATOMIC_DECREASE(state->size, obj->size);
@@ -215,7 +213,7 @@ arc_update_resource_size(arc_t *cache, arc_resource_t res, size_t size)
             ATOMIC_INCREASE(state->size, obj->size);
         }
         ATOMIC_INCREMENT(cache->needs_balance);
-        MUTEX_UNLOCK(&cache->lock);
+        MUTEX_UNLOCK(cache->lock);
     }
 }
 
@@ -248,7 +246,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
     if (UNLIKELY(obj->locked || (state == &cache->mfu && ATOMIC_READ(obj->state) == NULL)))
         return 0;
 
-    MUTEX_LOCK(&cache->lock);
+    MUTEX_LOCK(cache->lock);
 
     arc_state_t *obj_state = ATOMIC_READ(obj->state);
 
@@ -259,7 +257,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
             // (those in the mfu list being hit again)
             if (LIKELY(state->head.next != &obj->head))
                 arc_list_move_to_head(&obj->head, &state->head);
-            MUTEX_UNLOCK(&cache->lock);
+            MUTEX_UNLOCK(cache->lock);
             return 0;
         }
 
@@ -302,7 +300,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         // unlock the cache while the backend is fetching the data
         // (the object has been locked while being fetched so nobody
         // will change its state)
-        MUTEX_UNLOCK(&cache->lock);
+        MUTEX_UNLOCK(cache->lock);
         size_t size = 0;
         int rc = cache->ops->fetch(obj->ptr, &size, cache->ops->priv);
         switch (rc) {
@@ -322,7 +320,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                         release_ref(cache->refcnt, obj->node);
                     return 1;
                 }
-                MUTEX_LOCK(&cache->lock);
+                MUTEX_LOCK(cache->lock);
                 obj->size = ARC_OBJ_BASE_SIZE(obj) + cache->cos + size;
                 arc_list_prepend(&obj->head, &state->head);
                 ATOMIC_INCREMENT(state->count);
@@ -342,7 +340,7 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
         ATOMIC_SET(obj->state, state);
         ATOMIC_INCREASE(state->size, obj->size);
     }
-    MUTEX_UNLOCK(&cache->lock);
+    MUTEX_UNLOCK(cache->lock);
     return 0;
 }
 
@@ -402,7 +400,7 @@ arc_create(arc_ops_t *ops, size_t c, size_t cached_object_size, size_t *lists_si
     lists_size[2] = &cache->mrug.size;
     lists_size[3] = &cache->mfug.size;
 
-    MUTEX_INIT_RECURSIVE(&cache->lock);
+    MUTEX_INIT_RECURSIVE(cache->lock);
 
     cache->refcnt = refcnt_create(1<<8, terminate_node_callback, free_node_ptr_callback);
     return cache;
@@ -418,7 +416,7 @@ arc_destroy(arc_t *cache)
     arc_list_destroy(cache, &cache->mfug.head);
     ht_destroy(cache->hash);
     refcnt_destroy(cache->refcnt);
-    MUTEX_DESTROY(&cache->lock);
+    MUTEX_DESTROY(cache->lock);
     free(cache);
 }
 

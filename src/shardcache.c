@@ -52,7 +52,7 @@ shardcache_test_ownership_internal(shardcache_t *cache,
     if (cache->num_shards == 1)
         return 1;
 
-    SPIN_LOCK(&cache->migration_lock);
+    SPIN_LOCK(cache->migration_lock);
 
     chash_t *continuum = NULL;
     if (cache->migration && cache->migration_done) { 
@@ -63,7 +63,7 @@ shardcache_test_ownership_internal(shardcache_t *cache,
         if (cache->migration) {
             continuum = cache->migration;
         } else {
-            SPIN_UNLOCK(&cache->migration_lock);
+            SPIN_UNLOCK(cache->migration_lock);
             return -1;
         }
     } else {
@@ -80,7 +80,7 @@ shardcache_test_ownership_internal(shardcache_t *cache,
     if (len)
         *len = name_len;
 
-    SPIN_UNLOCK(&cache->migration_lock);
+    SPIN_UNLOCK(cache->migration_lock);
     return (strcmp(owner, cache->me) == 0);
 }
 
@@ -278,9 +278,9 @@ evictor(void *priv)
             rc = gettimeofday(&now, NULL);
             if (rc == 0) {
                 struct timespec abstime = { now.tv_sec + 1, now.tv_usec * 1000 };
-                MUTEX_LOCK(&cache->evictor_lock);
+                MUTEX_LOCK(cache->evictor_lock);
                 pthread_cond_timedwait(&cache->evictor_cond, &cache->evictor_lock, &abstime);
-                MUTEX_UNLOCK(&cache->evictor_lock);
+                MUTEX_UNLOCK(cache->evictor_lock);
             } else {
                 // TODO - Error messsages
             }
@@ -492,7 +492,7 @@ shardcache_create(char *me,
     else
         cache->num_async = SHARDCACHE_ASYNC_THREADS_NUM_DEFAULT;
 
-    SPIN_INIT(&cache->migration_lock);
+    SPIN_INIT(cache->migration_lock);
 
     if (st) {
         if (st->version != SHARDCACHE_STORAGE_API_VERSION) {
@@ -602,8 +602,8 @@ shardcache_create(char *me,
     shardcache_counter_add(cache->counters, "mfug_size", (uint64_t *)cache->arc_lists_size[3]);
 
     if (ATOMIC_READ(cache->evict_on_delete)) {
-        MUTEX_INIT(&cache->evictor_lock);
-        CONDITION_INIT(&cache->evictor_cond);
+        MUTEX_INIT(cache->evictor_lock);
+        CONDITION_INIT(cache->evictor_cond);
         cache->evictor_jobs = ht_create(128, 256, NULL);
         pthread_create(&cache->evictor_th, NULL, evictor, cache);
     }
@@ -711,20 +711,20 @@ shardcache_destroy(shardcache_t *cache)
     {
         SHC_DEBUG2("Stopping evictor thread");
         pthread_join(cache->evictor_th, NULL);
-        MUTEX_DESTROY(&cache->evictor_lock);
-        CONDITION_DESTROY(&cache->evictor_cond);
+        MUTEX_DESTROY(cache->evictor_lock);
+        CONDITION_DESTROY(cache->evictor_cond);
         ht_set_free_item_callback(cache->evictor_jobs,
                 (ht_free_item_callback_t)destroy_evictor_job);
         ht_destroy(cache->evictor_jobs);
         SHC_DEBUG2("Evictor thread stopped");
     }
 
-    SPIN_LOCK(&cache->migration_lock);
+    SPIN_LOCK(cache->migration_lock);
     if (cache->migration) {
         shardcache_migration_abort(cache);    
     }
-    SPIN_UNLOCK(&cache->migration_lock);
-    SPIN_DESTROY(&cache->migration_lock);
+    SPIN_UNLOCK(cache->migration_lock);
+    SPIN_DESTROY(cache->migration_lock);
 
     if (cache->expirer_th) {
         SHC_DEBUG2("Stopping expirer thread");
@@ -893,10 +893,10 @@ shardcache_get_offset_async(shardcache_t *cache,
     }
 
     cached_object_t *obj = (cached_object_t *)obj_ptr;
-    MUTEX_LOCK(&obj->lock);
+    MUTEX_LOCK(obj->lock);
     if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED)) {
         // if marked for eviction we don't want to return this object
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         arc_release_resource(cache->arc, res);
         // but we will try to fetch it again
         SHC_DEBUG("The retreived object has been already evicted, try fetching it again (offset)");
@@ -909,7 +909,7 @@ shardcache_get_offset_async(shardcache_t *cache,
                 dlen -= offset;
             } else {
                 cb(key, klen, NULL, 0, 0, &obj->ts, priv);
-                MUTEX_UNLOCK(&obj->lock);
+                MUTEX_UNLOCK(obj->lock);
                 arc_release_resource(cache->arc, res);
                 free(data);
                 return 0;
@@ -929,14 +929,14 @@ shardcache_get_offset_async(shardcache_t *cache,
         if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
             cache->expire_time > 0 && obj_expiration < time(NULL)))
         {
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
             arc_drop_resource(cache->arc, res);
             free(data);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
             return shardcache_get_offset_async(cache, key, klen, offset, length, cb, priv);
         } else {
             cb(key, klen, data, dlen, dlen, &obj->ts, priv);
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
             arc_release_resource(cache->arc, res);
             free(data);
             return 0;
@@ -972,7 +972,7 @@ shardcache_get_offset_async(shardcache_t *cache,
         listener->cb = shardcache_get_async_helper;
         listener->priv = arg;
         list_push_value(obj->listeners, listener);
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
     }
 
     arc_release_resource(cache->arc, res);
@@ -1002,7 +1002,7 @@ size_t shardcache_get_offset(shardcache_t *cache,
 
     if (obj_ptr) {
         cached_object_t *obj = (cached_object_t *)obj_ptr;
-        MUTEX_LOCK(&obj->lock);
+        MUTEX_LOCK(obj->lock);
         if (obj->data) {
             if (dlen && data) {
                 if (offset < obj->dlen) {
@@ -1016,7 +1016,7 @@ size_t shardcache_get_offset(shardcache_t *cache,
                 memcpy(timestamp, &obj->ts, sizeof(struct timeval));
         }
         vlen = obj->dlen;
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
     }
     arc_release_resource(cache->arc, res);
     return (offset < vlen + copied) ? (vlen - offset - copied) : 0;
@@ -1051,13 +1051,13 @@ shardcache_get_async(shardcache_t *cache,
     }
 
     cached_object_t *obj = (cached_object_t *)obj_ptr;
-    MUTEX_LOCK(&obj->lock);
+    MUTEX_LOCK(obj->lock);
 
     uint32_t retry_timeout = 1<<7;
     while (UNLIKELY(COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICTED))) {
         // if marked for eviction we don't want to return this object
         // but we will try to fetch it again
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         arc_release_resource(cache->arc, res);
 
         if (retry_timeout > 1<<11) {
@@ -1080,7 +1080,7 @@ shardcache_get_async(shardcache_t *cache,
         }
 
         obj = (cached_object_t *)obj_ptr;
-        MUTEX_LOCK(&obj->lock);
+        MUTEX_LOCK(obj->lock);
     }
 
     if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_COMPLETE)) {
@@ -1090,14 +1090,14 @@ shardcache_get_async(shardcache_t *cache,
         if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
                      cache->expire_time > 0 && obj_expiration < time(NULL)))
         {
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
             arc_drop_resource(cache->arc, res);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EXPIRES].value);
             return shardcache_get_async(cache, key, klen, cb, priv);
 
         } else {
             cb(key, klen, obj->data, obj->dlen, obj->dlen, &obj->ts, priv);
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
             arc_release_resource(cache->arc, res);
         }
     } else {
@@ -1114,7 +1114,7 @@ shardcache_get_async(shardcache_t *cache,
         listener->cb = shardcache_get_async_helper;
         listener->priv = arg;
         list_push_value(obj->listeners, listener);
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
     }
 
     return 0;
@@ -1157,9 +1157,9 @@ shardcache_get_helper(void *key,
         if (total_size != fbuf_used(&arg->data)) {
             ATOMIC_SET(arg->stat, -1);
         }
-        MUTEX_LOCK(&arg->lock);
+        MUTEX_LOCK(arg->lock);
         pthread_cond_signal(&arg->cond);
-        MUTEX_UNLOCK(&arg->lock);
+        MUTEX_UNLOCK(arg->lock);
     }
 
 
@@ -1178,8 +1178,8 @@ shardcache_get(shardcache_t *cache,
 
     shardcache_get_helper_arg_t *arg = calloc(1, sizeof(shardcache_get_helper_arg_t));
 
-    MUTEX_INIT(&arg->lock);
-    CONDITION_INIT(&arg->cond);
+    MUTEX_INIT(arg->lock);
+    CONDITION_INIT(arg->cond);
     arg->stat = 0;
     memset(&arg->ts, 0, sizeof(arg->ts));
     memset(&arg->data, 0, sizeof(arg->data));
@@ -1198,7 +1198,7 @@ shardcache_get(shardcache_t *cache,
             struct timeval sum;
             timeradd(&now, &waiting_time, &sum);
             struct timespec abstime = { sum.tv_sec, sum.tv_usec * 1000 };
-            MUTEX_LOCK(&arg->lock);
+            MUTEX_LOCK(arg->lock);
             pthread_cond_timedwait(&arg->cond, &arg->lock, &abstime); 
             if (ATOMIC_READ(cache->async_quit)) {
                 ATOMIC_SET(arg->stat, 1);
@@ -1213,8 +1213,8 @@ shardcache_get(shardcache_t *cache,
         if (timestamp)
             memcpy(timestamp, &arg->ts, sizeof(struct timeval));
 
-        MUTEX_DESTROY(&arg->lock);
-        CONDITION_DESTROY(&arg->cond);
+        MUTEX_DESTROY(arg->lock);
+        CONDITION_DESTROY(arg->cond);
         free(arg);
 
         if (stat != 0 && !ATOMIC_READ(cache->async_quit)) {
@@ -1233,8 +1233,8 @@ shardcache_get(shardcache_t *cache,
         return value;
     }
     fbuf_destroy(&arg->data);
-    MUTEX_DESTROY(&arg->lock);
-    CONDITION_DESTROY(&arg->cond);
+    MUTEX_DESTROY(arg->lock);
+    CONDITION_DESTROY(arg->cond);
     free(arg);
     return NULL;
 }
@@ -1435,9 +1435,9 @@ shardcache_touch(shardcache_t *cache, void *key, size_t klen)
         arc_resource_t res = arc_lookup(cache->arc, (const void *)key, klen, &obj_ptr, 0);
         if (res) {
             cached_object_t *obj = (cached_object_t *)obj_ptr;
-            MUTEX_LOCK(&obj->lock);
+            MUTEX_LOCK(obj->lock);
             gettimeofday(&obj->ts, NULL);
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
             arc_release_resource(cache->arc, res);
             return obj ? 0 : -1;
         }
@@ -1473,9 +1473,9 @@ shardcache_commence_eviction(shardcache_t *cache, void *key, size_t klen)
         return;
     }
 
-    MUTEX_LOCK(&cache->evictor_lock);
+    MUTEX_LOCK(cache->evictor_lock);
     pthread_cond_signal(&cache->evictor_cond);
-    MUTEX_UNLOCK(&cache->evictor_lock);
+    MUTEX_UNLOCK(cache->evictor_lock);
 }
 
 static inline int
@@ -2025,7 +2025,7 @@ shardcache_get_nodes(shardcache_t *cache, int *num_nodes)
 {
     int i;
     int num = 0;
-    SPIN_LOCK(&cache->migration_lock);
+    SPIN_LOCK(cache->migration_lock);
     num = cache->num_shards;
     if (num_nodes)
         *num_nodes = num;
@@ -2038,7 +2038,7 @@ shardcache_get_nodes(shardcache_t *cache, int *num_nodes)
         shardcache_node_get_all_addresses(orig, addresses, num_replicas);
         list[i] = shardcache_node_create(label, addresses, num_replicas);
     }
-    SPIN_UNLOCK(&cache->migration_lock);
+    SPIN_UNLOCK(cache->migration_lock);
     return list;
 }
 
@@ -2240,9 +2240,9 @@ migrate(void *priv)
 
     list_destroy(to_delete);
 
-    SPIN_LOCK(&cache->migration_lock);
+    SPIN_LOCK(cache->migration_lock);
     cache->migration_done = 1;
-    SPIN_UNLOCK(&cache->migration_lock);
+    SPIN_UNLOCK(cache->migration_lock);
     if (index) {
         SHC_INFO("Migrator ended: processed %d items, migrated %d, errors %d",
                 total_items, migrated_items, errors);
@@ -2297,16 +2297,16 @@ shardcache_set_migration_continuum(shardcache_t *cache,
     size_t shard_lens[num_nodes];
     char *shard_names[num_nodes];
 
-    SPIN_LOCK(&cache->migration_lock);
+    SPIN_LOCK(cache->migration_lock);
 
     if (cache->migration) {
         // already in a migration, ignore this command
-        SPIN_UNLOCK(&cache->migration_lock);
+        SPIN_UNLOCK(cache->migration_lock);
         return -1;
     }
 
     if (shardcache_check_migration_continuum(cache, nodes, num_nodes) != 0) {
-        SPIN_UNLOCK(&cache->migration_lock);
+        SPIN_UNLOCK(cache->migration_lock);
         return -1;
     }
 
@@ -2329,7 +2329,7 @@ shardcache_set_migration_continuum(shardcache_t *cache,
                                     num_nodes,
                                     200);
 
-    SPIN_UNLOCK(&cache->migration_lock);
+    SPIN_UNLOCK(cache->migration_lock);
     return 0;
 }
 
@@ -2342,7 +2342,7 @@ shardcache_migration_begin_internal(shardcache_t *cache,
     int i;
 
     if (shardcache_set_migration_continuum(cache, nodes, num_nodes) != 0) {
-        SPIN_UNLOCK(&cache->migration_lock);
+        SPIN_UNLOCK(cache->migration_lock);
         return -1;
     }
 
@@ -2404,7 +2404,7 @@ static int
 shardcache_migration_abort_internal(shardcache_t *cache)
 {
     int ret = -1;
-    SPIN_LOCK(&cache->migration_lock);
+    SPIN_LOCK(cache->migration_lock);
     if (cache->migration) {
         chash_free(cache->migration);
         free(cache->migration_shards);
@@ -2415,7 +2415,7 @@ shardcache_migration_abort_internal(shardcache_t *cache)
     cache->migration_shards = NULL;
     cache->num_migration_shards = 0;
 
-    SPIN_UNLOCK(&cache->migration_lock);
+    SPIN_UNLOCK(cache->migration_lock);
     pthread_join(cache->migrate_th, NULL);
     return ret;
 }
@@ -2432,7 +2432,7 @@ static int
 shardcache_migration_end_internal(shardcache_t *cache)
 {
     int ret = -1;
-    SPIN_LOCK(&cache->migration_lock);
+    SPIN_LOCK(cache->migration_lock);
     if (cache->migration) {
         chash_free(cache->chash);
         shardcache_free_nodes(cache->shards, cache->num_shards);
@@ -2446,7 +2446,7 @@ shardcache_migration_end_internal(shardcache_t *cache)
         ret = 0;
     }
     cache->migration_done = 0;
-    SPIN_UNLOCK(&cache->migration_lock);
+    SPIN_UNLOCK(cache->migration_lock);
     pthread_join(cache->migrate_th, NULL);
     return ret;
 }

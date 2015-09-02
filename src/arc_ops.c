@@ -77,21 +77,21 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
     int fd = arg->fd;
     int total_len = 0;
 
-    MUTEX_LOCK(&obj->lock);
+    MUTEX_LOCK(obj->lock);
 
     if (!obj->res) {
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         if (fd >= 0)
             close(fd);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         return -1;
     }
     if (!obj->listeners) {
         if (fd >= 0)
             close(fd);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         free(arg);
         arc_release_resource(cache->arc, obj->res);
         return -1;
@@ -101,7 +101,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         if (fd >= 0)
             close(fd);
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         arc_drop_resource(cache->arc, obj->res);
         free(arg);
         return -1;
@@ -114,7 +114,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
         int drop = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) || !obj->dlen);
 
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
 
         if (drop)
             arc_drop_resource(cache->arc, obj->res);
@@ -143,7 +143,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             .len = len
         };
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener, &arg);
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         return 0;
     } else {
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
@@ -164,7 +164,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         if (!total_len)
             COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
 
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         return 0;
     }
 }
@@ -284,7 +284,7 @@ arc_ops_init(const void *key, size_t len, int async, arc_resource_t res, void *p
         obj->listeners = list_create();
         list_set_free_value_callback(obj->listeners, free);
     }
-    MUTEX_INIT(&obj->lock);
+    MUTEX_INIT(obj->lock);
 }
 
 static void *
@@ -306,13 +306,13 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     cached_object_t *obj = (cached_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
 
-    MUTEX_LOCK(&obj->lock);
+    MUTEX_LOCK(obj->lock);
 
     if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_FETCHING)) {
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         return 1;
     } else if (obj->data) {
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         return 0;
     }
 
@@ -356,11 +356,11 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
                 gettimeofday(&obj->ts, NULL);
                 *size = (obj->data == obj->dbuf) ? 0 : obj->dlen;
                 int drop = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP|COBJ_FLAG_COMPLETE);
-                MUTEX_UNLOCK(&obj->lock);
+                MUTEX_UNLOCK(obj->lock);
                 ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
                 return drop ? 1 : 0;
             }
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_ERRORS].value);
             return -1;
         }
@@ -394,7 +394,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
             ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_ERRORS].value);
             COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
             COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
             return -1;
         }
         if (obj->data && obj->dlen) {
@@ -415,7 +415,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC) && obj->listeners)
             list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
 
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         SHC_DEBUG("Item not found for key %s", keystr);
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value);
         return 1;
@@ -439,7 +439,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
     if (cache->expire_time > 0 && !evicted && !cache->lazy_expiration)
         shardcache_schedule_expiration(cache, obj->key, obj->klen, cache->expire_time, 0);
 
-    MUTEX_UNLOCK(&obj->lock);
+    MUTEX_UNLOCK(obj->lock);
 
     ATOMIC_SET(cache->cnt[SHARDCACHE_COUNTER_CACHED_ITEMS].value, arc_count(cache->arc));
 
@@ -452,7 +452,7 @@ arc_ops_store(void *item, void *data, size_t size, void *priv)
 {
     cached_object_t *obj = (cached_object_t *)item;
     //shardcache_t *cache = (shardcache_t *)priv;
-    MUTEX_LOCK(&obj->lock); // XXX - this shouldn't be really necessary
+    MUTEX_LOCK(obj->lock); // XXX - this shouldn't be really necessary
 
     if (obj->data && obj->data != obj->dbuf)
         free(obj->data);
@@ -461,7 +461,7 @@ arc_ops_store(void *item, void *data, size_t size, void *priv)
     memcpy(obj->data, data, size);
     obj->dlen = size;
 
-    MUTEX_UNLOCK(&obj->lock);
+    MUTEX_UNLOCK(obj->lock);
 }
 
 void
@@ -470,7 +470,7 @@ arc_ops_evict(void *item, void *priv)
     cached_object_t *obj = (cached_object_t *)item;
     shardcache_t *cache = (shardcache_t *)priv;
 
-    MUTEX_LOCK(&obj->lock); // XXX - this shouldn't be really necessary
+    MUTEX_LOCK(obj->lock); // XXX - this shouldn't be really necessary
                             // TODO : try removing it and see what happens
                             //        during stress tests
 
@@ -487,7 +487,7 @@ arc_ops_evict(void *item, void *priv)
         list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_error, obj);
         list_destroy(obj->listeners);
     }
-    MUTEX_UNLOCK(&obj->lock);
+    MUTEX_UNLOCK(obj->lock);
 
     if (obj->data)
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_EVICTS].value);
@@ -500,7 +500,7 @@ arc_ops_evict(void *item, void *priv)
     if (obj->key && obj->key != obj->kbuf)
         free(obj->key);
 
-    MUTEX_DESTROY(&obj->lock);
+    MUTEX_DESTROY(obj->lock);
     // NOTE : we don't need to free the memory used to store the actual cached_object_t
     // structure because it's managed by the arc subsystem, which provided us a pointer
     // to the prealloc'd memory as argument to the arc_ops_init() callback
