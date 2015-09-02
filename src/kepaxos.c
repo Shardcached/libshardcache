@@ -189,6 +189,8 @@ kepaxos_context_create(char *dbfile,
 {
     kepaxos_t *ke = calloc(1, sizeof(kepaxos_t));
 
+    MUTEX_INIT(ke->lock);
+
     ke->timeout = timeout > 0 ? timeout : KEPAXOS_CMD_TTL;
     ke->my_index = my_index;
     ke->ballot = (1 << 8) | ke->my_index;
@@ -216,8 +218,6 @@ kepaxos_context_create(char *dbfile,
 
     SHC_DEBUG("Replica context created: %d replicas, starting ballot: %lu",
               ke->num_peers, ke->ballot);
-
-    MUTEX_INIT(ke->lock);
 
     if (pthread_create(&ke->expirer, NULL, kepaxos_expire_commands, ke) != 0) {
         kepaxos_log_destroy(ke->log);
@@ -605,6 +605,7 @@ kepaxos_handle_preaccept(kepaxos_t *ke, kepaxos_msg_t *msg, void **response, siz
         interfering_seq = cmd->seq;
     } else {
         cmd = calloc(1, sizeof(kepaxos_cmd_t));
+        MUTEX_INIT(cmd->lock);
         cmd->key = malloc(msg->klen);
         memcpy(cmd->key, msg->key, msg->klen);
         cmd->klen = msg->klen;
@@ -727,6 +728,7 @@ kepaxos_handle_accept(kepaxos_t *ke, kepaxos_msg_t *msg, void *response, size_t 
         }
     } else {
         cmd = calloc(1, sizeof(kepaxos_cmd_t));
+        MUTEX_INIT(cmd->lock);
         cmd->key = malloc(msg->klen);
         memcpy(cmd->key, msg->key, msg->klen);
         cmd->klen = msg->klen;
