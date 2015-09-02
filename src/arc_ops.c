@@ -454,7 +454,7 @@ arc_ops_store(void *item, void *data, size_t size, void *priv)
     //shardcache_t *cache = (shardcache_t *)priv;
     MUTEX_LOCK(obj->lock); // XXX - this shouldn't be really necessary
 
-    if (obj->data && obj->data != obj->dbuf)
+    if (obj->data != obj->dbuf)
         free(obj->data);
 
     obj->data = (size > sizeof(obj->dbuf)) ? malloc(size) : obj->dbuf;
@@ -494,10 +494,10 @@ arc_ops_evict(void *item, void *priv)
 
     // no lock is necessary here ... if we are here
     // nobody is referencing us anymore
-    if (obj->data && obj->data != obj->dbuf)
+    if (obj->data != obj->dbuf)
         free(obj->data);
 
-    if (obj->key && obj->key != obj->kbuf)
+    if (obj->key != obj->kbuf)
         free(obj->key);
 
     MUTEX_DESTROY(obj->lock);

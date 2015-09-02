@@ -486,8 +486,7 @@ shardcache_client_destroy(shardcache_client_t *c)
     queue_destroy(c->async_jobs);
     chash_free(c->chash);
     shardcache_free_nodes(c->shards, c->num_shards);
-    if (c->auth)
-        free((void *)c->auth);
+    free((void *)c->auth);
     connections_pool_destroy(c->connections);
     free(c);
 }
@@ -706,8 +705,7 @@ void
 shc_multi_item_destroy(shc_multi_item_t *item)
 {
     free(item->key);
-    if (item->data)
-        free(item->data);
+    free(item->data);
 }
 
 static linked_list_t *

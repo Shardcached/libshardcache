@@ -107,11 +107,9 @@ static void
 kepaxos_command_free(kepaxos_cmd_t *c)
 {
     free(c->key);
-    if (c->data)
-        free(c->data);
+    free(c->data);
 
-    if (c->votes)
-        free(c->votes);
+    free(c->votes);
 
     MUTEX_DESTROY(c->lock);
     CONDITION_DESTROY(c->condition);

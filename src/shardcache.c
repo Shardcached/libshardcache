@@ -294,8 +294,7 @@ evictor(void *priv)
 static void
 destroy_volatile(volatile_object_t *obj)
 {
-    if (obj->data)
-        free(obj->data);
+    free(obj->data);
     free(obj);
 }
 
@@ -402,8 +401,7 @@ shardcache_expire_keys(void *priv)
             if (tid && tid_ptr) {
                 ht_set(table, job->key, job->klen, tid_ptr, sizeof(iomux_timeout_id_t));
             } else {
-                if (tid_ptr)
-                    free(tid_ptr);
+                free(tid_ptr);
                 shardcache_expire_context_destroy(ctx);
                 // TODO - Erro message
             }
@@ -749,8 +747,7 @@ shardcache_destroy(shardcache_t *cache)
     if (cache->volatile_storage)
         ht_destroy(cache->volatile_storage);
 
-    if (cache->auth)
-        free((void *)cache->auth);
+    free((void *)cache->auth);
 
     if (cache->arc)
         arc_destroy(cache->arc);
@@ -777,11 +774,9 @@ shardcache_destroy(shardcache_t *cache)
     if (cache->volatile_timeouts)
         ht_destroy(cache->volatile_timeouts);
 
-    if (cache->me)
-        free(cache->me);
+    free(cache->me);
 
-    if (cache->addr)
-        free(cache->addr);
+    free(cache->addr);
 
     if (cache->shards)
         shardcache_free_nodes(cache->shards, cache->num_shards);
@@ -957,8 +952,7 @@ shardcache_get_offset_async(shardcache_t *cache,
                     memcpy(data, obj->data + offset, dlen);
                 }
                 cb(key, klen, data, dlen, 0, NULL, priv);
-                if (data)
-                    free(data);
+                free(data);
             }
         }
 
@@ -1219,8 +1213,7 @@ shardcache_get(shardcache_t *cache,
 
         if (stat != 0 && !ATOMIC_READ(cache->async_quit)) {
             SHC_ERROR("Error trying to get key: %s", keystr);
-            if (value)
-                free(value);
+            free(value);
             return NULL;
         }
 
@@ -2093,10 +2086,8 @@ shardcache_free_index(shardcache_storage_index_t *index)
 {
     if (index->items) {
         int i;
-        for (i = 0; i < index->size; i++) {
-            if (index->items[i].key)
-                free(index->items[i].key);
-        }
+        for (i = 0; i < index->size; i++)
+            free(index->items[i].key);
         free(index->items);
     }
     free(index);
