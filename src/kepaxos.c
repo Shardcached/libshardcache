@@ -98,6 +98,7 @@ static void
 kepaxos_command_destroy(kepaxos_cmd_t *c)
 {
     MUTEX_LOCK(c->lock);
+    c->waiting = 0;
     pthread_cond_broadcast(&c->condition);
     MUTEX_UNLOCK(c->lock);
 }
@@ -436,7 +437,8 @@ kepaxos_run_command(kepaxos_t *ke,
             MUTEX_LOCK(cmd->lock);
             cmd->waiting = 1;
             MUTEX_UNLOCK(ke->lock);
-            pthread_cond_wait(&cmd->condition, &cmd->lock);
+            while (cmd->waiting)
+                pthread_cond_wait(&cmd->condition, &cmd->lock);
             MUTEX_UNLOCK(cmd->lock);
             MUTEX_LOCK(ke->lock);
             kepaxos_command_free(cmd);
