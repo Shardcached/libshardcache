@@ -1,12 +1,12 @@
-#ifndef __SHARDCACHE_NODE_H__
-#define __SHARDCACHE_NODE_H__
+#ifndef SHARDCACHE_NODE_H
+#define SHARDCACHE_NODE_H
 
 /**
  * @brief Structure representing a node taking part in the shard cache
  * @see shardcache_create()
  * @see shardcache_get_nodes()
  */
-typedef struct __shardcache_node_s shardcache_node_t;
+typedef struct _shardcache_node_s shardcache_node_t;
 
 #include <shardcache.h>
 

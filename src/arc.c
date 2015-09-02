@@ -13,16 +13,16 @@
 #include "arc.h"
 
 
-#define LIKELY(__e) __builtin_expect((__e), 1)
-#define UNLIKELY(__e) __builtin_expect((__e), 0)
+#define LIKELY(_e) __builtin_expect((_e), 1)
+#define UNLIKELY(_e) __builtin_expect((_e), 0)
 
 /**********************************************************************
  * Simple double-linked list, inspired by the implementation used in the
  * linux kernel.
  */
 #pragma pack(push, 1)
-typedef struct __arc_list {
-    struct __arc_list *prev, *next;
+typedef struct _arc_list {
+    struct _arc_list *prev, *next;
 } arc_list_t;
 #pragma pack(pop)
 
@@ -39,7 +39,7 @@ typedef struct __arc_list {
  * The arc state represents one of the m{r,f}u{g,} lists
  */
 #pragma pack(push, 1)
-typedef struct __arc_state {
+typedef struct _arc_state {
     arc_list_t head;
     size_t size; // note must be accessed only via atomic functions
     uint64_t count; // note must be accessed only via atomic functions
@@ -50,7 +50,7 @@ typedef struct __arc_state {
  * this structure private, don't access the fields directly. When creating
  * a new object, use the arc_object_create() function to allocate and initialize it. */
 #pragma pack(push, 1)
-typedef struct __arc_object {
+typedef struct _arc_object {
     arc_state_t *state;
     arc_list_t head;
     size_t size;
@@ -65,13 +65,13 @@ typedef struct __arc_object {
 #pragma pack(pop)
 
 /* The actual cache. */
-struct __arc {
-    struct __arc_ops *ops;
+struct _arc {
+    struct _arc_ops *ops;
     hashtable_t *hash;
 
     size_t c, p;
     size_t cos;
-    struct __arc_state mrug, mru, mfu, mfug;
+    struct _arc_state mrug, mru, mfu, mfug;
 
     int needs_balance;
     int mode;

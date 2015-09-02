@@ -19,47 +19,47 @@
 #define SHARDCACHE_REPLICA_WRKDIR_DEFAULT "/tmp/shcrpl"
 #define KEPAXOS_LOG_FILENAME "kepaxos_log.db"
 
-#define MSG_WRITE_UINT64(__m, __o, __n) \
+#define MSG_WRITE_UINT64(_m, _o, _n) \
 { \
-    *((uint32_t *)((__m) + (__o))) = htonl((__n) >> 32); \
-    (__o) += sizeof(uint32_t); \
-    *((uint32_t *)((__m) + (__o))) = htonl((__n) & 0x00000000FFFFFFFF); \
-    (__o) += sizeof(uint32_t); \
+    *((uint32_t *)((_m) + (_o))) = htonl((_n) >> 32); \
+    (_o) += sizeof(uint32_t); \
+    *((uint32_t *)((_m) + (_o))) = htonl((_n) & 0x00000000FFFFFFFF); \
+    (_o) += sizeof(uint32_t); \
 }
 
-#define MSG_WRITE_UINT32(__m, __o, __n) \
+#define MSG_WRITE_UINT32(_m, _o, _n) \
 { \
-        *((uint32_t *)((__m) + (__o))) = htonl((__n)); \
-        (__o) += sizeof(uint32_t); \
+        *((uint32_t *)((_m) + (_o))) = htonl((_n)); \
+        (_o) += sizeof(uint32_t); \
 }
 
-#define MSG_WRITE_POINTER(__m, __o, __p, __l) \
+#define MSG_WRITE_POINTER(_m, _o, _p, _l) \
 { \
-    memcpy((__m) + (__o), (__p), (__l)); \
-    (__o) += (__l); \
+    memcpy((_m) + (_o), (_p), (_l)); \
+    (_o) += (_l); \
 }
 
-#define MSG_READ_UINT64(__m, __n) { \
-    (__n) = ((uint64_t)ntohl(*((uint32_t *)(__m))) << 32) | \
-            ntohl(*((uint32_t *)((__m) + sizeof(uint32_t)))); \
-    (__m) +=  2 * sizeof(uint32_t); \
+#define MSG_READ_UINT64(_m, _n) { \
+    (_n) = ((uint64_t)ntohl(*((uint32_t *)(_m))) << 32) | \
+            ntohl(*((uint32_t *)((_m) + sizeof(uint32_t)))); \
+    (_m) +=  2 * sizeof(uint32_t); \
 }
 
-#define MSG_READ_UINT32(__m, __n) { \
-    (__n) = ntohl(*((uint32_t *)(__m))); \
-    (__m) += sizeof(uint32_t); \
+#define MSG_READ_UINT32(_m, _n) { \
+    (_n) = ntohl(*((uint32_t *)(_m))); \
+    (_m) += sizeof(uint32_t); \
 }
 
-#define MSG_READ_POINTER(__m, __p, __l) { \
-    if ((__l) > 0) { \
-        (__p) = (__m); \
-        (__m) += (__l); \
+#define MSG_READ_POINTER(_m, _p, _l) { \
+    if ((_l) > 0) { \
+        (_p) = (_m); \
+        (_m) += (_l); \
     } else { \
-        (__p) = NULL; \
+        (_p) = NULL; \
     } \
 }
 
-struct __shardcache_replica_s {
+struct _shardcache_replica_s {
     shardcache_t *shc;        // a valid shardcache instance
     shardcache_node_t *node;  // the shardcache node (union of all replicas)
     char *me;                 // myself (among the node replicas)

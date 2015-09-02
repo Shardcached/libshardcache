@@ -1,5 +1,5 @@
-#ifndef __SHARDCACHE_LOG_H__
-#define __SHARDCACHE_LOG_H__
+#ifndef SHARDCACHE_LOG_H
+#define SHARDCACHE_LOG_H
 
 /*
  *******************************************************************************
@@ -50,22 +50,22 @@ char *shardcache_hex_escape(char *buf, int len, int limit, int use_prefix);
  */
 unsigned long shardcache_byte_escape(char ch, char esc, char *buffer, unsigned long len, char **dest, unsigned long *newlen);
 
-#define SHC_ERROR(__fmt, __args...)      do { shardcache_log_message(LOG_ERR,     0, __fmt, ## __args); } while (0)
-#define SHC_WARNING(__fmt, __args...)    do { shardcache_log_message(LOG_WARNING, 0, __fmt, ## __args); } while (0)
-#define SHC_WARN(__fmt, __args...) WARNING(__fmt, ## __args)
-#define SHC_NOTICE(__fmt, __args...)     do { shardcache_log_message(LOG_NOTICE,  0, __fmt, ## __args); } while (0)
-#define SHC_INFO(__fmt, __args...)       do { shardcache_log_message(LOG_INFO,    0, __fmt, ## __args); } while (0)
-#define SHC_DIE(__fmt, __args...)        do { SHC_ERROR(__fmt, ## __args); exit(-1); } while (0)
+#define SHC_ERROR(_fmt, _args...)      do { shardcache_log_message(LOG_ERR,     0, _fmt, ## _args); } while (0)
+#define SHC_WARNING(_fmt, _args...)    do { shardcache_log_message(LOG_WARNING, 0, _fmt, ## _args); } while (0)
+#define SHC_WARN(_fmt, _args...) WARNING(_fmt, ## _args)
+#define SHC_NOTICE(_fmt, _args...)     do { shardcache_log_message(LOG_NOTICE,  0, _fmt, ## _args); } while (0)
+#define SHC_INFO(_fmt, _args...)       do { shardcache_log_message(LOG_INFO,    0, _fmt, ## _args); } while (0)
+#define SHC_DIE(_fmt, _args...)        do { SHC_ERROR(_fmt, ## _args); exit(-1); } while (0)
 
-#define __SHC_DEBUG(__n, __fmt, __args...)  do { if (shardcache_log_level() >= LOG_DEBUG + __n) \
-    shardcache_log_message(LOG_DEBUG,   __n + 1, __fmt, ## __args); } while (0)
+#define _SHC_DEBUG(_n, _fmt, _args...)  do { if (shardcache_log_level() >= LOG_DEBUG + _n) \
+    shardcache_log_message(LOG_DEBUG,   _n + 1, _fmt, ## _args); } while (0)
 
-#define SHC_DEBUG(__fmt, __args...)  __SHC_DEBUG(0, __fmt, ## __args)
-#define SHC_DEBUG1(__fmt, __args...) SHC_DEBUG(__fmt, ## __args)
-#define SHC_DEBUG2(__fmt, __args...) __SHC_DEBUG(1, __fmt, ## __args)
-#define SHC_DEBUG3(__fmt, __args...) __SHC_DEBUG(2, __fmt, ## __args)
-#define SHC_DEBUG4(__fmt, __args...) __SHC_DEBUG(3, __fmt, ## __args)
-#define SHC_DEBUG5(__fmt, __args...) __SHC_DEBUG(4, __fmt, ## __args)
+#define SHC_DEBUG(_fmt, _args...)  _SHC_DEBUG(0, _fmt, ## _args)
+#define SHC_DEBUG1(_fmt, _args...) SHC_DEBUG(_fmt, ## _args)
+#define SHC_DEBUG2(_fmt, _args...) _SHC_DEBUG(1, _fmt, ## _args)
+#define SHC_DEBUG3(_fmt, _args...) _SHC_DEBUG(2, _fmt, ## _args)
+#define SHC_DEBUG4(_fmt, _args...) _SHC_DEBUG(3, _fmt, ## _args)
+#define SHC_DEBUG5(_fmt, _args...) _SHC_DEBUG(4, _fmt, ## _args)
 
 #endif
 

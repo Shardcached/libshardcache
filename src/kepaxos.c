@@ -13,11 +13,11 @@
 
 #define KEPAXOS_CMD_TTL 30 // default to 30 seconds
 
-#define BALLOT2NODE(__k, __b) (__k)->peers[ (__b) & 0x00000000000000FF ]
-#define BALLOT2NODEINDEX(__b) (__b) & 0x00000000000000FF
-#define IS_MY_BALLOT(__k, __b) ((__k)->my_index == ((__b) & 0x00000000000000FF))
+#define BALLOT2NODE(_k, _b) (_k)->peers[ (_b) & 0x00000000000000FF ]
+#define BALLOT2NODEINDEX(_b) (_b) & 0x00000000000000FF
+#define IS_MY_BALLOT(_k, _b) ((_k)->my_index == ((_b) & 0x00000000000000FF))
 
-#define BALLOT_VALUE(__b) ((__b) >> 8)
+#define BALLOT_VALUE(_b) ((_b) >> 8)
 
 #define KEPAXOS_MSGLEN_MIN (3 + (sizeof(uint32_t) * 6) + sizeof(uint16_t))
 
@@ -57,7 +57,7 @@ typedef struct {
     uint64_t seq;
 } kepaxos_vote_t;
 
-struct __kepaxos_cmd_s {
+struct _kepaxos_cmd_s {
     unsigned char type;
     kepaxos_msg_type_t msg;
     kepaxos_cmd_status_t status;
@@ -79,7 +79,7 @@ struct __kepaxos_cmd_s {
     int waiting;
 };
 
-struct __kepaxos_s {
+struct _kepaxos_s {
     kepaxos_log_t *log;
     char *dbfile;
     hashtable_t *commands; // key => cmd 

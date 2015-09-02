@@ -1,9 +1,9 @@
-#ifndef __CONNECTIONS_POOL_H__
-#define __CONNECTIONS_POOL_H__
+#ifndef CONNECTIONS_POOL_H
+#define CONNECTIONS_POOL_H
 
-typedef struct __connections_pool_s connections_pool_t;
+typedef struct _connections_pool_s connections_pool_t;
 
-typedef struct __connection_pool_entry_s connection_pool_entry_t;
+typedef struct _connection_pool_entry_s connection_pool_entry_t;
 
 connections_pool_t * connections_pool_create(int tcp_timeout, int expire_time, int max_spare);
 void connections_pool_destroy(connections_pool_t *cc);

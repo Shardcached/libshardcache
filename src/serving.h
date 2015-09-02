@@ -1,10 +1,10 @@
-#ifndef __SERVING_H__
-#define __SERVING_H__
+#ifndef SERVING_H
+#define SERVING_H
 
 #include "shardcache.h"
 #include "counters.h"
 
-typedef struct __shardcache_serving_s shardcache_serving_t;
+typedef struct _shardcache_serving_s shardcache_serving_t;
 
 void *accept_requests(void *priv);
 shardcache_serving_t *start_serving(shardcache_t *cache, int num_workers);

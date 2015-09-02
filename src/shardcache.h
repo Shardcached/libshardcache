@@ -1,5 +1,5 @@
-#ifndef __SHARDCACHE_H__
-#define __SHARDCACHE_H__
+#ifndef SHARDCACHE_H
+#define SHARDCACHE_H
 
 /**
  * @file shardcache.h
@@ -18,7 +18,7 @@
 /**
  * @brief Opaque structure representing the actual shardcache instance
  */
-typedef struct __shardcache_s shardcache_t;
+typedef struct _shardcache_s shardcache_t;
 
 #include <shardcache_log.h>
 #include <shardcache_storage.h>

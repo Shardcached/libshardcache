@@ -5,7 +5,7 @@
 
 #define COUNTERS_ALLOC_CHUNK 128
 
-struct __shardcache_counters_s {
+struct _shardcache_counters_s {
     linked_list_t *lookup;
 };
 

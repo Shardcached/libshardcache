@@ -1,5 +1,5 @@
-#ifndef __SHARDCACHE_REPLICA_H__
-#define __SHARDCACHE_REPLICA_H__
+#ifndef SHARDCACHE_REPLICA_H
+#define SHARDCACHE_REPLICA_H
 
 #include "shardcache.h"
 #include "messaging.h"
@@ -14,9 +14,9 @@ typedef enum {
     SHARDCACHE_REPLICA_OP_MIGRATION_END   = 0x07
 } shardcache_replica_operation_t;
 
-typedef struct __shardcache_replica_s shardcache_replica_t;
+typedef struct _shardcache_replica_s shardcache_replica_t;
 
-typedef struct __shardcache_replica_command_s shardcache_replica_command_t;
+typedef struct _shardcache_replica_command_s shardcache_replica_command_t;
 
 shardcache_replica_t *shardcache_replica_create(shardcache_t *shc,
                                                 shardcache_node_t *node,

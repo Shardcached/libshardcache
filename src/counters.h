@@ -1,7 +1,7 @@
-#ifndef __SHARDCACHE_COUNTERS_H__
-#define __SHARDCACHE_COUNTERS_H__
+#ifndef SHARDCACHE_COUNTERS_H
+#define SHARDCACHE_COUNTERS_H
 
-typedef struct __shardcache_counters_s shardcache_counters_t;
+typedef struct _shardcache_counters_s shardcache_counters_t;
 
 shardcache_counters_t *shardcache_init_counters();
 void shardcache_release_counters(shardcache_counters_t *counters);

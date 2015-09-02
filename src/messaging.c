@@ -24,7 +24,7 @@
 #define DEBUG_DUMP_MAXSIZE 128
 
 #pragma pack(push, 1)
-struct __async_read_ctx_s {
+struct _async_read_ctx_s {
     async_read_callback_t cb;
     shardcache_hdr_t hdr;
     shardcache_hdr_t sig_hdr;

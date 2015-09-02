@@ -1,10 +1,10 @@
-#ifndef __KEPAXOS_LOG_H__
-#define __KEPAXOS_LOG_H__
+#ifndef KEPAXOS_LOG_H
+#define KEPAXOS_LOG_H
 
 #include <sys/types.h>
 #include <stdint.h>
 
-typedef struct __kepaxos_log_s kepaxos_log_t;
+typedef struct _kepaxos_log_s kepaxos_log_t;
 
 kepaxos_log_t *kepaxos_log_create(char *dbfile);
 void kepaxos_log_destroy(kepaxos_log_t *log);

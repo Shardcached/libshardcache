@@ -1,5 +1,5 @@
-#ifndef __SHARDCACHE_STORAGE_H__
-#define __SHARDCACHE_STORAGE_H__
+#ifndef SHARDCACHE_STORAGE_H
+#define SHARDCACHE_STORAGE_H
 
 #include <shardcache.h>
 
@@ -112,7 +112,7 @@ typedef int
  * @brief structure representing an item in the storage index
  *
  */
-typedef struct __shardcache_storage_index_item_s {
+typedef struct _shardcache_storage_index_item_s {
     void *key;   //!<A valid pointer to the key
     size_t klen; //!<The length of the key
     size_t vlen; //!<The length of the value
@@ -126,7 +126,7 @@ typedef struct __shardcache_storage_index_item_s {
  * @note  Can be obtained calling shardcache_get_index()
  *        and MUST be disposed using shardcache_free_index()
  */
-typedef struct __shardcache_storage_index_s {
+typedef struct _shardcache_storage_index_s {
     //! Array of shardcache_storage_index_item_t structures
     shardcache_storage_index_item_t *items;
     //! The number of elements in the 'items' array
@@ -207,7 +207,7 @@ typedef void (*shardcache_thread_exit_callback_t)(void *priv);
 
 #define SHARDCACHE_STORAGE_API_VERSION 0x01
 
-typedef struct __shardcache_storage_s shardcache_storage_t;
+typedef struct _shardcache_storage_s shardcache_storage_t;
 typedef int (*shardcache_storage_init_t)(shardcache_storage_t *, char **);
 typedef void (*shardcache_storage_destroy_t)(void *);
 typedef int (*shardcache_storage_reset_t)(void *);
@@ -218,7 +218,7 @@ typedef int (*shardcache_storage_reset_t)(void *);
  * @brief      Structure holding all the callback pointers required
  *             by shardcache to interact with underlying storage
  */
-struct __shardcache_storage_s {
+struct _shardcache_storage_s {
 
     uint32_t version; // The version of the storage structure
  

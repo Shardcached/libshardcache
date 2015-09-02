@@ -9,7 +9,7 @@
 
 #define ADDR_REGEXP "^[a-z0-9_\\.\\-]+(:[0-9]+)?$"
 
-struct __shardcache_node_s {
+struct _shardcache_node_s {
     char *label;
     char **address;
     int num_replicas;

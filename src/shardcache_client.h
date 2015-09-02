@@ -1,5 +1,5 @@
-#ifndef __SHARDCACHE_CLIENT_H__
-#define __SHARDCACHE_CLIENT_H__
+#ifndef SHARDCACHE_CLIENT_H
+#define SHARDCACHE_CLIENT_H
 
 #include <shardcache.h>
 

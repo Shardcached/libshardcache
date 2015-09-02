@@ -19,7 +19,7 @@
 #include <time.h>
 #include <sys/resource.h>
 
-struct __connections_pool_s {
+struct _connections_pool_s {
     hashtable_t *table;
     int tcp_timeout;
     int max_spare;
@@ -28,7 +28,7 @@ struct __connections_pool_s {
     int fds_limit;
 };
 
-struct __connection_pool_entry_s {
+struct _connection_pool_entry_s {
     int fd;
     struct timeval last_access;
 };

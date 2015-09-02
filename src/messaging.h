@@ -1,5 +1,5 @@
-#ifndef __MESSAGING_H__
-#define __MESSAGING_H__
+#ifndef MESSAGING_H
+#define MESSAGING_H
 
 #include <sys/types.h>
 #include <iomux.h>
@@ -69,7 +69,7 @@ typedef enum {
     SHC_RES_ERR    = 0xFF
 } shardcache_res_t;
 
-typedef struct __shardcache_record_s {
+typedef struct _shardcache_record_s {
     void *v;
     size_t l;
 } shardcache_record_t;
@@ -233,7 +233,7 @@ typedef int (*async_read_callback_t)(void *data,
                                      void *priv);
 
 
-typedef struct __async_read_ctx_s async_read_ctx_t;
+typedef struct _async_read_ctx_s async_read_ctx_t;
 
 async_read_ctx_t *async_read_context_create(char *auth,
                                             async_read_callback_t cb,

@@ -25,51 +25,51 @@
 
 #define DEBUG_DUMP_MAXSIZE 128
 
-#define KEY2STR(__k, __l, __o, __ol) \
+#define KEY2STR(_k, _l, _o, _ol) \
 { \
-    size_t __s = (__l < __ol) ? __l : __ol; \
-    memcpy(__o, __k, __s); \
-    __o[__s] = 0; \
+    size_t _s = (_l < _ol) ? _l : _ol; \
+    memcpy(_o, _k, _s); \
+    _o[_s] = 0; \
 }
 
-#define LIKELY(__e) __builtin_expect((__e), 1)
-#define UNLIKELY(__e) __builtin_expect((__e), 0)
+#define LIKELY(_e) __builtin_expect((_e), 1)
+#define UNLIKELY(_e) __builtin_expect((_e), 0)
 
-#define MUTEX_INIT_RECURSIVE(__mutex) {\
-    pthread_mutexattr_t __attr; \
-    pthread_mutexattr_init(&__attr); \
-    pthread_mutexattr_settype(&__attr, PTHREAD_MUTEX_RECURSIVE); \
-    pthread_mutex_init(&(__mutex), &__attr); \
-    pthread_mutexattr_destroy(&__attr); \
+#define MUTEX_INIT_RECURSIVE(_mutex) {\
+    pthread_mutexattr_t _attr; \
+    pthread_mutexattr_init(&_attr); \
+    pthread_mutexattr_settype(&_attr, PTHREAD_MUTEX_RECURSIVE); \
+    pthread_mutex_init(&(_mutex), &_attr); \
+    pthread_mutexattr_destroy(&_attr); \
 }
 
-#define CONDITION_INIT(__cond) pthread_cond_init(&(__cond), NULL)
+#define CONDITION_INIT(_cond) pthread_cond_init(&(_cond), NULL)
 
-#define CONDITION_DESTROY(__cond) pthread_cond_destroy(&(__cond))
+#define CONDITION_DESTROY(_cond) pthread_cond_destroy(&(_cond))
 
-#define CONDITION_WAIT(__c, __m) {\
-    MUTEX_LOCK(__m); \
-    pthread_cond_wait(&(__c), &(__m)); \
-    MUTEX_UNLOCK(__m); \
+#define CONDITION_WAIT(_c, _m) {\
+    MUTEX_LOCK(_m); \
+    pthread_cond_wait(&(_c), &(_m)); \
+    MUTEX_UNLOCK(_m); \
 }
 
-#define CONDITION_TIMEDWAIT(__c, __m, __t) {\
-    MUTEX_LOCK(__m); \
-    pthread_cond_timedwait(&(__c), &(__m), __t); \
-    MUTEX_UNLOCK(__m); \
+#define CONDITION_TIMEDWAIT(_c, _m, _t) {\
+    MUTEX_LOCK(_m); \
+    pthread_cond_timedwait(&(_c), &(_m), _t); \
+    MUTEX_UNLOCK(_m); \
 }
 
-#define CONDITION_WAIT_IF(__c, __m, __e) {\
-    MUTEX_LOCK(__m); \
-    if ((__e)) \
-        pthread_cond_wait(&(__c), &(__m)); \
-    MUTEX_UNLOCK(__m); \
+#define CONDITION_WAIT_IF(_c, _m, _e) {\
+    MUTEX_LOCK(_m); \
+    if ((_e)) \
+        pthread_cond_wait(&(_c), &(_m)); \
+    MUTEX_UNLOCK(_m); \
 }
 
-#define CONDITION_SIGNAL(__c, __m) {\
-    MUTEX_LOCK(__m); \
-    pthread_cond_signal(&(__c)); \
-    MUTEX_UNLOCK(__m); \
+#define CONDITION_SIGNAL(_c, _m) {\
+    MUTEX_LOCK(_m); \
+    pthread_cond_signal(&(_c)); \
+    MUTEX_UNLOCK(_m); \
 }
 
 
@@ -83,7 +83,7 @@ typedef struct {
     queue_t *queue;
 } shardcache_async_io_context_t;
  
-struct __shardcache_s {
+struct _shardcache_s {
     char *me;   // a copy of the label for this node
                 // it won't be changed until destruction
     char *addr; // a copy of the local address used for shardcache communication

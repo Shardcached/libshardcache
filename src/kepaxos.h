@@ -2,15 +2,15 @@
 // Key-based Egalitarian Paxos
 //
 
-#ifndef __CONSENSUS__H__
-#define __CONSENSUS__H__
+#ifndef CONSENSUS_H
+#define CONSENSUS_H
 
 #include <sys/types.h>
 #include <stdint.h>
 #include "kepaxos_log.h"
 
-typedef struct __kepaxos_cmd_s kepaxos_cmd_t;
-typedef struct __kepaxos_s kepaxos_t;
+typedef struct _kepaxos_cmd_s kepaxos_cmd_t;
+typedef struct _kepaxos_s kepaxos_t;
 
 typedef kepaxos_log_item_t kepaxos_diff_item_t;
 

@@ -43,7 +43,7 @@ typedef struct {
     //uint64_t pruning;
 } shardcache_worker_context_t;
 
-struct __shardcache_serving_s {
+struct _shardcache_serving_s {
     shardcache_t *cache;
     int sock;
     pthread_t io_thread;
@@ -56,11 +56,11 @@ struct __shardcache_serving_s {
     uint64_t total_workers;
 };
 
-typedef struct __shardcache_connection_context_s shardcache_connection_context_t;
+typedef struct _shardcache_connection_context_s shardcache_connection_context_t;
 
 #define SHARDCACHE_REQUEST_RECORDS_MAX 4
 
-typedef struct __shardcache_request_s {
+typedef struct _shardcache_request_s {
     fbuf_t records[SHARDCACHE_REQUEST_RECORDS_MAX];
     int fd;
     shardcache_hdr_t hdr;
@@ -78,14 +78,14 @@ typedef struct __shardcache_request_s {
     int copied;
     int done;
     fbuf_t fetch_accumulator;
-    TAILQ_ENTRY(__shardcache_request_s) next;
+    TAILQ_ENTRY(_shardcache_request_s) next;
 } shardcache_request_t;
 
-struct __shardcache_connection_context_s {
+struct _shardcache_connection_context_s {
     shardcache_hdr_t hdr;
     shardcache_hdr_t sig_hdr;
 
-    TAILQ_HEAD (, __shardcache_request_s) requests;
+    TAILQ_HEAD (, _shardcache_request_s) requests;
     int num_requests;
 
     fbuf_t records[SHARDCACHE_REQUEST_RECORDS_MAX];

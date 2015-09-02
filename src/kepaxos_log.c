@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <errno.h>
 
-struct __kepaxos_log_s {
+struct _kepaxos_log_s {
     char *dbpath;
     uint64_t max_ballot;
     FILE *bfile;

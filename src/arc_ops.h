@@ -43,9 +43,9 @@ typedef struct {
 } cached_object_t;
 #pragma pack(pop)
 
-#define COBJ_CHECK_FLAGS(__o, __f) ((((__o)->flags) & (__f)) == (__f))
-#define COBJ_SET_FLAG(__o, __f) ((__o)->flags |= (__f))
-#define COBJ_UNSET_FLAG(__o, __f) ((__o)->flags &= ~(__f))
+#define COBJ_CHECK_FLAGS(_o, _f) ((((_o)->flags) & (_f)) == (_f))
+#define COBJ_SET_FLAG(_o, _f) ((_o)->flags |= (_f))
+#define COBJ_UNSET_FLAG(_o, _f) ((_o)->flags &= ~(_f))
 
 typedef struct {
     shardcache_get_async_callback_t cb;
