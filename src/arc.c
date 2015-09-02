@@ -274,7 +274,11 @@ arc_move(arc_t *cache, arc_object_t *obj, arc_state_t *state)
                 size_t csize = cache->mfug.size
                              ? (cache->mrug.size / cache->mfug.size)
                              : cache->mrug.size / 2;
-                cache->p = MAX(0, cache->p - MAX(csize, 1));
+                size_t diff = MAX(csize, 1);
+                if (cache->p > diff)
+                    cache->p -= diff;
+                else
+                    cache->p = 0;
             }
         }
 
