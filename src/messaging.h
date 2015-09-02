@@ -1,5 +1,5 @@
-#ifndef MESSAGING_H
-#define MESSAGING_H
+#ifndef SHARDCACHE_MESSAGING_H
+#define SHARDCACHE_MESSAGING_H
 
 #include <sys/types.h>
 #include <iomux.h>

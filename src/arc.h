@@ -5,8 +5,8 @@
  *
  * @note Iniitially based on https://github.com/wereHamster/adaptive-replacement-cache.git
  */
-#ifndef ARC_H
-#define ARC_H
+#ifndef SHARDCACHE_ARC_H
+#define SHARDCACHE_ARC_H
 #include <sys/types.h>
 #include "shardcache.h"
 
@@ -192,7 +192,7 @@ uint64_t arc_count(arc_t *cache);
 
 void arc_set_mode(arc_t *cache, arc_mode_t mode);
 
-#endif /* ARC_H */
+#endif /* SHARDCACHE_ARC_H */
 
 // vim: tabstop=4 shiftwidth=4 expandtab:
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
