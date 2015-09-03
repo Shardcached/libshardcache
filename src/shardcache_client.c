@@ -1222,8 +1222,7 @@ async_job_destroy(async_job_t *job)
             free(job->arg.single.wrk);
             break;
         case JOB_CMD_GET_MULTI:
-            if (job->arg.multi.pools)
-                list_destroy(job->arg.multi.pools);
+            list_destroy(job->arg.multi.pools);
             if (job->arg.multi.contexts) {
                 shc_multi_ctx_t *ctx = NULL;
                 while ((ctx = list_shift_value(job->arg.multi.contexts)))
