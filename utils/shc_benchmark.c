@@ -547,8 +547,7 @@ main (int argc, char **argv)
                                : counts[i].value;
                 if (!slowest_client || (diff > 0 && slowest_client > diff)) {
                     slowest_client = diff;
-                    if (slowest_label)
-                        free(slowest_label);
+                    free(slowest_label);
                     slowest_label = strdup(counts[i].name);
                 }
 
@@ -595,8 +594,7 @@ main (int argc, char **argv)
                    fastest_client,
                    stuck_clients);
         }
-        if (slowest_label)
-            free(slowest_label);
+        free(slowest_label);
 
         if (stats_file) {
             char line[(10*9) + 10];
@@ -621,8 +619,7 @@ main (int argc, char **argv)
 
 
         num_responses_prev = __sync_add_and_fetch(&num_responses, 0);
-        if (counts)
-            free(counts);
+        free(counts);
     }
 
     for (i = 0; i < num_threads; i++) {
