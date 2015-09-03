@@ -154,8 +154,7 @@ int main(int argc, char **argv)
             ut_failure("%s != %s", vv, v);
             failed = 1;
         }
-        if (vv)
-            free(vv);
+        free(vv);
         int count = i - 100;
         if (count%10 == 0)
             ut_progress(count);

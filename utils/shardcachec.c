@@ -221,8 +221,7 @@ int main (int argc, char **argv) {
             shc_multi_item_destroy(items[i]);
             if (out)
                 fclose(out);
-            if (outname)
-                free(outname);
+            free(outname);
         }
     } else if (strcasecmp(cmd, "set") == 0 ||
                strcasecmp(cmd, "add") == 0)
@@ -313,8 +312,7 @@ int main (int argc, char **argv) {
                 printf("%s\n", stats);
             else
                 printf("Error querying node: %s (%s)\n", label, address);
-            if (stats)
-                free(stats);
+            free(stats);
             printf("\n");
         }
         if (found == 0 && selected_node)
