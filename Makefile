@@ -70,6 +70,10 @@ build_deps:
 static: $(DEPS) objects
 	ar -r libshardcache.a src/*.o
 
+.PHONY: static-nodeps
+static-nodeps: objects
+	ar -r libshardcache.a src/*.o
+
 standalone: $(DEPS) objects
 	@cwd=`pwd`; \
 	dir="/tmp/libshardcache_build$$$$"; \
