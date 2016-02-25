@@ -1,5 +1,5 @@
-#ifndef __PROTOCOL_H__
-#define __PROTOCOL_H__
+#ifndef SHARDCACHE_PROTOCOL_H
+#define SHARDCACHE_PROTOCOL_H
 
 /* For the protocol specification check the 'docs/protocol.txt' file
  * in the libshardcache source distribution

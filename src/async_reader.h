@@ -1,5 +1,5 @@
-#ifndef __ASYNC_READER_H__
-#define __ASYNC_READER_H__
+#ifndef SHARDCACHE_ASYNC_READER_H
+#define SHARDCACHE_ASYNC_READER_H
 
 #include <sys/types.h>
 #include <iomux.h>
@@ -15,7 +15,7 @@ typedef int (*async_read_callback_t)(void *data,
                                      void *priv);
 
 
-typedef struct __async_read_ctx_s async_read_ctx_t;
+typedef struct _async_read_ctx_s async_read_ctx_t;
 
 async_read_ctx_t *async_read_context_create(async_read_callback_t cb,
                                             void *priv);
