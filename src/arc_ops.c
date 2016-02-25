@@ -130,7 +130,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             if (fd >= 0)
                 close(fd);
             COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
             arc_drop_resource(cache->arc, obj->res);
             free(arg);
             return -1;
@@ -145,7 +145,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
             COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
             int drop = (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_DROP) || COBJ_CHECK_FLAGS(obj, COBJ_FLAG_EVICT) || !obj->dlen);
 
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
 
             if (drop)
                 arc_drop_resource(cache->arc, obj->res);
@@ -191,7 +191,7 @@ arc_ops_fetch_from_peer_async_cb(char *peer,
         default:
             break;
     }
-    MUTEX_UNLOCK(&obj->lock);
+    MUTEX_UNLOCK(obj->lock);
     return 0;
 }
 
@@ -305,7 +305,7 @@ arc_ops_init(const void *key, size_t len, int async, time_t ttl, arc_resource_t 
         list_set_free_value_callback(obj->listeners, free);
     }
     obj->ttl = ttl;
-    MUTEX_INIT(&obj->lock);
+    MUTEX_INIT(obj->lock);
 }
 
 static void *
@@ -432,7 +432,7 @@ arc_ops_fetch(void *item, size_t *size, void * priv)
         if (COBJ_CHECK_FLAGS(obj, COBJ_FLAG_ASYNC) && obj->listeners)
             list_foreach_value(obj->listeners, arc_ops_fetch_from_peer_notify_listener_complete, obj);
 
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         SHC_DEBUG("Item not found for key %.*s", obj->klen, obj->key);
         ATOMIC_INCREMENT(cache->cnt[SHARDCACHE_COUNTER_NOT_FOUND].value);
         return 1;
@@ -477,9 +477,9 @@ arc_ops_fetch_multi(void **objs, size_t *sizes, int *statuses, int num_objects, 
     int i;
     for (i = 0; i < num_objects; i++) {
         cached_object_t *obj = (cached_object_t *)objs[i];
-        MUTEX_LOCK(&obj->lock);
+        MUTEX_LOCK(obj->lock);
         COBJ_SET_FLAG(obj, COBJ_FLAG_FETCHING);
-        MUTEX_UNLOCK(&obj->lock);
+        MUTEX_UNLOCK(obj->lock);
         char node_name[1024];
         size_t node_len = sizeof(node_name);
         memset(node_name, 0, node_len);
@@ -514,13 +514,13 @@ arc_ops_fetch_multi(void **objs, size_t *sizes, int *statuses, int num_objects, 
         } else {
             cached_object_t *obj = list_shift_value(local);
             while(obj) {
-                MUTEX_LOCK(&obj->lock);
+                MUTEX_LOCK(obj->lock);
                 int rc = cache->storage.fetch(obj->key, obj->klen, &obj->data, &obj->dlen, cache->storage.priv);
                 COBJ_UNSET_FLAG(obj, COBJ_FLAG_FETCHING);
                 if (rc != 0) {
                     COBJ_SET_FLAG(obj, COBJ_FLAG_DROP);
                 }
-                MUTEX_UNLOCK(&obj->lock);
+                MUTEX_UNLOCK(obj->lock);
                 obj = list_shift_value(local);
             }
         }

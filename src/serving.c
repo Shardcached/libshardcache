@@ -14,7 +14,6 @@
 #include <linklist.h>
 #include <bsd_queue.h>
 #include <hashtable.h>
-#include <atomic_defs.h>
 #include <inttypes.h>
 
 #include "messaging.h"
@@ -96,7 +95,7 @@ typedef struct {
     };
 } shardcache_get_async_ctx_t;
 
-struct __shardcache_connection_context_s {
+struct _shardcache_connection_context_s {
     shardcache_hdr_t hdr;
 
     TAILQ_HEAD (, _shardcache_request_s) requests;
@@ -1379,8 +1378,8 @@ create_serving_worker(shardcache_serving_t *s, int id)
     snprintf(label, sizeof(label), "worker[%d].numfds", id);
     shardcache_counter_add(s->cache->counters, label, &wrk->numfds);
 
-    MUTEX_INIT(&wrk->wakeup_lock);
-    CONDITION_INIT(&wrk->wakeup_cond);
+    MUTEX_INIT(wrk->wakeup_lock);
+    CONDITION_INIT(wrk->wakeup_cond);
     wrk->iomux = iomux_create(1<<13, 0);
     pthread_create(&wrk->thread, NULL, worker, wrk);
     list_push_value(s->workers, wrk);
@@ -1443,14 +1442,14 @@ destroy_serving_worker(shardcache_worker_context_t *wrk)
     ATOMIC_INCREMENT(wrk->leave);
 
     // wake up the worker if it is slacking
-    CONDITION_SIGNAL(&wrk->wakeup_cond, &wrk->wakeup_lock);
+    CONDITION_SIGNAL(wrk->wakeup_cond, wrk->wakeup_lock);
 
     pthread_join(wrk->thread, NULL);
 
     queue_destroy(wrk->jobs);
 
-    MUTEX_DESTROY(&wrk->wakeup_lock);
-    CONDITION_DESTROY(&wrk->wakeup_cond);
+    MUTEX_DESTROY(wrk->wakeup_lock);
+    CONDITION_DESTROY(wrk->wakeup_cond);
     SHC_DEBUG3("Worker thread %p exited", wrk);
 
     shardcache_connection_context_t *ctx = list_shift_value(wrk->prune);
@@ -1481,9 +1480,9 @@ int
 configure_serving_workers(shardcache_serving_t *s, unsigned int num_workers)
 {
     static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-    pthread_mutex_lock(&lock);
+    MUTEX_LOCK(lock);
     if (s->num_workers == num_workers) {
-        pthread_mutex_unlock(&lock);
+        MUTEX_UNLOCK(lock);
         return 0;
     }
 
@@ -1504,7 +1503,7 @@ configure_serving_workers(shardcache_serving_t *s, unsigned int num_workers)
     int ret = num_workers - s->num_workers;
     s->num_workers = num_workers;
 
-    pthread_mutex_unlock(&lock);
+    MUTEX_UNLOCK(lock);
     return ret;
 }
 

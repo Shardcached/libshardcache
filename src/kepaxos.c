@@ -740,7 +740,7 @@ kepaxos_handle_accept(kepaxos_t *ke, kepaxos_msg_t *msg, void *response, size_t 
     }
     // inform the sender if we have already committed this seq
     int committed = (accepted_seq == local_seq);
-    MUTEX_UNLOCK(&ke->lock);
+    MUTEX_UNLOCK(ke->lock);
     SHC_DEBUG("%s accepted %llu (%d) ballot: %llu for key %.*s to peer %s\n",
               ke->peers[ke->my_index], accepted_seq, committed, accepted_ballot, msg->klen, msg->key, msg->peer);
     *response_len = kepaxos_build_message((char **)response, ke->peers[ke->my_index], KEPAXOS_MSG_TYPE_ACCEPT_RESPONSE,
@@ -856,7 +856,7 @@ kepaxos_handle_commit(kepaxos_t *ke, kepaxos_msg_t *msg)
         // ignore this commit message (it's too old)
         SHC_DEBUG("Ignoring commit message, seq too old for key %.*s: (%lld -- %lld)",
                   msg->klen, msg->key, msg->seq, last_recorded_seq);
-        MUTEX_UNLOCK(&ke->lock);
+        MUTEX_UNLOCK(ke->lock);
         return 0;
     }
 

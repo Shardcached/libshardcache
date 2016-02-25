@@ -587,8 +587,8 @@ shardcache_create(char *me,
     shardcache_counter_add(cache->counters, "mfug_size", (uint64_t *)cache->arc_lists_size[3]);
 
     if (ATOMIC_READ(cache->evict_on_delete)) {
-        MUTEX_INIT(&cache->evictor_lock);
-        CONDITION_INIT(&cache->evictor_cond);
+        MUTEX_INIT(cache->evictor_lock);
+        CONDITION_INIT(cache->evictor_cond);
         cache->evictor_jobs = ht_create(128, 8192, NULL);
         pthread_create(&cache->evictor_th, NULL, evictor, cache);
     }
@@ -931,7 +931,7 @@ shardcache_get_offset(shardcache_t *cache,
             return shardcache_get_offset(cache, key, klen, offset, length, cb, priv);
         } else {
             cb(key, klen, data, dlen, obj->dlen, &obj->ts, priv);
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
             arc_release_resource(cache->arc, res);
             free(data);
             return 0;
@@ -1271,7 +1271,7 @@ int shardcache_get_multi(shardcache_t *cache,
         arc_resource_t res = resources[i];
         if (res) {
             cached_object_t *obj = (cached_object_t *)arc_get_resource_ptr(res);
-            MUTEX_LOCK(&obj->lock);
+            MUTEX_LOCK(obj->lock);
 
             int complete = COBJ_CHECK_FLAGS(obj, COBJ_FLAG_COMPLETE);
             if (complete) {
@@ -1279,7 +1279,7 @@ int shardcache_get_multi(shardcache_t *cache,
                 if (UNLIKELY(cache->lazy_expiration && obj_expiration &&
                              cache->expire_time > 0 && obj_expiration < time(NULL)))
                 {
-                    MUTEX_UNLOCK(&obj->lock);
+                    MUTEX_UNLOCK(obj->lock);
                     arc_drop_resource(cache->arc, res);
                     cb(keys[i], lens[i], NULL, 0, 0, NULL, priv);
                     continue;
@@ -1304,7 +1304,7 @@ int shardcache_get_multi(shardcache_t *cache,
                 list_push_value(obj->listeners, listener);
             }
 
-            MUTEX_UNLOCK(&obj->lock);
+            MUTEX_UNLOCK(obj->lock);
         } else {
             cb(keys[i], lens[i], NULL, 0, 0, NULL, priv);
         }

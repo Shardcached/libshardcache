@@ -13,9 +13,6 @@
 #include "arc.h"
 
 
-#define LIKELY(_e) __builtin_expect((_e), 1)
-#define UNLIKELY(_e) __builtin_expect((_e), 0)
-
 /**********************************************************************
  * Simple double-linked list, inspired by the implementation used in the
  * linux kernel.
@@ -427,7 +424,7 @@ arc_destroy(arc_t *cache)
 void
 arc_clear(arc_t *cache)
 {
-    MUTEX_LOCK(&cache->lock);
+    MUTEX_LOCK(cache->lock);
     hashtable_t *new_table = ht_create(1<<16, 1<<25, NULL);
     hashtable_t *old_table = ATOMIC_READ(cache->hash);
     if (ATOMIC_CAS(cache->hash, old_table, new_table)) {
@@ -437,7 +434,7 @@ arc_clear(arc_t *cache)
         arc_list_destroy(cache, &cache->mfu.head);
         ht_destroy(old_table);
     }
-    MUTEX_UNLOCK(&cache->lock);
+    MUTEX_UNLOCK(cache->lock);
 }
 
 void
