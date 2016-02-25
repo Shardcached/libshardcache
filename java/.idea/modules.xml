@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/ShardcacheClient/ShardcacheClient.iml" filepath="$PROJECT_DIR$/ShardcacheClient/ShardcacheClient.iml" />
+      <module fileurl="file://$PROJECT_DIR$/shardcachec/shardcachec.iml" filepath="$PROJECT_DIR$/shardcachec/shardcachec.iml" />
+      <module fileurl="file://$PROJECT_DIR$/test/test.iml" filepath="$PROJECT_DIR$/test/test.iml" />
+    </modules>
+  </component>
+</project>
