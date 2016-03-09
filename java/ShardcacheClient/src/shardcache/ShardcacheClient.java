@@ -102,6 +102,7 @@ public class ShardcacheClient {
         ShardcacheMessage response = connection.receive();
 
         ShardcacheMessage.Record record = response.recordAtIndex(0);
+		ShardcacheMessage.Record status = response.recordAtIndex(1);
 		return record.getData();
 	}
 

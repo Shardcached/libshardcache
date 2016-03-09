@@ -1,6 +1,8 @@
 package shardcache;
 
 import java.io.ByteArrayOutputStream;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -66,7 +68,7 @@ public class ShardcacheMessage {
 
         private ShardcacheMessage.Type type;
         private List<ShardcacheMessage.Record> records;
-        private final byte[] magic = { 0x73, 0x68, 0x63, 0x01 };
+        private final byte[] magic = { 0x73, 0x68, 0x63, 0x02 };
 
 
         public Builder() {
@@ -164,17 +166,19 @@ public class ShardcacheMessage {
                    parserStatus == ParserStatus.RSEP)
             {
                 if (parserStatus == ParserStatus.RECORD) {
-                    if (pdata.length - offset > 2) {
-                        int size = pdata[offset] << 8 | pdata[offset+1];
+                    if (pdata.length - offset > 4) {
+                        ByteBuffer byteBuffer = ByteBuffer.wrap(pdata, offset, 4);
+                        int size = byteBuffer.getInt();
                         if (size == 0) { // End-Of-Record
-                            offset += 2;
+                            offset += 4;
                             parserStatus = ParserStatus.RSEP;
                             addRecord(recordAccumulator.toByteArray());
                             recordAccumulator.reset();
-                        } else if (pdata.length - offset >= size + 2) {
-                            offset += 2;
+                        } else if (pdata.length - offset >= size + 4) {
+                            offset += 4;
                             recordAccumulator.write(pdata, offset, size);
                             offset += size;
+                            parserStatus = ParserStatus.RSEP;
                         } else {
                             inputAccumulator.write(pdata, offset, pdata.length - offset);
                             status = Status.NEEDS_DATA;
@@ -188,6 +192,9 @@ public class ShardcacheMessage {
                         byte rsep = pdata[offset++];
                         if (rsep == RSEP) {
                             parserStatus = ParserStatus.RECORD;
+                            Record record = new Record(recordAccumulator.toByteArray());
+                            recordAccumulator.reset();
+                            records.add(record);
                         } else {
                             if (rsep == EOM) {
                                 parserStatus = ParserStatus.DONE;
@@ -230,28 +237,23 @@ public class ShardcacheMessage {
         public Record(byte[] data) {
             fullData = data;
 
-            int numChunks = (fullData.length / 65536) + 1;
-            recordData = new byte[2 * numChunks + fullData.length + 2];
+            recordData = new byte[4 + fullData.length + 1];
 
             int offset = 0;
             int doffset = 0;
 
-            // multiple chunks
-            for (int i = 1; i < numChunks; i++) {
-                recordData[offset++] = (byte)0xFF;
-                recordData[offset++] = (byte)0xFF;
-                for (int n = 0; n < 65536; n++)
-                    recordData[offset++] = data[doffset++];
-            }
+            ByteBuffer byteBuffer = ByteBuffer.allocate(4);
+            byteBuffer.putInt(fullData.length);
+            byte[] lenBytes = byteBuffer.array();
 
-            int len = fullData.length;
-            recordData[offset++] = (byte)(len >> 8);
-            recordData[offset++] = (byte)len;
-            for (int i = 0; i < len; i++)
+            recordData[offset++] = lenBytes[0];
+            recordData[offset++] = lenBytes[1];
+            recordData[offset++] = lenBytes[2];
+            recordData[offset++] = lenBytes[3];
+            for (int i = 0; i < fullData.length; i++)
                 recordData[offset++] = data[doffset++];
             // EOR
-            recordData[offset++] = EORH;
-            recordData[offset++] = EORL;
+            recordData[offset++] = EOM;
 
         }
 
@@ -269,7 +271,7 @@ public class ShardcacheMessage {
 
 	public ShardcacheMessage(ShardcacheMessage.Type type, List<ShardcacheMessage.Record> records) throws Exception {
         hdr = type.getByte();
-        version = 1;
+        version = 2;
 
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
 
@@ -289,7 +291,7 @@ public class ShardcacheMessage {
 		data[0] = magic[0];
 		data[1] = magic[1];
 		data[2] = magic[2];
-		data[3] = 0x01; // protocol version
+		data[3] = 0x02; // protocol version
 
 		data[4] = hdr;
 

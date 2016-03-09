@@ -34,6 +34,7 @@ public class ShardcacheConnection {
                 ShardcacheMessage.Builder.Status status = builder.parse(buf, ret);
                 if (status != ShardcacheMessage.Builder.Status.NEEDS_DATA)
                     break;
+				ret = inFromServer.read(buf);
 			}
             return builder.build();
 		} catch (Exception e) {
