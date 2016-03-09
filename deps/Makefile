@@ -20,18 +20,33 @@ all:
 	    export LIBDIR="$(shell pwd)/.libs"; \
 	    export INCDIR="$(shell pwd)/.incs"; \
 	    export CFLAGS="$(CFLAGS) -fPIC -DHAVE_UINT64_T"; \
-	    if [ $$? -ne 0 ] ; then exit $$?; fi; \
 	    if [ -f $$name/Makefile ]; then \
 		make -eC $$name; \
+		if [ $$? -ne 0 ]; then \
+		    echo "Errors building dependencies"; \
+		    exit -1; \
+		fi; \
 		make -eC $$name install; \
+		if [ $$? -ne 0 ]; then \
+		    echo "Errors installing dependencies"; \
+		    exit -1; \
+		fi; \
 	    elif [ -d $$name/build ]; then \
 		cd $$name/build; \
 		if [ ! -f Makefile ]; then \
 		    ./configure --libdir="$$LIBDIR" --includedir="$$INCDIR"; \
 		fi; \
 		make ; \
+		if [ $$? -ne 0 ]; then \
+		    echo "Errors building dependencies"; \
+		    exit -1; \
+		fi; \
 		make install; \
-		cd -;\
+		if [ $$? -ne 0 ]; then \
+		    echo "Errors installing dependencies"; \
+		    exit -1; \
+		fi; \
+		cd -; \
 	    else \
 		echo "Don't know how to build $$name"; \
 		exit -1; \
