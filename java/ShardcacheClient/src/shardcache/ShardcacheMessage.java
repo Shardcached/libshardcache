@@ -190,19 +190,19 @@ public class ShardcacheMessage {
                 if (parserStatus == ParserStatus.RSEP) {
                     if (pdata.length - offset > 0) {
                         byte rsep = pdata[offset++];
-                        if (rsep == RSEP) {
-                            parserStatus = ParserStatus.RECORD;
+                        if (rsep == RSEP || rsep == EOM) {
                             Record record = new Record(recordAccumulator.toByteArray());
                             recordAccumulator.reset();
                             records.add(record);
-                        } else {
                             if (rsep == EOM) {
                                 parserStatus = ParserStatus.DONE;
                                 status = Status.OK;
                             } else {
-                                status = Status.ERROR;
-                                parserStatus = ParserStatus.EMPTY;
+                                parserStatus = ParserStatus.RECORD;
                             }
+                        } else {
+                            status = Status.ERROR;
+                            parserStatus = ParserStatus.EMPTY;
                             break;
                         }
                     } else {
@@ -237,7 +237,7 @@ public class ShardcacheMessage {
         public Record(byte[] data) {
             fullData = data;
 
-            recordData = new byte[4 + fullData.length + 1];
+            recordData = new byte[4 + fullData.length];
 
             int offset = 0;
             int doffset = 0;
@@ -253,7 +253,7 @@ public class ShardcacheMessage {
             for (int i = 0; i < fullData.length; i++)
                 recordData[offset++] = data[doffset++];
             // EOR
-            recordData[offset++] = EOM;
+            //recordData[offset++] = EOM;
 
         }
 
