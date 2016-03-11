@@ -27,6 +27,9 @@ public class ShardcacheMessage {
 	static final byte HDR_NOOP       = (byte)0x90;
 	static final byte HDR_RESPONSE   = (byte)0x99;
 
+    static final byte HDR_CHECK      = (byte)0x31;
+    static final byte HDR_STATS      = (byte)0x32;
+
     static final byte EOM = (byte)0x00; // end-of-message
 
     static final byte EORL = 0x00; // end-of-record low byte
@@ -36,12 +39,15 @@ public class ShardcacheMessage {
 	public enum Type {
 		GET(HDR_GET),
 		SET(HDR_SET),
+        ADD(HDR_ADD),
 		DELETE(HDR_DELETE),
 		EVICT(HDR_EVICT),
 		TOUCH(HDR_TOUCH),
 		RESPONSE(HDR_RESPONSE),
-		NOOP(HDR_NOOP);
-
+		NOOP(HDR_NOOP),
+        EXISTS(HDR_EXISTS),
+        STATS(HDR_STATS),
+        CHECK(HDR_CHECK);
 
 		private byte byteVal;
 

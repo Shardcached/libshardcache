@@ -23,7 +23,18 @@ public class shardcachec {
 		                 "        check   [ <node> ] \n");
 		System.exit(-1);
 	}
-	
+
+	private static void checkArgsNumber(String[] args, int expectedNum) {
+        if (args.length < 4) {
+            System.out.print("Not enough arguments\n");
+        }
+        usage();
+	}
+
+    private static void checkResponse(ShardcacheMessage.Type cmd, int status) {
+
+    }
+
 	public static void main(String[] args) {
 		
 		String shcHosts = System.getenv("SHC_HOSTS");
@@ -37,14 +48,13 @@ public class shardcachec {
 		
 		if (args.length < 1)
 			usage();
+
 		// TODO Auto-generated method stub
 		ShardcacheClient client = new ShardcacheClient(shcHosts);
 		
 		String command = args[0];
 		if (command.equals("get")) {
-			if (args.length < 2) {
-				
-			}
+            checkArgsNumber(args, 2);
 			byte[] response = client.get(args[1]);
 			String out = null;
 			try {
@@ -63,14 +73,10 @@ public class shardcachec {
 		} else if (command.equals("offset")) {
 			
 		} else if (command.equals("set")) {
-
-			if (args.length < 4) {
-			
-			}
-			int status = client.set(args[1], args[2].getBytes());
-
+			checkArgsNumber(args, 4);
+            checkResponse(ShardcacheMessage.Type.SET, client.set(args[1], args[2].getBytes()));
 		} else if (command.equals("add")) {
-			
+            checkResponse(ShardcacheMessage.Type.ADD, client.add(args[1], args[2].getBytes()));
 		} else if (command.equals("stats")) {
 		
 			
@@ -79,15 +85,15 @@ public class shardcachec {
 		} else if (command.equals("touch")) {
 			
 		} else if (command.equals("del")) {
-			
+			checkResponse(ShardcacheMessage.Type.DELETE, client.delete(args[1]));
 		} else if (command.equals("evict")) {
-			
+            checkResponse(ShardcacheMessage.Type.EVICT, client.evict(args[1]));
 		} else if (command.equals("index")) {
-			
+            checkResponse(ShardcacheMessage.Type.EVICT, client.evict(args[1]));
 		} else if (command.equals("stats")) {
-			
+            //checkResponse(ShardcacheMessage.Type.STATS, client.evict(args[1]));
 		} else if (command.equals("check")) {
-			
+            //checkResponse(ShardcacheMessage.Type.CHECK, client.evict(args[1]));
 		} else {
 			System.out.printf("Unknown command %s.\n", command);
 			usage();

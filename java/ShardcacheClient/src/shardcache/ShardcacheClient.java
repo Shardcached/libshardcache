@@ -5,6 +5,8 @@ import java.lang.reflect.Array;
 import java.net.*;
 import java.util.Arrays;
 
+import com.sun.istack.internal.Nullable;
+
 import static shardcache.ShardcacheMessage.*;
 
 public class ShardcacheClient {
@@ -74,55 +76,48 @@ public class ShardcacheClient {
 		}
 		return null;
 	}
-	
-	public byte[] get(String key) {
-		ShardcacheNode owner = this.selectNode(key);
-
-		
-		int numChunks = (key.length() / 65536) + 1;
-		byte[] request = new byte[4 + 1 + 2 * numChunks + key.length() + 2 + 1];
-		
-		byte[] data = key.getBytes();
-		int doffset = 0;
-
-		ShardcacheMessage.Builder builder = new ShardcacheMessage.Builder();
-
-        builder.setMessageType(Type.GET);
-
-        builder.addRecord(key.getBytes());
-
-        ShardcacheMessage message = builder.build();
 
 
-		ShardcacheConnection connection = owner.connect();
-		if (connection == null)
-			return null;
-
-		connection.send(message);
-        ShardcacheMessage response = connection.receive();
-
-        ShardcacheMessage.Record record = response.recordAtIndex(0);
-		ShardcacheMessage.Record status = response.recordAtIndex(1);
-		return record.getData();
-	}
-
-    public int set(String key, byte[] data) {
+	@Nullable
+	private ShardcacheMessage sendCommand(Type cmd, String key, byte[]... records) {
         ShardcacheNode owner = this.selectNode(key);
         ShardcacheMessage.Builder builder = new ShardcacheMessage.Builder();
-        builder.setMessageType(Type.SET);
+        builder.setMessageType(cmd);
         builder.addRecord(key.getBytes());
-        builder.addRecord(data);
+		for (byte[] record: records) {
+			builder.addRecord(record);
+		}
 
         ShardcacheMessage message = builder.build();
 
         ShardcacheConnection connection = owner.connect();
         if (connection == null)
-            return -1;
+            return null;
 
         connection.send(message);
         ShardcacheMessage response = connection.receive();
 
-        if (response.hdr == HDR_RESPONSE) {
+		return response;
+	}
+
+	@Nullable
+	public byte[] get(String key) {
+		ShardcacheNode owner = this.selectNode(key);
+
+
+		ShardcacheMessage response = sendCommand(Type.GET, key);
+
+		if (response == null)
+			return null;
+
+        ShardcacheMessage.Record record = response.recordAtIndex(0);
+		ShardcacheMessage.Record status = response.recordAtIndex(1);
+
+		return record.getData();
+	}
+
+    private int checkResponse(ShardcacheMessage response) {
+       if (response != null && response.hdr == HDR_RESPONSE) {
             Record r = response.recordAtIndex(0);
             byte[] rd = r.getData();
             if (rd.length == 1 && rd[0] == 0x00)
@@ -130,5 +125,20 @@ public class ShardcacheClient {
         }
         return -1;
     }
-	
+
+    public int set(String key, byte[] data) {
+        return checkResponse(sendCommand(Type.SET, key, data));
+    }
+
+    public int add(String key, byte[] data) {
+        return checkResponse(sendCommand(Type.ADD, key, data));
+    }
+
+    public int evict(String key) {
+        return checkResponse(sendCommand(Type.EVICT, key));
+    }
+
+    public int delete(String key) {
+        return checkResponse(sendCommand(Type.DELETE, key));
+    }
 }
