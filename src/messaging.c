@@ -663,8 +663,13 @@ int build_message(unsigned char hdr,
                 fbuf_add_binary(out, (char *)&eor, sizeof(eor));
             }
         }
-    } else if (version < 2) {
-        fbuf_add_binary(out, (char *)&eor, sizeof(eor));
+    } else { 
+        if (version < 2) {
+            fbuf_add_binary(out, (char *)&eor, sizeof(eor));
+        } else {
+            uint32_t zero_len = 0;
+            fbuf_add_binary(out, (char *)&zero_len, sizeof(zero_len));
+        }
     }
 
     fbuf_add_binary(out, &eom, 1);
