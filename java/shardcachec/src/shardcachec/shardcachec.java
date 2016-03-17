@@ -77,9 +77,6 @@ public class shardcachec {
             checkResponse(ShardcacheMessage.Type.SET, client.set(args[1], args[2].getBytes()));
 		} else if (command.equals("add")) {
             checkResponse(ShardcacheMessage.Type.ADD, client.add(args[1], args[2].getBytes()));
-		} else if (command.equals("stats")) {
-		
-			
 		} else if (command.equals("exists")) {
 			
 		} else if (command.equals("touch")) {
@@ -91,7 +88,9 @@ public class shardcachec {
 		} else if (command.equals("index")) {
             checkResponse(ShardcacheMessage.Type.EVICT, client.evict(args[1]));
 		} else if (command.equals("stats")) {
-            //checkResponse(ShardcacheMessage.Type.STATS, client.evict(args[1]));
+            String stats = client.stats(null);
+            System.out.printf("%s", stats);
+
 		} else if (command.equals("check")) {
             //checkResponse(ShardcacheMessage.Type.CHECK, client.evict(args[1]));
 		} else {

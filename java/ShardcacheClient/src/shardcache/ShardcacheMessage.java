@@ -1,6 +1,7 @@
 package shardcache;
 
 import java.io.ByteArrayOutputStream;
+import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -266,6 +267,14 @@ public class ShardcacheMessage {
         byte[] getData() { return this.fullData; }
 
         byte[] getRecordData() { return this.recordData; }
+
+        public String toString() {
+            try {
+                return new String(fullData, "UTF-8");
+            } catch (UnsupportedEncodingException e) {
+                return fullData.toString();
+            }
+        }
     }
 
 	boolean complete;
@@ -283,12 +292,19 @@ public class ShardcacheMessage {
 
 
         this.records = new ShardcacheMessage.Record[records.size()];
-        int recordNum = 0;
-        for (Record r: records) {
-            if (recordNum > 0)
-                stream.write(RSEP);
-            this.records[recordNum++] = r;
-            stream.write(r.recordData);
+        if (this.records.length > 0) {
+            int recordNum = 0;
+            for (Record r : records) {
+                if (recordNum > 0)
+                    stream.write(RSEP);
+                this.records[recordNum++] = r;
+                stream.write(r.recordData);
+            }
+        } else {
+            stream.write(0x00);
+            stream.write(0x00);
+            stream.write(0x00);
+            stream.write(0x00);
         }
 
         this.data = new byte[4 + 1 + stream.size() + 1];

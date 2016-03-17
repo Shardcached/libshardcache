@@ -79,11 +79,14 @@ public class ShardcacheClient {
 
 
 	@Nullable
-	private ShardcacheMessage sendCommand(Type cmd, String key, byte[]... records) {
+	private ShardcacheMessage sendCommand(Type cmd, @Nullable  String key, byte[]... records) {
         ShardcacheNode owner = this.selectNode(key);
         ShardcacheMessage.Builder builder = new ShardcacheMessage.Builder();
         builder.setMessageType(cmd);
-        builder.addRecord(key.getBytes());
+        if (key != null) {
+            builder.addRecord(key.getBytes());
+        }
+
 		for (byte[] record: records) {
 			builder.addRecord(record);
 		}
@@ -140,5 +143,63 @@ public class ShardcacheClient {
 
     public int delete(String key) {
         return checkResponse(sendCommand(Type.DELETE, key));
+    }
+
+    public int touch(String key) {
+        return checkResponse(sendCommand(Type.TOUCH, key));
+    }
+
+    public int exists(String key) {
+        return checkResponse(sendCommand(Type.STATS, key));
+    }
+
+    @Nullable
+    private String statsInternal(ShardcacheNode node) {
+        ShardcacheMessage.Builder builder = new ShardcacheMessage.Builder();
+        builder.setMessageType(Type.STATS);
+
+        ShardcacheMessage message = builder.build();
+
+        ShardcacheConnection connection = node.connect();
+        if (connection == null)
+            return null;
+
+        connection.send(message);
+        ShardcacheMessage response = connection.receive();
+        ShardcacheMessage.Record record = response.recordAtIndex(0);
+        return record.toString();
+    }
+
+    @Nullable
+    public String stats(@Nullable String host) {
+
+        ShardcacheNode node = null;
+
+        if (host != null) {
+            for (ShardcacheNode n : nodes) {
+                if (n.getLabel().equals(host)) {
+                    node = n;
+                }
+            }
+
+            if (node == null) {
+                // TODO - Error message (node 'host' not found)
+                return null;
+            }
+        }
+
+        if (node != null) {
+            return statsInternal(node);
+        }
+
+        StringBuilder output = new StringBuilder();
+        for (ShardcacheNode n: nodes) {
+            output.append(statsInternal(n));
+        }
+        return output.toString();
+    }
+
+    public int check() {
+        return checkResponse(sendCommand(Type.CHECK, null));
     }
 }
